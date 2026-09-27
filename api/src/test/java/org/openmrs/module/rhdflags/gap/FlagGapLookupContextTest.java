@@ -152,6 +152,14 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void rewritesCriteriaAsPatientflagsDoesWhenWhereIsOnlyInANameOrASubquery() {
+		assertEquals("fails",
+		    outcomeAgreedWithPatientflags("select e.patient_id, e.uuid, '" + WEIGHT + "' as nowhere from encounter e"));
+		assertEquals("true", outcomeAgreedWithPatientflags("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e"
+		        + " join (select encounter_id from encounter where voided = false) v on v.encounter_id = e.encounter_id"));
+	}
+	
+	@Test
 	public void returnsNoGapsRatherThanNullWhenEveryRowIsLeftOut() {
 		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
 		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
@@ -362,6 +370,27 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 				assertTrue(message, !message.contains(password.get(0).toString()));
 			}
 		}
+	}
+	
+	private String outcomeAgreedWithPatientflags(String criteria) {
+		configure(criteria);
+		String evaluated;
+		try {
+			evaluated = String.valueOf(new SQLFlagEvaluator().eval(flag, patient(), null));
+		}
+		catch (Exception e) {
+			evaluated = "fails";
+		}
+		String looked;
+		try {
+			List<FlagGap> gaps = lookup.find(patient(), flag);
+			looked = String.valueOf(gaps != null && !gaps.isEmpty());
+		}
+		catch (Exception e) {
+			looked = "fails";
+		}
+		assertEquals(criteria, evaluated, looked);
+		return looked;
 	}
 	
 	private Patient patient() {
