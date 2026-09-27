@@ -15,7 +15,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.logging.log4j.Level;
@@ -26,6 +32,7 @@ import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.CohortMembership;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
 import org.openmrs.GlobalProperty;
@@ -36,11 +43,11 @@ import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
-import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
@@ -54,6 +61,8 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final String ENCOUNTER_3 = "6519d653-393b-4118-9c83-a3715b82d4ac";
 	
+	private static final String ENCOUNTER_4 = "eec646cb-c847-45a7-98bc-91c8c4f70add";
+	
 	private static final String ENCOUNTER_5 = "e403fafb-e5e4-42d0-9d11-4f52e89d148c";
 	
 	private static final String BASIC_FORM = "d9218f76-6c39-45f4-8efa-4c5c6c199f50";
@@ -63,6 +72,8 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	private final FlagGapLookup lookup = new FlagGapLookup();
 	
 	private Flag flag;
+	
+	private List<FlagGap> found;
 	
 	@Before
 	public void setUp() {
@@ -78,9 +89,8 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void returnsOneGapPerRowWithTheEncountersFormAndQuestion() {
-		configure("select e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else '" + CD4 + "' end"
-		        + " from encounter e where e.patient_id = :patientId and e.encounter_id in (3, 5)"
-		        + " order by e.encounter_id");
+		configure("select e.patient_id, e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else '" + CD4 + "' end"
+		        + " from encounter e where e.encounter_id in (3, 5)");
 		
 		List<FlagGap> gaps = lookup.find(patient(), flag);
 		
@@ -93,23 +103,133 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void returnsNullWhenTheFlagHasNoQuery() {
+	public void thePatientsAFlagRaisesAreTheOnesWithGaps() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.voided = false"
+		        + " and e.encounter_id in (3, 6)");
+		Set<Integer> raised = new HashSet<Integer>();
+		for (CohortMembership membership : Context.getService(FlagService.class)
+		        .getFlaggedPatients(flag, new HashMap<Object, Object>()).getMemberships()) {
+			raised.add(membership.getPatientId());
+		}
+		
+		Set<Integer> withGaps = new HashSet<Integer>();
+		for (Integer patientId : Arrays.asList(2, 6, 7, 8)) {
+			List<FlagGap> gaps = lookup.find(Context.getPatientService().getPatient(patientId), flag);
+			if (gaps != null && !gaps.isEmpty()) {
+				withGaps.add(patientId);
+			} else {
+				assertNull(gaps);
+			}
+		}
+		
+		assertEquals(new HashSet<Integer>(Arrays.asList(2, 7)), raised);
+		assertEquals(raised, withGaps);
+	}
+	
+	@Test
+	public void sortsTheGapsByEncounterDate() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id in (3, 4, 5)");
+		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
+		three.setEncounterDatetime(new GregorianCalendar(2009, Calendar.JANUARY, 1).getTime());
+		Context.getEncounterService().saveEncounter(three);
+		
+		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), encounterUuids(lookup.find(patient(), flag)));
+	}
+	
+	@Test
+	public void returnsNullForCriteriaWithoutGapColumns() {
+		List<LogEvent> warnings = warningsWhileFinding();
+		
+		assertNull(found);
+		assertTrue(warnings.isEmpty());
+	}
+	
+	@Test
+	public void rewritesCriteriaWrittenInCapitalsOverSeveralLinesWithATrailingSemicolon() {
+		configure("SELECT e.patient_id, e.uuid, '" + WEIGHT + "' FROM encounter e\nWHERE e.encounter_id = 3;");
+		
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+	}
+	
+	@Test
+	public void rewritesCriteriaAsPatientflagsDoesWhenWhereIsOnlyInANameOrASubquery() {
+		assertEquals("fails",
+		    outcomeAgreedWithPatientflags("select e.patient_id, e.uuid, '" + WEIGHT + "' as nowhere from encounter e"));
+		assertEquals("true", outcomeAgreedWithPatientflags("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e"
+		        + " join (select encounter_id from encounter where voided = false) v on v.encounter_id = e.encounter_id"));
+	}
+	
+	@Test
+	public void returnsNoGapsRatherThanNullWhenEveryRowIsLeftOut() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
+		Context.getEncounterService().voidEncounter(three, "test");
+		
+		assertEquals(new ArrayList<FlagGap>(), lookup.find(patient(), flag));
+	}
+	
+	@Test
+	public void returnsNullForAVoidedPatient() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		Patient patient = patient();
+		Context.getPatientService().voidPatient(patient, "test");
+		
+		assertNull(lookup.find(patient, flag));
+	}
+	
+	@Test
+	public void returnsNullForAPatientTheCriteriaDoNotMatch() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 6");
+		
 		assertNull(lookup.find(patient(), flag));
 	}
 	
 	@Test
+	public void ignoresAGapQueryGlobalProperty() {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty("rhdflags.gapQuery." + flag.getUuid(),
+		        "select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId"));
+		
+		assertNull(lookup.find(patient(), flag));
+	}
+	
+	@Test
+	public void returnsNullForAFlagThatIsNotEvaluatedBySql() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		flag.setEvaluator(GroovyFlagEvaluator.class.getName());
+		
+		assertNull(lookup.find(patient(), flag));
+	}
+	
+	@Test
+	public void returnsNullForCriteriaWithoutAPatientColumn() {
+		configure("select patient_id, 'x', 'y' from patient where patient_id = " + PATIENT);
+		
+		assertNull(lookup.find(patient(), flag));
+	}
+	
+	@Test
+	public void warnsOfCriteriaThatReturnTwoColumns() {
+		configure("select e.patient_id, e.uuid from encounter e where e.encounter_id = 3");
+		List<LogEvent> warnings = warningsWhileFinding();
+		
+		assertNull(found);
+		assertEquals(1, warnings.size());
+		String warning = warnings.get(0).getMessage().getFormattedMessage();
+		assertTrue(warning, warning.contains("2 columns"));
+	}
+	
+	@Test
 	public void dropsARowWhoseEncounterBelongsToAnotherPatient() {
-		// ignores the patient beyond the token, so it returns patient 2's encounter 6 as well
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e where :patientId = :patientId"
-		        + " and e.encounter_id in (3, 6) order by e.encounter_id");
+		// the join ignores the patient, so it returns patient 2's encounter 6 as well
+		configure("select p.patient_id, e.uuid, '" + WEIGHT + "' from patient p join encounter e"
+		        + " on e.encounter_id in (3, 6) where p.patient_id > 0");
 		
 		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
 	}
 	
 	@Test
 	public void dropsAVoidedEncounter() {
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId"
-		        + " and e.encounter_id in (3, 5) order by e.encounter_id");
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id in (3, 5)");
 		Encounter five = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_5);
 		Context.getEncounterService().voidEncounter(five, "test");
 		
@@ -118,34 +238,29 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void dropsARowWhoseQuestionIsNotAConcept() {
-		configure("select e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else 'not a concept' end"
-		        + " from encounter e where e.patient_id = :patientId and e.encounter_id in (3, 5)"
-		        + " order by e.encounter_id");
+		configure("select e.patient_id, e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else 'not a concept' end"
+		        + " from encounter e where e.encounter_id in (3, 5)");
 		
 		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
 	}
 	
 	@Test
 	public void warnsOfAnEncounterCellThatIsNotAnEncounterUuid() {
-		configure("select e.encounter_id, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		configure("select e.patient_id, e.encounter_id, '" + WEIGHT + "' from encounter e");
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertTrue(gaps.isEmpty());
+		assertEquals(new ArrayList<FlagGap>(), found);
 		assertTrue(!warnings.isEmpty());
 		String warning = warnings.get(0).getMessage().getFormattedMessage();
 		assertTrue(warning, warning.contains("not an encounter uuid"));
-		assertTrue(warning, warning.contains("column 1"));
+		assertTrue(warning, warning.contains("column 2"));
 		assertTrue(warning, warning.contains("Integer"));
 	}
 	
 	@Test
 	public void keepsAnEncounterCellThatIsNotAnEncounterUuidOutOfTheLog() {
-		configure("select u.password, '" + WEIGHT + "' from users u where :patientId > 0 and u.password is not null");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
-		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		configure("select p.patient_id, u.password, '" + WEIGHT + "' from patient p, users u where u.password is not null");
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertTrue(!warnings.isEmpty());
 		assertNoPasswordIn(warnings);
@@ -153,11 +268,9 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void keepsAQuestionCellThatIsNotAConceptUuidOutOfTheLog() {
-		configure("select e.uuid, u.password from encounter e, users u where e.patient_id = :patientId"
-		        + " and e.encounter_id = 3 and u.password is not null");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
-		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		configure("select e.patient_id, e.uuid, u.password from encounter e, users u where e.encounter_id = 3"
+		        + " and u.password is not null");
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertTrue(!warnings.isEmpty());
 		assertNoPasswordIn(warnings);
@@ -165,54 +278,36 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void warnsOfAQuestionCellThatIsNotAConceptUuid() {
-		configure("select e.uuid, 5089 from encounter e where e.patient_id = :patientId and e.encounter_id = 3");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		configure("select e.patient_id, e.uuid, 5089 from encounter e where e.encounter_id = 3");
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertTrue(gaps.isEmpty());
+		assertEquals(new ArrayList<FlagGap>(), found);
 		assertEquals(1, warnings.size());
 		String warning = warnings.get(0).getMessage().getFormattedMessage();
 		assertTrue(warning, warning.contains("not a concept uuid"));
-		assertTrue(warning, warning.contains("column 2"));
+		assertTrue(warning, warning.contains("column 3"));
 		assertTrue(warning, warning.contains("Integer"));
 	}
 	
 	@Test
 	public void doesNotWarnOfAnEncounterItFiltersOut() {
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e where :patientId = :patientId"
-		        + " and e.encounter_id in (3, 5, 6) order by e.encounter_id");
+		configure("select p.patient_id, e.uuid, '" + WEIGHT + "' from patient p join encounter e"
+		        + " on e.encounter_id in (3, 5, 6) where p.patient_id > 0");
 		Encounter five = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_5);
 		Context.getEncounterService().voidEncounter(five, "test");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertEquals(ENCOUNTER_3, onlyEncounter(gaps));
+		assertEquals(ENCOUNTER_3, onlyEncounter(found));
 		assertTrue(warnings.isEmpty());
-	}
-	
-	@Test(expected = APIException.class)
-	public void refusesAQueryThatDoesNotNameThePatient() {
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e");
-		
-		lookup.find(patient(), flag);
 	}
 	
 	@Test
 	public void skipsARowWithoutAnEncounterOrAQuestion() {
-		configure("select case when e.encounter_id = 4 then null else e.uuid end,"
+		configure("select e.patient_id, case when e.encounter_id = 4 then null else e.uuid end,"
 		        + " case when e.encounter_id = 5 then null else '" + WEIGHT + "' end from encounter e"
-		        + " where e.patient_id = :patientId and e.encounter_id in (3, 4, 5) order by e.encounter_id");
+		        + " where e.encounter_id in (3, 4, 5)");
 		
 		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
-	}
-	
-	@Test(expected = APIException.class)
-	public void refusesAQueryThatDoesNotReturnTwoColumns() {
-		configure("select e.uuid from encounter e where e.patient_id = :patientId");
-		
-		lookup.find(patient(), flag);
 	}
 	
 	@Test
@@ -223,8 +318,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void aUserWhoCanViewPatientFlagsGetsTheGaps() {
-		configure(
-		    "select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId" + " and e.encounter_id = 3");
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
 		Patient patient = patient();
 		
 		authenticateWith("View Patient Flags", "Get Patients", "Get Encounters", "Get Concepts");
@@ -235,8 +329,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void leavesOutAnEncounterTheUserMayNotView() {
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId"
-		        + " and e.encounter_id in (3, 5) order by e.encounter_id");
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id in (3, 5)");
 		Patient patient = patient();
 		// encounter 3 is of type 2, encounter 5 of type 1
 		EncounterType restricted = Context.getEncounterService().getEncounterType(2);
@@ -250,7 +343,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void aUserWhoCannotViewPatientFlagsIsRefused() {
-		configure("select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId");
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e");
 		Patient patient = patient();
 		
 		authenticateWith("Get Patients", "Get Encounters", "Get Concepts");
@@ -279,16 +372,37 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 	
+	private String outcomeAgreedWithPatientflags(String criteria) {
+		configure(criteria);
+		String evaluated;
+		try {
+			evaluated = String.valueOf(new SQLFlagEvaluator().eval(flag, patient(), null));
+		}
+		catch (Exception e) {
+			evaluated = "fails";
+		}
+		String looked;
+		try {
+			List<FlagGap> gaps = lookup.find(patient(), flag);
+			looked = String.valueOf(gaps != null && !gaps.isEmpty());
+		}
+		catch (Exception e) {
+			looked = "fails";
+		}
+		assertEquals(criteria, evaluated, looked);
+		return looked;
+	}
+	
 	private Patient patient() {
 		return Context.getPatientService().getPatient(PATIENT);
 	}
 	
-	private void configure(String sql) {
-		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(FlagGapLookup.GAP_QUERY_PREFIX + flag.getUuid(), sql));
+	private void configure(String criteria) {
+		flag.setCriteria(criteria);
+		Context.getService(FlagService.class).saveFlag(flag);
 	}
 	
-	private List<LogEvent> warningsWhileFinding(List<FlagGap> gaps) {
+	private List<LogEvent> warningsWhileFinding() {
 		final List<LogEvent> events = new ArrayList<LogEvent>();
 		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
 			
@@ -306,7 +420,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.WARN);
 		try {
-			gaps.addAll(lookup.find(patient(), flag));
+			found = lookup.find(patient(), flag);
 		}
 		finally {
 			logger.removeAppender(appender);
@@ -316,12 +430,17 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private String onlyEncounter(List<FlagGap> gaps) {
+		List<String> uuids = encounterUuids(gaps);
+		assertEquals(1, uuids.size());
+		return uuids.get(0);
+	}
+	
+	private List<String> encounterUuids(List<FlagGap> gaps) {
 		List<String> uuids = new ArrayList<String>();
 		for (FlagGap gap : gaps) {
 			uuids.add(gap.getEncounter().getUuid());
 		}
-		assertEquals(1, uuids.size());
-		return uuids.get(0);
+		return uuids;
 	}
 	
 	private Privilege savedPrivilege(String name) {

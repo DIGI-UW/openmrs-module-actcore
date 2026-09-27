@@ -73,40 +73,53 @@ open the encounter that still needs the answer:
 
 `form` and `concept` are the REST module's reference representations.
 
-Each flag that supports this has a query in the global property `rhdflags.gapQuery.<flag uuid>`.
-The query names the patient as `:patientId`, which the module replaces with the patient's id, and
-returns rows of (encounter uuid, uuid of the question whose answer is missing). For example, for a
-flag raised when a discharged patient's Perfusion Issues answer is missing:
+A SQL flag supports this when its own criteria return one row per gap: the patient, the encounter
+uuid, and the uuid of the question whose answer is missing. patientflags raises the flag from the
+first column, so the same criteria raise the flag and list its gaps. A message's `${n}` placeholders
+read the first row's columns, so a gap flag's message should not use them. For example, for a flag
+raised when a discharged patient's Perfusion Issues answer is missing:
 
-    SELECT e.uuid, q.uuid FROM encounter e JOIN concept q ON q.uuid = '<Perfusion Issues uuid>'
-    WHERE e.patient_id = :patientId AND e.voided = 0 AND ...
+    SELECT DISTINCT e.patient_id, e.uuid, q.uuid FROM encounter e
+      JOIN concept q ON q.uuid = '<Perfusion Issues uuid>'
+    WHERE e.voided = 0 AND ...
       AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.encounter_id = e.encounter_id
                       AND o.concept_id = q.concept_id AND o.voided = 0)
 
-A flag without a query answers `"configured": false` with no results. The response carries only
-the patient's own unvoided encounters and real concepts: a row naming another patient's encounter,
-a voided one, one of a type the caller may not view, or something that is not a concept uuid is
-left out. A cell that is not an encounter or concept uuid, such as `e.encounter_id` returned in
-place of `e.uuid`, is also logged as a warning, since a query returning only such cells otherwise
-answers exactly as one that finds no gaps. The warning names the column and the Java type of what
-it held, never the value. A query without `:patientId`, or one that returns a row of fewer than
-two columns, is refused. Days pending can be counted from `encounterDatetime`.
+The module rewrites the criteria for one patient as patientflags does when it checks a flag against
+a patient: it finds the first `<alias>.patient_id` and appends `and <that> = <id>`, or `where` in
+place of `and` when the letters `where` appear nowhere in the criteria, not even inside a subquery,
+a name or a string. So the first `<alias>.patient_id` must be the patient each row belongs to,
+nothing may follow the conditions (no `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT` or `UNION`), and a
+top-level `OR` must be in parentheses. The gaps come back in encounter date order.
+
+The response says `"configured": false` with no results when the criteria return no gap columns for
+this patient: criteria of one or two columns, a patient the criteria do not match now, a voided
+patient, a flag with no `<alias>.patient_id`, and a flag that is not a SQL flag. Criteria returning
+two columns for the patient are also logged as a warning, since they look like a gap query missing a
+column. The response carries only the patient's own unvoided encounters and real concepts: a row
+naming another patient's encounter, a voided one, one of a type the caller may not view, or
+something that is not a concept uuid is left out, and so is a row whose encounter or question cell
+is null, without a warning. A cell that is not an encounter or concept uuid, such as
+`e.encounter_id` returned in place of `e.uuid`, is also logged as a warning, since criteria
+returning only such cells otherwise answer exactly as ones that find no gaps. The warning names the
+column and the Java type of what it held, never the value. Days pending can be counted from
+`encounterDatetime`.
 
 Calling it takes View Patient Flags, the privilege that shows flags on the chart, along with the Get
 Patients, Get Encounters and Get Concepts privileges for the data it returns. patientflags 3.0.10
 checks View Patient Flags but does not create it, so a distribution creates that privilege and
 grants it to the roles that should see flags. For a caller without Get Forms, `form` is null. The
-module reads the flag definition and the gap query, and runs the query with SQL Level Access, on the
-caller's behalf.
+module reads the flag definition, and runs its criteria with SQL Level Access, on the caller's
+behalf, as patientflags does when it evaluates the flag.
 
-Saving a `rhdflags.gapQuery.*` property therefore amounts to SQL Level Access. The query can be any
-SELECT, and what it finds, in any table the database account can read, can reach the caller even
+Whoever can save a SQL flag's criteria therefore controls SQL that runs with SQL Level Access, as
+patientflags already lets them: it asks for SQL Level Access before it accepts SQL criteria only in
+its legacy flag form, and a flag saved through its API runs whatever criteria it holds. What the
+criteria find, in any table the database account can read, can reach a caller of this look-up even
 though the response carries only the patient's encounters, their forms and dates, and concept names:
-whether the response carries a row reveals it, and a query that fails answers with the query and the
-database's error message, which can quote the value it failed on. So grant Manage Global Properties
-only to roles you would trust with SQL Level Access. Manage Flags is much the same: patientflags
-asks for SQL Level Access before it accepts SQL criteria only in its legacy flag form, and a flag
-saved through its API runs whatever criteria it holds.
+whether the response carries a row reveals it, and criteria that fail answer with the query and the
+database's error message, which can quote the value they failed on. So grant Manage Flags only to
+roles you would trust with SQL Level Access.
 
 ### Upstream
 
