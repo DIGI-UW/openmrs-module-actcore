@@ -88,17 +88,25 @@ the patient's own unvoided encounters and real concepts: a row naming another pa
 a voided one, one of a type the caller may not view, or something that is not a concept uuid is
 left out. A cell that is not an encounter or concept uuid, such as `e.encounter_id` returned in
 place of `e.uuid`, is also logged as a warning, since a query returning only such cells otherwise
-answers exactly as one that finds no gaps. A query without `:patientId`, or one that returns a row
-of fewer than two columns, is refused. Days pending can be counted from `encounterDatetime`.
+answers exactly as one that finds no gaps. The warning names the column and the Java type of what
+it held, never the value. A query without `:patientId`, or one that returns a row of fewer than
+two columns, is refused. Days pending can be counted from `encounterDatetime`.
 
 Calling it takes View Patient Flags, the privilege that shows flags on the chart, along with the Get
 Patients, Get Encounters and Get Concepts privileges for the data it returns. patientflags 3.0.10
 checks View Patient Flags but does not create it, so a distribution creates that privilege and
 grants it to the roles that should see flags. For a caller without Get Forms, `form` is null. The
-module reads the flag definition and the gap query, and runs the query, on the caller's behalf.
-Whoever can edit global properties can therefore change what these queries select, as whoever can
-manage flags can with a flag's criteria; the response carries only the patient's encounters, their
-forms and dates, and concept names either way.
+module reads the flag definition and the gap query, and runs the query with SQL Level Access, on the
+caller's behalf.
+
+Saving a `rhdflags.gapQuery.*` property therefore amounts to SQL Level Access. The query can be any
+SELECT, and what it finds, in any table the database account can read, can reach the caller even
+though the response carries only the patient's encounters, their forms and dates, and concept names:
+whether the response carries a row reveals it, and a query that fails answers with the query and the
+database's error message, which can quote the value it failed on. So grant Manage Global Properties
+only to roles you would trust with SQL Level Access. Manage Flags is much the same: patientflags
+asks for SQL Level Access before it accepts SQL criteria only in its legacy flag form, and a flag
+saved through its API runs whatever criteria it holds.
 
 ### Upstream
 
@@ -132,6 +140,9 @@ every start. To run the task sooner:
       http://<host>/openmrs/ws/rest/v1/taskaction
 
 **Start** in **Manage Scheduler** does not do this: it reschedules the task for its next daily run.
+A run asked for while another is in progress is skipped, with a warning in the log. The request
+still answers as though it ran, and a skipped scheduled run still gets a last execution time in
+Manage Scheduler.
 
 Flags whose criteria have become true show up on the patient chart as usual, and each flag also
 appears under **Patient lists** as a list of the patients currently carrying it.
@@ -154,8 +165,9 @@ Every run reports itself in one line:
     1 created, 0 restored, 0 retired, 3 members added, 1 members ended
 
 A run that could not finish part of its work reports at `warn` instead, saying how many flags and
-lists failed, and logs the cause of each at `error`. The platform's packaged `log4j2.xml` puts
-`org.openmrs` at `warn`, so those are the lines you get without configuring anything.
+lists failed, and logs the cause of each at `error`. A run asked for while another is in progress
+logs only that it was skipped, at `warn`. The platform's packaged `log4j2.xml` puts `org.openmrs`
+at `warn`, so those are the lines you get without configuring anything.
 
 For the rest, including which list changed and by how much, give `org.openmrs.module.rhdflags` a
 logger of its own in core's logging configuration. On platform 2.4.4, 2.5.1, 2.6.0 and later, core

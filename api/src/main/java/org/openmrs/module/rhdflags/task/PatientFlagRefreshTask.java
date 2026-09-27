@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
@@ -36,16 +37,40 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefreshTask.class);
 	
+	/**
+	 * Static because the REST taskaction resource runs a new instance of the task, on the request
+	 * thread, alongside the scheduler's.
+	 */
+	private static final ReentrantLock RUNNING = new ReentrantLock();
+	
+	// Counted per row raised or cleared, not per flag, so a flag that fails partway still counts.
+	int raised;
+	
+	int cleared;
+	
 	@Override
 	public void execute() {
+		if (!RUNNING.tryLock()) {
+			log.warn("Patient flag refresh skipped: another run is in progress");
+			return;
+		}
+		try {
+			refresh();
+		}
+		finally {
+			RUNNING.unlock();
+		}
+	}
+	
+	private void refresh() {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
 		
 		FlagService flagService = Context.getService(FlagService.class);
 		int evaluated = 0;
 		int failed = 0;
-		int added = 0;
-		int removed = 0;
+		raised = 0;
+		cleared = 0;
 		
 		for (Flag flag : flagService.getAllFlags()) {
 			if (!Boolean.TRUE.equals(flag.getEnabled()) || Boolean.TRUE.equals(flag.getRetired())) {
@@ -53,9 +78,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			}
 			evaluated++;
 			try {
-				int[] delta = reconcile(flagService, flag);
-				added += delta[0];
-				removed += delta[1];
+				reconcile(flagService, flag);
 			}
 			catch (Exception e) {
 				// One bad criterion must not stop the flags behind it from being refreshed.
@@ -69,7 +92,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		Context.clearSession();
 		FlagListSync.Result lists = new FlagListSync().syncAll();
 		
-		report(evaluated, failed, added, removed, lists, System.currentTimeMillis() - startedAt);
+		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
 	}
 	
 	/**
@@ -91,35 +114,36 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		}
 	}
 	
-	int[] reconcile(FlagService flagService, Flag flag) {
+	void reconcile(FlagService flagService, Flag flag) {
 		Map<Object, Object> evaluationContext = new HashMap<Object, Object>();
 		Set<Integer> matching = evaluate(flagService, flag, evaluationContext);
 		Map<Integer, String> alreadyFlagged = alreadyFlagged(flag);
 		
-		int added = 0;
+		int raisedBefore = raised;
+		int clearedBefore = cleared;
+		
+		// Clearing first, since evaluating a message can throw and end the flag's pass.
+		for (Integer patientId : alreadyFlagged.keySet()) {
+			if (!matching.contains(patientId)) {
+				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+				cleared++;
+			}
+		}
+		
 		for (Integer patientId : matching) {
 			String message = message(flag, patientId, evaluationContext);
 			if (!alreadyFlagged.containsKey(patientId)) {
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
-				added++;
+				raised++;
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
 				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
 			}
 		}
 		
-		int removed = 0;
-		for (Integer patientId : alreadyFlagged.keySet()) {
-			if (!matching.contains(patientId)) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
-				removed++;
-			}
+		if (raised > raisedBefore || cleared > clearedBefore) {
+			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), raised - raisedBefore, cleared - clearedBefore);
 		}
-		
-		if (added > 0 || removed > 0) {
-			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), added, removed);
-		}
-		return new int[] { added, removed };
 	}
 	
 	private Set<Integer> evaluate(FlagService flagService, Flag flag, Map<Object, Object> evaluationContext) {
@@ -158,8 +182,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Custom evaluators hand back their own text per patient through the evaluation context; everything
-	 * else falls back to the flag's own message.
+	 * Keeps one message, the first a custom evaluator supplies, since reconcile tracks one row per
+	 * patient; patientflags' PatientFlagTask writes a row for each message it is given.
 	 */
 	@SuppressWarnings("unchecked")
 	private String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {
