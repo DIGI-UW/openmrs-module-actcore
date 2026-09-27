@@ -43,7 +43,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
-	// Counted as each row is raised or cleared, so the summary includes those of a flag that fails partway.
+	// Counted per row, not per flag, so a flag that fails partway still counts in the summary.
 	int raised;
 	
 	int cleared;
@@ -182,9 +182,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * A custom evaluator may hand back its own text per patient through the evaluation context, and
-	 * only the first is kept, where patientflags' own PatientFlagTask writes a row for each. Everything
-	 * else falls back to the flag's own message.
+	 * The first message a custom evaluator supplies through the evaluation context, where patientflags'
+	 * PatientFlagTask writes a row for each; otherwise the flag's own message.
 	 */
 	@SuppressWarnings("unchecked")
 	private String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {
