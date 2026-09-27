@@ -100,12 +100,13 @@ module reads the flag definition and the gap query, and runs the query with SQL 
 caller's behalf.
 
 Saving a `rhdflags.gapQuery.*` property therefore amounts to SQL Level Access. The query can be any
-SELECT, and although the response carries only the patient's encounters, their forms and dates, and
-concept names, whether it carries a row at all reveals what the query found, in any table the
-database account can read. So grant Manage Global Properties only to roles you would trust with SQL
-Level Access. Manage Flags is much the same: patientflags asks for SQL Level Access before it
-accepts SQL criteria only in its legacy flag form, and a flag saved through its API runs whatever
-criteria it holds.
+SELECT, and what it finds, in any table the database account can read, can reach the caller even
+though the response carries only the patient's encounters, their forms and dates, and concept names:
+whether the response carries a row reveals it, and a query that fails answers with the database's
+error message, which can quote the value it failed on. So grant Manage Global Properties only to
+roles you would trust with SQL Level Access. Manage Flags is much the same: patientflags asks for
+SQL Level Access before it accepts SQL criteria only in its legacy flag form, and a flag saved
+through its API runs whatever criteria it holds.
 
 ### Upstream
 
@@ -139,7 +140,9 @@ every start. To run the task sooner:
       http://<host>/openmrs/ws/rest/v1/taskaction
 
 **Start** in **Manage Scheduler** does not do this: it reschedules the task for its next daily run.
-A run asked for while another is in progress is skipped, with a warning in the log.
+A run asked for while another is in progress is skipped, with a warning in the log. The request
+still answers as though it ran, and a skipped scheduled run still gets a last execution time in
+Manage Scheduler.
 
 Flags whose criteria have become true show up on the patient chart as usual, and each flag also
 appears under **Patient lists** as a list of the patients currently carrying it.

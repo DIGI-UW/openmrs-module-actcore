@@ -499,14 +499,12 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	 * asked for by hand can start while the scheduled one is still going.
 	 */
 	@Test
-	public void aRunStartedWhileAnotherIsGoingLeavesItsWorkAlone() throws Exception {
+	public void aRunStartedWhileAnotherIsGoingIsSkipped() throws Exception {
 		saveFlag("overdue", MATCHES_ONE);
 		final Thread first = Thread.currentThread();
 		final List<LogEvent> secondRunLogged = new CopyOnWriteArrayList<LogEvent>();
 		final AtomicReference<Throwable> secondRunThrew = new AtomicReference<Throwable>();
 		AbstractAppender appender = new AbstractAppender("overlap", null, null, true, Property.EMPTY_ARRAY) {
-			
-			private boolean started;
 			
 			@Override
 			public void append(LogEvent event) {
@@ -514,10 +512,9 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 					secondRunLogged.add(event.toImmutable());
 					return;
 				}
-				if (started || !event.getMessage().getFormattedMessage().contains("Patient flag refresh starting")) {
+				if (!event.getMessage().getFormattedMessage().contains("Patient flag refresh starting")) {
 					return;
 				}
-				started = true;
 				Thread second = new Thread(new Runnable() {
 					
 					@Override
@@ -532,25 +529,18 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 				});
 				second.start();
 				try {
-					second.join();
+					second.join(10000);
 				}
 				catch (InterruptedException e) {
 					throw new IllegalStateException(e);
 				}
+				if (second.isAlive()) {
+					secondRunThrew.set(new IllegalStateException("the second run did not return"));
+				}
 			}
 		};
-		appender.start();
-		Logger logger = (Logger) LogManager.getLogger(PatientFlagRefreshTask.class);
-		Level level = logger.getLevel();
-		logger.addAppender(appender);
-		logger.setLevel(Level.INFO);
-		try {
-			runScheduledWork();
-		}
-		finally {
-			logger.removeAppender(appender);
-			logger.setLevel(level);
-		}
+		
+		runScheduledWorkWith(appender, PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask());
 		
 		assertNull(String.valueOf(secondRunThrew.get()), secondRunThrew.get());
 		assertEquals(1, secondRunLogged.size());
@@ -571,8 +561,10 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		flagService.saveFlag(flag);
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(OTHER_PATIENT), flag, "overdue"));
 		
-		runScheduledWork();
+		String summary = theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask()))
+		        .getMessage().getFormattedMessage();
 		
+		assertTrue(summary, summary.contains("1 cleared"));
 		assertEquals(0, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
 		        + " and patient_id = " + OTHER_PATIENT + " and voided = false"));
 	}
@@ -606,6 +598,12 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 				}
 			}
 		};
+		runScheduledWorkWith(appender, source, threshold, task);
+		return events;
+	}
+	
+	private void runScheduledWorkWith(AbstractAppender appender, Class<?> source, Level threshold,
+	        PatientFlagRefreshTask task) {
 		appender.start();
 		Logger logger = (Logger) LogManager.getLogger(source);
 		Level level = logger.getLevel();
@@ -619,7 +617,6 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 			logger.removeAppender(appender);
 			logger.setLevel(level);
 		}
-		return events;
 	}
 	
 	private LogEvent theSummaryIn(List<LogEvent> events) {

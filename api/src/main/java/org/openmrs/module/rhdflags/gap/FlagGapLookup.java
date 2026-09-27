@@ -99,7 +99,7 @@ public class FlagGapLookup {
 			}
 			Encounter encounter = Context.getEncounterService().getEncounterByUuid(row.get(0).toString());
 			if (encounter == null) {
-				log.warn("The gap query for flag {} returned a {} in column 1, which is not an encounter uuid",
+				log.warn("The gap query for flag {} returned a value of type {} in column 1, which is not an encounter uuid",
 				    flag.getUuid(), row.get(0).getClass().getSimpleName());
 				continue;
 			}
@@ -109,8 +109,8 @@ public class FlagGapLookup {
 			}
 			Concept question = Context.getConceptService().getConceptByUuid(row.get(1).toString());
 			if (question == null) {
-				log.warn("The gap query for flag {} returned a {} in column 2, which is not a concept uuid", flag.getUuid(),
-				    row.get(1).getClass().getSimpleName());
+				log.warn("The gap query for flag {} returned a value of type {} in column 2, which is not a concept uuid",
+				    flag.getUuid(), row.get(1).getClass().getSimpleName());
 				continue;
 			}
 			gaps.add(new FlagGap(encounter, question));

@@ -272,8 +272,8 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		        .executeSQL("select password from users where password is not null", true);
 		assertTrue(!passwords.isEmpty());
 		for (LogEvent warning : warnings) {
+			String message = warning.getMessage().getFormattedMessage();
 			for (List<Object> password : passwords) {
-				String message = warning.getMessage().getFormattedMessage();
 				assertTrue(message, !message.contains(password.get(0).toString()));
 			}
 		}

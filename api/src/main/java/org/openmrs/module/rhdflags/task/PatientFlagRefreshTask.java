@@ -43,6 +43,11 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
+	// Counted as each row is written, so a flag that fails partway still reports what it changed.
+	private int raised;
+	
+	private int cleared;
+	
 	@Override
 	public void execute() {
 		if (!RUNNING.tryLock()) {
@@ -64,8 +69,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		FlagService flagService = Context.getService(FlagService.class);
 		int evaluated = 0;
 		int failed = 0;
-		int added = 0;
-		int removed = 0;
+		raised = 0;
+		cleared = 0;
 		
 		for (Flag flag : flagService.getAllFlags()) {
 			if (!Boolean.TRUE.equals(flag.getEnabled()) || Boolean.TRUE.equals(flag.getRetired())) {
@@ -73,9 +78,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			}
 			evaluated++;
 			try {
-				int[] delta = reconcile(flagService, flag);
-				added += delta[0];
-				removed += delta[1];
+				reconcile(flagService, flag);
 			}
 			catch (Exception e) {
 				// One bad criterion must not stop the flags behind it from being refreshed.
@@ -89,7 +92,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		Context.clearSession();
 		FlagListSync.Result lists = new FlagListSync().syncAll();
 		
-		report(evaluated, failed, added, removed, lists, System.currentTimeMillis() - startedAt);
+		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
 	}
 	
 	/**
@@ -116,27 +119,30 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		Set<Integer> matching = evaluate(flagService, flag, evaluationContext);
 		Map<Integer, String> alreadyFlagged = alreadyFlagged(flag);
 		
+		int raisedBefore = raised;
+		int clearedBefore = cleared;
+		
 		// Clearing first, since evaluating a message can throw and end the flag's pass.
-		int removed = 0;
 		for (Integer patientId : alreadyFlagged.keySet()) {
 			if (!matching.contains(patientId)) {
 				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
-				removed++;
+				cleared++;
 			}
 		}
 		
-		int added = 0;
 		for (Integer patientId : matching) {
 			String message = message(flag, patientId, evaluationContext);
 			if (!alreadyFlagged.containsKey(patientId)) {
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
-				added++;
+				raised++;
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
 				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
 			}
 		}
 		
+		int added = raised - raisedBefore;
+		int removed = cleared - clearedBefore;
 		if (added > 0 || removed > 0) {
 			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), added, removed);
 		}
