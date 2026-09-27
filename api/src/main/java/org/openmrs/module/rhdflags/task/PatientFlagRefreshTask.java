@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
@@ -36,8 +37,27 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefreshTask.class);
 	
+	/**
+	 * Static because the REST taskaction resource runs a new instance of the task, on the request
+	 * thread, alongside the scheduler's.
+	 */
+	private static final ReentrantLock RUNNING = new ReentrantLock();
+	
 	@Override
 	public void execute() {
+		if (!RUNNING.tryLock()) {
+			log.warn("Patient flag refresh skipped: another run is in progress");
+			return;
+		}
+		try {
+			refresh();
+		}
+		finally {
+			RUNNING.unlock();
+		}
+	}
+	
+	private void refresh() {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
 		
@@ -96,6 +116,15 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		Set<Integer> matching = evaluate(flagService, flag, evaluationContext);
 		Map<Integer, String> alreadyFlagged = alreadyFlagged(flag);
 		
+		// Clearing first, since evaluating a message can throw and end the flag's pass.
+		int removed = 0;
+		for (Integer patientId : alreadyFlagged.keySet()) {
+			if (!matching.contains(patientId)) {
+				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+				removed++;
+			}
+		}
+		
 		int added = 0;
 		for (Integer patientId : matching) {
 			String message = message(flag, patientId, evaluationContext);
@@ -105,14 +134,6 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
 				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
-			}
-		}
-		
-		int removed = 0;
-		for (Integer patientId : alreadyFlagged.keySet()) {
-			if (!matching.contains(patientId)) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
-				removed++;
 			}
 		}
 		
@@ -158,7 +179,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Custom evaluators hand back their own text per patient through the evaluation context; everything
+	 * A custom evaluator may hand back its own text per patient through the evaluation context, and
+	 * only the first is kept, where patientflags' own PatientFlagTask writes a row for each. Everything
 	 * else falls back to the flag's own message.
 	 */
 	@SuppressWarnings("unchecked")

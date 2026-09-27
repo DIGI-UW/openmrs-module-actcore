@@ -134,7 +134,33 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertTrue(gaps.isEmpty());
 		assertTrue(!warnings.isEmpty());
-		assertTrue(warnings.get(0).getMessage().getFormattedMessage().contains("not an encounter uuid"));
+		String warning = warnings.get(0).getMessage().getFormattedMessage();
+		assertTrue(warning, warning.contains("not an encounter uuid"));
+		assertTrue(warning, warning.contains("column 1"));
+		assertTrue(warning, warning.contains("Integer"));
+	}
+	
+	@Test
+	public void keepsAnEncounterCellThatIsNotAnEncounterUuidOutOfTheLog() {
+		configure("select u.password, '" + WEIGHT + "' from users u where :patientId > 0 and u.password is not null");
+		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		
+		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		
+		assertTrue(!warnings.isEmpty());
+		assertNoPasswordIn(warnings);
+	}
+	
+	@Test
+	public void keepsAQuestionCellThatIsNotAConceptUuidOutOfTheLog() {
+		configure("select e.uuid, u.password from encounter e, users u where e.patient_id = :patientId"
+		        + " and e.encounter_id = 3 and u.password is not null");
+		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		
+		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		
+		assertTrue(!warnings.isEmpty());
+		assertNoPasswordIn(warnings);
 	}
 	
 	@Test
@@ -146,7 +172,10 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertTrue(gaps.isEmpty());
 		assertEquals(1, warnings.size());
-		assertTrue(warnings.get(0).getMessage().getFormattedMessage().contains("not a concept uuid"));
+		String warning = warnings.get(0).getMessage().getFormattedMessage();
+		assertTrue(warning, warning.contains("not a concept uuid"));
+		assertTrue(warning, warning.contains("column 2"));
+		assertTrue(warning, warning.contains("Integer"));
 	}
 	
 	@Test
@@ -236,6 +265,18 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 			fail("expected the lookup to require View Patient Flags");
 		}
 		catch (APIAuthenticationException expected) {}
+	}
+	
+	private void assertNoPasswordIn(List<LogEvent> warnings) {
+		List<List<Object>> passwords = Context.getAdministrationService()
+		        .executeSQL("select password from users where password is not null", true);
+		assertTrue(!passwords.isEmpty());
+		for (LogEvent warning : warnings) {
+			for (List<Object> password : passwords) {
+				String message = warning.getMessage().getFormattedMessage();
+				assertTrue(message, !message.contains(password.get(0).toString()));
+			}
+		}
 	}
 	
 	private Patient patient() {

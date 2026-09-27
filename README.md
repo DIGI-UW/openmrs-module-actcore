@@ -88,17 +88,23 @@ the patient's own unvoided encounters and real concepts: a row naming another pa
 a voided one, one of a type the caller may not view, or something that is not a concept uuid is
 left out. A cell that is not an encounter or concept uuid, such as `e.encounter_id` returned in
 place of `e.uuid`, is also logged as a warning, since a query returning only such cells otherwise
-answers exactly as one that finds no gaps. A query without `:patientId`, or one that returns a row
+answers exactly as one that finds no gaps. The warning names the column and the Java type of what
+it held, never the value. A query without `:patientId`, or one that returns a row
 of fewer than two columns, is refused. Days pending can be counted from `encounterDatetime`.
 
 Calling it takes View Patient Flags, the privilege that shows flags on the chart, along with the Get
 Patients, Get Encounters and Get Concepts privileges for the data it returns. patientflags 3.0.10
 checks View Patient Flags but does not create it, so a distribution creates that privilege and
 grants it to the roles that should see flags. For a caller without Get Forms, `form` is null. The
-module reads the flag definition and the gap query, and runs the query, on the caller's behalf.
-Whoever can edit global properties can therefore change what these queries select, as whoever can
-manage flags can with a flag's criteria; the response carries only the patient's encounters, their
-forms and dates, and concept names either way.
+module reads the flag definition and the gap query, and runs the query with SQL Level Access, on the
+caller's behalf.
+
+Saving a `rhdflags.gapQuery.*` property therefore amounts to SQL Level Access. The query can be any
+SELECT, and although the response carries only the patient's encounters, their forms and dates, and
+concept names, whether it carries a row at all reveals what the query found, in any table. So grant
+Manage Global Properties only to roles you would trust with SQL Level Access. Manage Flags is much
+the same: patientflags asks for SQL Level Access before it accepts SQL criteria only in its legacy
+flag form, and a flag saved through its API runs whatever criteria it holds.
 
 ### Upstream
 
@@ -130,6 +136,10 @@ every start. To run the task sooner:
     curl -u admin:<password> -X POST -H 'Content-Type: application/json' \
       -d '{"action":"runtask","tasks":["RHD Patient Flag Refresh"]}' \
       http://<host>/openmrs/ws/rest/v1/taskaction
+
+A run asked for while another is in progress is skipped, with a warning in the log. After the module
+is upgraded without a restart, the scheduler still runs the previous copy of the task, which the new
+copy cannot see, so restart before asking for a run.
 
 **Start** in **Manage Scheduler** does not do this: it reschedules the task for its next daily run.
 
