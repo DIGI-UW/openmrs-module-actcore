@@ -30,8 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Lists a SQL flag's gaps from its criteria's (patient_id, encounter uuid, question uuid) rows,
- * evaluated for one patient as patientflags' SQLFlagEvaluator.eval does.
+ * Lists a SQL flag's gaps from its criteria's (patient_id, encounter uuid, question uuid) rows.
  */
 public class FlagGapLookup {
 	
@@ -56,7 +55,7 @@ public class FlagGapLookup {
 	
 	/**
 	 * The gaps behind this flag for this patient in encounter date order, or null when the flag is not
-	 * a SQL flag with a patient column, the patient is voided, or no gap columns come back for them.
+	 * a SQL flag with a patient column, the patient is voided, or no row of three columns comes back.
 	 */
 	public List<FlagGap> find(Patient patient, Flag flag) {
 		requireViewPatientFlags();
