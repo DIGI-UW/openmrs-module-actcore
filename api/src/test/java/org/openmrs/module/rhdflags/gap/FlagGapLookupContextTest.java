@@ -73,7 +73,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	private Flag flag;
 	
-	// What the last warningsWhileFinding call returned, which may be null.
+	// What find returned during the last warningsWhileFinding call, which may be null.
 	private List<FlagGap> found;
 	
 	@Before

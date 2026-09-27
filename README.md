@@ -98,8 +98,9 @@ patient, a flag with no `<alias>.patient_id`, and a flag that is not a SQL flag.
 two columns for the patient are also logged as a warning, since they look like a gap query missing a
 column. The response carries only the patient's own unvoided encounters and real concepts: a row
 naming another patient's encounter, a voided one, one of a type the caller may not view, or
-something that is not a concept uuid is left out. A cell that is not an encounter or concept uuid,
-such as `e.encounter_id` returned in place of `e.uuid`, is also logged as a warning, since criteria
+something that is not a concept uuid is left out, and so is a row whose encounter or question cell
+is null, without a warning. A cell that is not an encounter or concept uuid, such as
+`e.encounter_id` returned in place of `e.uuid`, is also logged as a warning, since criteria
 returning only such cells otherwise answer exactly as ones that find no gaps. The warning names the
 column and the Java type of what it held, never the value. Days pending can be counted from
 `encounterDatetime`.
