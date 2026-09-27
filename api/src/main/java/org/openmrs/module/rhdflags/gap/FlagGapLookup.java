@@ -82,8 +82,11 @@ public class FlagGapLookup {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		}
 		
-		if (rows.isEmpty() || rows.get(0).size() < 3) {
-			if (!rows.isEmpty() && rows.get(0).size() == 2) {
+		if (rows.isEmpty()) {
+			return null;
+		}
+		if (rows.get(0).size() < 3) {
+			if (rows.get(0).size() == 2) {
 				log.warn("The criteria of flag {} return 2 columns, where a gap row needs patient_id, an"
 				        + " encounter uuid and a concept uuid",
 				    flag.getUuid());

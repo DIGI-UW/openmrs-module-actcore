@@ -73,6 +73,9 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	private Flag flag;
 	
+	// What the last warningsWhileFinding call returned, which may be null.
+	private List<FlagGap> found;
+	
 	@Before
 	public void setUp() {
 		flag = new Flag();
@@ -136,12 +139,17 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void returnsNullForCriteriaWithoutGapColumns() {
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<LogEvent> warnings = warningsWhileFinding(new ArrayList<FlagGap>());
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertNull(lookup.find(patient(), flag));
+		assertNull(found);
 		assertTrue(warnings.isEmpty());
+	}
+	
+	@Test
+	public void rewritesCriteriaWrittenInCapitalsOverSeveralLinesWithATrailingSemicolon() {
+		configure("SELECT e.patient_id, e.uuid, '" + WEIGHT + "' FROM encounter e\nWHERE e.encounter_id = 3;");
+		
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
 	}
 	
 	@Test
@@ -199,7 +207,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		
 		List<LogEvent> warnings = warningsWhileFinding(gaps);
 		
-		assertTrue(gaps.isEmpty());
+		assertNull(found);
 		assertEquals(1, warnings.size());
 		String warning = warnings.get(0).getMessage().getFormattedMessage();
 		assertTrue(warning, warning.contains("2 columns"));
@@ -396,7 +404,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.WARN);
 		try {
-			List<FlagGap> found = lookup.find(patient(), flag);
+			found = lookup.find(patient(), flag);
 			if (found != null) {
 				gaps.addAll(found);
 			}

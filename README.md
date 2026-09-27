@@ -87,22 +87,21 @@ raised when a discharged patient's Perfusion Issues answer is missing:
 
 The module rewrites the criteria for one patient as patientflags does when it checks a flag against
 a patient: it finds the first `<alias>.patient_id` and appends `and <that> = <id>`, or `where` in
-place of `and` when the word `where` appears nowhere in the criteria, a subquery included. So the
-first `<alias>.patient_id` must be the patient each row belongs to, nothing may follow the
-conditions (no `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT` or `UNION`), and a top-level `OR` must be
-in parentheses. The gaps come back in encounter date order. A voided patient, a flag with no
-`<alias>.patient_id` and a flag that is not a SQL flag have no gaps.
+place of `and` when the letters `where` appear nowhere in the criteria, not even inside a subquery,
+a name or a string. So the first `<alias>.patient_id` must be the patient each row belongs to,
+nothing may follow the conditions (no `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT` or `UNION`), and a
+top-level `OR` must be in parentheses. The gaps come back in encounter date order.
 
 The response says `"configured": false` with no results when the criteria return no gap columns for
-this patient, which includes criteria of one column and a patient the criteria do not match now.
-Criteria returning two columns for the patient are logged as a warning, since they look like a gap
-query missing a column. The response carries only the patient's own unvoided encounters and real
-concepts: a row naming another patient's encounter, a voided one, one of a type the caller may not
-view, or something that is not a concept uuid is left out. A cell that is not an encounter or
-concept uuid, such as `e.encounter_id` returned in place of `e.uuid`, is also logged as a warning,
-since criteria returning only such cells otherwise answer exactly as ones that find no gaps. The
-warning names the column and the Java type of what it held, never the value. Days pending can be
-counted from `encounterDatetime`.
+this patient: criteria of one column, a patient the criteria do not match now, a voided patient, a
+flag with no `<alias>.patient_id`, and a flag that is not a SQL flag. Criteria returning two columns
+for the patient are logged as a warning, since they look like a gap query missing a column. The
+response carries only the patient's own unvoided encounters and real concepts: a row naming another
+patient's encounter, a voided one, one of a type the caller may not view, or something that is not a
+concept uuid is left out. A cell that is not an encounter or concept uuid, such as `e.encounter_id`
+returned in place of `e.uuid`, is also logged as a warning, since criteria returning only such cells
+otherwise answer exactly as ones that find no gaps. The warning names the column and the Java type
+of what it held, never the value. Days pending can be counted from `encounterDatetime`.
 
 Calling it takes View Patient Flags, the privilege that shows flags on the chart, along with the Get
 Patients, Get Encounters and Get Concepts privileges for the data it returns. patientflags 3.0.10
