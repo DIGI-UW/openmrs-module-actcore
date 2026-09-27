@@ -30,9 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Lists a SQL flag's gaps from its own criteria, whose rows are (patient_id, encounter uuid,
- * question concept uuid), evaluated for one patient the way patientflags' SQLFlagEvaluator.eval
- * does.
+ * Lists a SQL flag's gaps from its criteria's (patient_id, encounter uuid, question uuid) rows,
+ * evaluated for one patient as patientflags' SQLFlagEvaluator.eval does.
  */
 public class FlagGapLookup {
 	
