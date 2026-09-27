@@ -117,12 +117,15 @@ Build the module, then either drop the omod into the running instance:
 
     cp omod/target/rhdflags-omod-*.omod /openmrs/data/modules/
 
-or, in a distribution, mount it alongside the other modules and restart the backend. Once it
-starts it registers its own scheduled task, so there is nothing to configure to get it running.
-The first run is five minutes after installation, and daily from then on. On a first boot where
-Initializer is still loading the flags at that point, as on an act3 distribution, that run finds no
-flags and the lists appear only after the next day's run. To get them sooner, run the task once
-startup has finished:
+or, in a distribution, mount it alongside the other modules and restart the backend. Once it starts
+it registers its own scheduled task, so there is nothing to configure to get it running. The first
+run is five minutes after the module first starts, and daily from then on. Where Initializer is
+installed the module starts after it, and Initializer creates a distribution's flags while it
+starts, so on a first boot that run already finds them. Stopping Initializer keeps this module from
+starting on the next boot, as it does any module that is aware of it; start Initializer again and
+then this module, or set Initializer's `initializer.started` global property to `true` and restart.
+Uninstalling Initializer is not enough on a distribution image, which copies its modules back in at
+every start. To run the task sooner:
 
     curl -u admin:<password> -X POST -H 'Content-Type: application/json' \
       -d '{"action":"runtask","tasks":["RHD Patient Flag Refresh"]}' \

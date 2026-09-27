@@ -31,6 +31,12 @@
     <require_module version="${webservicesRestVersion}">org.openmrs.module.webservices.rest</require_module>
   </require_modules>
 
+  <!-- Initializer creates the flags while it starts, and this module schedules its first refresh
+       when it starts, so it starts after Initializer where Initializer is installed. -->
+  <aware_of_modules>
+    <aware_of_module>org.openmrs.module.initializer</aware_of_module>
+  </aware_of_modules>
+
   <globalProperty>
     <property>rhdflags.listFlagTag</property>
     <defaultValue></defaultValue>
