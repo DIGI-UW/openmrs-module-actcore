@@ -119,12 +119,13 @@ Build the module, then either drop the omod into the running instance:
 
 or, in a distribution, mount it alongside the other modules and restart the backend. Once it starts
 it registers its own scheduled task, so there is nothing to configure to get it running. The first
-run is five minutes after the module first starts, and daily from then on. Where Initializer is installed
-the module starts after it, and Initializer creates a distribution's flags while it starts, so on a
-first boot that run already finds them. Stopping Initializer keeps this module from starting on the
-next boot, as it does any module that is aware of it; start Initializer again, or set its
-`initializer.started` global property to `true`. Uninstalling Initializer is not enough on a
-distribution image, which copies its modules back in at every start. To run the task sooner:
+run is five minutes after the module first starts, and daily from then on. Where Initializer is
+installed the module starts after it, and Initializer creates a distribution's flags while it
+starts, so on a first boot that run already finds them. Stopping Initializer keeps this module from
+starting on the next boot, as it does any module that is aware of it; start Initializer again and
+then this module, or set Initializer's `initializer.started` global property to `true` and restart.
+Uninstalling Initializer is not enough on a distribution image, which copies its modules back in at
+every start. To run the task sooner:
 
     curl -u admin:<password> -X POST -H 'Content-Type: application/json' \
       -d '{"action":"runtask","tasks":["RHD Patient Flag Refresh"]}' \

@@ -48,7 +48,7 @@ public class ModuleStartupOrderTest {
 	
 	private final List<Module> loaded = new ArrayList<Module>();
 	
-	// Restored because the map is static, under each module's own id because the map is weakly keyed.
+	// Restored after each test, since ModuleFactory's map is static.
 	private final Map<String, Module> replaced = new HashMap<String, Module>();
 	
 	@Before
@@ -94,6 +94,7 @@ public class ModuleStartupOrderTest {
 	private void load(Module module) {
 		Module previous = ModuleFactory.getLoadedModulesMap().put(module.getModuleId(), module);
 		if (previous != null) {
+			// Keyed by the module's own id string, since the map is weakly keyed.
 			replaced.put(previous.getModuleId(), previous);
 		}
 		loaded.add(module);
