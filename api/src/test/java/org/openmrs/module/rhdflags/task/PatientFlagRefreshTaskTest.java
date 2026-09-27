@@ -79,10 +79,10 @@ public class PatientFlagRefreshTaskTest {
 	public void raisesAFlagForAPatientThatHasStartedMatching() {
 		matches(7);
 		
-		int[] delta = task.reconcile(flagService, flag);
+		task.reconcile(flagService, flag);
 		
-		assertEquals(1, delta[0]);
-		assertEquals(0, delta[1]);
+		assertEquals(1, task.raised);
+		assertEquals(0, task.cleared);
 		ArgumentCaptor<PatientFlag> saved = ArgumentCaptor.forClass(PatientFlag.class);
 		verify(flagService).savePatientFlag(saved.capture());
 		assertEquals(Integer.valueOf(7), saved.getValue().getPatient().getPatientId());
@@ -93,10 +93,10 @@ public class PatientFlagRefreshTaskTest {
 		alreadyFlagged.addAll(Arrays.asList(7));
 		matches();
 		
-		int[] delta = task.reconcile(flagService, flag);
+		task.reconcile(flagService, flag);
 		
-		assertEquals(0, delta[0]);
-		assertEquals(1, delta[1]);
+		assertEquals(0, task.raised);
+		assertEquals(1, task.cleared);
 		verify(flagService).deletePatientFlagForPatient(any(Patient.class), eq(flag));
 	}
 	
@@ -108,10 +108,10 @@ public class PatientFlagRefreshTaskTest {
 		alreadyFlagged.addAll(Arrays.asList(7));
 		matches(7);
 		
-		int[] delta = task.reconcile(flagService, flag);
+		task.reconcile(flagService, flag);
 		
-		assertEquals(0, delta[0]);
-		assertEquals(0, delta[1]);
+		assertEquals(0, task.raised);
+		assertEquals(0, task.cleared);
 		verify(flagService, never()).savePatientFlag(any(PatientFlag.class));
 		verify(flagService, never()).deletePatientFlagForPatient(any(Patient.class), any(Flag.class));
 	}
@@ -121,10 +121,10 @@ public class PatientFlagRefreshTaskTest {
 		alreadyFlagged.addAll(Arrays.asList(7, 8));
 		matches(8, 9);
 		
-		int[] delta = task.reconcile(flagService, flag);
+		task.reconcile(flagService, flag);
 		
-		assertEquals(1, delta[0]);
-		assertEquals(1, delta[1]);
+		assertEquals(1, task.raised);
+		assertEquals(1, task.cleared);
 		verify(flagService, times(1)).savePatientFlag(any(PatientFlag.class));
 		verify(flagService, times(1)).deletePatientFlagForPatient(any(Patient.class), eq(flag));
 	}
@@ -134,9 +134,9 @@ public class PatientFlagRefreshTaskTest {
 		alreadyFlagged.addAll(new HashSet<Integer>(Arrays.asList(7)));
 		when(flagService.getFlaggedPatients(eq(flag), any(Map.class))).thenReturn(null);
 		
-		int[] delta = task.reconcile(flagService, flag);
+		task.reconcile(flagService, flag);
 		
-		assertEquals(0, delta[0]);
-		assertEquals(1, delta[1]);
+		assertEquals(0, task.raised);
+		assertEquals(1, task.cleared);
 	}
 }

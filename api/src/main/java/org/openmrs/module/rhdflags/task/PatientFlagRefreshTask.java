@@ -44,9 +44,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
 	// Counted as each row is raised or cleared, so the summary includes those of a flag that fails partway.
-	private int raised;
+	int raised;
 	
-	private int cleared;
+	int cleared;
 	
 	@Override
 	public void execute() {
@@ -114,7 +114,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		}
 	}
 	
-	int[] reconcile(FlagService flagService, Flag flag) {
+	void reconcile(FlagService flagService, Flag flag) {
 		Map<Object, Object> evaluationContext = new HashMap<Object, Object>();
 		Set<Integer> matching = evaluate(flagService, flag, evaluationContext);
 		Map<Integer, String> alreadyFlagged = alreadyFlagged(flag);
@@ -141,12 +141,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			}
 		}
 		
-		int added = raised - raisedBefore;
-		int removed = cleared - clearedBefore;
-		if (added > 0 || removed > 0) {
-			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), added, removed);
+		if (raised > raisedBefore || cleared > clearedBefore) {
+			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), raised - raisedBefore, cleared - clearedBefore);
 		}
-		return new int[] { added, removed };
 	}
 	
 	private Set<Integer> evaluate(FlagService flagService, Flag flag, Map<Object, Object> evaluationContext) {

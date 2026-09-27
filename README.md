@@ -102,11 +102,11 @@ caller's behalf.
 Saving a `rhdflags.gapQuery.*` property therefore amounts to SQL Level Access. The query can be any
 SELECT, and what it finds, in any table the database account can read, can reach the caller even
 though the response carries only the patient's encounters, their forms and dates, and concept names:
-whether the response carries a row reveals it, and a query that fails answers with the database's
-error message, which can quote the value it failed on. So grant Manage Global Properties only to
-roles you would trust with SQL Level Access. Manage Flags is much the same: patientflags asks for
-SQL Level Access before it accepts SQL criteria only in its legacy flag form, and a flag saved
-through its API runs whatever criteria it holds.
+whether the response carries a row reveals it, and a query that fails answers with the query and the
+database's error message, which can quote the value it failed on. So grant Manage Global Properties
+only to roles you would trust with SQL Level Access. Manage Flags is much the same: patientflags
+asks for SQL Level Access before it accepts SQL criteria only in its legacy flag form, and a flag
+saved through its API runs whatever criteria it holds.
 
 ### Upstream
 

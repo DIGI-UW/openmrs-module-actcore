@@ -469,7 +469,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		PatientFlagRefreshTask failing = new PatientFlagRefreshTask() {
 			
 			@Override
-			int[] reconcile(FlagService flagService, Flag flag) {
+			void reconcile(FlagService flagService, Flag flag) {
 				throw new IllegalStateException("criteria is broken");
 			}
 		};
