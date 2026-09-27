@@ -43,7 +43,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
-	// Counted per row, not per flag, so a flag that fails partway still counts in the summary.
+	// Counted per row raised or cleared, not per flag, so a flag that fails partway still counts.
 	int raised;
 	
 	int cleared;
@@ -182,8 +182,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * The first message a custom evaluator supplies through the evaluation context, where patientflags'
-	 * PatientFlagTask writes a row for each; otherwise the flag's own message.
+	 * Keeps one message, the first a custom evaluator supplies, since reconcile tracks one row per
+	 * patient; patientflags' PatientFlagTask writes a row for each message it is given.
 	 */
 	@SuppressWarnings("unchecked")
 	private String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {

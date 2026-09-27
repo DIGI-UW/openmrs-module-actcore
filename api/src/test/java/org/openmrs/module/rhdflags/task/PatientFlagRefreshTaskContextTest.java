@@ -494,10 +494,6 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		assertTrue(second, second.contains("0 retired"));
 	}
 	
-	/**
-	 * The REST taskaction resource runs a new instance of the task on the request thread, so a run
-	 * asked for by hand can start while the scheduled one is still going.
-	 */
 	@Test
 	public void aRunStartedWhileAnotherIsGoingIsSkipped() throws Exception {
 		saveFlag("overdue", MATCHES_ONE);
