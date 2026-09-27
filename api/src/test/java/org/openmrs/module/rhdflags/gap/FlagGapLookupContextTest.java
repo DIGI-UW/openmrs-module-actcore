@@ -139,7 +139,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void returnsNullForCriteriaWithoutGapColumns() {
-		List<LogEvent> warnings = warningsWhileFinding(new ArrayList<FlagGap>());
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertNull(found);
 		assertTrue(warnings.isEmpty());
@@ -203,9 +203,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void warnsOfCriteriaThatReturnTwoColumns() {
 		configure("select e.patient_id, e.uuid from encounter e where e.encounter_id = 3");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
-		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertNull(found);
 		assertEquals(1, warnings.size());
@@ -242,11 +240,9 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void warnsOfAnEncounterCellThatIsNotAnEncounterUuid() {
 		configure("select e.patient_id, e.encounter_id, '" + WEIGHT + "' from encounter e");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertTrue(gaps.isEmpty());
+		assertEquals(new ArrayList<FlagGap>(), found);
 		assertTrue(!warnings.isEmpty());
 		String warning = warnings.get(0).getMessage().getFormattedMessage();
 		assertTrue(warning, warning.contains("not an encounter uuid"));
@@ -257,9 +253,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void keepsAnEncounterCellThatIsNotAnEncounterUuidOutOfTheLog() {
 		configure("select p.patient_id, u.password, '" + WEIGHT + "' from patient p, users u where u.password is not null");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
-		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertTrue(!warnings.isEmpty());
 		assertNoPasswordIn(warnings);
@@ -269,9 +263,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	public void keepsAQuestionCellThatIsNotAConceptUuidOutOfTheLog() {
 		configure("select e.patient_id, e.uuid, u.password from encounter e, users u where e.encounter_id = 3"
 		        + " and u.password is not null");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
-		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		List<LogEvent> warnings = warningsWhileFinding();
 		
 		assertTrue(!warnings.isEmpty());
 		assertNoPasswordIn(warnings);
@@ -280,11 +272,9 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void warnsOfAQuestionCellThatIsNotAConceptUuid() {
 		configure("select e.patient_id, e.uuid, 5089 from encounter e where e.encounter_id = 3");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertTrue(gaps.isEmpty());
+		assertEquals(new ArrayList<FlagGap>(), found);
 		assertEquals(1, warnings.size());
 		String warning = warnings.get(0).getMessage().getFormattedMessage();
 		assertTrue(warning, warning.contains("not a concept uuid"));
@@ -298,11 +288,9 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		        + " on e.encounter_id in (3, 5, 6) where p.patient_id > 0");
 		Encounter five = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_5);
 		Context.getEncounterService().voidEncounter(five, "test");
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<LogEvent> warnings = warningsWhileFinding();
 		
-		List<LogEvent> warnings = warningsWhileFinding(gaps);
-		
-		assertEquals(ENCOUNTER_3, onlyEncounter(gaps));
+		assertEquals(ENCOUNTER_3, onlyEncounter(found));
 		assertTrue(warnings.isEmpty());
 	}
 	
@@ -386,7 +374,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		Context.getService(FlagService.class).saveFlag(flag);
 	}
 	
-	private List<LogEvent> warningsWhileFinding(List<FlagGap> gaps) {
+	private List<LogEvent> warningsWhileFinding() {
 		final List<LogEvent> events = new ArrayList<LogEvent>();
 		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
 			
@@ -405,9 +393,6 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		logger.setLevel(Level.WARN);
 		try {
 			found = lookup.find(patient(), flag);
-			if (found != null) {
-				gaps.addAll(found);
-			}
 		}
 		finally {
 			logger.removeAppender(appender);
