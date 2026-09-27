@@ -22,7 +22,6 @@ import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -33,7 +32,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
-import org.openmrs.module.rhdflags.gap.FlagGapLookup;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -131,9 +129,8 @@ public class FlagGapControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	private void configureOneGap() {
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(
-		        FlagGapLookup.GAP_QUERY_PREFIX + flag.getUuid(),
-		        "select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId and e.encounter_id = 3"));
+		flag.setCriteria("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		Context.getService(FlagService.class).saveFlag(flag);
 	}
 	
 	private void authenticateWith(String... privileges) {

@@ -10,31 +10,33 @@
 package org.openmrs.module.rhdflags.gap;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Lists a flag's gaps from the query in {@value #GAP_QUERY_PREFIX}&lt;flag uuid&gt;, which names
- * the patient as {@value #PATIENT_TOKEN} and returns (encounter uuid, question concept uuid) rows.
+ * Lists a SQL flag's gaps from its own criteria, whose rows are (patient_id, encounter uuid,
+ * question concept uuid), evaluated for one patient the way patientflags' SQLFlagEvaluator.eval
+ * does.
  */
 public class FlagGapLookup {
 	
-	public static final String GAP_QUERY_PREFIX = "rhdflags.gapQuery.";
-	
-	public static final String PATIENT_TOKEN = ":patientId";
+	private static final Pattern PATIENT_COLUMN = Pattern.compile("(\\w+\\.patient_id)");
 	
 	private static final Logger log = LoggerFactory.getLogger(FlagGapLookup.class);
 	
@@ -54,69 +56,79 @@ public class FlagGapLookup {
 	}
 	
 	/**
-	 * The gaps behind this flag for this patient in query order, or null when the flag has no query.
-	 * 
-	 * @throws APIException if the query does not name the patient, or returns a row of fewer than two
-	 *             columns
+	 * The gaps behind this flag for this patient in encounter date order, or null when the flag's
+	 * criteria return no gap columns for the patient, including when they do not match the patient.
 	 */
 	public List<FlagGap> find(Patient patient, Flag flag) {
 		requireViewPatientFlags();
-		String query;
-		try {
-			// platform 2.7 and later authorize reading a global property, which a clinician need not hold
-			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-			query = Context.getAdministrationService().getGlobalProperty(GAP_QUERY_PREFIX + flag.getUuid());
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-		}
-		if (StringUtils.isBlank(query)) {
+		if (!SQLFlagEvaluator.class.getName().equals(flag.getEvaluator()) || flag.getCriteria() == null) {
 			return null;
 		}
-		if (!query.contains(PATIENT_TOKEN)) {
-			throw new APIException(
-			        "The gap query for flag " + flag.getUuid() + " does not name the patient as " + PATIENT_TOKEN);
+		Matcher column = PATIENT_COLUMN.matcher(flag.getCriteria());
+		if (!column.find()) {
+			return null;
 		}
+		// The same per-patient query as SQLFlagEvaluator.eval, so the gaps are the rows that raise the flag.
+		String criteria = flag.getCriteria().replaceFirst(";?\\s*$", "");
+		String query = criteria + (criteria.matches("(?i)(?s).*where.*") ? " and " : " where ") + column.group() + " = "
+		        + patient.getPatientId();
 		
 		List<List<Object>> rows;
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			rows = Context.getAdministrationService()
-			        .executeSQL(query.replace(PATIENT_TOKEN, patient.getPatientId().toString()), true);
+			rows = Context.getAdministrationService().executeSQL(query, true);
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		}
 		
-		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		List<FlagGap> gaps = null;
 		for (List<Object> row : rows) {
-			if (row.size() < 2) {
-				throw new APIException(
-				        "The gap query for flag " + flag.getUuid() + " must return an encounter uuid and a concept uuid");
+			if (row.size() < 3) {
+				if (row.size() == 2) {
+					log.warn("The criteria of flag {} return 2 columns, where a gap row needs patient_id, an"
+					        + " encounter uuid and a concept uuid",
+					    flag.getUuid());
+				}
+				return null;
 			}
-			if (row.get(0) == null || row.get(1) == null) {
+			if (gaps == null) {
+				gaps = new ArrayList<FlagGap>();
+			}
+			if (row.get(1) == null || row.get(2) == null) {
 				continue;
 			}
-			Encounter encounter = Context.getEncounterService().getEncounterByUuid(row.get(0).toString());
+			Encounter encounter = Context.getEncounterService().getEncounterByUuid(row.get(1).toString());
 			if (encounter == null) {
-				log.warn("The gap query for flag {} returned a value of type {} in column 1, which is not an encounter uuid",
-				    flag.getUuid(), row.get(0).getClass().getSimpleName());
+				log.warn("The criteria of flag {} returned a value of type {} in column 2, which is not an encounter uuid",
+				    flag.getUuid(), row.get(1).getClass().getSimpleName());
 				continue;
 			}
 			if (encounter.getVoided() || !patient.equals(encounter.getPatient())
 			        || !Context.getEncounterService().canViewEncounter(encounter, Context.getAuthenticatedUser())) {
 				continue;
 			}
-			Concept question = Context.getConceptService().getConceptByUuid(row.get(1).toString());
+			Concept question = Context.getConceptService().getConceptByUuid(row.get(2).toString());
 			if (question == null) {
-				log.warn("The gap query for flag {} returned a value of type {} in column 2, which is not a concept uuid",
-				    flag.getUuid(), row.get(1).getClass().getSimpleName());
+				log.warn("The criteria of flag {} returned a value of type {} in column 3, which is not a concept uuid",
+				    flag.getUuid(), row.get(2).getClass().getSimpleName());
 				continue;
 			}
 			gaps.add(new FlagGap(encounter, question));
 		}
+		if (gaps != null) {
+			Collections.sort(gaps, BY_ENCOUNTER_DATE);
+		}
 		return gaps;
 	}
+	
+	private static final Comparator<FlagGap> BY_ENCOUNTER_DATE = new Comparator<FlagGap>() {
+		
+		@Override
+		public int compare(FlagGap a, FlagGap b) {
+			return a.getEncounter().getEncounterDatetime().compareTo(b.getEncounter().getEncounterDatetime());
+		}
+	};
 	
 	/**
 	 * Throws the exception the platform's authorization advice throws, rather than the one
