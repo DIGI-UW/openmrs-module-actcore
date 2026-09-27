@@ -43,7 +43,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
-	// Counted as each row is written, so a flag that fails partway still reports what it changed.
+	// Counted as each row is raised or cleared, so the summary includes those of a flag that fails partway.
 	private int raised;
 	
 	private int cleared;
