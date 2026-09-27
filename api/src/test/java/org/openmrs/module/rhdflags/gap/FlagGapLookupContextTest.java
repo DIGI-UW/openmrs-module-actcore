@@ -43,7 +43,6 @@ import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
-import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
@@ -116,6 +115,8 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 			List<FlagGap> gaps = lookup.find(Context.getPatientService().getPatient(patientId), flag);
 			if (gaps != null && !gaps.isEmpty()) {
 				withGaps.add(patientId);
+			} else {
+				assertNull(gaps);
 			}
 		}
 		
@@ -129,19 +130,36 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
 		three.setEncounterDatetime(new GregorianCalendar(2009, Calendar.JANUARY, 1).getTime());
 		Context.getEncounterService().saveEncounter(three);
-		Context.flushSession();
 		
-		List<String> order = new ArrayList<String>();
-		for (FlagGap gap : lookup.find(patient(), flag)) {
-			order.add(gap.getEncounter().getUuid());
-		}
-		
-		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), order);
+		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), encounterUuids(lookup.find(patient(), flag)));
 	}
 	
 	@Test
 	public void returnsNullForCriteriaWithoutGapColumns() {
+		List<FlagGap> gaps = new ArrayList<FlagGap>();
+		
+		List<LogEvent> warnings = warningsWhileFinding(gaps);
+		
 		assertNull(lookup.find(patient(), flag));
+		assertTrue(warnings.isEmpty());
+	}
+	
+	@Test
+	public void returnsNoGapsRatherThanNullWhenEveryRowIsLeftOut() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
+		Context.getEncounterService().voidEncounter(three, "test");
+		
+		assertEquals(new ArrayList<FlagGap>(), lookup.find(patient(), flag));
+	}
+	
+	@Test
+	public void returnsNullForAVoidedPatient() {
+		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
+		Patient patient = patient();
+		Context.getPatientService().voidPatient(patient, "test");
+		
+		assertNull(lookup.find(patient, flag));
 	}
 	
 	@Test
@@ -391,12 +409,17 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private String onlyEncounter(List<FlagGap> gaps) {
+		List<String> uuids = encounterUuids(gaps);
+		assertEquals(1, uuids.size());
+		return uuids.get(0);
+	}
+	
+	private List<String> encounterUuids(List<FlagGap> gaps) {
 		List<String> uuids = new ArrayList<String>();
 		for (FlagGap gap : gaps) {
 			uuids.add(gap.getEncounter().getUuid());
 		}
-		assertEquals(1, uuids.size());
-		return uuids.get(0);
+		return uuids;
 	}
 	
 	private Privilege savedPrivilege(String name) {

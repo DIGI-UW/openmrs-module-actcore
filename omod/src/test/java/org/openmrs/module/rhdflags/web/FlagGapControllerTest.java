@@ -101,7 +101,7 @@ public class FlagGapControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void saysSoWhenTheFlagHasNoGapQuery() {
+	public void saysSoWhenTheFlagsCriteriaHaveNoGapColumns() {
 		SimpleObject response = controller.getGaps(PATIENT_7, flag.getUuid());
 		
 		assertEquals(Boolean.FALSE, response.get("configured"));

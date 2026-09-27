@@ -56,19 +56,19 @@ public class FlagGapLookup {
 	}
 	
 	/**
-	 * The gaps behind this flag for this patient in encounter date order, or null when the flag's
-	 * criteria return no gap columns for the patient, including when they do not match the patient.
+	 * The gaps behind this flag for this patient in encounter date order, or null when the flag is not
+	 * a SQL flag with a patient column, the patient is voided, or no gap columns come back for them.
 	 */
 	public List<FlagGap> find(Patient patient, Flag flag) {
 		requireViewPatientFlags();
-		if (!SQLFlagEvaluator.class.getName().equals(flag.getEvaluator()) || flag.getCriteria() == null) {
+		if (!SQLFlagEvaluator.class.getName().equals(flag.getEvaluator()) || patient.getVoided()) {
 			return null;
 		}
 		Matcher column = PATIENT_COLUMN.matcher(flag.getCriteria());
 		if (!column.find()) {
 			return null;
 		}
-		// The same per-patient query as SQLFlagEvaluator.eval, so the gaps are the rows that raise the flag.
+		// Rewritten for one patient as SQLFlagEvaluator.eval does, so patientflags and the look-up agree.
 		String criteria = flag.getCriteria().replaceFirst(";?\\s*$", "");
 		String query = criteria + (criteria.matches("(?i)(?s).*where.*") ? " and " : " where ") + column.group() + " = "
 		        + patient.getPatientId();
@@ -82,19 +82,17 @@ public class FlagGapLookup {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		}
 		
-		List<FlagGap> gaps = null;
+		if (rows.isEmpty() || rows.get(0).size() < 3) {
+			if (!rows.isEmpty() && rows.get(0).size() == 2) {
+				log.warn("The criteria of flag {} return 2 columns, where a gap row needs patient_id, an"
+				        + " encounter uuid and a concept uuid",
+				    flag.getUuid());
+			}
+			return null;
+		}
+		
+		List<FlagGap> gaps = new ArrayList<FlagGap>();
 		for (List<Object> row : rows) {
-			if (row.size() < 3) {
-				if (row.size() == 2) {
-					log.warn("The criteria of flag {} return 2 columns, where a gap row needs patient_id, an"
-					        + " encounter uuid and a concept uuid",
-					    flag.getUuid());
-				}
-				return null;
-			}
-			if (gaps == null) {
-				gaps = new ArrayList<FlagGap>();
-			}
 			if (row.get(1) == null || row.get(2) == null) {
 				continue;
 			}
@@ -116,9 +114,7 @@ public class FlagGapLookup {
 			}
 			gaps.add(new FlagGap(encounter, question));
 		}
-		if (gaps != null) {
-			Collections.sort(gaps, BY_ENCOUNTER_DATE);
-		}
+		Collections.sort(gaps, BY_ENCOUNTER_DATE);
 		return gaps;
 	}
 	
