@@ -119,4 +119,27 @@
       The prescription duration answers, as answer uuid:days, separated by commas.
     </description>
   </globalProperty>
+  <globalProperty>
+    <property>rhdflags.adherence.consultationDateConcept</property>
+    <defaultValue>c3edefd2-5777-5084-b01e-fd4ca0e40162</defaultValue>
+    <description>
+      The date of a consultation. With the data entry interval, it keeps a patient whose injections are entered in batches at the adherence of their last batch, as ACT 2.0 did.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.dataEntryConcept</property>
+    <defaultValue>d444bffc-c718-5295-a19e-8fb03dbdbfd7</defaultValue>
+    <description>
+      How a patient's injections are entered, recorded on the consultation; the latest answer counts.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.dataEntryIntervals</property>
+    <defaultValue>4040ccf9-175d-5502-ada2-f562662c32f5:90,dba07d74-cd84-519c-93e3-f43c8bf7c398:180,2e145a91-1967-537c-b957-730f005002b2:365</defaultValue>
+    <description>
+      The batch data entry answers, as answer uuid:days between batches, separated by commas. Until that long has passed since the later of the latest consultation and injection, adherence is computed as of that date. Any other answer, such as continuous entry, is computed as of today.
+    </description>
+  </globalProperty>
 </module>

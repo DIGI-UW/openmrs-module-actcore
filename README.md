@@ -79,9 +79,14 @@ A port of ACT 2.0's `calculate_adherence_and_injection_date` (is4r-rhd-cdk
 - An oral regimen instead takes the clinician's latest estimate in its window.
 - The next due date runs from the latest injection by the latest regimen's interval, or on an oral
   regimen from the latest estimate by its prescription duration.
+- As ACT 2.0 did around that calculation: a regimen with no injection, or no estimate, ever recorded
+  gets no adherence or due date. A patient whose injections are entered in batches (every 3, 6 or 12
+  months, on the consultation) is computed as of the later of their latest consultation and injection
+  until that long has passed, which is where ACT 2.0's nightly run left them.
 
 Each row holds the patient, the latest regimen and its injection interval (0 for an oral regimen),
 adherence as a fraction, the last injection or estimate, the next due date and when it was computed.
+Each run replaces every row in one transaction, so a failed run leaves the previous rows in place.
 
 `AdherenceCalculationParityTest` holds the port to ACT 2.0 itself. Its fixture,
 `api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
@@ -110,7 +115,7 @@ that function unchanged from an ACT 2.0 checkout.
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
 | Adherence is ported from ACT 2.0 unchanged | ACT 3.0 had no definition of "adherent" of its own; parity with ACT 2.0 keeps the registry's numbers comparable across the migration, quirks included. |
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
-| Adherence is recomputed daily and on demand, not on every form save | ACT 2.0 also recomputed on save. Here a BPG delivery shows in the registry after the next run; run the task to see it at once. |
+| Adherence is recomputed daily and on demand, not on every form save | ACT 2.0 also recomputed on save. Here a BPG delivery shows in the registry after the next run; run the task to see it at once. A batch-entered patient is computed as of their latest consultation or injection, which is the value ACT 2.0's save gave them when that is when the batch was entered. |
 | A prescription's latest encounter, not its latest consultation form | ACT 2.0 read the latest consultation. The latest encounter that records a prescription is the same when every consultation records one, and does not drop a regimen when a consultation leaves it out. |
 
 How the ACT distribution uses the flags, for context: risk flags (overdue prophylaxis, lost to

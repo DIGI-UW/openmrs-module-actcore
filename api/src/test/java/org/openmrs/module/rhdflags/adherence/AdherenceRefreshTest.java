@@ -28,4 +28,17 @@ public class AdherenceRefreshTest {
 		assertEquals(DAY, AdherenceRefresh.localDate(LocalDateTime.of(DAY, java.time.LocalTime.of(0, 15))));
 		assertEquals(DAY, AdherenceRefresh.localDate(DAY));
 	}
+	
+	@Test
+	public void batchEntered_shouldHoldTheLastBatchUntilItsIntervalHasPassed() {
+		LocalDate today = LocalDate.of(2026, 9, 29);
+		LocalDate consulted = today.minusDays(89);
+		// ACT 2.0 skipped the patient while fewer than the interval's days had passed.
+		assertEquals(consulted, AdherenceRefresh.batchEntered(today, 90, consulted, today.minusDays(120)));
+		assertEquals(today, AdherenceRefresh.batchEntered(today, 90, today.minusDays(90), null));
+		// The later of the consultation and the last injection counts.
+		assertEquals(today.minusDays(10), AdherenceRefresh.batchEntered(today, 90, consulted, today.minusDays(10)));
+		assertEquals(today, AdherenceRefresh.batchEntered(today, null, consulted, null));
+		assertEquals(today, AdherenceRefresh.batchEntered(today, 90, null, null));
+	}
 }

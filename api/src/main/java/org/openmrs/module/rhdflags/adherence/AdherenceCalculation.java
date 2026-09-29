@@ -19,14 +19,8 @@ import java.util.SortedSet;
 
 /**
  * ACT 2.0's adherence calculation (is4r-rhd-cdk
- * adherence_utils.calculate_adherence_and_injection_date), ported step for step so it gives the
- * same answers; AdherenceCalculationParityTest holds it to that.
- * <p>
- * Over at most the last 365 days, each injection regimen's window counts the days its injections
- * were late against the regimen's interval, and adherence is 1 minus the days late over the days
- * prescribed. An oral regimen instead takes the clinician's latest estimate in its window. The next
- * due date runs from the latest injection (or the prescription) by the latest regimen's interval,
- * or, on an oral regimen, from the latest estimate by its prescription duration.
+ * adherence_utils.calculate_adherence_and_injection_date), ported step for step;
+ * AdherenceCalculationParityTest holds it to ACT 2.0's own answers.
  */
 public final class AdherenceCalculation {
 	
@@ -55,7 +49,7 @@ public final class AdherenceCalculation {
 		
 		private final LocalDate nextDue;
 		
-		Result(Double adherence, LocalDate nextDue) {
+		public Result(Double adherence, LocalDate nextDue) {
 			this.adherence = adherence;
 			this.nextDue = nextDue;
 		}
@@ -77,7 +71,7 @@ public final class AdherenceCalculation {
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, SortedSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
-		// Future prescriptions and oral entries do not count; injections are bounded by the windows below.
+		// Future prescriptions and oral entries do not count; an injection outside every prescription window is ignored.
 		SortedMap<LocalDate, Integer> started = prescriptions.headMap(today.plusDays(1));
 		SortedMap<LocalDate, OralEntry> estimated = oral.headMap(today.plusDays(1));
 		if (started.isEmpty()) {

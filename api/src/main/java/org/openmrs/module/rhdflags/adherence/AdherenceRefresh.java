@@ -12,6 +12,7 @@ package org.openmrs.module.rhdflags.adherence;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -28,6 +29,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Recomputes every patient's prophylaxis adherence and next due date into
@@ -55,10 +60,16 @@ public class AdherenceRefresh {
 	
 	static final String GP_DURATIONS = "rhdflags.adherence.prescriptionDurations";
 	
+	static final String GP_CONSULTATION_DATE = "rhdflags.adherence.consultationDateConcept";
+	
+	static final String GP_DATA_ENTRY = "rhdflags.adherence.dataEntryConcept";
+	
+	static final String GP_DATA_ENTRY_INTERVALS = "rhdflags.adherence.dataEntryIntervals";
+	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
 	
-	private static final int ROWS_PER_INSERT = 200;
+	private final int rowsPerInsert;
 	
 	/** A patient's prescriptions, from their latest encounter that records any. */
 	private static final class Prescribed {
@@ -68,6 +79,14 @@ public class AdherenceRefresh {
 		final TreeMap<LocalDate, Integer> intervals = new TreeMap<LocalDate, Integer>();
 		
 		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
+	}
+	
+	public AdherenceRefresh() {
+		this(200);
+	}
+	
+	AdherenceRefresh(int rowsPerInsert) {
+		this.rowsPerInsert = rowsPerInsert;
 	}
 	
 	/** Recomputes every row and returns how many patients now have one. */
@@ -87,6 +106,8 @@ public class AdherenceRefresh {
 		Map<Integer, Prescribed> prescribed = prescriptions(admin, injectionIntervals);
 		Map<Integer, TreeSet<LocalDate>> injections = injections(admin);
 		Map<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>> oral = oralEntries(admin, durations);
+		Map<Integer, LocalDate> consulted = latestDates(admin, GP_CONSULTATION_DATE);
+		Map<Integer, Integer> batchDays = batchEntryDays(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS));
 		
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		List<String> rows = new ArrayList<String>();
@@ -97,8 +118,6 @@ public class AdherenceRefresh {
 			        : new TreeSet<LocalDate>();
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates = oral.containsKey(patientId) ? oral.get(patientId)
 			        : new TreeMap<LocalDate, AdherenceCalculation.OralEntry>();
-			AdherenceCalculation.Result result = AdherenceCalculation.calculate(p.intervals, given, estimates, today);
-			
 			SortedMap<LocalDate, Integer> started = p.intervals.headMap(today.plusDays(1));
 			LocalDate latest = started.isEmpty() ? null : started.lastKey();
 			Integer interval = latest == null ? null : started.get(latest);
@@ -111,24 +130,61 @@ public class AdherenceRefresh {
 				SortedMap<LocalDate, AdherenceCalculation.OralEntry> past = estimates.headMap(today.plusDays(1));
 				lastGiven = past.isEmpty() ? null : past.lastKey();
 			}
+			
+			AdherenceCalculation.Result result;
+			if (interval != null && (interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
+				// ACT 2.0 gave no adherence or due date to a regimen with no injection, or no estimate, recorded.
+				result = new AdherenceCalculation.Result(null, null);
+			} else {
+				LocalDate asOf = interval != null && interval > 0
+				        ? batchEntered(today, batchDays.get(patientId), consulted.get(patientId), lastGiven)
+				        : today;
+				result = AdherenceCalculation.calculate(p.intervals, given, estimates, asOf);
+			}
 			rows.add("(" + patientId + ", " + sqlValue(latest == null ? null : p.regimens.get(latest)) + ", "
 			        + sqlValue(interval) + ", " + sqlValue(result.getAdherence()) + ", " + sqlValue(lastGiven) + ", "
 			        + sqlValue(result.getNextDue()) + ", " + sqlValue(computedAt) + ")");
 		}
 		
-		admin.executeSQL("delete from " + TABLE, false);
-		for (int i = 0; i < rows.size(); i += ROWS_PER_INSERT) {
-			admin.executeSQL("insert into " + TABLE + " (patient_id, regimen_concept_id, injection_interval_days, adherence,"
-			        + " last_given, next_due, date_computed) values "
-			        + StringUtils.join(rows.subList(i, Math.min(rows.size(), i + ROWS_PER_INSERT)), ", "),
-			    false);
-		}
+		rewrite(admin, rows);
 		return rows.size();
 	}
 	
+	/** Replaces every row in one transaction, so no run leaves the table empty or part filled. */
+	private void rewrite(final AdministrationService admin, final List<String> rows) {
+		PlatformTransactionManager transactions = Context.getRegisteredComponent("transactionManager",
+		    PlatformTransactionManager.class);
+		new TransactionTemplate(transactions).execute(new TransactionCallbackWithoutResult() {
+			
+			@Override
+			protected void doInTransactionWithoutResult(TransactionStatus status) {
+				admin.executeSQL("delete from " + TABLE, false);
+				for (int i = 0; i < rows.size(); i += rowsPerInsert) {
+					admin.executeSQL("insert into " + TABLE + " (patient_id, regimen_concept_id, injection_interval_days,"
+					        + " adherence, last_given, next_due, date_computed) values "
+					        + StringUtils.join(rows.subList(i, Math.min(rows.size(), i + rowsPerInsert)), ", "),
+					    false);
+				}
+			}
+		});
+	}
+	
 	/**
-	 * ACT 2.0 took the prescriptions of the latest consultation, leaving out those with a date stopped,
-	 * and the first entry of each start date.
+	 * ACT 2.0's nightly run left a patient whose injections are entered in batches (every 3, 6 or 12
+	 * months) at the adherence computed when the batch was saved, until that long had passed since the
+	 * later of their latest consultation and injection. Computing as of that date gives the same value.
+	 */
+	static LocalDate batchEntered(LocalDate today, Integer batchDays, LocalDate consulted, LocalDate lastGiven) {
+		LocalDate seen = consulted == null || lastGiven != null && lastGiven.isAfter(consulted) ? lastGiven : consulted;
+		if (batchDays == null || seen == null || ChronoUnit.DAYS.between(seen, today) >= batchDays) {
+			return today;
+		}
+		return seen;
+	}
+	
+	/**
+	 * The prescriptions on each patient's latest encounter that records any, leaving out those with a
+	 * date stopped, and keeping the first of each start date, as ACT 2.0 kept them.
 	 */
 	private Map<Integer, Prescribed> prescriptions(AdministrationService admin, Map<String, Integer> intervals) {
 		String prescription = concept(admin, GP_PRESCRIPTION);
@@ -213,6 +269,45 @@ public class AdherenceRefresh {
 				Double estimate = row.get(2) == null ? null : ((Number) row.get(2)).doubleValue();
 				Integer days = row.get(3) == null ? null : durations.get(row.get(3).toString());
 				byPatient.get(patientId).put(day, new AdherenceCalculation.OralEntry(estimate, days));
+			}
+		}
+		return byPatient;
+	}
+	
+	/** Each patient's latest value of the date the global property names. */
+	private Map<Integer, LocalDate> latestDates(AdministrationService admin, String property) {
+		List<List<Object>> rows = admin.executeSQL(
+		    "select o.person_id, max(o.value_datetime) from obs o"
+		            + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
+		            + " where o.voided = false and o.concept_id = " + concept(admin, property) + " group by o.person_id",
+		    true);
+		Map<Integer, LocalDate> byPatient = new HashMap<Integer, LocalDate>();
+		for (List<Object> row : rows) {
+			if (row.get(1) != null) {
+				byPatient.put(((Number) row.get(0)).intValue(), localDate(row.get(1)));
+			}
+		}
+		return byPatient;
+	}
+	
+	/**
+	 * Each patient's batch data entry interval, from the latest encounter that records how they are
+	 * entered.
+	 */
+	private Map<Integer, Integer> batchEntryDays(AdministrationService admin, Map<String, Integer> intervals) {
+		List<List<Object>> rows = admin.executeSQL("select o.person_id, c.uuid from obs o"
+		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
+		        + " join concept c on c.concept_id = o.value_coded where o.voided = false and o.concept_id = "
+		        + concept(admin, GP_DATA_ENTRY) + " order by o.person_id, e.encounter_datetime, e.encounter_id, o.obs_id",
+		    true);
+		Map<Integer, Integer> byPatient = new HashMap<Integer, Integer>();
+		for (List<Object> row : rows) {
+			// Later rows replace earlier ones, so each patient ends with their latest; continuous entry has none.
+			Integer days = intervals.get(row.get(1).toString());
+			if (days == null) {
+				byPatient.remove(((Number) row.get(0)).intValue());
+			} else {
+				byPatient.put(((Number) row.get(0)).intValue(), days);
 			}
 		}
 		return byPatient;

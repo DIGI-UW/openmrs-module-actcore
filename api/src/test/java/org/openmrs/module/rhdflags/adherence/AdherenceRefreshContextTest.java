@@ -10,6 +10,7 @@
 package org.openmrs.module.rhdflags.adherence;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.sql.Timestamp;
@@ -53,6 +54,14 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	
 	private Concept threeMonths;
 	
+	private Concept consultationDate;
+	
+	private Concept dataEntry;
+	
+	private Concept everyThreeMonths;
+	
+	private Concept continuous;
+	
 	@Before
 	public void setUp() {
 		// The module's liquibase changeset is not run by the test context, so the table is made here; H2
@@ -80,6 +89,13 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		property(AdherenceRefresh.GP_ESTIMATE, estimate.getUuid());
 		property(AdherenceRefresh.GP_DURATION, duration.getUuid());
 		property(AdherenceRefresh.GP_DURATIONS, threeMonths.getUuid() + ":90");
+		consultationDate = concept("Date of consultation", "Datetime");
+		dataEntry = concept("Prophylaxis data entry", "Coded");
+		everyThreeMonths = concept("Every 3 months", "N/A");
+		continuous = concept("Continuous", "N/A");
+		property(AdherenceRefresh.GP_CONSULTATION_DATE, consultationDate.getUuid());
+		property(AdherenceRefresh.GP_DATA_ENTRY, dataEntry.getUuid());
+		property(AdherenceRefresh.GP_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":90");
 	}
 	
 	@Test
@@ -102,7 +118,9 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	@Test
 	public void refreshAll_shouldTakeThePrescriptionsOfTheLatestEncounterThatRecordsAny() {
 		prescribe(encounter(7, 200), q28, 200, null);
-		prescribe(encounter(7, 27), q21, 27, null);
+		Encounter latest = encounter(7, 27);
+		prescribe(latest, q21, 27, null);
+		given(latest, 27);
 		
 		refresh.refreshAll(TODAY);
 		
@@ -151,6 +169,98 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		
 		assertEquals(1, rows().size());
 		assertEquals(7, number(rows().get(0).get(0)));
+	}
+	
+	@Test
+	public void refreshAll_shouldGiveNoAdherenceToAnInjectionRegimenWithNoInjectionRecorded() {
+		prescribe(encounter(7, 10), q28, 10, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// ACT 2.0 stopped before calculating; the calculation alone would say 100% and covered.
+		List<Object> row = row(7);
+		assertEquals((int) q28.getConceptId(), number(row.get(1)));
+		assertNull(row.get(3));
+		assertNull(row.get(5));
+	}
+	
+	@Test
+	public void refreshAll_shouldGiveNoAdherenceToAnOralRegimenWithNoEstimateRecorded() {
+		// Switched from BPG to oral on one consultation: the BPG window would otherwise count its late days.
+		Encounter consultation = encounter(7, 20);
+		prescribe(consultation, q28, 60, null);
+		prescribe(consultation, oralPenicillin, 20, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(0, number(row(7).get(2)));
+		assertNull(row(7).get(3));
+		assertNull(row(7).get(5));
+	}
+	
+	@Test
+	public void refreshAll_shouldHoldABatchEnteredPatientAtTheirLastBatchUntilTheNextIsDue() {
+		// Every injection on time until the batch was entered at a consultation 84 days ago.
+		Encounter consultation = encounter(7, 200);
+		prescribe(consultation, q28, 200, null);
+		for (int daysAgo = 200; daysAgo >= 88; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		consulted(encounter(7, 84), 84, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		// As of today, 56 of 200 days late; ACT 2.0 kept the batch's 100% until 90 days had passed.
+		assertEquals(1.0, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldRecomputeABatchEnteredPatientOnceTheNextBatchIsDue() {
+		// Injected on time until 116 days ago, last seen at a consultation 95 days ago: the batch is due.
+		prescribe(encounter(7, 200), q28, 200, null);
+		for (int daysAgo = 200; daysAgo >= 116; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		consulted(encounter(7, 95), 95, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(1 - 88.0 / 201, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldComputeAContinuouslyEnteredPatientAsOfToday() {
+		prescribe(encounter(7, 200), q28, 200, null);
+		for (int daysAgo = 200; daysAgo >= 88; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		consulted(encounter(7, 84), 84, continuous);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(1 - 60.0 / 201, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldKeepTheFirstPrescriptionOfAStartDate() {
+		Encounter consultation = encounter(7, 27);
+		prescribe(consultation, q21, 27, null);
+		prescribe(consultation, oralPenicillin, 27, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals((int) q21.getConceptId(), number(row(7).get(1)));
+		assertEquals(21, number(row(7).get(2)));
+	}
+	
+	@Test
+	public void refreshAll_shouldWriteEveryRowWhenTheyTakeMoreThanOneInsert() {
+		prescribe(encounter(7, 27), q21, 27, null);
+		prescribe(encounter(2, 27), q28, 27, null);
+		
+		assertEquals(2, new AdherenceRefresh(1).refreshAll(TODAY));
+		
+		assertEquals(2, rows().size());
 	}
 	
 	private Concept concept(String name, String datatype) {
@@ -204,6 +314,15 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		Obs lasts = obs(encounter, duration);
 		lasts.setValueCoded(threeMonths);
 		Context.getObsService().saveObs(lasts, null);
+	}
+	
+	private void consulted(Encounter encounter, int daysAgo, Concept entry) {
+		Obs date = obs(encounter, consultationDate);
+		date.setValueDatetime(at(daysAgo));
+		Context.getObsService().saveObs(date, null);
+		Obs how = obs(encounter, dataEntry);
+		how.setValueCoded(entry);
+		Context.getObsService().saveObs(how, null);
 	}
 	
 	private Obs obs(Encounter encounter, Concept concept) {
