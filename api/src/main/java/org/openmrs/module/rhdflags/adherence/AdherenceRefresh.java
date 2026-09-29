@@ -12,17 +12,13 @@ package org.openmrs.module.rhdflags.adherence;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -66,43 +62,6 @@ public class AdherenceRefresh {
 	
 	private final int rowsPerInsert;
 	
-	/**
-	 * The regimen started last by a date, its injection interval, and the latest injection (or, on an
-	 * oral regimen, estimate) by then.
-	 */
-	private static final class Regimen {
-		
-		final LocalDate latest;
-		
-		final Integer interval;
-		
-		LocalDate lastGiven;
-		
-		Regimen(Prescribed p, TreeSet<LocalDate> given, TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates,
-		    LocalDate onDate) {
-			SortedMap<LocalDate, Integer> started = p.intervals.headMap(onDate.plusDays(1));
-			latest = started.isEmpty() ? null : started.lastKey();
-			interval = latest == null ? null : started.get(latest);
-			if (interval != null && interval > 0) {
-				SortedSet<LocalDate> past = given.headSet(onDate.plusDays(1));
-				lastGiven = past.isEmpty() ? null : past.last();
-			} else if (interval != null) {
-				SortedMap<LocalDate, AdherenceCalculation.OralEntry> past = estimates.headMap(onDate.plusDays(1));
-				lastGiven = past.isEmpty() ? null : past.lastKey();
-			}
-		}
-	}
-	
-	/** A patient's prescriptions, from their latest encounter that records any. */
-	private static final class Prescribed {
-		
-		int encounterId;
-		
-		final TreeMap<LocalDate, Integer> intervals = new TreeMap<LocalDate, Integer>();
-		
-		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
-	}
-	
 	public AdherenceRefresh() {
 		this(200);
 	}
@@ -123,51 +82,25 @@ public class AdherenceRefresh {
 	}
 	
 	private int refresh(AdministrationService admin, LocalDate today) {
-		Map<String, Integer> injectionIntervals = daysByUuid(admin, GP_INJECTION_INTERVALS);
-		Map<String, Integer> durations = daysByUuid(admin, GP_DURATIONS);
-		Map<Integer, Prescribed> prescribed = prescriptions(admin, injectionIntervals);
-		Map<Integer, TreeSet<LocalDate>> injections = injections(admin);
-		Map<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>> oral = oralEntries(admin, durations);
-		Map<Integer, LocalDate> consulted = latestDates(admin, GP_CONSULTATION_DATE, today);
-		Map<Integer, Integer> batchDays = batchEntryDays(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS));
+		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
+		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), histories);
+		readInjections(admin, histories);
+		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), histories);
+		readConsultations(admin, today, histories);
+		readBatchDays(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), histories);
 		
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		List<String> rows = new ArrayList<String>();
-		for (Map.Entry<Integer, Prescribed> entry : prescribed.entrySet()) {
-			Integer patientId = entry.getKey();
-			Prescribed p = entry.getValue();
-			TreeSet<LocalDate> given = injections.containsKey(patientId) ? injections.get(patientId)
-			        : new TreeSet<LocalDate>();
-			TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates = oral.containsKey(patientId) ? oral.get(patientId)
-			        : new TreeMap<LocalDate, AdherenceCalculation.OralEntry>();
-			Regimen regimen = new Regimen(p, given, estimates, today);
-			LocalDate asOf = today;
-			if (regimen.interval != null && regimen.interval > 0) {
-				asOf = batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven);
-			} else if (regimen.interval != null) {
-				asOf = lastSaved(today, consulted.get(patientId), regimen.lastGiven);
+		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
+			if (entry.getValue().prescriptions.isEmpty()) {
+				continue;
 			}
-			// The row, and the no-record rule, describe the regimen its adherence and due date are computed for.
-			if (!asOf.equals(today)) {
-				regimen = new Regimen(p, given, estimates, asOf);
-				// Oral today, but an injection regimen when last saved: ACT 2.0 stored the injection regimen then
-				// and went on recomputing it nightly, so the injection rule decides the date.
-				if (regimen.interval != null && regimen.interval > 0) {
-					asOf = batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven);
-					regimen = new Regimen(p, given, estimates, asOf);
-				}
+			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today);
+			if (row != null) {
+				rows.add("(" + entry.getKey() + ", " + sqlValue(row.regimen) + ", " + sqlValue(row.interval) + ", "
+				        + sqlValue(row.result.getAdherence()) + ", " + sqlValue(row.lastGiven) + ", "
+				        + sqlValue(row.result.getNextDue()) + ", " + sqlValue(computedAt) + ")");
 			}
-			AdherenceCalculation.Result result;
-			if (regimen.interval != null && (regimen.interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
-				// ACT 2.0 gave no adherence or due date to a regimen with no injection, or no estimate, recorded.
-				result = new AdherenceCalculation.Result(null, null);
-			} else {
-				result = AdherenceCalculation.calculate(p.intervals, given, estimates, asOf);
-			}
-			rows.add("(" + patientId + ", " + sqlValue(regimen.latest == null ? null : p.regimens.get(regimen.latest)) + ", "
-			        + sqlValue(regimen.interval) + ", " + sqlValue(result.getAdherence()) + ", "
-			        + sqlValue(regimen.lastGiven) + ", " + sqlValue(result.getNextDue()) + ", " + sqlValue(computedAt)
-			        + ")");
 		}
 		
 		rewrite(admin, rows);
@@ -193,37 +126,20 @@ public class AdherenceRefresh {
 		});
 	}
 	
-	/**
-	 * ACT 2.0's nightly run held a batch-entered patient at their last batch until the interval passed;
-	 * this computes them as of their latest consultation or injection until then.
-	 */
-	static LocalDate batchEntered(LocalDate today, Integer batchDays, LocalDate consulted, LocalDate lastGiven) {
-		LocalDate seen = later(consulted, lastGiven);
-		if (batchDays == null || seen == null || ChronoUnit.DAYS.between(seen, today) >= batchDays) {
-			return today;
+	private static AdherenceReplay.History history(Map<Integer, AdherenceReplay.History> histories, Object patientId) {
+		Integer id = ((Number) patientId).intValue();
+		if (!histories.containsKey(id)) {
+			histories.put(id, new AdherenceReplay.History());
 		}
-		return seen;
+		return histories.get(id);
 	}
 	
 	/**
-	 * ACT 2.0 recomputed an oral patient only when a consultation or estimate was saved, so as of the
-	 * later.
+	 * The prescriptions each encounter records, leaving out those with a date stopped, and keeping the
+	 * first of each start date, as ACT 2.0 kept them.
 	 */
-	static LocalDate lastSaved(LocalDate today, LocalDate consulted, LocalDate lastEstimate) {
-		LocalDate saved = later(consulted, lastEstimate);
-		return saved == null ? today : saved;
-	}
-	
-	private static LocalDate later(LocalDate a, LocalDate b) {
-		return a == null || b != null && b.isAfter(a) ? b : a;
-	}
-	
-	/**
-	 * The prescriptions on each patient's latest encounter that records any, leaving out those with a
-	 * date stopped, and keeping the first of each start date, as ACT 2.0 kept them.
-	 */
-	private Map<Integer, Prescribed> prescriptions(AdministrationService admin, Map<String, Integer> intervals) {
-		String prescription = concept(admin, GP_PRESCRIPTION);
+	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals,
+	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select g.person_id, e.encounter_datetime, e.encounter_id,"
 		        + " rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
 		        + " from obs g join encounter e on e.encounter_id = g.encounter_id and e.voided = false"
@@ -233,20 +149,21 @@ public class AdherenceRefresh {
 		        + concept(admin, GP_DATE_STARTED)
 		        + " left join obs x on x.obs_group_id = g.obs_id and x.voided = false and x.concept_id = "
 		        + concept(admin, GP_DATE_STOPPED) + " where g.voided = false and g.obs_group_id is null and g.concept_id = "
-		        + prescription + " order by g.person_id, e.encounter_datetime, e.encounter_id, g.obs_id, r.obs_id",
+		        + concept(admin, GP_PRESCRIPTION)
+		        + " order by g.person_id, e.encounter_datetime, e.encounter_id, g.obs_id, r.obs_id",
 		    true);
-		
-		Map<Integer, Prescribed> byPatient = new LinkedHashMap<Integer, Prescribed>();
+		Map<Integer, Integer> encounterOf = new HashMap<Integer, Integer>();
 		for (List<Object> row : rows) {
+			AdherenceReplay.History h = history(histories, row.get(0));
 			Integer patientId = ((Number) row.get(0)).intValue();
 			int encounterId = ((Number) row.get(2)).intValue();
-			Prescribed p = byPatient.get(patientId);
-			if (p == null || p.encounterId != encounterId) {
-				// Rows come in encounter order, so a new encounter is a later one.
-				p = new Prescribed();
-				p.encounterId = encounterId;
-				byPatient.put(patientId, p);
+			LocalDate day = localDate(row.get(1));
+			// Rows come in encounter order, so a new encounter on a day replaces an earlier one that day.
+			if (!Integer.valueOf(encounterId).equals(encounterOf.get(patientId))) {
+				encounterOf.put(patientId, encounterId);
+				h.prescriptions.put(day, new AdherenceReplay.Prescriptions());
 			}
+			AdherenceReplay.Prescriptions p = h.prescriptions.get(day);
 			if (row.get(5) == null || row.get(6) != null) {
 				continue;
 			}
@@ -257,36 +174,22 @@ public class AdherenceRefresh {
 				p.regimens.put(started, row.get(4) == null ? null : ((Number) row.get(4)).intValue());
 			}
 		}
-		// A latest encounter whose prescriptions were all stopped, or had no start date, prescribes none.
-		Map<Integer, Prescribed> withPrescriptions = new LinkedHashMap<Integer, Prescribed>();
-		for (Map.Entry<Integer, Prescribed> entry : byPatient.entrySet()) {
-			if (!entry.getValue().intervals.isEmpty()) {
-				withPrescriptions.put(entry.getKey(), entry.getValue());
-			}
-		}
-		return withPrescriptions;
 	}
 	
-	private Map<Integer, TreeSet<LocalDate>> injections(AdministrationService admin) {
+	private void readInjections(AdministrationService admin, Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
 		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
 		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
 		        + concept(admin, GP_INJECTION_DATE),
 		    true);
-		Map<Integer, TreeSet<LocalDate>> byPatient = new HashMap<Integer, TreeSet<LocalDate>>();
 		for (List<Object> row : rows) {
-			Integer patientId = ((Number) row.get(0)).intValue();
-			if (!byPatient.containsKey(patientId)) {
-				byPatient.put(patientId, new TreeSet<LocalDate>());
-			}
-			byPatient.get(patientId).add(localDate(row.get(1)));
+			history(histories, row.get(0)).injections.add(localDate(row.get(1)));
 		}
-		return byPatient;
 	}
 	
 	/** The oral form has no date of its own, so an estimate counts from its encounter's date. */
-	private Map<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>> oralEntries(AdministrationService admin,
-	        Map<String, Integer> durations) {
+	private void readEstimates(AdministrationService admin, Map<String, Integer> durations,
+	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select o.person_id, e.encounter_datetime, o.value_numeric, dc.uuid"
 		        + " from obs o join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
 		        + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
@@ -294,63 +197,46 @@ public class AdherenceRefresh {
 		        + " where o.voided = false and o.concept_id = " + concept(admin, GP_ESTIMATE)
 		        + " order by o.person_id, e.encounter_datetime, e.encounter_id, o.obs_id",
 		    true);
-		Map<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>> byPatient = new HashMap<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>>();
 		for (List<Object> row : rows) {
-			Integer patientId = ((Number) row.get(0)).intValue();
-			if (!byPatient.containsKey(patientId)) {
-				byPatient.put(patientId, new TreeMap<LocalDate, AdherenceCalculation.OralEntry>());
-			}
+			TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral = history(histories, row.get(0)).oral;
 			LocalDate day = localDate(row.get(1));
-			if (!byPatient.get(patientId).containsKey(day)) {
+			if (!oral.containsKey(day)) {
 				Double estimate = row.get(2) == null ? null : ((Number) row.get(2)).doubleValue();
 				Integer days = row.get(3) == null ? null : durations.get(row.get(3).toString());
-				byPatient.get(patientId).put(day, new AdherenceCalculation.OralEntry(estimate, days));
+				oral.put(day, new AdherenceCalculation.OralEntry(estimate, days));
 			}
 		}
-		return byPatient;
 	}
 	
-	/**
-	 * Each patient's latest value, up to today, of the date the global property names; a future date
-	 * does not count.
-	 */
-	private Map<Integer, LocalDate> latestDates(AdministrationService admin, String property, LocalDate today) {
+	/** Each consultation's date; one dated after today has not happened, so it does not count. */
+	private void readConsultations(AdministrationService admin, LocalDate today,
+	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
 		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = " + concept(admin, property),
+		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
+		        + concept(admin, GP_CONSULTATION_DATE),
 		    true);
-		Map<Integer, LocalDate> byPatient = new HashMap<Integer, LocalDate>();
 		for (List<Object> row : rows) {
-			Integer patientId = ((Number) row.get(0)).intValue();
 			LocalDate day = localDate(row.get(1));
-			if (!day.isAfter(today) && (!byPatient.containsKey(patientId) || day.isAfter(byPatient.get(patientId)))) {
-				byPatient.put(patientId, day);
+			if (!day.isAfter(today)) {
+				history(histories, row.get(0)).consultations.add(day);
 			}
 		}
-		return byPatient;
 	}
 	
-	/**
-	 * Each patient's batch data entry interval, from the latest encounter that records how they are
-	 * entered.
-	 */
-	private Map<Integer, Integer> batchEntryDays(AdministrationService admin, Map<String, Integer> intervals) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, c.uuid from obs o"
+	/** How each patient's injections are entered, from the date of each encounter that records it. */
+	private void readBatchDays(AdministrationService admin, Map<String, Integer> intervals,
+	        Map<Integer, AdherenceReplay.History> histories) {
+		List<List<Object>> rows = admin.executeSQL("select o.person_id, e.encounter_datetime, c.uuid from obs o"
 		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
 		        + " join concept c on c.concept_id = o.value_coded where o.voided = false and o.concept_id = "
 		        + concept(admin, GP_DATA_ENTRY) + " order by o.person_id, e.encounter_datetime, e.encounter_id, o.obs_id",
 		    true);
-		Map<Integer, Integer> byPatient = new HashMap<Integer, Integer>();
 		for (List<Object> row : rows) {
-			// Later rows replace earlier ones, so each patient ends with their latest; continuous entry has none.
-			Integer days = intervals.get(row.get(1).toString());
-			if (days == null) {
-				byPatient.remove(((Number) row.get(0)).intValue());
-			} else {
-				byPatient.put(((Number) row.get(0)).intValue(), days);
-			}
+			Integer days = intervals.get(row.get(2).toString());
+			// Later rows replace earlier ones on the same day; any answer but a batch interval is continuous.
+			history(histories, row.get(0)).batchDays.put(localDate(row.get(1)), days == null ? 0 : days);
 		}
-		return byPatient;
 	}
 	
 	/** The concept_id of the concept the global property names by uuid, as a subquery. */

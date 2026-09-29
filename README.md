@@ -68,23 +68,30 @@ logged as warnings that name the column and type, never the value. Days pending 
 
 ### Prophylaxis adherence
 
-A port of ACT 2.0's `calculate_adherence_and_injection_date` (is4r-rhd-cdk
-`query_handlers/adherence_utils.py`), step for step:
+A port of ACT 2.0's adherence (is4r-rhd-cdk `query_handlers/adherence_utils.py`). Its calculation,
+`calculate_adherence_and_injection_date`, is ported step for step:
 
-- It reads the prophylaxis prescribed on the patient's latest encounter that records any, leaving
-  out prescriptions with a date stopped, then every injection date and every oral adherence estimate.
+- It reads the prophylaxis prescribed on the latest encounter that records any, leaving out
+  prescriptions with a date stopped, then every injection date and every oral adherence estimate.
 - Over at most the last 365 days, each injection regimen's window counts the days its injections
   came later than the regimen's interval (Q14, Q21, Q28) allows. Adherence is 1 minus the days late
   over the days prescribed.
 - An oral regimen instead takes the clinician's latest estimate in its window.
 - The next due date runs from the latest injection by the latest regimen's interval, or on an oral
   regimen from the latest estimate by its prescription duration.
-- As ACT 2.0 did around that calculation: a regimen with no injection, or no estimate, ever recorded
-  gets no adherence or due date. A patient whose injections are entered in batches (every 3, 6 or 12
-  months, on the consultation) is computed as of the later of their latest consultation and injection
-  until that long has passed, which is where ACT 2.0's nightly run left them.
-- ACT 2.0 recomputed an oral patient only when a consultation or estimate was saved, so an oral patient
-  is computed as of the later of the two.
+
+ACT 2.0 kept the result on the patient's record and recomputed it only at certain times: whenever a
+consultation, BPG delivery or oral adherence form was saved, and each night for a patient whose stored
+regimen was an injection. The nightly run skipped a patient whose injections are entered in batches
+(every 3, 6 or 12 months, on the consultation) until that long had passed since the later of their
+latest consultation and last injection. `AdherenceReplay` replays those times day by day, taking each
+record to have been saved on the date it records, and each row is the calculation as of the last day
+ACT 2.0 would have run it. So a regimen that starts after the consultation recording it counts from
+the first run on or after its start date, as it did in ACT 2.0.
+
+A regimen with no injection, or no estimate, recorded by then gets no adherence or due date. Here this
+differs from ACT 2.0, which left the previous regimen's values on the record: under the new regimen's
+name they would be wrong.
 
 Each row holds the patient, the latest regimen and its injection interval (0 for an oral regimen),
 adherence as a fraction, the last injection or estimate, the next due date and when it was computed.
@@ -94,7 +101,10 @@ Each run replaces every row in one transaction, so a failed run leaves the previ
 `api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
 pinned, for every call in its `test_adherence.py`, for prescriptions either side of the 365-day
 cutoff, and for 400 random histories, recorded by running that function unchanged from the ACT 2.0
-source. It is fixed data: the build and tests need no Python.
+source. It is fixed data: the build and tests need no Python. `AdherenceReplayOracleTest` holds the
+replay to ACT 2.0's record-keeping written out as ACT 2.0 ran it, a stored record updated on each save
+and on each nightly run it allowed, over 3000 random histories in which regimens start before and after
+the consultations that record them.
 
 
 | Decision | Why |
@@ -117,7 +127,7 @@ source. It is fixed data: the build and tests need no Python.
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
 | Adherence is ported from ACT 2.0 unchanged | ACT 3.0 had no definition of "adherent" of its own; parity with ACT 2.0 keeps the registry's numbers comparable across the migration, quirks included. |
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
-| Adherence is recomputed daily and on demand, not on every form save | ACT 2.0 also recomputed on save. Here a BPG delivery shows in the registry after the next run; run the task to see it at once. A batch-entered patient is computed as of their latest consultation or injection, which is the value ACT 2.0's save gave them when that is when the batch was entered. |
+| Adherence is recomputed daily and on demand, replaying ACT 2.0's saves and nightly runs | A BPG delivery shows in the registry after the next run; run the task to see it at once. The replay needs no state of its own, so a run gives the same rows whatever ran before it. |
 | A prescription's latest encounter, not its latest consultation form | ACT 2.0 read the latest consultation. The latest encounter that records a prescription is the same when every consultation records one, and does not drop a regimen when a consultation leaves it out. |
 
 How the ACT distribution uses the flags, for context: risk flags (overdue prophylaxis, lost to
