@@ -242,6 +242,62 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void refreshAll_shouldNotHoldABatchEnteredPatientAtAConsultationDatedInTheFuture() {
+		onTimeUntil(116);
+		consulted(encounter(7, 1), -60, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		// The future date is ignored, the last injection 116 days ago is past the batch interval: as of today.
+		assertEquals(1 - 88.0 / 201, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldTakeTheLatestConsultationDate() {
+		onTimeUntil(116);
+		consulted(encounter(7, 150), 150, everyThreeMonths);
+		Obs date = obs(encounter(7, 84), consultationDate);
+		date.setValueDatetime(at(84));
+		Context.getObsService().saveObs(date, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Held as of the consultation 84 days ago: the injection due 88 days ago is 4 of 117 days late.
+		assertEquals(1 - 4.0 / 117, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldTakeTheLatestDataEntryAnswer() {
+		prescribe(encounter(7, 200), q28, 200, null);
+		for (int daysAgo = 200; daysAgo >= 88; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		consulted(encounter(7, 150), 150, everyThreeMonths);
+		consulted(encounter(7, 84), 84, continuous);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(1 - 60.0 / 201, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldStoreTheRegimenAHeldPatientWasComputedFor() {
+		Encounter consultation = encounter(7, 10);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, q21, 3, null);
+		given(encounter(7, 32), 32);
+		consulted(consultation, 10, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Held as of 10 days ago, before the Q21 started: the Q28 row, due 28 days after the last injection.
+		List<Object> row = row(7);
+		assertEquals((int) q28.getConceptId(), number(row.get(1)));
+		assertEquals(28, number(row.get(2)));
+		assertEquals(TODAY.minusDays(4), date(row.get(5)));
+	}
+	
+	@Test
 	public void refreshAll_shouldKeepTheFirstPrescriptionOfAStartDate() {
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 27, null);
@@ -314,6 +370,14 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		Obs lasts = obs(encounter, duration);
 		lasts.setValueCoded(threeMonths);
 		Context.getObsService().saveObs(lasts, null);
+	}
+	
+	/** Q28 prescribed 200 days ago, every injection on time until the one ``lastDaysAgo`` ago. */
+	private void onTimeUntil(int lastDaysAgo) {
+		prescribe(encounter(7, 200), q28, 200, null);
+		for (int daysAgo = 200; daysAgo >= lastDaysAgo; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
 	}
 	
 	private void consulted(Encounter encounter, int daysAgo, Concept entry) {

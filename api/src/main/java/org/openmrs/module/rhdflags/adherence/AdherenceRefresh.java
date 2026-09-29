@@ -36,9 +36,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Recomputes every patient's prophylaxis adherence and next due date into
- * rhdflags_prophylaxis_adherence, from the prophylaxis prescribed on their latest encounter that
- * records one, their injections and their oral adherence estimates. The concepts are global
- * properties, defaulting to the ACT forms'.
+ * rhdflags_prophylaxis_adherence; the concepts it reads are global properties, defaulting to the
+ * ACT forms'.
  */
 public class AdherenceRefresh {
 	
@@ -70,6 +69,33 @@ public class AdherenceRefresh {
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
 	
 	private final int rowsPerInsert;
+	
+	/**
+	 * The regimen started last by a date, its injection interval, and the latest injection (or, on an
+	 * oral regimen, estimate) by then.
+	 */
+	private static final class Regimen {
+		
+		final LocalDate latest;
+		
+		final Integer interval;
+		
+		LocalDate lastGiven;
+		
+		Regimen(Prescribed p, TreeSet<LocalDate> given, TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates,
+		    LocalDate onDate) {
+			SortedMap<LocalDate, Integer> started = p.intervals.headMap(onDate.plusDays(1));
+			latest = started.isEmpty() ? null : started.lastKey();
+			interval = latest == null ? null : started.get(latest);
+			if (interval != null && interval > 0) {
+				SortedSet<LocalDate> past = given.headSet(onDate.plusDays(1));
+				lastGiven = past.isEmpty() ? null : past.last();
+			} else if (interval != null) {
+				SortedMap<LocalDate, AdherenceCalculation.OralEntry> past = estimates.headMap(onDate.plusDays(1));
+				lastGiven = past.isEmpty() ? null : past.lastKey();
+			}
+		}
+	}
 	
 	/** A patient's prescriptions, from their latest encounter that records any. */
 	private static final class Prescribed {
@@ -106,7 +132,7 @@ public class AdherenceRefresh {
 		Map<Integer, Prescribed> prescribed = prescriptions(admin, injectionIntervals);
 		Map<Integer, TreeSet<LocalDate>> injections = injections(admin);
 		Map<Integer, TreeMap<LocalDate, AdherenceCalculation.OralEntry>> oral = oralEntries(admin, durations);
-		Map<Integer, LocalDate> consulted = latestDates(admin, GP_CONSULTATION_DATE);
+		Map<Integer, LocalDate> consulted = latestDates(admin, GP_CONSULTATION_DATE, today);
 		Map<Integer, Integer> batchDays = batchEntryDays(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS));
 		
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
@@ -118,32 +144,25 @@ public class AdherenceRefresh {
 			        : new TreeSet<LocalDate>();
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates = oral.containsKey(patientId) ? oral.get(patientId)
 			        : new TreeMap<LocalDate, AdherenceCalculation.OralEntry>();
-			SortedMap<LocalDate, Integer> started = p.intervals.headMap(today.plusDays(1));
-			LocalDate latest = started.isEmpty() ? null : started.lastKey();
-			Integer interval = latest == null ? null : started.get(latest);
-			// The latest injection, or on an oral regimen the latest estimate, up to today.
-			LocalDate lastGiven = null;
-			if (interval != null && interval > 0) {
-				SortedSet<LocalDate> past = given.headSet(today.plusDays(1));
-				lastGiven = past.isEmpty() ? null : past.last();
-			} else if (interval != null) {
-				SortedMap<LocalDate, AdherenceCalculation.OralEntry> past = estimates.headMap(today.plusDays(1));
-				lastGiven = past.isEmpty() ? null : past.lastKey();
-			}
-			
+			Regimen regimen = new Regimen(p, given, estimates, today);
 			AdherenceCalculation.Result result;
-			if (interval != null && (interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
+			if (regimen.interval != null && (regimen.interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
 				// ACT 2.0 gave no adherence or due date to a regimen with no injection, or no estimate, recorded.
 				result = new AdherenceCalculation.Result(null, null);
 			} else {
-				LocalDate asOf = interval != null && interval > 0
-				        ? batchEntered(today, batchDays.get(patientId), consulted.get(patientId), lastGiven)
+				LocalDate asOf = regimen.interval != null && regimen.interval > 0
+				        ? batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven)
 				        : today;
+				// The row describes the regimen its adherence and due date were computed for.
+				if (!asOf.equals(today)) {
+					regimen = new Regimen(p, given, estimates, asOf);
+				}
 				result = AdherenceCalculation.calculate(p.intervals, given, estimates, asOf);
 			}
-			rows.add("(" + patientId + ", " + sqlValue(latest == null ? null : p.regimens.get(latest)) + ", "
-			        + sqlValue(interval) + ", " + sqlValue(result.getAdherence()) + ", " + sqlValue(lastGiven) + ", "
-			        + sqlValue(result.getNextDue()) + ", " + sqlValue(computedAt) + ")");
+			rows.add("(" + patientId + ", " + sqlValue(regimen.latest == null ? null : p.regimens.get(regimen.latest)) + ", "
+			        + sqlValue(regimen.interval) + ", " + sqlValue(result.getAdherence()) + ", "
+			        + sqlValue(regimen.lastGiven) + ", " + sqlValue(result.getNextDue()) + ", " + sqlValue(computedAt)
+			        + ")");
 		}
 		
 		rewrite(admin, rows);
@@ -170,9 +189,9 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * ACT 2.0's nightly run left a patient whose injections are entered in batches (every 3, 6 or 12
-	 * months) at the adherence computed when the batch was saved, until that long had passed since the
-	 * later of their latest consultation and injection. Computing as of that date gives the same value.
+	 * ACT 2.0's nightly run left a batch-entered patient at the adherence saved with their last batch
+	 * until the batch interval had passed; this computes them as of their latest consultation or
+	 * injection instead.
 	 */
 	static LocalDate batchEntered(LocalDate today, Integer batchDays, LocalDate consulted, LocalDate lastGiven) {
 		LocalDate seen = consulted == null || lastGiven != null && lastGiven.isAfter(consulted) ? lastGiven : consulted;
@@ -274,17 +293,21 @@ public class AdherenceRefresh {
 		return byPatient;
 	}
 	
-	/** Each patient's latest value of the date the global property names. */
-	private Map<Integer, LocalDate> latestDates(AdministrationService admin, String property) {
-		List<List<Object>> rows = admin.executeSQL(
-		    "select o.person_id, max(o.value_datetime) from obs o"
-		            + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		            + " where o.voided = false and o.concept_id = " + concept(admin, property) + " group by o.person_id",
+	/**
+	 * Each patient's latest value, up to today, of the date the global property names; a future date
+	 * does not count.
+	 */
+	private Map<Integer, LocalDate> latestDates(AdministrationService admin, String property, LocalDate today) {
+		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
+		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
+		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = " + concept(admin, property),
 		    true);
 		Map<Integer, LocalDate> byPatient = new HashMap<Integer, LocalDate>();
 		for (List<Object> row : rows) {
-			if (row.get(1) != null) {
-				byPatient.put(((Number) row.get(0)).intValue(), localDate(row.get(1)));
+			Integer patientId = ((Number) row.get(0)).intValue();
+			LocalDate day = localDate(row.get(1));
+			if (!day.isAfter(today) && (!byPatient.containsKey(patientId) || day.isAfter(byPatient.get(patientId)))) {
+				byPatient.put(patientId, day);
 			}
 		}
 		return byPatient;
