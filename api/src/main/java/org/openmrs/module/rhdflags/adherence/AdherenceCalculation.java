@@ -71,7 +71,7 @@ public final class AdherenceCalculation {
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, SortedSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
-		// Future prescriptions and oral entries do not count; an injection outside every prescription window is ignored.
+		// Future prescriptions and oral entries do not count.
 		SortedMap<LocalDate, Integer> started = prescriptions.headMap(today.plusDays(1));
 		SortedMap<LocalDate, OralEntry> estimated = oral.headMap(today.plusDays(1));
 		if (started.isEmpty()) {

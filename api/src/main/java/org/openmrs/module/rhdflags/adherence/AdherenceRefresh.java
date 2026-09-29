@@ -34,11 +34,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Recomputes every patient's prophylaxis adherence and next due date into
- * rhdflags_prophylaxis_adherence; the concepts it reads are global properties, defaulting to the
- * ACT forms'.
- */
+/** Recomputes every patient's adherence and next due date into rhdflags_prophylaxis_adherence. */
 public class AdherenceRefresh {
 	
 	public static final String TABLE = "rhdflags_prophylaxis_adherence";
@@ -145,18 +141,21 @@ public class AdherenceRefresh {
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> estimates = oral.containsKey(patientId) ? oral.get(patientId)
 			        : new TreeMap<LocalDate, AdherenceCalculation.OralEntry>();
 			Regimen regimen = new Regimen(p, given, estimates, today);
+			LocalDate asOf = today;
+			if (regimen.interval != null && regimen.interval > 0) {
+				asOf = batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven);
+			} else if (regimen.interval != null) {
+				asOf = lastSaved(today, consulted.get(patientId), regimen.lastGiven);
+			}
+			// The row, and the no-record rule, describe the regimen its adherence and due date are computed for.
+			if (!asOf.equals(today)) {
+				regimen = new Regimen(p, given, estimates, asOf);
+			}
 			AdherenceCalculation.Result result;
 			if (regimen.interval != null && (regimen.interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
 				// ACT 2.0 gave no adherence or due date to a regimen with no injection, or no estimate, recorded.
 				result = new AdherenceCalculation.Result(null, null);
 			} else {
-				LocalDate asOf = regimen.interval != null && regimen.interval > 0
-				        ? batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven)
-				        : today;
-				// The row describes the regimen its adherence and due date were computed for.
-				if (!asOf.equals(today)) {
-					regimen = new Regimen(p, given, estimates, asOf);
-				}
 				result = AdherenceCalculation.calculate(p.intervals, given, estimates, asOf);
 			}
 			rows.add("(" + patientId + ", " + sqlValue(regimen.latest == null ? null : p.regimens.get(regimen.latest)) + ", "
@@ -189,16 +188,28 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * ACT 2.0's nightly run left a batch-entered patient at the adherence saved with their last batch
-	 * until the batch interval had passed; this computes them as of their latest consultation or
-	 * injection instead.
+	 * ACT 2.0's nightly run held a batch-entered patient at their last batch until the interval passed;
+	 * this computes them as of their latest consultation or injection until then.
 	 */
 	static LocalDate batchEntered(LocalDate today, Integer batchDays, LocalDate consulted, LocalDate lastGiven) {
-		LocalDate seen = consulted == null || lastGiven != null && lastGiven.isAfter(consulted) ? lastGiven : consulted;
+		LocalDate seen = later(consulted, lastGiven);
 		if (batchDays == null || seen == null || ChronoUnit.DAYS.between(seen, today) >= batchDays) {
 			return today;
 		}
 		return seen;
+	}
+	
+	/**
+	 * ACT 2.0 recomputed an oral patient only when a consultation or estimate was saved, so as of the
+	 * later.
+	 */
+	static LocalDate lastSaved(LocalDate today, LocalDate consulted, LocalDate lastEstimate) {
+		LocalDate saved = later(consulted, lastEstimate);
+		return saved == null ? today : saved;
+	}
+	
+	private static LocalDate later(LocalDate a, LocalDate b) {
+		return a == null || b != null && b.isAfter(a) ? b : a;
 	}
 	
 	/**

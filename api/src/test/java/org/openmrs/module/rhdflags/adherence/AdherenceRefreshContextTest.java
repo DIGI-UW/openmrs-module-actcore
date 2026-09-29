@@ -298,6 +298,36 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void refreshAll_shouldApplyTheNoRecordRuleToTheRegimenAHeldRowDescribes() {
+		// Held as of the consultation 10 days ago, when the oral regimen, with no estimate, was the latest.
+		Encounter consultation = encounter(7, 10);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, oralPenicillin, 60, null);
+		prescribe(consultation, q21, 3, null);
+		given(encounter(7, 150), 150);
+		consulted(consultation, 10, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<Object> row = row(7);
+		assertEquals((int) oralPenicillin.getConceptId(), number(row.get(1)));
+		assertNull(row.get(3));
+		assertNull(row.get(5));
+	}
+	
+	@Test
+	public void refreshAll_shouldKeepAnOralPatientsEstimateFromTheirLastSavedForm() {
+		prescribe(encounter(7, 500), oralPenicillin, 500, null);
+		estimate(encounter(7, 400), 70.0);
+		
+		refresh.refreshAll(TODAY);
+		
+		// ACT 2.0 recomputed oral patients only on a save, so the estimate a year old still stands.
+		assertEquals(0.7, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+		assertEquals(TODAY.minusDays(400).plusDays(90), date(row(7).get(5)));
+	}
+	
+	@Test
 	public void refreshAll_shouldKeepTheFirstPrescriptionOfAStartDate() {
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 27, null);

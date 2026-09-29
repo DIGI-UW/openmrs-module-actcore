@@ -41,4 +41,13 @@ public class AdherenceRefreshTest {
 		assertEquals(today, AdherenceRefresh.batchEntered(today, null, consulted, null));
 		assertEquals(today, AdherenceRefresh.batchEntered(today, 90, null, null));
 	}
+	
+	@Test
+	public void lastSaved_shouldTakeTheLaterOfTheConsultationAndTheEstimate() {
+		LocalDate today = LocalDate.of(2026, 9, 29);
+		assertEquals(today.minusDays(5), AdherenceRefresh.lastSaved(today, today.minusDays(40), today.minusDays(5)));
+		assertEquals(today.minusDays(5), AdherenceRefresh.lastSaved(today, today.minusDays(5), today.minusDays(40)));
+		assertEquals(today.minusDays(40), AdherenceRefresh.lastSaved(today, null, today.minusDays(40)));
+		assertEquals(today, AdherenceRefresh.lastSaved(today, null, null));
+	}
 }

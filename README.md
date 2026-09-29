@@ -83,6 +83,8 @@ A port of ACT 2.0's `calculate_adherence_and_injection_date` (is4r-rhd-cdk
   gets no adherence or due date. A patient whose injections are entered in batches (every 3, 6 or 12
   months, on the consultation) is computed as of the later of their latest consultation and injection
   until that long has passed, which is where ACT 2.0's nightly run left them.
+- ACT 2.0 recomputed an oral patient only when a consultation or estimate was saved, so an oral patient
+  is computed as of the later of the two.
 
 Each row holds the patient, the latest regimen and its injection interval (0 for an oral regimen),
 adherence as a fraction, the last injection or estimate, the next due date and when it was computed.
