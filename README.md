@@ -3,11 +3,13 @@
 [![Build with Maven](https://github.com/mherman22/openmrs-module-rhd-flags/actions/workflows/build.yml/badge.svg)](https://github.com/mherman22/openmrs-module-rhd-flags/actions/workflows/build.yml)
 
 A companion to the patientflags module. It re-evaluates flags every day, keeps a patient list per
-flag, and tells a client which form and question are missing behind a flag.
+flag, tells a client which form and question are missing behind a flag, and computes each patient's
+prophylaxis adherence and next due date.
 
 It was written for ACT 3.0, the OpenMRS 3 edition of the ACT RHD registry, where it replaces the
-ACT 2.0 Critical Data Flags screen. The code has nothing RHD-specific in it: the flags themselves
-are configuration in the distribution.
+ACT 2.0 Critical Data Flags screen. The flag code has nothing RHD-specific in it: the flags
+themselves are configuration in the distribution. The adherence calculation is ACT 2.0's secondary
+prophylaxis rule; the concepts it reads are global properties, defaulting to the ACT forms'.
 
 ## Why it exists
 
@@ -27,6 +29,9 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Gap look-up.** `GET /ws/rest/v1/rhdflags/gap?patient=<uuid>&flag=<uuid>` lists, for a flag that
   stands for missing data, each encounter and question still missing an answer. The RHD frontend
   app (`openmrs-esm-rhd-app`) shows these in its Missing data workspace, with Open form.
+- **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
+  each patient's adherence and next due date into the table `rhdflags_prophylaxis_adherence`, which
+  the registry and care cascade reports read.
 
 ### Gap look-up
 
@@ -61,13 +66,35 @@ encounter, a voided encounter or something that is not a concept are dropped. Su
 logged as warnings that name the column and type, never the value. Days pending are counted from
 `encounterDatetime`.
 
-## Design decisions
+### Prophylaxis adherence
+
+A port of ACT 2.0's `calculate_adherence_and_injection_date` (is4r-rhd-cdk
+`query_handlers/adherence_utils.py`), step for step:
+
+- It reads the prophylaxis prescribed on the patient's latest encounter that records any, leaving
+  out prescriptions with a date stopped, then every injection date and every oral adherence estimate.
+- Over at most the last 365 days, each injection regimen's window counts the days its injections
+  came later than the regimen's interval (Q14, Q21, Q28) allows. Adherence is 1 minus the days late
+  over the days prescribed.
+- An oral regimen instead takes the clinician's latest estimate in its window.
+- The next due date runs from the latest injection by the latest regimen's interval, or on an oral
+  regimen from the latest estimate by its prescription duration.
+
+Each row holds the patient, the latest regimen and its injection interval (0 for an oral regimen),
+adherence as a fraction, the last injection or estimate, the next due date and when it was computed.
+
+`AdherenceCalculationParityTest` holds the port to ACT 2.0 itself. Its fixture,
+`api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
+pinned, for every call in its `test_adherence.py`, for prescriptions either side of the 365-day
+cutoff, and for 400 random histories. `tools/adherence-parity/fixture.py` regenerates it by loading
+that function unchanged from an ACT 2.0 checkout.
+
 
 | Decision | Why |
 | --- | --- |
 | A separate module, not a patched patientflags | Works with stock patientflags 3.0.10, so the distribution needs no fork. Fixes for the two underlying patientflags defects (a schedulable task, reconcile instead of rebuild) are drafted but not yet proposed upstream; if they land, this module keeps the lists and sheds most of its reconciliation. |
 | Every ACT 2.0 rule is an ordinary SQL patient flag | Rules change by editing configuration, not by releasing code, and they show wherever O3 shows flags. |
-| Nothing RHD-specific in the code | Flags, tags, priorities and messages live in the distribution's Initializer files. |
+| Nothing RHD-specific in the flag code | Flags, tags, priorities and messages live in the distribution's Initializer files. |
 | The module registers its own scheduled task | Initializer has no domain for scheduler tasks. The first run is five minutes after the module first starts, then daily; the scheduler owns the interval after that. |
 | The module starts after Initializer (`aware_of_module`) | On a fresh database the first run then finds the flags Initializer created (#7). |
 | Write only what changed | Rows and memberships are reconciled, not rebuilt, so a refresh does not churn the database. |
@@ -81,6 +108,10 @@ logged as warnings that name the column and type, never the value. Days pending 
 | A failing flag message does not stop the flag clearing (#9) | One bad flag should not leave stale rows for everyone. |
 | Logging goes through core's `log4j2.xml` | No second logging system; one summary line per run at the default level. |
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
+| Adherence is ported from ACT 2.0 unchanged | ACT 3.0 had no definition of "adherent" of its own; parity with ACT 2.0 keeps the registry's numbers comparable across the migration, quirks included. |
+| Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
+| Adherence is recomputed daily and on demand, not on every form save | ACT 2.0 also recomputed on save. Here a BPG delivery shows in the registry after the next run; run the task to see it at once. |
+| A prescription's latest encounter, not its latest consultation form | ACT 2.0 read the latest consultation. The latest encounter that records a prescription is the same when every consultation records one, and does not drop a regimen when a consultation leaves it out. |
 
 How the ACT distribution uses the flags, for context: risk flags (overdue prophylaxis, lost to
 follow-up) have priority `RHD High` and show red; missing data flags have priority
@@ -96,7 +127,7 @@ OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.
 Put the omod in the modules directory (or mount it in a distribution) and restart. The module
 registers its task on first start; there is nothing else to set up.
 
-To run the refresh now:
+To run the refresh now (or `RHD Prophylaxis Adherence Refresh` for adherence):
 
     curl -u admin:<password> -X POST -H 'Content-Type: application/json' \
       -d '{"action":"runtask","tasks":["RHD Patient Flag Refresh"]}' \
@@ -111,6 +142,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `rhdflags.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `rhdflags.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `rhdflags.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, and the regimen intervals and prescription durations as `uuid:days` pairs; see `config.xml` |
 
 ## Security
 

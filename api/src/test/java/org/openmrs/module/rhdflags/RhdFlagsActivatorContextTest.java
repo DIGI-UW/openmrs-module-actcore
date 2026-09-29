@@ -17,6 +17,7 @@ import java.util.Date;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.module.rhdflags.adherence.AdherenceRefreshTask;
 import org.openmrs.module.rhdflags.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -44,6 +45,16 @@ public class RhdFlagsActivatorContextTest extends BaseModuleContextSensitiveTest
 		    refreshed.getDescription().startsWith("Re-evaluates every enabled, unretired patient flag"));
 		assertEquals(Long.valueOf(3600L), refreshed.getRepeatInterval());
 		assertEquals(startTime.getTime(), refreshed.getStartTime().getTime());
+	}
+	
+	@Test
+	public void registersTheDailyAdherenceRefresh() {
+		new RhdFlagsActivator().started();
+		
+		TaskDefinition task = Context.getSchedulerService().getTaskByName(RhdFlagsActivator.ADHERENCE_TASK_NAME);
+		assertEquals(AdherenceRefreshTask.class.getName(), task.getTaskClass());
+		assertEquals(Long.valueOf(86400L), task.getRepeatInterval());
+		assertTrue(task.getStartOnStartup());
 	}
 	
 }

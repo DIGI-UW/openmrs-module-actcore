@@ -19,7 +19,7 @@
   <package>org.openmrs.module.rhdflags</package>
   <author>UW DIGI</author>
   <description>
-    Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, and a look-up of the data missing behind a flag.
+    Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, and each patient's prophylaxis adherence and next due date.
   </description>
 
   <activator>org.openmrs.module.rhdflags.RhdFlagsActivator</activator>
@@ -54,6 +54,69 @@
       Name of the cohort type given to lists this module creates. The module creates the type if no
       cohort type has this name, and creates no lists while a voided type has it. Lists created
       before this value changes keep their original type.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>rhdflags.adherence.prescriptionConcept</property>
+    <defaultValue>668e0221-8b41-5669-9ad8-78e193d42494</defaultValue>
+    <description>
+      The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest encounter that has any.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.injectionIntervals</property>
+    <defaultValue>50be4b26-6c5b-5aaa-9254-3bfd313b4522:28,2f3ee632-dd14-51b0-a4ec-de10e7958019:21,91230c88-6a90-5d45-af50-fa6155fe5dd7:14</defaultValue>
+    <description>
+      The injection regimens, as regimen answer uuid:days between injections, separated by commas. Any other regimen is treated as oral, whose adherence is the latest estimate.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.dateStartedConcept</property>
+    <defaultValue>5bcc7d12-b279-5955-815c-090a1f392071</defaultValue>
+    <description>
+      The member of a prescription group holding the date it started. A prescription without one is left out.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.dateStoppedConcept</property>
+    <defaultValue>d75edc42-3213-5a06-9228-4e5735b9594b</defaultValue>
+    <description>
+      The member of a prescription group holding the date it stopped. A stopped prescription is left out, as ACT 2.0 left it out.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.injectionDateConcept</property>
+    <defaultValue>183fb30e-b861-5b7c-806f-7118a40f2b51</defaultValue>
+    <description>
+      The date an injection was given.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.estimateConcept</property>
+    <defaultValue>8edff8dc-4af6-5d0f-bf1d-8e349c7a1b15</defaultValue>
+    <description>
+      The clinician's oral adherence estimate, in percent. It counts from its encounter's date.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.prescriptionDurationConcept</property>
+    <defaultValue>cd03af00-de81-5c08-9a02-92f95c00e1ce</defaultValue>
+    <description>
+      The duration of an oral prescription, recorded with the estimate; it sets when oral prophylaxis is next due.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>rhdflags.adherence.prescriptionDurations</property>
+    <defaultValue>87bdee8a-aaf8-56e7-9e34-2b668873787d:30,30f01ae8-2fc0-5ac2-be59-a573b38d73d5:90,35d3bb08-35fb-5377-8d8f-3edd73c1178b:180,63726df8-d924-54fe-b88b-b8bc9749632b:365</defaultValue>
+    <description>
+      The prescription duration answers, as answer uuid:days, separated by commas.
     </description>
   </globalProperty>
 </module>
