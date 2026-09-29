@@ -71,8 +71,9 @@ logged as warnings that name the column and type, never the value. Days pending 
 A port of ACT 2.0's adherence (is4r-rhd-cdk `query_handlers/adherence_utils.py`). Its calculation,
 `calculate_adherence_and_injection_date`, is ported step for step:
 
-- It reads the prophylaxis prescribed on the latest encounter that records any, leaving out
-  prescriptions with a date stopped, then every injection date and every oral adherence estimate.
+- It reads the prophylaxis prescribed on the latest consultation that records any, by its Date of
+  Consultation Visit (else its encounter's date), leaving out prescriptions with a date stopped, then
+  every injection date and every oral adherence form.
 - Over at most the last 365 days, each injection regimen's window counts the days its injections
   came later than the regimen's interval (Q14, Q21, Q28) allows. Adherence is 1 minus the days late
   over the days prescribed.
@@ -133,7 +134,7 @@ the consultations that record them.
 | Adherence is ported from ACT 2.0 unchanged | ACT 3.0 had no definition of "adherent" of its own; parity with ACT 2.0 keeps the registry's numbers comparable across the migration, quirks included. |
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
 | Adherence is recomputed daily and on demand, replaying ACT 2.0's saves and nightly runs | A BPG delivery shows in the registry after the next run; run the task to see it at once. The replay needs no state of its own, so a run gives the same rows whatever ran before it. |
-| A prescription's latest encounter, not its latest consultation form | ACT 2.0 read the latest consultation. The latest encounter that records a prescription is the same when every consultation records one, and does not drop a regimen when a consultation leaves it out. |
+| The latest consultation that records a prescription, not the latest consultation | ACT 2.0 read the latest consultation, by its date, and the first of a day. Here a consultation that leaves the prescriptions out does not drop the regimen the one before it recorded. |
 
 How the ACT distribution uses the flags, for context: risk flags (overdue prophylaxis, lost to
 follow-up) have priority `RHD High` and show red; missing data flags have priority

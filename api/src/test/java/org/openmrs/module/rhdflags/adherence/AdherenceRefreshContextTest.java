@@ -390,6 +390,62 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void refreshAll_shouldDatePrescriptionsByTheirConsultationNotWhenTheyWereEntered() {
+		// A paper consultation from 120 days ago, entered 5 days ago, after the one from 50 days ago.
+		Encounter recent = encounter(7, 50);
+		prescribe(recent, q28, 50, null);
+		given(recent, 50);
+		given(encounter(7, 22), 22);
+		dated(recent, 50);
+		Encounter backlog = encounter(7, 5);
+		prescribe(backlog, oralPenicillin, 300, null);
+		dated(backlog, 120);
+		
+		refresh.refreshAll(TODAY);
+		
+		// ACT 2.0 took the consultation dated latest.
+		List<Object> row = row(7);
+		assertEquals((int) q28.getConceptId(), number(row.get(1)));
+		assertEquals(1.0, ((Number) row.get(3)).doubleValue(), 1e-12);
+		assertEquals(TODAY.minusDays(22), date(row.get(4)));
+		assertEquals(TODAY.plusDays(6), date(row.get(5)));
+	}
+	
+	@Test
+	public void refreshAll_shouldTakeTheFirstOfTwoConsultationsOnADay() {
+		Encounter first = encounter(7, 30);
+		prescribe(first, q28, 30, null);
+		given(first, 30);
+		consulted(first, 30, everyThreeMonths);
+		Encounter second = encounter(7, 30);
+		prescribe(second, oralPenicillin, 30, null);
+		consulted(second, 30, continuous);
+		
+		refresh.refreshAll(TODAY);
+		
+		// ACT 2.0 kept the first loaded of a day for both the regimen and the batch hold: held at day 30.
+		List<Object> row = row(7);
+		assertEquals((int) q28.getConceptId(), number(row.get(1)));
+		assertEquals(TODAY.minusDays(2), date(row.get(5)));
+	}
+	
+	@Test
+	public void refreshAll_shouldCountAnOralFormSavedWithoutAnEstimate() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounter(7, 40), 70.0);
+		Obs lasts = obs(encounter(7, 15), duration);
+		lasts.setValueCoded(threeMonths);
+		Context.getObsService().saveObs(lasts, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// The estimate still stands, but the last oral form is the one without it, as ACT 2.0 stored it.
+		List<Object> row = row(7);
+		assertEquals(0.7, ((Number) row.get(3)).doubleValue(), 1e-12);
+		assertEquals(TODAY.minusDays(15), date(row.get(4)));
+	}
+	
+	@Test
 	public void refreshAll_shouldKeepTheFirstPrescriptionOfAStartDate() {
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 27, null);
@@ -470,6 +526,12 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		for (int daysAgo = 200; daysAgo >= lastDaysAgo; daysAgo -= 28) {
 			given(encounter(7, daysAgo), daysAgo);
 		}
+	}
+	
+	private void dated(Encounter encounter, int daysAgo) {
+		Obs date = obs(encounter, consultationDate);
+		date.setValueDatetime(at(daysAgo));
+		Context.getObsService().saveObs(date, null);
 	}
 	
 	private void consulted(Encounter encounter, int daysAgo, Concept entry) {

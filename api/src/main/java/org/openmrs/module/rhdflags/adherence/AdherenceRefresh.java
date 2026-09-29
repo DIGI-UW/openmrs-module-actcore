@@ -134,14 +134,17 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * The prescriptions each encounter records, leaving out those with a date stopped, and keeping the
-	 * first of each start date, as ACT 2.0 kept them.
+	 * The prescriptions each encounter records, dated as its consultation (else the encounter) is,
+	 * leaving out those with a date stopped and keeping the first of each start date, as ACT 2.0 kept
+	 * them.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select g.person_id, e.encounter_datetime, e.encounter_id,"
-		        + " rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
+		List<List<Object>> rows = admin.executeSQL("select g.person_id, coalesce(cd.value_datetime, e.encounter_datetime),"
+		        + " e.encounter_id, rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
 		        + " from obs g join encounter e on e.encounter_id = g.encounter_id and e.voided = false"
+		        + " left join obs cd on cd.encounter_id = g.encounter_id and cd.voided = false and cd.concept_id = "
+		        + concept(admin, GP_CONSULTATION_DATE)
 		        + " left join obs r on r.obs_group_id = g.obs_id and r.voided = false and r.concept_id = g.concept_id"
 		        + " left join concept rc on rc.concept_id = r.value_coded"
 		        + " left join obs s on s.obs_group_id = g.obs_id and s.voided = false and s.concept_id = "
@@ -149,18 +152,25 @@ public class AdherenceRefresh {
 		        + " left join obs x on x.obs_group_id = g.obs_id and x.voided = false and x.concept_id = "
 		        + concept(admin, GP_DATE_STOPPED) + " where g.voided = false and g.obs_group_id is null and g.concept_id = "
 		        + concept(admin, GP_PRESCRIPTION)
-		        + " order by g.person_id, e.encounter_datetime, e.encounter_id, g.obs_id, r.obs_id",
+		        + " order by g.person_id, coalesce(cd.value_datetime, e.encounter_datetime), e.encounter_id, g.obs_id,"
+		        + " r.obs_id",
 		    true);
-		Map<Integer, Integer> encounterOf = new HashMap<Integer, Integer>();
+		// ACT 2.0 sorted consultations by their date and kept the first loaded of a day, so the first encounter wins.
+		Map<Integer, Map<LocalDate, Integer>> encounterOfDay = new HashMap<Integer, Map<LocalDate, Integer>>();
 		for (List<Object> row : rows) {
 			AdherenceReplay.History h = history(histories, row.get(0));
 			Integer patientId = ((Number) row.get(0)).intValue();
-			int encounterId = ((Number) row.get(2)).intValue();
+			Integer encounterId = ((Number) row.get(2)).intValue();
 			LocalDate day = localDate(row.get(1));
-			// Rows come in encounter order, so a new encounter on a day replaces an earlier one that day.
-			if (!Integer.valueOf(encounterId).equals(encounterOf.get(patientId))) {
-				encounterOf.put(patientId, encounterId);
+			if (!encounterOfDay.containsKey(patientId)) {
+				encounterOfDay.put(patientId, new HashMap<LocalDate, Integer>());
+			}
+			Integer first = encounterOfDay.get(patientId).get(day);
+			if (first == null) {
+				encounterOfDay.get(patientId).put(day, encounterId);
 				h.prescriptions.put(day, new AdherenceReplay.Prescriptions());
+			} else if (!first.equals(encounterId)) {
+				continue;
 			}
 			AdherenceReplay.Prescriptions p = h.prescriptions.get(day);
 			if (row.get(5) == null || row.get(6) != null) {
@@ -186,15 +196,20 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** The oral form has no date of its own, so an estimate counts from its encounter's date. */
+	/**
+	 * Each oral adherence form, by its encounter's date since the form has none of its own; one saved
+	 * without an estimate still counts, as ACT 2.0 counted it.
+	 */
 	private void readEstimates(AdministrationService admin, Map<String, Integer> durations,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, e.encounter_datetime, o.value_numeric, dc.uuid"
-		        + " from obs o join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
-		        + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
-		        + " where o.voided = false and o.concept_id = " + concept(admin, GP_ESTIMATE)
-		        + " order by o.person_id, e.encounter_datetime, e.encounter_id, o.obs_id",
+		List<List<Object>> rows = admin.executeSQL(
+		    "select e.patient_id, e.encounter_datetime, est.value_numeric, dc.uuid" + " from encounter e"
+		            + " left join obs est on est.encounter_id = e.encounter_id and est.voided = false and est.concept_id = "
+		            + concept(admin, GP_ESTIMATE)
+		            + " left join obs d on d.encounter_id = e.encounter_id and d.voided = false and d.concept_id = "
+		            + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
+		            + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)"
+		            + " order by e.patient_id, e.encounter_datetime, e.encounter_id, est.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral = history(histories, row.get(0)).oral;
@@ -213,13 +228,13 @@ public class AdherenceRefresh {
 	 */
 	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL(
-		    "select o.person_id, o.value_datetime, c.uuid from obs o"
-		            + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		            + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
-		            + concept(admin, GP_DATA_ENTRY) + " left join concept c on c.concept_id = d.value_coded"
-		            + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		            + concept(admin, GP_CONSULTATION_DATE) + " order by o.person_id, o.value_datetime, o.obs_id, d.obs_id",
+		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime, c.uuid from obs o"
+		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
+		        + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
+		        + concept(admin, GP_DATA_ENTRY) + " left join concept c on c.concept_id = d.value_coded"
+		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
+		        + concept(admin, GP_CONSULTATION_DATE)
+		        + " order by o.person_id, o.value_datetime, e.encounter_id, o.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {
 			AdherenceReplay.History h = history(histories, row.get(0));
