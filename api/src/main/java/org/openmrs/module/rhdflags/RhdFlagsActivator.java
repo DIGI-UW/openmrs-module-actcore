@@ -13,6 +13,7 @@ import java.util.Date;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
+import org.openmrs.module.rhdflags.adherence.AdherenceRefreshTask;
 import org.openmrs.module.rhdflags.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -27,6 +28,8 @@ import org.slf4j.LoggerFactory;
 public class RhdFlagsActivator extends BaseModuleActivator {
 	
 	public static final String REFRESH_TASK_NAME = "RHD Patient Flag Refresh";
+	
+	public static final String ADHERENCE_TASK_NAME = "RHD Prophylaxis Adherence Refresh";
 	
 	/**
 	 * The scheduler owns the interval once the task exists, so this is only the value the task is first
@@ -48,6 +51,9 @@ public class RhdFlagsActivator extends BaseModuleActivator {
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 		            + " of the same name.");
+		schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
+		    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
+		            + " injections and oral adherence estimates.");
 		log.info("RHD Flags module started");
 	}
 	

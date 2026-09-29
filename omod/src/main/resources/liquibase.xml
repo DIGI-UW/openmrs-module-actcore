@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    This Source Code Form is subject to the terms of the Mozilla Public License,
+    v. 2.0. If a copy of the MPL was not distributed with this file, You can
+    obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+    the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+
+    Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+    graphic logo is a trademark of OpenMRS Inc.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+  <changeSet id="rhdflags-2026-09-29-prophylaxis-adherence" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="rhdflags_prophylaxis_adherence"/></not>
+    </preConditions>
+    <comment>Each patient's prophylaxis adherence and next due date, as the adherence refresh last computed them</comment>
+    <createTable tableName="rhdflags_prophylaxis_adherence">
+      <column name="patient_id" type="int">
+        <constraints primaryKey="true" nullable="false"
+            foreignKeyName="rhdflags_prophylaxis_adherence_patient" references="patient(patient_id)"/>
+      </column>
+      <column name="regimen_concept_id" type="int">
+        <constraints foreignKeyName="rhdflags_prophylaxis_adherence_regimen" references="concept(concept_id)"/>
+      </column>
+      <column name="injection_interval_days" type="int"/>
+      <column name="adherence" type="double"/>
+      <column name="last_given" type="date"/>
+      <column name="next_due" type="date"/>
+      <column name="date_computed" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+  </changeSet>
+</databaseChangeLog>
