@@ -51,4 +51,3 @@ nbdist/
 # macOS and Windows
 .DS_Store
 Thumbs.db
-__pycache__/

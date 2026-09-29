@@ -91,8 +91,8 @@ Each run replaces every row in one transaction, so a failed run leaves the previ
 `AdherenceCalculationParityTest` holds the port to ACT 2.0 itself. Its fixture,
 `api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
 pinned, for every call in its `test_adherence.py`, for prescriptions either side of the 365-day
-cutoff, and for 400 random histories. `tools/adherence-parity/fixture.py` regenerates it by loading
-that function unchanged from an ACT 2.0 checkout.
+cutoff, and for 400 random histories, recorded by running that function unchanged from the ACT 2.0
+source. It is fixed data: the build and tests need no Python.
 
 
 | Decision | Why |

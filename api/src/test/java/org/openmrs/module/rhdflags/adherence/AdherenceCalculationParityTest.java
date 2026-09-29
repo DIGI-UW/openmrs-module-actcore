@@ -27,7 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * The port against ACT 2.0 itself: adherence-parity.json holds what ACT 2.0's
  * calculate_adherence_and_injection_date returns, with today pinned, for every call in its
- * test_adherence.py and for random histories. Regenerate it with the script named in the README.
+ * test_adherence.py and for random histories, recorded once from the ACT 2.0 source.
  */
 public class AdherenceCalculationParityTest {
 	
