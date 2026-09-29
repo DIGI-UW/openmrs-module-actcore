@@ -134,9 +134,8 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * The prescriptions each encounter records, dated as its consultation (else the encounter) is,
-	 * leaving out those with a date stopped and keeping the first of each start date, as ACT 2.0 kept
-	 * them.
+	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
+	 * date kept.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals,
 	        Map<Integer, AdherenceReplay.History> histories) {
@@ -155,7 +154,7 @@ public class AdherenceRefresh {
 		        + " order by g.person_id, coalesce(cd.value_datetime, e.encounter_datetime), e.encounter_id, g.obs_id,"
 		        + " r.obs_id",
 		    true);
-		// ACT 2.0 sorted consultations by their date and kept the first loaded of a day, so the first encounter wins.
+		// ACT 2.0 kept the first consultation of a day.
 		Map<Integer, Map<LocalDate, Integer>> encounterOfDay = new HashMap<Integer, Map<LocalDate, Integer>>();
 		for (List<Object> row : rows) {
 			AdherenceReplay.History h = history(histories, row.get(0));

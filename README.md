@@ -94,6 +94,10 @@ A regimen with no injection, or no estimate, recorded by then gets no adherence 
 differs from ACT 2.0, which left the previous regimen's values on the record: under the new regimen's
 name they would be wrong.
 
+Two rare forms also differ: an oral adherence form with neither an estimate nor a prescription
+duration is not read at all, and a prescription with a start date but no regimen is taken as oral.
+ACT 2.0 counted the first as a save and treated the second as no regimen.
+
 It also differs in not asking whether the patient is still active. ACT 2.0's nightly run covered only
 active patients, so a patient who left the registry kept the adherence of their last save; here their
 adherence goes on changing. The care cascade counts only open RHD Registry enrolments, so it is not

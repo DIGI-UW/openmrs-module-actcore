@@ -427,6 +427,7 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 		List<Object> row = row(7);
 		assertEquals((int) q28.getConceptId(), number(row.get(1)));
 		assertEquals(TODAY.minusDays(2), date(row.get(5)));
+		assertEquals(1.0, ((Number) row.get(3)).doubleValue(), 1e-12);
 	}
 	
 	@Test

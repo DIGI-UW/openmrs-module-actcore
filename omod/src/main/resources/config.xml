@@ -60,7 +60,7 @@
     <property>rhdflags.adherence.prescriptionConcept</property>
     <defaultValue>668e0221-8b41-5669-9ad8-78e193d42494</defaultValue>
     <description>
-      The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest encounter that has any.
+      The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest consultation that has any, by its date.
     </description>
   </globalProperty>
 

@@ -41,7 +41,7 @@ final class AdherenceReplay {
 	/** A patient's records, each taken to be saved on the date it records. */
 	static final class History {
 		
-		/** By encounter date; a later encounter the same day replaces an earlier one. */
+		/** By consultation date, else encounter date; the first consultation of a day wins. */
 		final TreeMap<LocalDate, Prescriptions> prescriptions = new TreeMap<LocalDate, Prescriptions>();
 		
 		final TreeSet<LocalDate> injections = new TreeSet<LocalDate>();
