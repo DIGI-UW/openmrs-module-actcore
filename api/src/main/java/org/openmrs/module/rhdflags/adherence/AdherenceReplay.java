@@ -50,7 +50,7 @@ final class AdherenceReplay {
 		
 		final TreeSet<LocalDate> consultations = new TreeSet<LocalDate>();
 		
-		/** Days between batches from each date the data entry was recorded, 0 for continuous entry. */
+		/** Each consultation's days between batches, 0 for continuous entry or no answer. */
 		final TreeMap<LocalDate, Integer> batchDays = new TreeMap<LocalDate, Integer>();
 	}
 	

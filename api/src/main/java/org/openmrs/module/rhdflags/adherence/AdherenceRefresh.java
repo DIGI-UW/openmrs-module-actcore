@@ -86,8 +86,7 @@ public class AdherenceRefresh {
 		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), histories);
 		readInjections(admin, histories);
 		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), histories);
-		readConsultations(admin, today, histories);
-		readBatchDays(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), histories);
+		readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), histories);
 		
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		List<String> rows = new ArrayList<String>();
@@ -208,34 +207,27 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** Each consultation's date; one dated after today has not happened, so it does not count. */
-	private void readConsultations(AdministrationService admin, LocalDate today,
+	/**
+	 * Each consultation's date and how it says injections are entered: ACT 2.0 read that from the
+	 * latest consultation alone, so one that leaves it blank means continuous entry.
+	 */
+	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
-		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		        + concept(admin, GP_CONSULTATION_DATE),
+		List<List<Object>> rows = admin.executeSQL(
+		    "select o.person_id, o.value_datetime, c.uuid from obs o"
+		            + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
+		            + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
+		            + concept(admin, GP_DATA_ENTRY) + " left join concept c on c.concept_id = d.value_coded"
+		            + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
+		            + concept(admin, GP_CONSULTATION_DATE) + " order by o.person_id, o.value_datetime, o.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {
+			AdherenceReplay.History h = history(histories, row.get(0));
 			LocalDate day = localDate(row.get(1));
-			if (!day.isAfter(today)) {
-				history(histories, row.get(0)).consultations.add(day);
+			Integer days = row.get(2) == null ? null : batchIntervals.get(row.get(2).toString());
+			if (h.consultations.add(day)) {
+				h.batchDays.put(day, days == null ? 0 : days);
 			}
-		}
-	}
-	
-	/** How each patient's injections are entered, from the date of each encounter that records it. */
-	private void readBatchDays(AdministrationService admin, Map<String, Integer> intervals,
-	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, e.encounter_datetime, c.uuid from obs o"
-		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " join concept c on c.concept_id = o.value_coded where o.voided = false and o.concept_id = "
-		        + concept(admin, GP_DATA_ENTRY) + " order by o.person_id, e.encounter_datetime, e.encounter_id, o.obs_id",
-		    true);
-		for (List<Object> row : rows) {
-			Integer days = intervals.get(row.get(2).toString());
-			// Later rows replace earlier ones on the same day; any answer but a batch interval is continuous.
-			history(histories, row.get(0)).batchDays.put(localDate(row.get(1)), days == null ? 0 : days);
 		}
 	}
 	

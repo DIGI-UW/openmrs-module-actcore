@@ -253,17 +253,45 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
-	public void refreshAll_shouldTakeTheLatestConsultationDate() {
-		onTimeUntil(116);
-		consulted(encounter(7, 150), 150, everyThreeMonths);
-		Obs date = obs(encounter(7, 84), consultationDate);
-		date.setValueDatetime(at(84));
+	public void refreshAll_shouldTakeABlankAnswerOnTheLatestConsultationAsContinuousEntry() {
+		// Every 12 months at a consultation 400 days ago; the latest, 200 days ago, leaves it blank.
+		prescribe(encounter(7, 500), q28, 500, null);
+		for (int daysAgo = 500; daysAgo >= 192; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		property(AdherenceRefresh.GP_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":365");
+		consulted(encounter(7, 400), 400, everyThreeMonths);
+		Obs date = obs(encounter(7, 200), consultationDate);
+		date.setValueDatetime(at(200));
 		Context.getObsService().saveObs(date, null);
 		
 		refresh.refreshAll(TODAY);
 		
-		// Held as of the consultation 84 days ago: the injection due 88 days ago is 4 of 117 days late.
-		assertEquals(1 - 4.0 / 117, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+		// ACT 2.0 read the latest consultation alone, so the nightly run recomputed them: 164 of 366 days late.
+		assertEquals(1 - 164.0 / 366, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	public void refreshAll_shouldHoldNoRowWhenTheLatestPrescriptionsWereAllStopped() {
+		Encounter earlier = encounter(7, 60);
+		prescribe(earlier, q28, 60, null);
+		given(earlier, 60);
+		prescribe(encounter(7, 20), q28, 60, 20);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertTrue(rows().isEmpty());
+	}
+	
+	@Test
+	public void refreshAll_shouldTakeTheFirstEstimateOfADay() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounter(7, 15), 70.0);
+		estimate(encounter(7, 15), 40.0);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(0.7, ((Number) row(7).get(3)).doubleValue(), 1e-12);
 	}
 	
 	@Test

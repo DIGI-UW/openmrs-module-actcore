@@ -148,6 +148,14 @@ public class AdherenceReplayTest {
 	}
 	
 	@Test
+	public void replay_shouldHoldNoRowForAPatientWhoseRecordsAreAllInTheFuture() {
+		prescribed(-5, -5, Q28, Q28_ID);
+		h.injections.add(ago(-5));
+		
+		assertNull(AdherenceReplay.replay(h, TODAY));
+	}
+	
+	@Test
 	public void replay_shouldHoldNoRowForAPatientWhoseLatestPrescriptionsWereAllStopped() {
 		h.prescriptions.put(ago(30), new AdherenceReplay.Prescriptions());
 		h.consultations.add(ago(30));

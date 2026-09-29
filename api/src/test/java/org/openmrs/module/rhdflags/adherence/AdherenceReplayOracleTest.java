@@ -22,10 +22,8 @@ import java.util.TreeMap;
 import org.junit.Test;
 
 /**
- * Holds the replay to ACT 2.0 written the way ACT 2.0 ran: a patient record whose fields each save
- * overwrites (update_patient_adherence_and_injection_date) and whose stored regimen gates the
- * nightly run (scheduled_adherence_update), over random histories where regimens change around
- * their consultations.
+ * Holds the replay to ACT 2.0's record-keeping written out as ACT 2.0 ran it: a stored record each
+ * save overwrites, and a nightly run its stored regimen gates.
  */
 public class AdherenceReplayOracleTest {
 	
@@ -114,9 +112,10 @@ public class AdherenceReplayOracleTest {
 		AdherenceReplay.History h = new AdherenceReplay.History();
 		int[] intervals = { 0, 14, 21, 28 };
 		for (int e = rng.nextInt(3) + 1; e > 0; e--) {
-			int on = rng.nextInt(500);
+			// A few encounters are dated after today, and some prescribe nothing (all stopped or undated).
+			int on = rng.nextInt(520) - 20;
 			AdherenceReplay.Prescriptions p = new AdherenceReplay.Prescriptions();
-			for (int n = rng.nextInt(3); n >= 0; n--) {
+			for (int n = rng.nextInt(4) - 1; n >= 0; n--) {
 				// Starts before and after the consultation that records them.
 				LocalDate start = TODAY.minusDays(on + rng.nextInt(400) - 60);
 				int interval = intervals[rng.nextInt(intervals.length)];
@@ -127,23 +126,27 @@ public class AdherenceReplayOracleTest {
 			}
 			h.prescriptions.put(TODAY.minusDays(on), p);
 			if (rng.nextBoolean()) {
-				h.consultations.add(TODAY.minusDays(on));
+				consulted(rng, h, TODAY.minusDays(on));
 			}
 		}
 		for (int n = rng.nextInt(12); n > 0; n--) {
-			h.injections.add(TODAY.minusDays(rng.nextInt(600)));
+			h.injections.add(TODAY.minusDays(rng.nextInt(620) - 20));
 		}
 		for (int n = rng.nextInt(3); n > 0; n--) {
-			h.oral.put(TODAY.minusDays(rng.nextInt(600)),
+			h.oral.put(TODAY.minusDays(rng.nextInt(620) - 20),
 			    new AdherenceCalculation.OralEntry(rng.nextBoolean() ? null : (double) rng.nextInt(101), 90));
 		}
 		for (int n = rng.nextInt(3); n > 0; n--) {
-			h.consultations.add(TODAY.minusDays(rng.nextInt(500)));
-		}
-		for (int n = rng.nextInt(3); n > 0; n--) {
-			h.batchDays.put(TODAY.minusDays(rng.nextInt(500)), new int[] { 0, 90, 180, 365 }[rng.nextInt(4)]);
+			consulted(rng, h, TODAY.minusDays(rng.nextInt(520) - 20));
 		}
 		return h;
+	}
+	
+	/** A consultation, which records how injections are entered or leaves it blank (continuous). */
+	private static void consulted(Random rng, AdherenceReplay.History h, LocalDate day) {
+		if (h.consultations.add(day)) {
+			h.batchDays.put(day, new int[] { 0, 0, 90, 180, 365 }[rng.nextInt(5)]);
+		}
 	}
 	
 	@Test

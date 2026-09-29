@@ -83,8 +83,8 @@ A port of ACT 2.0's adherence (is4r-rhd-cdk `query_handlers/adherence_utils.py`)
 ACT 2.0 kept the result on the patient's record and recomputed it only at certain times: whenever a
 consultation, BPG delivery or oral adherence form was saved, and each night for a patient whose stored
 regimen was an injection. The nightly run skipped a patient whose injections are entered in batches
-(every 3, 6 or 12 months, on the consultation) until that long had passed since the later of their
-latest consultation and last injection. `AdherenceReplay` replays those times day by day, taking each
+(every 3, 6 or 12 months, as the latest consultation records it; blank means continuous) until that
+long had passed since the later of their latest consultation and last injection. `AdherenceReplay` replays those times day by day, taking each
 record to have been saved on the date it records, and each row is the calculation as of the last day
 ACT 2.0 would have run it. So a regimen that starts after the consultation recording it counts from
 the first run on or after its start date, as it did in ACT 2.0.
@@ -92,6 +92,11 @@ the first run on or after its start date, as it did in ACT 2.0.
 A regimen with no injection, or no estimate, recorded by then gets no adherence or due date. Here this
 differs from ACT 2.0, which left the previous regimen's values on the record: under the new regimen's
 name they would be wrong.
+
+It also differs in not asking whether the patient is still active. ACT 2.0's nightly run covered only
+active patients, so a patient who left the registry kept the adherence of their last save; here their
+adherence goes on changing. The care cascade counts only open RHD Registry enrolments, so it is not
+affected; the registry's adherence column for a completed enrolment is.
 
 Each row holds the patient, the latest regimen and its injection interval (0 for an oral regimen),
 adherence as a fraction, the last injection or estimate, the next due date and when it was computed.

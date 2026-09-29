@@ -131,7 +131,7 @@
     <property>rhdflags.adherence.dataEntryConcept</property>
     <defaultValue>d444bffc-c718-5295-a19e-8fb03dbdbfd7</defaultValue>
     <description>
-      How a patient's injections are entered, recorded on the consultation; the latest answer counts.
+      How a patient's injections are entered, recorded on the consultation. As in ACT 2.0 the latest consultation's answer counts, and a consultation that leaves it blank means continuous entry.
     </description>
   </globalProperty>
 
