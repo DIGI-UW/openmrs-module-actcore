@@ -328,6 +328,40 @@ public class AdherenceRefreshContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void refreshAll_shouldNotFreezeAPatientSwitchedToOralAfterTheirLastConsultation() {
+		// Q28 still open and oral started 3 days ago, after the consultation 10 days ago; entered continuously.
+		Encounter consultation = encounter(7, 10);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, oralPenicillin, 3, null);
+		for (int daysAgo = 200; daysAgo >= 32; daysAgo -= 28) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		consulted(consultation, 10, continuous);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<Object> row = row(7);
+		assertEquals((int) oralPenicillin.getConceptId(), number(row.get(1)));
+		assertEquals(0, number(row.get(2)));
+		assertNull(row.get(3));
+	}
+	
+	@Test
+	public void refreshAll_shouldCountAPrescriptionAndInjectionOnTheDayAHeldPatientIsComputedAs() {
+		Encounter consultation = encounter(7, 10);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, q21, 10, null);
+		given(consultation, 10);
+		consulted(consultation, 10, everyThreeMonths);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<Object> row = row(7);
+		assertEquals((int) q21.getConceptId(), number(row.get(1)));
+		assertEquals(TODAY.minusDays(10), date(row.get(4)));
+	}
+	
+	@Test
 	public void refreshAll_shouldKeepTheFirstPrescriptionOfAStartDate() {
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 27, null);

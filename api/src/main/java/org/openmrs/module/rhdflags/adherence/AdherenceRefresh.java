@@ -150,6 +150,12 @@ public class AdherenceRefresh {
 			// The row, and the no-record rule, describe the regimen its adherence and due date are computed for.
 			if (!asOf.equals(today)) {
 				regimen = new Regimen(p, given, estimates, asOf);
+				// Oral today, but an injection regimen when last saved: ACT 2.0 stored the injection regimen then
+				// and went on recomputing it nightly, so the injection rule decides the date.
+				if (regimen.interval != null && regimen.interval > 0) {
+					asOf = batchEntered(today, batchDays.get(patientId), consulted.get(patientId), regimen.lastGiven);
+					regimen = new Regimen(p, given, estimates, asOf);
+				}
 			}
 			AdherenceCalculation.Result result;
 			if (regimen.interval != null && (regimen.interval > 0 ? given.isEmpty() : estimates.isEmpty())) {
