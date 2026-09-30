@@ -26,5 +26,6 @@ jobs:
       java_version: '8'
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
-      MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_API_KEY }}
+      # The DIGI-UW organization keeps the repository password as MAVEN_REPO_PASSWORD.
+      MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_PASSWORD }}
       BOT_PAT: ${{ secrets.BOT_PAT }}

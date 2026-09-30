@@ -18,6 +18,15 @@
   <name>RHD Flags</name>
   <description>Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, and a look-up of the data missing behind a flag.</description>
 
+  <url>https://github.com/DIGI-UW/openmrs-module-rhd-flags</url>
+
+  <scm>
+    <connection>scm:git:git@github.com:DIGI-UW/openmrs-module-rhd-flags.git</connection>
+    <developerConnection>scm:git:git@github.com:DIGI-UW/openmrs-module-rhd-flags.git</developerConnection>
+    <url>https://github.com/DIGI-UW/openmrs-module-rhd-flags</url>
+    <tag>HEAD</tag>
+  </scm>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <openmrsPlatformVersion>2.4.0</openmrsPlatformVersion>
@@ -90,4 +99,17 @@
       <url>https://mavenrepo.openmrs.org/public</url>
     </pluginRepository>
   </pluginRepositories>
+
+  <distributionManagement>
+    <repository>
+      <id>uwdigi-repo-central</id>
+      <name>libs-release</name>
+      <url>https://packages.uwdigi.org/artifactory/libs-release</url>
+    </repository>
+    <snapshotRepository>
+      <id>uwdigi-repo-snapshots</id>
+      <name>libs-snapshot</name>
+      <url>https://packages.uwdigi.org/artifactory/libs-snapshot</url>
+    </snapshotRepository>
+  </distributionManagement>
 </project>
