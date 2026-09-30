@@ -50,10 +50,10 @@ public class ReportDescriptorLoaderContextTest extends BaseModuleContextSensitiv
 		File dir = new File(dataDirectory.getRoot(), "configuration/reports/reportdescriptors/test");
 		new File(dir, "sql").mkdirs();
 		Files.write(new File(dir, "sql/patients.sql").toPath(), "select patient_id from patient".getBytes("UTF-8"));
-		Files.write(new File(dir, "patients.yml").toPath(),
-		    ("key: actcoreTestReport\n" + "uuid: \"" + REPORT_UUID + "\"\n" + "name: \"ACT Core test report\"\n"
-		            + "datasets:\n" + "  - key: patients\n" + "    type: sql\n" + "    config: \"sql/patients.sql\"\n")
-		            .getBytes("UTF-8"));
+		String descriptor = "key: actcoreTestReport\n" + "uuid: \"" + REPORT_UUID + "\"\n"
+		        + "name: \"ACT Core test report\"\n" + "datasets:\n" + "  - key: patients\n" + "    type: sql\n"
+		        + "    config: \"sql/patients.sql\"\n";
+		Files.write(new File(dir, "patients.yml").toPath(), descriptor.getBytes("UTF-8"));
 	}
 	
 	private ReportDefinition savedReport() {
