@@ -53,7 +53,7 @@ public class ReportDescriptorLoaderContextTest extends BaseModuleContextSensitiv
 		Files.write(new File(dir, "patients.yml").toPath(),
 		    ("key: actcoreTestReport\n" + "uuid: \"" + REPORT_UUID + "\"\n" + "name: \"ACT Core test report\"\n"
 		            + "datasets:\n" + "  - key: patients\n" + "    type: sql\n" + "    config: \"sql/patients.sql\"\n")
-		                    .getBytes("UTF-8"));
+		            .getBytes("UTF-8"));
 	}
 	
 	private ReportDefinition savedReport() {
