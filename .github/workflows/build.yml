@@ -15,9 +15,29 @@ jobs:
   build:
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     with:
-      # A push to main deploys the SNAPSHOT to DIGI-UW's repository, named in the pom's distributionManagement.
-      deploy_snapshots: ${{ github.repository == 'DIGI-UW/openmrs-module-actcore' }}
-    secrets:
-      MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
-      # The DIGI-UW organization keeps the repository password as MAVEN_REPO_PASSWORD.
-      MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_PASSWORD }}
+      # That workflow deploys only for the openmrs organization, so the deploy job below does it here.
+      deploy_snapshots: false
+
+  # A push to main deploys the SNAPSHOT to DIGI-UW's repository, named in the pom's distributionManagement.
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'DIGI-UW/openmrs-module-actcore'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+          server-id: uwdigi-repo-snapshots
+          server-username: MAVEN_REPO_USERNAME
+          server-password: MAVEN_REPO_PASSWORD
+      - name: Deploy the SNAPSHOT
+        run: mvn --batch-mode deploy -DskipTests
+        env:
+          MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
+          # The DIGI-UW organization keeps the repository password as MAVEN_REPO_PASSWORD.
+          MAVEN_REPO_PASSWORD: ${{ secrets.MAVEN_REPO_PASSWORD }}
