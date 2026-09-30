@@ -14,18 +14,18 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
-  <changeSet id="rhdflags-2026-09-29-prophylaxis-adherence" author="UW DIGI">
+  <changeSet id="actcore-2026-09-29-prophylaxis-adherence" author="UW DIGI">
     <preConditions onFail="MARK_RAN">
-      <not><tableExists tableName="rhdflags_prophylaxis_adherence"/></not>
+      <not><tableExists tableName="actcore_prophylaxis_adherence"/></not>
     </preConditions>
     <comment>Each patient's prophylaxis adherence and next due date, as the adherence refresh last computed them</comment>
-    <createTable tableName="rhdflags_prophylaxis_adherence">
+    <createTable tableName="actcore_prophylaxis_adherence">
       <column name="patient_id" type="int">
         <constraints primaryKey="true" nullable="false"
-            foreignKeyName="rhdflags_prophylaxis_adherence_patient" references="patient(patient_id)"/>
+            foreignKeyName="actcore_prophylaxis_adherence_patient" references="patient(patient_id)"/>
       </column>
       <column name="regimen_concept_id" type="int">
-        <constraints foreignKeyName="rhdflags_prophylaxis_adherence_regimen" references="concept(concept_id)"/>
+        <constraints foreignKeyName="actcore_prophylaxis_adherence_regimen" references="concept(concept_id)"/>
       </column>
       <column name="injection_interval_days" type="int"/>
       <column name="adherence" type="double"/>

@@ -11,19 +11,19 @@
   </parent>
 
   <groupId>org.openmrs.module</groupId>
-  <artifactId>rhdflags</artifactId>
+  <artifactId>actcore</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>RHD Flags</name>
+  <name>ACT Core</name>
   <description>Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, and a look-up of the data missing behind a flag.</description>
 
-  <url>https://github.com/DIGI-UW/openmrs-module-rhd-flags</url>
+  <url>https://github.com/DIGI-UW/openmrs-module-actcore</url>
 
   <scm>
-    <connection>scm:git:git@github.com:DIGI-UW/openmrs-module-rhd-flags.git</connection>
-    <developerConnection>scm:git:git@github.com:DIGI-UW/openmrs-module-rhd-flags.git</developerConnection>
-    <url>https://github.com/DIGI-UW/openmrs-module-rhd-flags</url>
+    <connection>scm:git:git@github.com:DIGI-UW/openmrs-module-actcore.git</connection>
+    <developerConnection>scm:git:git@github.com:DIGI-UW/openmrs-module-actcore.git</developerConnection>
+    <url>https://github.com/DIGI-UW/openmrs-module-actcore</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -33,6 +33,7 @@
     <patientflagsVersion>3.0.10</patientflagsVersion>
     <cohortVersion>3.7.3</cohortVersion>
     <webservicesRestVersion>2.40.0</webservicesRestVersion>
+    <reportingVersion>2.1.0</reportingVersion>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
@@ -60,6 +61,12 @@
         <groupId>org.openmrs.module</groupId>
         <artifactId>cohort-api</artifactId>
         <version>${cohortVersion}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.openmrs.module</groupId>
+        <artifactId>reporting-api</artifactId>
+        <version>${reportingVersion}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>

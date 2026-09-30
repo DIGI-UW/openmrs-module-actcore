@@ -1,13 +1,14 @@
-# OpenMRS RHD Flags module
+# OpenMRS ACT Core module
 
-[![Build with Maven](https://github.com/mherman22/openmrs-module-rhd-flags/actions/workflows/build.yml/badge.svg)](https://github.com/mherman22/openmrs-module-rhd-flags/actions/workflows/build.yml)
+[![Build with Maven](https://github.com/DIGI-UW/openmrs-module-actcore/actions/workflows/build.yml/badge.svg)](https://github.com/DIGI-UW/openmrs-module-actcore/actions/workflows/build.yml)
 
-A companion to the patientflags module. It re-evaluates flags every day, keeps a patient list per
-flag, tells a client which form and question are missing behind a flag, and computes each patient's
-prophylaxis adherence and next due date.
+The server side of ACT 3.0, the OpenMRS 3 edition of the ACT RHD registry. It re-evaluates patient
+flags every day, keeps a patient list per flag, tells a client which form and question are missing
+behind a flag, computes each patient's prophylaxis adherence and next due date, and loads the
+distribution's report descriptors at startup.
 
-It was written for ACT 3.0, the OpenMRS 3 edition of the ACT RHD registry, where it replaces the
-ACT 2.0 Critical Data Flags screen. The flag code has nothing RHD-specific in it: the flags
+It replaces the ACT 2.0 Critical Data Flags screen, and was called rhdflags until it took over the
+reportdescriptorloader module too. The flag code has nothing RHD-specific in it: the flags
 themselves are configuration in the distribution. The adherence calculation is ACT 2.0's secondary
 prophylaxis rule; the concepts it reads are global properties, defaulting to the ACT forms'.
 
@@ -24,14 +25,22 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 
 - **Daily refresh.** The task **RHD Patient Flag Refresh** re-evaluates every enabled flag and
   writes only the rows that changed.
-- **A list per flag.** Each flag is mirrored into a patient list of the same name, shown under
-  Patient lists. This is the worklist that replaces the ACT 2.0 Critical Data Flags screen.
-- **Gap look-up.** `GET /ws/rest/v1/rhdflags/gap?patient=<uuid>&flag=<uuid>` lists, for a flag that
-  stands for missing data, each encounter and question still missing an answer. The RHD frontend
-  app (`openmrs-esm-rhd-app`) shows these in its Missing data workspace, with Open form.
+- **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
+  worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
+  that replace the ACT 2.0 Critical Data Flags screen.
+- **Gap look-up.** `GET /ws/rest/v1/actcore/gap?patient=<uuid>&flag=<uuid>` lists, for a flag that
+  stands for missing data, each encounter and question still missing an answer. The ACT frontend
+  app (`openmrs-esm-act-app`) shows these in its Missing data workspace, with Open form.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
-  each patient's adherence and next due date into the table `rhdflags_prophylaxis_adherence`, which
+  each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
+- **Report descriptors at startup.** The reporting module reads
+  `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
+  distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
+  and is aware of Initializer, so it starts after both, and loads the descriptors in
+  `configuration/reports/reportdescriptors` itself when that property is true. It logs whether it
+  loaded, skipped or failed. Remove this once the reporting module does it
+  ([mherman22/openmrs-module-reporting#1](https://github.com/mherman22/openmrs-module-reporting/issues/1)).
 
 ### Gap look-up
 
@@ -147,7 +156,7 @@ follow-up) have priority `RHD High` and show red; missing data flags have priori
 
 ## Requirements
 
-OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0.
+OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0, reporting 2.1.0.
 
 ## Installing and running
 
@@ -167,9 +176,9 @@ stopped, this module will not start on the next boot either; start Initializer f
 
 | Global property | Default | Meaning |
 | --- | --- | --- |
-| `rhdflags.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
-| `rhdflags.listCohortType` | `System List` | Cohort type for the lists; created if missing |
-| `rhdflags.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, and the regimen intervals and prescription durations as `uuid:days` pairs; see `config.xml` |
+| `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
+| `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, and the regimen intervals and prescription durations as `uuid:days` pairs; see `config.xml` |
 
 ## Security
 
@@ -187,13 +196,13 @@ Each run logs one line, at `warn` if part of it failed:
 
 For per-list detail, on platform 2.4.4, 2.5.1, 2.6.0 and later, copy the platform's `log4j2.xml`
 into the application data directory, add
-`<Logger name="org.openmrs.module.rhdflags" level="info" />` to its `<Loggers>`, and restart.
+`<Logger name="org.openmrs.module.actcore" level="info" />` to its `<Loggers>`, and restart.
 
 ## Building
 
     mvn clean install
 
-The module is `omod/target/rhdflags-omod-*.omod`.
+The module is `omod/target/actcore-omod-*.omod`.
 
 ## License
 

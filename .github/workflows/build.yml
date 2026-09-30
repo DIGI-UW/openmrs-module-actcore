@@ -16,7 +16,7 @@ jobs:
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     with:
       # A push to main deploys the SNAPSHOT to DIGI-UW's repository, named in the pom's distributionManagement.
-      deploy_snapshots: ${{ github.repository == 'DIGI-UW/openmrs-module-rhd-flags' }}
+      deploy_snapshots: ${{ github.repository == 'DIGI-UW/openmrs-module-actcore' }}
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
       # The DIGI-UW organization keeps the repository password as MAVEN_REPO_PASSWORD.

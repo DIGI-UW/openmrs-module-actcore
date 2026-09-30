@@ -5,13 +5,13 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.openmrs.module</groupId>
-    <artifactId>rhdflags</artifactId>
+    <artifactId>actcore</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>rhdflags-omod</artifactId>
+  <artifactId>actcore-omod</artifactId>
   <packaging>jar</packaging>
-  <name>RHD Flags OMOD</name>
+  <name>ACT Core OMOD</name>
 
   <dependencies>
     <dependency>
@@ -20,7 +20,7 @@
     </dependency>
     <dependency>
       <groupId>org.openmrs.module</groupId>
-      <artifactId>rhdflags-api</artifactId>
+      <artifactId>actcore-api</artifactId>
       <version>${project.parent.version}</version>
     </dependency>
     <dependency>
@@ -38,6 +38,30 @@
     <dependency>
       <groupId>org.openmrs.module</groupId>
       <artifactId>cohort-api</artifactId>
+    </dependency>
+    <!-- reporting and the modules it requires, for the api's test context these tests share -->
+    <dependency>
+      <groupId>org.openmrs.module</groupId>
+      <artifactId>reporting-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openmrs.module</groupId>
+      <artifactId>calculation-api</artifactId>
+      <version>2.0.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openmrs.module</groupId>
+      <artifactId>htmlwidgets-api</artifactId>
+      <version>2.0.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openmrs.module</groupId>
+      <artifactId>serialization.xstream-api</artifactId>
+      <version>0.3.0</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.openmrs.api</groupId>
