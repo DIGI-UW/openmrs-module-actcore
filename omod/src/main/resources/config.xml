@@ -13,32 +13,34 @@
 <!DOCTYPE module PUBLIC "-//OpenMRS//DTD OpenMRS Config 1.0//EN"
   "https://resources.openmrs.org/doctype/config-1.6.dtd">
 <module configVersion="1.6">
-  <id>rhdflags</id>
-  <name>RHD Flags</name>
+  <id>actcore</id>
+  <name>ACT Core</name>
   <version>${project.parent.version}</version>
-  <package>org.openmrs.module.rhdflags</package>
+  <package>org.openmrs.module.actcore</package>
   <author>UW DIGI</author>
   <description>
-    Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, and each patient's prophylaxis adherence and next due date.
+    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, and loading the report descriptors at startup.
   </description>
 
-  <activator>org.openmrs.module.rhdflags.RhdFlagsActivator</activator>
+  <activator>org.openmrs.module.actcore.ActCoreActivator</activator>
   <require_version>${openmrsPlatformVersion}</require_version>
 
   <require_modules>
     <require_module version="${patientflagsVersion}">org.openmrs.module.patientflags</require_module>
     <require_module version="${cohortVersion}">org.openmrs.module.cohort</require_module>
     <require_module version="${webservicesRestVersion}">org.openmrs.module.webservices.rest</require_module>
+    <require_module version="${reportingVersion}">org.openmrs.module.reporting</require_module>
   </require_modules>
 
-  <!-- Initializer creates the flags while it starts, and this module schedules its first refresh
-       when it starts, so it starts after Initializer where Initializer is installed. -->
+  <!-- Initializer creates the flags and applies the report descriptor properties while it starts, and
+       this module schedules its first refresh and loads the report descriptors when it starts, so it
+       starts after Initializer where Initializer is installed. -->
   <aware_of_modules>
     <aware_of_module>org.openmrs.module.initializer</aware_of_module>
   </aware_of_modules>
 
   <globalProperty>
-    <property>rhdflags.listFlagTag</property>
+    <property>actcore.listFlagTag</property>
     <defaultValue></defaultValue>
     <description>
       Only flags carrying this tag are mirrored into a patient list. Leave empty to give every
@@ -48,7 +50,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.listCohortType</property>
+    <property>actcore.listCohortType</property>
     <defaultValue>System List</defaultValue>
     <description>
       Name of the cohort type given to lists this module creates. The module creates the type if no
@@ -57,7 +59,7 @@
     </description>
   </globalProperty>
   <globalProperty>
-    <property>rhdflags.adherence.prescriptionConcept</property>
+    <property>actcore.adherence.prescriptionConcept</property>
     <defaultValue>668e0221-8b41-5669-9ad8-78e193d42494</defaultValue>
     <description>
       The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest consultation that has any, by its date.
@@ -65,7 +67,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.injectionIntervals</property>
+    <property>actcore.adherence.injectionIntervals</property>
     <defaultValue>50be4b26-6c5b-5aaa-9254-3bfd313b4522:28,2f3ee632-dd14-51b0-a4ec-de10e7958019:21,91230c88-6a90-5d45-af50-fa6155fe5dd7:14</defaultValue>
     <description>
       The injection regimens, as regimen answer uuid:days between injections, separated by commas. Any other regimen is treated as oral, whose adherence is the latest estimate.
@@ -73,7 +75,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.dateStartedConcept</property>
+    <property>actcore.adherence.dateStartedConcept</property>
     <defaultValue>5bcc7d12-b279-5955-815c-090a1f392071</defaultValue>
     <description>
       The member of a prescription group holding the date it started. A prescription without one is left out.
@@ -81,7 +83,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.dateStoppedConcept</property>
+    <property>actcore.adherence.dateStoppedConcept</property>
     <defaultValue>d75edc42-3213-5a06-9228-4e5735b9594b</defaultValue>
     <description>
       The member of a prescription group holding the date it stopped. A stopped prescription is left out, as ACT 2.0 left it out.
@@ -89,7 +91,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.injectionDateConcept</property>
+    <property>actcore.adherence.injectionDateConcept</property>
     <defaultValue>183fb30e-b861-5b7c-806f-7118a40f2b51</defaultValue>
     <description>
       The date an injection was given.
@@ -97,7 +99,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.estimateConcept</property>
+    <property>actcore.adherence.estimateConcept</property>
     <defaultValue>8edff8dc-4af6-5d0f-bf1d-8e349c7a1b15</defaultValue>
     <description>
       The clinician's oral adherence estimate, in percent. It counts from its encounter's date.
@@ -105,7 +107,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.prescriptionDurationConcept</property>
+    <property>actcore.adherence.prescriptionDurationConcept</property>
     <defaultValue>cd03af00-de81-5c08-9a02-92f95c00e1ce</defaultValue>
     <description>
       The duration of an oral prescription, recorded with the estimate; it sets when oral prophylaxis is next due.
@@ -113,14 +115,14 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.prescriptionDurations</property>
+    <property>actcore.adherence.prescriptionDurations</property>
     <defaultValue>87bdee8a-aaf8-56e7-9e34-2b668873787d:30,30f01ae8-2fc0-5ac2-be59-a573b38d73d5:90,35d3bb08-35fb-5377-8d8f-3edd73c1178b:180,63726df8-d924-54fe-b88b-b8bc9749632b:365</defaultValue>
     <description>
       The prescription duration answers, as answer uuid:days, separated by commas.
     </description>
   </globalProperty>
   <globalProperty>
-    <property>rhdflags.adherence.consultationDateConcept</property>
+    <property>actcore.adherence.consultationDateConcept</property>
     <defaultValue>c3edefd2-5777-5084-b01e-fd4ca0e40162</defaultValue>
     <description>
       The date of a consultation. ACT 2.0 recomputed adherence when a consultation was saved, and its nightly run held a batch-entered patient from the latest consultation or injection until the batch interval passed.
@@ -128,7 +130,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.dataEntryConcept</property>
+    <property>actcore.adherence.dataEntryConcept</property>
     <defaultValue>d444bffc-c718-5295-a19e-8fb03dbdbfd7</defaultValue>
     <description>
       How a patient's injections are entered, recorded on the consultation. As in ACT 2.0 the latest consultation's answer counts, and a consultation that leaves it blank means continuous entry.
@@ -136,7 +138,7 @@
   </globalProperty>
 
   <globalProperty>
-    <property>rhdflags.adherence.dataEntryIntervals</property>
+    <property>actcore.adherence.dataEntryIntervals</property>
     <defaultValue>4040ccf9-175d-5502-ada2-f562662c32f5:90,dba07d74-cd84-519c-93e3-f43c8bf7c398:180,2e145a91-1967-537c-b957-730f005002b2:365</defaultValue>
     <description>
       The batch data entry answers, as answer uuid:days between batches, separated by commas. ACT 2.0's nightly run skipped such a patient until that long had passed since the later of their latest consultation and injection. Any other answer, such as continuous entry, is recomputed nightly.
