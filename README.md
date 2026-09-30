@@ -41,6 +41,7 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `configuration/reports/reportdescriptors` itself when that property is true. It logs whether it
   loaded, skipped or failed. Remove this once the reporting module does it
   ([mherman22/openmrs-module-reporting#1](https://github.com/mherman22/openmrs-module-reporting/issues/1)).
+  How ACT's descriptors are written, and which reports there are: [docs/report-descriptors.md](docs/report-descriptors.md).
 
 ### Gap look-up
 
