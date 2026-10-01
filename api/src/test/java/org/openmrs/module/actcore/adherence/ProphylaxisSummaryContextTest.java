@@ -212,6 +212,58 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(6, onTime.getGiven());
 	}
 	
+	@Test
+	public void of_shouldMeasureInjectionsAgainstTheFirstConsultationOfTheirDay() {
+		prescribe(encounter(7, 150), q28, 150, null);
+		prescribe(encounter(7, 150), q21, 150, null);
+		for (int daysAgo : new int[] { 122, 94, 66, 38, 10 }) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		
+		ProphylaxisSummary s = summary(7);
+		
+		assertEquals(q28.getName().getName(), s.getRegimen());
+		assertEquals(Integer.valueOf(28), s.getIntervalDays());
+		assertEquals(5, s.getOnTime().getTotal());
+		assertEquals(5, s.getOnTime().getGiven());
+	}
+	
+	@Test
+	public void of_shouldEndAnInjectionRegimenALaterConsultationLeavesOut() {
+		Encounter consultation = encounter(7, 100);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, q21, 100, null);
+		prescribe(encounter(7, 90), q28, 200, null);
+		givenEvery28Days(7);
+		
+		ProphylaxisSummary s = summary(7);
+		
+		assertEquals(q28.getName().getName(), s.getRegimen());
+		assertEquals(Integer.valueOf(28), s.getIntervalDays());
+		assertEquals(7, s.getOnTime().getTotal());
+		assertEquals(7, s.getOnTime().getGiven());
+	}
+	
+	@Test
+	public void of_shouldEndAnOralRegimenALaterConsultationLeavesOut() {
+		Encounter consultation = encounter(7, 100);
+		prescribe(consultation, q28, 200, null);
+		prescribe(consultation, oralPenicillin, 100, null);
+		prescribe(encounter(7, 90), q28, 200, null);
+		givenEvery28Days(7);
+		
+		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
+		
+		assertEquals(7, onTime.getTotal());
+		assertEquals(7, onTime.getGiven());
+	}
+	
+	private void givenEvery28Days(int patientId) {
+		for (int daysAgo = 172; daysAgo >= 4; daysAgo -= 28) {
+			given(encounter(patientId, daysAgo), daysAgo);
+		}
+	}
+	
 	private void givenOnSwitch(int patientId) {
 		for (int daysAgo : new int[] { 150, 122, 94, 66, 50, 29, 8 }) {
 			given(encounter(patientId, daysAgo), daysAgo);

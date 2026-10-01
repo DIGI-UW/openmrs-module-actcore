@@ -67,7 +67,7 @@ public final class ProphylaxisSummary {
 			nextDue = row.started.plusDays(row.interval);
 		}
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, nextDue,
-		        status(nextDue, today), injected ? onTime(history.courses, history.injections, today) : null);
+		        status(nextDue, today), injected ? onTime(history.prescriptions, history.injections, today) : null);
 	}
 	
 	private static String name(Integer conceptId) {
@@ -106,26 +106,26 @@ public final class ProphylaxisSummary {
 	 * The last six months' injections, each measured as AdherenceCalculation measures it: against the
 	 * one before it, or the start of the prescription in force for the first under that prescription.
 	 */
-	private static OnTime onTime(NavigableMap<LocalDate, AdherenceReplay.Course> courses, SortedSet<LocalDate> injections,
-	        LocalDate today) {
+	private static OnTime onTime(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
+	        SortedSet<LocalDate> injections, LocalDate today) {
 		LocalDate from = today.minusMonths(ON_TIME_MONTHS);
 		int given = 0;
 		int total = 0;
 		LocalDate start = null;
 		LocalDate previous = null;
 		for (LocalDate injection : injections.headSet(today.plusDays(1))) {
-			LocalDate inForce = inForce(courses, injection);
+			Map.Entry<LocalDate, AdherenceReplay.Course> inForce = inForce(prescriptions, injection);
 			if (inForce == null) {
 				start = null;
 				continue;
 			}
-			if (!inForce.equals(start)) {
-				start = inForce;
-				previous = inForce;
+			if (!inForce.getKey().equals(start)) {
+				start = inForce.getKey();
+				previous = start;
 			}
 			if (!injection.isBefore(from)) {
 				total++;
-				if (!injection.isAfter(previous.plusDays(courses.get(start).interval))) {
+				if (!injection.isAfter(previous.plusDays(inForce.getValue().interval))) {
 					given++;
 				}
 			}
@@ -135,13 +135,19 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * The start of the latest prescription begun and not stopped before the day if it is an injection;
-	 * null leaves an injection given that day out of the count, as no interval says when it was due.
+	 * The latest course begun and not stopped by the day in the consultation replay holds that day, the
+	 * first standing in before it; null, leaving the injection out, if that course is not an injection.
 	 */
-	private static LocalDate inForce(NavigableMap<LocalDate, AdherenceReplay.Course> courses, LocalDate day) {
-		for (Map.Entry<LocalDate, AdherenceReplay.Course> course : courses.headMap(day, true).descendingMap().entrySet()) {
+	private static Map.Entry<LocalDate, AdherenceReplay.Course> inForce(
+	        NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions, LocalDate day) {
+		Map.Entry<LocalDate, AdherenceReplay.Prescriptions> consultation = prescriptions.floorEntry(day);
+		if (consultation == null) {
+			consultation = prescriptions.firstEntry();
+		}
+		for (Map.Entry<LocalDate, AdherenceReplay.Course> course : consultation.getValue().courses.headMap(day, true)
+		        .descendingMap().entrySet()) {
 			if (course.getValue().stopped == null || !day.isAfter(course.getValue().stopped)) {
-				return course.getValue().interval > 0 ? course.getKey() : null;
+				return course.getValue().interval > 0 ? course : null;
 			}
 		}
 		return null;

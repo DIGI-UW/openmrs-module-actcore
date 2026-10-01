@@ -36,6 +36,9 @@ final class AdherenceReplay {
 		final TreeMap<LocalDate, Integer> intervals = new TreeMap<LocalDate, Integer>();
 		
 		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
+		
+		/** Every prescription it records, stopped ones too, agreeing with intervals on the rest. */
+		final TreeMap<LocalDate, Course> courses = new TreeMap<LocalDate, Course>();
 	}
 	
 	/** A prescription's injection interval (0 if oral) and the date it was stopped, if it was. */
@@ -56,12 +59,6 @@ final class AdherenceReplay {
 		
 		/** By consultation date, else encounter date; the first consultation of a day wins. */
 		final TreeMap<LocalDate, Prescriptions> prescriptions = new TreeMap<LocalDate, Prescriptions>();
-		
-		/**
-		 * Every prescription any consultation records, stopped ones too, by start date, the latest record
-		 * of a start date kept; replay reads prescriptions instead, as ACT 2.0 did.
-		 */
-		final TreeMap<LocalDate, Course> courses = new TreeMap<LocalDate, Course>();
 		
 		final TreeSet<LocalDate> injections = new TreeSet<LocalDate>();
 		

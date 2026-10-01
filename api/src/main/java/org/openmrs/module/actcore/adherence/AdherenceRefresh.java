@@ -157,7 +157,7 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
-	 * date kept; and every prescription's course, stopped ones too.
+	 * date kept; and its courses, stopped ones too.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
@@ -183,11 +183,6 @@ public class AdherenceRefresh {
 			Integer patientId = ((Number) row.get(0)).intValue();
 			Integer encounterId = ((Number) row.get(2)).intValue();
 			LocalDate day = localDate(row.get(1));
-			if (row.get(5) != null) {
-				Integer days = row.get(3) == null ? null : intervals.get(row.get(3).toString());
-				h.courses.put(localDate(row.get(5)),
-				    new AdherenceReplay.Course(days == null ? 0 : days, row.get(6) == null ? null : localDate(row.get(6))));
-			}
 			if (!encounterOfDay.containsKey(patientId)) {
 				encounterOfDay.put(patientId, new HashMap<LocalDate, Integer>());
 			}
@@ -199,14 +194,20 @@ public class AdherenceRefresh {
 				continue;
 			}
 			AdherenceReplay.Prescriptions p = h.prescriptions.get(day);
-			if (row.get(5) == null || row.get(6) != null) {
+			if (row.get(5) == null) {
 				continue;
 			}
 			LocalDate started = localDate(row.get(5));
-			if (!p.intervals.containsKey(started)) {
-				Integer days = row.get(3) == null ? null : intervals.get(row.get(3).toString());
-				p.intervals.put(started, days == null ? 0 : days);
+			Integer days = row.get(3) == null ? null : intervals.get(row.get(3).toString());
+			int interval = days == null ? 0 : days;
+			if (row.get(6) != null) {
+				if (!p.courses.containsKey(started)) {
+					p.courses.put(started, new AdherenceReplay.Course(interval, localDate(row.get(6))));
+				}
+			} else if (!p.intervals.containsKey(started)) {
+				p.intervals.put(started, interval);
 				p.regimens.put(started, row.get(4) == null ? null : ((Number) row.get(4)).intValue());
+				p.courses.put(started, new AdherenceReplay.Course(interval, null));
 			}
 		}
 	}
