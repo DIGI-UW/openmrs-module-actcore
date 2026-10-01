@@ -104,7 +104,8 @@ public final class ProphylaxisSummary {
 	
 	/**
 	 * The last six months' injections, each measured as AdherenceCalculation measures it: against the
-	 * one before it, or the start of the prescription in force for the first under that prescription.
+	 * one before it, even one left out, or the start of the prescription in force for the first under
+	 * it.
 	 */
 	private static OnTime onTime(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
 	        SortedSet<LocalDate> injections, LocalDate today) {
@@ -115,18 +116,17 @@ public final class ProphylaxisSummary {
 		LocalDate previous = null;
 		for (LocalDate injection : injections.headSet(today.plusDays(1))) {
 			Map.Entry<LocalDate, AdherenceReplay.Course> inForce = inForce(prescriptions, injection);
-			if (inForce == null) {
-				start = null;
-				continue;
-			}
-			if (!inForce.getKey().equals(start)) {
-				start = inForce.getKey();
-				previous = start;
-			}
-			if (!injection.isBefore(from)) {
-				total++;
-				if (!injection.isAfter(previous.plusDays(inForce.getValue().interval))) {
-					given++;
+			// A course re-recorded after a gap keeps its start, so a null between does not reset previous.
+			if (inForce != null) {
+				if (!inForce.getKey().equals(start)) {
+					start = inForce.getKey();
+					previous = start;
+				}
+				if (!injection.isBefore(from)) {
+					total++;
+					if (!injection.isAfter(previous.plusDays(inForce.getValue().interval))) {
+						given++;
+					}
 				}
 			}
 			previous = injection;

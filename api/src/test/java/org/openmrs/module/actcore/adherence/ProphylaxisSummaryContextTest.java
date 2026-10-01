@@ -258,6 +258,19 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(7, onTime.getGiven());
 	}
 	
+	@Test
+	public void of_shouldMeasureAnInjectionAfterAnOralGapFromTheOneBeforeIt() {
+		prescribe(encounter(7, 200), q28, 200, null);
+		prescribe(encounter(7, 100), oralPenicillin, 100, null);
+		prescribe(encounter(7, 70), q28, 200, null);
+		givenEvery28Days(7);
+		
+		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
+		
+		assertEquals(6, onTime.getTotal());
+		assertEquals(6, onTime.getGiven());
+	}
+	
 	private void givenEvery28Days(int patientId) {
 		for (int daysAgo = 172; daysAgo >= 4; daysAgo -= 28) {
 			given(encounter(patientId, daysAgo), daysAgo);
