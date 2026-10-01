@@ -172,6 +172,53 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldMeasureInjectionsUnderAStoppedRegimen() {
+		// 150 days ago is 50 days after the Q28 starts, so six of the seven are on time, not seven.
+		Encounter consultation = encounter(7, 50);
+		prescribe(consultation, q28, 200, 50);
+		prescribe(consultation, q21, 50, null);
+		givenOnSwitch(7);
+		
+		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
+		
+		assertEquals(7, onTime.getTotal());
+		assertEquals(6, onTime.getGiven());
+	}
+	
+	@Test
+	public void of_shouldMeasureInjectionsUnderARegimenAnEarlierConsultationPrescribed() {
+		prescribe(encounter(7, 200), q28, 200, null);
+		prescribe(encounter(7, 50), q21, 50, null);
+		givenOnSwitch(7);
+		
+		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
+		
+		assertEquals(7, onTime.getTotal());
+		assertEquals(6, onTime.getGiven());
+	}
+	
+	@Test
+	public void of_shouldLeaveOutAnInjectionGivenWithNoRegimenInForce() {
+		Encounter consultation = encounter(7, 50);
+		prescribe(consultation, q28, 200, 100);
+		prescribe(consultation, q21, 50, null);
+		for (int daysAgo : new int[] { 172, 144, 116, 80, 50, 29, 8 }) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		
+		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
+		
+		assertEquals(6, onTime.getTotal());
+		assertEquals(6, onTime.getGiven());
+	}
+	
+	private void givenOnSwitch(int patientId) {
+		for (int daysAgo : new int[] { 150, 122, 94, 66, 50, 29, 8 }) {
+			given(encounter(patientId, daysAgo), daysAgo);
+		}
+	}
+	
+	@Test
 	public void of_shouldReadTheLatestInjectionRatherThanLastNightsTable() {
 		prescribe(encounter(7, 27), q21, 27, null);
 		given(encounter(7, 27), 27);

@@ -157,7 +157,7 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
-	 * date kept.
+	 * date kept; and every prescription's course, stopped ones too.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
@@ -183,6 +183,11 @@ public class AdherenceRefresh {
 			Integer patientId = ((Number) row.get(0)).intValue();
 			Integer encounterId = ((Number) row.get(2)).intValue();
 			LocalDate day = localDate(row.get(1));
+			if (row.get(5) != null) {
+				Integer days = row.get(3) == null ? null : intervals.get(row.get(3).toString());
+				h.courses.put(localDate(row.get(5)),
+				    new AdherenceReplay.Course(days == null ? 0 : days, row.get(6) == null ? null : localDate(row.get(6))));
+			}
 			if (!encounterOfDay.containsKey(patientId)) {
 				encounterOfDay.put(patientId, new HashMap<LocalDate, Integer>());
 			}

@@ -38,11 +38,30 @@ final class AdherenceReplay {
 		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
 	}
 	
+	/** A prescription's injection interval (0 if oral) and the date it was stopped, if it was. */
+	static final class Course {
+		
+		final int interval;
+		
+		final LocalDate stopped;
+		
+		Course(int interval, LocalDate stopped) {
+			this.interval = interval;
+			this.stopped = stopped;
+		}
+	}
+	
 	/** A patient's records, each taken to be saved on the date it records. */
 	static final class History {
 		
 		/** By consultation date, else encounter date; the first consultation of a day wins. */
 		final TreeMap<LocalDate, Prescriptions> prescriptions = new TreeMap<LocalDate, Prescriptions>();
+		
+		/**
+		 * Every prescription any consultation records, stopped ones too, by start date, the latest record
+		 * of a start date kept; replay reads prescriptions instead, as ACT 2.0 did.
+		 */
+		final TreeMap<LocalDate, Course> courses = new TreeMap<LocalDate, Course>();
 		
 		final TreeSet<LocalDate> injections = new TreeSet<LocalDate>();
 		
@@ -68,17 +87,12 @@ final class AdherenceReplay {
 		/** When the regimen in force started. */
 		final LocalDate started;
 		
-		/** Each regimen the latest consultation started, by start date, with its injection interval. */
-		final SortedMap<LocalDate, Integer> intervals;
-		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started,
-		    SortedMap<LocalDate, Integer> intervals) {
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
 			this.result = result;
 			this.started = started;
-			this.intervals = intervals;
 		}
 	}
 	
@@ -148,7 +162,7 @@ final class AdherenceReplay {
 		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores none.
 		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null)
 		        : AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections, h.oral, computed);
-		return new Row(regimen, stored.interval, stored.lastGiven, result, stored.started, stored.prescriptions.intervals);
+		return new Row(regimen, stored.interval, stored.lastGiven, result, stored.started);
 	}
 	
 	/**

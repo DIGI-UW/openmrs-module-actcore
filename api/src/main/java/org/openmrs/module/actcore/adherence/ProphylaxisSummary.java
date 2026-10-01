@@ -11,9 +11,8 @@ package org.openmrs.module.actcore.adherence;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.SortedMap;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.SortedSet;
 
 import org.openmrs.Concept;
@@ -68,7 +67,7 @@ public final class ProphylaxisSummary {
 			nextDue = row.started.plusDays(row.interval);
 		}
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, nextDue,
-		        status(nextDue, today), injected ? onTime(row.intervals, history.injections, today) : null);
+		        status(nextDue, today), injected ? onTime(history.courses, history.injections, today) : null);
 	}
 	
 	private static String name(Integer conceptId) {
@@ -107,27 +106,45 @@ public final class ProphylaxisSummary {
 	 * The last six months' injections, each measured as AdherenceCalculation measures it: against the
 	 * one before it, or the start of the prescription in force for the first under that prescription.
 	 */
-	private static OnTime onTime(SortedMap<LocalDate, Integer> intervals, SortedSet<LocalDate> injections, LocalDate today) {
+	private static OnTime onTime(NavigableMap<LocalDate, AdherenceReplay.Course> courses, SortedSet<LocalDate> injections,
+	        LocalDate today) {
 		LocalDate from = today.minusMonths(ON_TIME_MONTHS);
-		List<LocalDate> starts = new ArrayList<LocalDate>(intervals.headMap(today.plusDays(1)).keySet());
 		int given = 0;
 		int total = 0;
-		for (int i = 0; i < starts.size(); i++) {
-			LocalDate windowStart = starts.get(i);
-			LocalDate windowEnd = i + 1 < starts.size() ? starts.get(i + 1) : today.plusDays(1);
-			int interval = intervals.get(windowStart);
-			LocalDate previous = windowStart;
-			for (LocalDate injection : injections.subSet(windowStart, windowEnd)) {
-				if (!injection.isBefore(from)) {
-					total++;
-					if (!injection.isAfter(previous.plusDays(interval))) {
-						given++;
-					}
-				}
-				previous = injection;
+		LocalDate start = null;
+		LocalDate previous = null;
+		for (LocalDate injection : injections.headSet(today.plusDays(1))) {
+			LocalDate inForce = inForce(courses, injection);
+			if (inForce == null) {
+				start = null;
+				continue;
 			}
+			if (!inForce.equals(start)) {
+				start = inForce;
+				previous = inForce;
+			}
+			if (!injection.isBefore(from)) {
+				total++;
+				if (!injection.isAfter(previous.plusDays(courses.get(start).interval))) {
+					given++;
+				}
+			}
+			previous = injection;
 		}
 		return new OnTime(given, total);
+	}
+	
+	/**
+	 * The start of the latest prescription begun and not stopped before the day if it is an injection;
+	 * null leaves an injection given that day out of the count, as no interval says when it was due.
+	 */
+	private static LocalDate inForce(NavigableMap<LocalDate, AdherenceReplay.Course> courses, LocalDate day) {
+		for (Map.Entry<LocalDate, AdherenceReplay.Course> course : courses.headMap(day, true).descendingMap().entrySet()) {
+			if (course.getValue().stopped == null || !day.isAfter(course.getValue().stopped)) {
+				return course.getValue().interval > 0 ? course.getKey() : null;
+			}
+		}
+		return null;
 	}
 	
 	public String getRegimen() {
