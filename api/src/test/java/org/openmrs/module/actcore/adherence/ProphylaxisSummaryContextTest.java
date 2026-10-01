@@ -158,7 +158,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldMeasureEachInjectionAgainstThePrescriptionInForce() {
-		// Q21 from 100 days ago, then Q28 from 50 days ago: 100 to 75 is 25 days, late against the Q21 in force.
+		// Q21 from 100 days ago, then Q28 from 50: 100 to 75 is 25 days, late against the Q21 in force.
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 100, null);
 		prescribe(consultation, q28, 50, null);
