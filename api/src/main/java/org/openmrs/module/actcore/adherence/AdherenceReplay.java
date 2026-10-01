@@ -65,11 +65,19 @@ final class AdherenceReplay {
 		
 		final AdherenceCalculation.Result result;
 		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result) {
+		/** When the regimen in force started, and each regimen the latest consultation started, by date. */
+		final LocalDate started;
+		
+		final SortedMap<LocalDate, Integer> intervals;
+		
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started,
+		    SortedMap<LocalDate, Integer> intervals) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
 			this.result = result;
+			this.started = started;
+			this.intervals = intervals;
 		}
 	}
 	
@@ -139,7 +147,7 @@ final class AdherenceReplay {
 		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores none.
 		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null)
 		        : AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections, h.oral, computed);
-		return new Row(regimen, stored.interval, stored.lastGiven, result);
+		return new Row(regimen, stored.interval, stored.lastGiven, result, stored.started, stored.prescriptions.intervals);
 	}
 	
 	/**
