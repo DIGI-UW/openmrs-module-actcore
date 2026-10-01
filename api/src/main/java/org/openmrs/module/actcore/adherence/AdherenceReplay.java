@@ -36,6 +36,22 @@ final class AdherenceReplay {
 		final TreeMap<LocalDate, Integer> intervals = new TreeMap<LocalDate, Integer>();
 		
 		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
+		
+		/** Every prescription it records, stopped ones too, agreeing with intervals on the rest. */
+		final TreeMap<LocalDate, Course> courses = new TreeMap<LocalDate, Course>();
+	}
+	
+	/** A prescription's injection interval (0 if oral) and the date it was stopped, if it was. */
+	static final class Course {
+		
+		final int interval;
+		
+		final LocalDate stopped;
+		
+		Course(int interval, LocalDate stopped) {
+			this.interval = interval;
+			this.stopped = stopped;
+		}
 	}
 	
 	/** A patient's records, each taken to be saved on the date it records. */
@@ -65,11 +81,15 @@ final class AdherenceReplay {
 		
 		final AdherenceCalculation.Result result;
 		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result) {
+		/** When the regimen in force started. */
+		final LocalDate started;
+		
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
 			this.result = result;
+			this.started = started;
 		}
 	}
 	
@@ -139,7 +159,7 @@ final class AdherenceReplay {
 		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores none.
 		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null)
 		        : AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections, h.oral, computed);
-		return new Row(regimen, stored.interval, stored.lastGiven, result);
+		return new Row(regimen, stored.interval, stored.lastGiven, result, stored.started);
 	}
 	
 	/**
