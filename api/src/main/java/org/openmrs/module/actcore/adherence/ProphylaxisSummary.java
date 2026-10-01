@@ -89,7 +89,7 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Null for an oral regimen with no entry yet, as nothing recorded says when its supply runs out.
+	 * Null for an oral regimen whose supply end is unknown, as nothing recorded says when it runs out.
 	 */
 	private static String status(LocalDate nextDue, LocalDate today) {
 		if (nextDue == null) {
