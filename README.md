@@ -34,6 +34,10 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
+- **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
+  regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`) and
+  how many of the last six months' injections were on time. It replays the patient's saved forms when
+  asked, as the nightly refresh does, so a dose saved today counts at once.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting

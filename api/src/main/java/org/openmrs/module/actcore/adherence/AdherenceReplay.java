@@ -65,9 +65,10 @@ final class AdherenceReplay {
 		
 		final AdherenceCalculation.Result result;
 		
-		/** When the regimen in force started, and each regimen the latest consultation started, by date. */
+		/** When the regimen in force started. */
 		final LocalDate started;
 		
+		/** Each regimen the latest consultation started, by start date, with its injection interval. */
 		final SortedMap<LocalDate, Integer> intervals;
 		
 		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started,
