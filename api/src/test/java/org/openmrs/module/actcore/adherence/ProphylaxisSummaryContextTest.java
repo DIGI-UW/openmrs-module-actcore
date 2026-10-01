@@ -119,7 +119,6 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldMeasureAFirstInjectionFromThePrescriptionsStart() {
-		// Prescribed Q28 200 days ago, first injected 120 days ago, then every 28 days.
 		prescribe(encounter(7, 200), q28, 200, null);
 		for (int daysAgo = 120; daysAgo >= 8; daysAgo -= 28) {
 			given(encounter(7, daysAgo), daysAgo);

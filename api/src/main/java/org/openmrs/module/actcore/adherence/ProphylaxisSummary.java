@@ -21,9 +21,6 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
-/**
- * A patient's prophylaxis today: the regimen, its last and next dose, and how many were on time.
- */
 public final class ProphylaxisSummary {
 	
 	private static final int ON_TIME_MONTHS = 6;
@@ -167,7 +164,6 @@ public final class ProphylaxisSummary {
 		return onTime;
 	}
 	
-	/** How many of the last six months' injections were on time. */
 	public static final class OnTime {
 		
 		private final int given;

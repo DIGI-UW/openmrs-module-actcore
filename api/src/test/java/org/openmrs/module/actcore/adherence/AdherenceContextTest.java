@@ -23,7 +23,6 @@ import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
-/** Concepts, global properties and saved forms for the adherence context tests. */
 public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTest {
 	
 	protected static final LocalDate TODAY = LocalDate.of(2026, 9, 29);
