@@ -82,7 +82,6 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		property("dateStartedConcept", started.getUuid());
 		property("injectionDateConcept", injection.getUuid());
 		property("injectionIntervals", q21.getUuid() + ":21");
-		// Prescribed and injected 27 days ago, so due again 6 days ago.
 		Encounter consultation = new Encounter();
 		consultation.setPatient(Context.getPatientService().getPatientByUuid(PATIENT_7));
 		consultation.setEncounterType(Context.getEncounterService().getEncounterType(1));
