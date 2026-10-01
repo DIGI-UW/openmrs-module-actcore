@@ -26,7 +26,7 @@ import org.openmrs.util.PrivilegeConstants;
  */
 public final class ProphylaxisSummary {
 	
-	static final int ON_TIME_MONTHS = 6;
+	private static final int ON_TIME_MONTHS = 6;
 	
 	private static final int DUE_SOON_DAYS = 7;
 	
@@ -154,7 +154,10 @@ public final class ProphylaxisSummary {
 		return nextDue;
 	}
 	
-	/** overdue, dueToday, dueSoon, ok, or none without a regimen in force. */
+	/**
+	 * overdue, dueToday, dueSoon, ok, none without a regimen in force, or null for an oral one whose
+	 * supply end is unknown.
+	 */
 	public String getStatus() {
 		return status;
 	}

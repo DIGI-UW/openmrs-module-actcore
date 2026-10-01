@@ -159,7 +159,7 @@ public class AdherenceRefresh {
 	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
 	 * date kept.
 	 */
-	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, String only,
+	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select g.person_id, coalesce(cd.value_datetime, e.encounter_datetime),"
 		        + " e.encounter_id, rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
@@ -172,7 +172,7 @@ public class AdherenceRefresh {
 		        + concept(admin, GP_DATE_STARTED)
 		        + " left join obs x on x.obs_group_id = g.obs_id and x.voided = false and x.concept_id = "
 		        + concept(admin, GP_DATE_STOPPED) + " where g.voided = false and g.obs_group_id is null and g.concept_id = "
-		        + concept(admin, GP_PRESCRIPTION) + only
+		        + concept(admin, GP_PRESCRIPTION) + patientFilter
 		        + " order by g.person_id, coalesce(cd.value_datetime, e.encounter_datetime), e.encounter_id, g.obs_id,"
 		        + " r.obs_id",
 		    true);
@@ -206,11 +206,12 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	private void readInjections(AdministrationService admin, String only, Map<Integer, AdherenceReplay.History> histories) {
+	private void readInjections(AdministrationService admin, String patientFilter,
+	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
 		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
 		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		        + concept(admin, GP_INJECTION_DATE) + only,
+		        + concept(admin, GP_INJECTION_DATE) + patientFilter,
 		    true);
 		for (List<Object> row : rows) {
 			history(histories, row.get(0)).injections.add(localDate(row.get(1)));
@@ -221,7 +222,7 @@ public class AdherenceRefresh {
 	 * Each oral adherence form, by its encounter's date since the form has none of its own; one saved
 	 * without an estimate still counts, as ACT 2.0 counted it.
 	 */
-	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, String only,
+	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL(
 		    "select e.patient_id, e.encounter_datetime, est.value_numeric, dc.uuid" + " from encounter e"
@@ -229,7 +230,7 @@ public class AdherenceRefresh {
 		            + concept(admin, GP_ESTIMATE)
 		            + " left join obs d on d.encounter_id = e.encounter_id and d.voided = false and d.concept_id = "
 		            + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
-		            + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)" + only
+		            + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)" + patientFilter
 		            + " order by e.patient_id, e.encounter_datetime, e.encounter_id, est.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {
@@ -247,14 +248,14 @@ public class AdherenceRefresh {
 	 * Each consultation's date and how it says injections are entered: ACT 2.0 read that from the
 	 * latest consultation alone, so one that leaves it blank means continuous entry.
 	 */
-	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals, String only,
+	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime, c.uuid from obs o"
 		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
 		        + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
 		        + concept(admin, GP_DATA_ENTRY) + " left join concept c on c.concept_id = d.value_coded"
 		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		        + concept(admin, GP_CONSULTATION_DATE) + only
+		        + concept(admin, GP_CONSULTATION_DATE) + patientFilter
 		        + " order by o.person_id, o.value_datetime, e.encounter_id, o.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {

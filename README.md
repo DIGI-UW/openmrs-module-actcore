@@ -35,7 +35,8 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
-  regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`) and
+  regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok`, `none`, or null for
+  an oral regimen with no adherence entry yet, whose supply end is unknown) and
   how many of the last six months' injections were on time. It replays the patient's saved forms when
   asked, as the nightly refresh does, so a dose saved today counts at once.
 - **Report descriptors at startup.** The reporting module reads

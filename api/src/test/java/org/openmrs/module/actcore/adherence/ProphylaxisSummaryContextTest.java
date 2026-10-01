@@ -133,15 +133,27 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldCountOnlyTheLastSixMonthsInjectionsAndMeasureTheFirstFromTheOneBefore() {
-		// On time every 28 days from 200 days ago; six months back from 29 Sep is 29 Mar, 184 days ago.
-		onTimeUntil(4);
-		given(encounter(7, 190), 190);
+	public void of_shouldMeasureTheFirstInjectionInTheWindowFromTheOneBeforeIt() {
+		// 168 days ago is 22 days after the injection 190 days ago, but 32 after the prescription's start.
+		prescribe(encounter(7, 200), q28, 200, null);
+		for (int daysAgo : new int[] { 200, 190, 168 }) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
 		
 		ProphylaxisSummary.OnTime onTime = summary(7).getOnTime();
 		
-		assertEquals(7, onTime.getTotal());
-		assertEquals(7, onTime.getGiven());
+		assertEquals(1, onTime.getTotal());
+		assertEquals(1, onTime.getGiven());
+	}
+	
+	@Test
+	public void of_shouldCountTheInjectionsOfTheLastSixMonths() {
+		// Six months back from 29 Sep is 29 Mar, 184 days ago.
+		prescribe(encounter(7, 300), q28, 300, null);
+		given(encounter(7, 185), 185);
+		given(encounter(7, 184), 184);
+		
+		assertEquals(1, summary(7).getOnTime().getTotal());
 	}
 	
 	@Test

@@ -13,13 +13,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.openmrs.GlobalProperty;
+import org.openmrs.Concept;
+import org.openmrs.ConceptName;
+import org.openmrs.Encounter;
+import org.openmrs.Obs;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -49,8 +55,7 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		for (String property : Arrays.asList("prescriptionConcept", "dateStartedConcept", "dateStoppedConcept",
 		    "injectionDateConcept", "estimateConcept", "prescriptionDurationConcept", "consultationDateConcept",
 		    "dataEntryConcept")) {
-			Context.getAdministrationService()
-			        .saveGlobalProperty(new GlobalProperty("actcore.adherence." + property, WEIGHT));
+			property(property, WEIGHT);
 		}
 	}
 	
@@ -65,6 +70,49 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		    summary.keySet());
 		assertNull(summary.get("regimen"));
 		assertNull(summary.get("onTime"));
+	}
+	
+	@Test
+	public void describesAnOverdueInjectionRegimenWithItsDatesAndOnTimeCount() {
+		Concept prescription = concept("Prophylaxis", "Coded");
+		Concept q21 = concept("Q21 day BPG", "N/A");
+		Concept started = concept("Date started", "Datetime");
+		Concept injection = concept("Date of injection", "Datetime");
+		property("prescriptionConcept", prescription.getUuid());
+		property("dateStartedConcept", started.getUuid());
+		property("injectionDateConcept", injection.getUuid());
+		property("injectionIntervals", q21.getUuid() + ":21");
+		// Prescribed and injected 27 days ago, so due again 6 days ago.
+		Encounter consultation = new Encounter();
+		consultation.setPatient(Context.getPatientService().getPatientByUuid(PATIENT_7));
+		consultation.setEncounterType(Context.getEncounterService().getEncounterType(1));
+		consultation.setLocation(Context.getLocationService().getLocation(1));
+		consultation.setEncounterDatetime(daysAgo(27));
+		Context.getEncounterService().saveEncounter(consultation);
+		Obs group = obs(consultation, prescription);
+		Obs regimen = obs(consultation, prescription);
+		regimen.setValueCoded(q21);
+		group.addGroupMember(regimen);
+		Obs start = obs(consultation, started);
+		start.setValueDatetime(daysAgo(27));
+		group.addGroupMember(start);
+		Context.getObsService().saveObs(group, null);
+		Obs given = obs(consultation, injection);
+		given.setValueDatetime(daysAgo(27));
+		Context.getObsService().saveObs(given, null);
+		
+		SimpleObject summary = controller.getSummary(PATIENT_7);
+		
+		assertEquals(q21.getName().getName(), summary.get("regimen"));
+		assertEquals("BPG", summary.get("type"));
+		assertEquals(Integer.valueOf(21), summary.get("intervalDays"));
+		assertEquals(LocalDate.now().minusDays(27).toString(), summary.get("lastGiven"));
+		assertEquals(LocalDate.now().minusDays(6).toString(), summary.get("nextDue"));
+		assertEquals("overdue", summary.get("status"));
+		SimpleObject onTime = (SimpleObject) summary.get("onTime");
+		assertEquals(Integer.valueOf(1), onTime.get("given"));
+		assertEquals(Integer.valueOf(1), onTime.get("total"));
+		assertEquals(Integer.valueOf(6), onTime.get("months"));
 	}
 	
 	@Test(expected = IllegalRequestException.class)
@@ -85,9 +133,30 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 			throw new AssertionError("expected the request to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			// The REST layer answers this exception, unlike requirePrivilege's, with 403 rather than 500.
 			assertTrue(e.getMessage().contains("Get Observations"));
 		}
+	}
+	
+	private static void property(String name, String value) {
+		Context.getAdministrationService().setGlobalProperty("actcore.adherence." + name, value);
+	}
+	
+	private static Concept concept(String name, String datatype) {
+		Concept concept = new Concept();
+		concept.addName(new ConceptName(name + " " + System.nanoTime(), Context.getLocale()));
+		concept.setDatatype(Context.getConceptService().getConceptDatatypeByName(datatype));
+		concept.setConceptClass(Context.getConceptService().getConceptClass(1));
+		return Context.getConceptService().saveConcept(concept);
+	}
+	
+	private static Obs obs(Encounter encounter, Concept concept) {
+		Obs obs = new Obs(encounter.getPatient(), concept, encounter.getEncounterDatetime(), encounter.getLocation());
+		obs.setEncounter(encounter);
+		return obs;
+	}
+	
+	private static Date daysAgo(int days) {
+		return Timestamp.valueOf(LocalDate.now().minusDays(days).atTime(10, 0));
 	}
 	
 	private void authenticateWith(String... privileges) {
