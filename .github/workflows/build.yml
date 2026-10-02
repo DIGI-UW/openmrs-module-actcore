@@ -18,7 +18,6 @@ jobs:
       # That workflow deploys only for the openmrs organization, so the deploy job below does it here.
       deploy_snapshots: false
 
-  # A push to main deploys the SNAPSHOT to DIGI-UW's GitHub Packages, named in the pom's distributionManagement.
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'DIGI-UW/openmrs-module-actcore'

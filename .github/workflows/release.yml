@@ -25,7 +25,7 @@ jobs:
       branch: ${{ inputs.branch }}
       java_version: '8'
     secrets:
-      # The shared workflow's own job grants its GITHUB_TOKEN no packages access, so the DIGI-UW bot publishes the release.
+      # The shared job's GITHUB_TOKEN has no packages: write, so the release publishes as the bot.
       MAVEN_REPO_USERNAME: uwdigi
       MAVEN_REPO_API_KEY: ${{ secrets.GH_BOT_TOKEN }}
       BOT_PAT: ${{ secrets.BOT_PAT }}
