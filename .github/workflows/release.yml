@@ -25,7 +25,7 @@ jobs:
       branch: ${{ inputs.branch }}
       java_version: '8'
     secrets:
-      MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
-      # The DIGI-UW organization keeps the repository password as MAVEN_REPO_PASSWORD.
-      MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_PASSWORD }}
+      # The shared workflow's own job grants its GITHUB_TOKEN no packages access, so the DIGI-UW bot publishes the release.
+      MAVEN_REPO_USERNAME: uwdigi
+      MAVEN_REPO_API_KEY: ${{ secrets.GH_BOT_TOKEN }}
       BOT_PAT: ${{ secrets.BOT_PAT }}
