@@ -19,8 +19,9 @@ import java.util.SortedSet;
 
 /**
  * ACT 2.0's adherence calculation (is4r-rhd-cdk
- * adherence_utils.calculate_adherence_and_injection_date), ported step for step;
- * AdherenceCalculationParityTest holds it to ACT 2.0's own answers.
+ * adherence_utils.calculate_adherence_and_injection_date), ported step for step but for the next
+ * due date, counted from the latest injection however old; AdherenceCalculationParityTest holds it
+ * to the rest.
  */
 public final class AdherenceCalculation {
 	
@@ -83,7 +84,6 @@ public final class AdherenceCalculation {
 		long missedDays = 0;
 		long totalDays = 0;
 		Double estimate = null;
-		LocalDate latestInjection = null;
 		LocalDate latestEstimateDate = null;
 		
 		for (int i = 0; i < dates.size(); i++) {
@@ -114,9 +114,6 @@ public final class AdherenceCalculation {
 			}
 			
 			List<LocalDate> given = new ArrayList<LocalDate>(injections.subSet(windowStart, windowEnd));
-			if (!given.isEmpty()) {
-				latestInjection = given.get(given.size() - 1);
-			}
 			given.add(finalDue);
 			LocalDate previous = windowStart;
 			for (LocalDate injection : given) {
@@ -129,6 +126,9 @@ public final class AdherenceCalculation {
 			totalDays += ChronoUnit.DAYS.between(windowStart, windowEnd);
 		}
 		
+		// Unlike ACT 2.0, which takes it from the past year only, the latest injection however old.
+		SortedSet<LocalDate> givenByToday = injections.headSet(today.plusDays(1));
+		LocalDate latestInjection = givenByToday.isEmpty() ? null : givenByToday.last();
 		return new Result(adherence(estimate, missedDays, totalDays),
 		        nextDue(started, latestInjection, latestEstimateDate, estimated));
 	}
