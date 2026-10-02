@@ -109,14 +109,14 @@
 
   <distributionManagement>
     <repository>
-      <id>uwdigi-repo-central</id>
-      <name>libs-release</name>
-      <url>https://packages.uwdigi.org/artifactory/libs-release</url>
+      <id>github</id>
+      <name>DIGI-UW GitHub Packages</name>
+      <url>https://maven.pkg.github.com/digi-uw/openmrs-module-actcore</url>
     </repository>
     <snapshotRepository>
-      <id>uwdigi-repo-snapshots</id>
-      <name>libs-snapshot</name>
-      <url>https://packages.uwdigi.org/artifactory/libs-snapshot</url>
+      <id>github-snapshots</id>
+      <name>DIGI-UW GitHub Packages</name>
+      <url>https://maven.pkg.github.com/digi-uw/openmrs-module-actcore</url>
     </snapshotRepository>
   </distributionManagement>
 </project>
