@@ -10,6 +10,8 @@
 package org.openmrs.module.actcore.web;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
@@ -51,10 +53,20 @@ public class ProphylaxisController extends BaseRestController {
 		ProphylaxisSummary.OnTime onTime = summary.getOnTime();
 		return new SimpleObject().add("regimen", summary.getRegimen()).add("type", summary.getType())
 		        .add("intervalDays", summary.getIntervalDays()).add("lastGiven", date(summary.getLastGiven()))
-		        .add("nextDue", date(summary.getNextDue())).add("status", summary.getStatus()).add("onTime",
+		        .add("nextDue", date(summary.getNextDue())).add("status", summary.getStatus())
+		        .add("onTime",
 		            onTime == null ? null
 		                    : new SimpleObject().add("given", onTime.getGiven()).add("total", onTime.getTotal())
-		                            .add("months", onTime.getMonths()));
+		                            .add("months", onTime.getMonths()))
+		        .add("injections", injections(summary.getInjections()));
+	}
+	
+	private static List<SimpleObject> injections(List<ProphylaxisSummary.Injection> injections) {
+		List<SimpleObject> list = new ArrayList<SimpleObject>();
+		for (ProphylaxisSummary.Injection injection : injections) {
+			list.add(new SimpleObject().add("date", date(injection.getDate())).add("onTime", injection.getOnTime()));
+		}
+		return list;
 	}
 	
 	private static String date(LocalDate date) {

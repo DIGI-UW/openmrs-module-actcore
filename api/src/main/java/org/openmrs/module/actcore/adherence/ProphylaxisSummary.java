@@ -11,6 +11,9 @@ package org.openmrs.module.actcore.adherence;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.SortedSet;
@@ -40,8 +43,10 @@ public final class ProphylaxisSummary {
 	
 	private final OnTime onTime;
 	
+	private final List<Injection> injections;
+	
 	private ProphylaxisSummary(String regimen, String type, Integer intervalDays, LocalDate lastGiven, LocalDate nextDue,
-	    String status, OnTime onTime) {
+	    String status, OnTime onTime, List<Injection> injections) {
 		this.regimen = regimen;
 		this.type = type;
 		this.intervalDays = intervalDays;
@@ -49,6 +54,7 @@ public final class ProphylaxisSummary {
 		this.nextDue = nextDue;
 		this.status = status;
 		this.onTime = onTime;
+		this.injections = injections;
 	}
 	
 	/**
@@ -57,8 +63,9 @@ public final class ProphylaxisSummary {
 	public static ProphylaxisSummary of(Patient patient, LocalDate today) {
 		AdherenceReplay.History history = new AdherenceRefresh().historyOf(patient.getPatientId());
 		AdherenceReplay.Row row = AdherenceReplay.replay(history, today);
+		List<Injection> injections = timings(history.prescriptions, history.injections, today);
 		if (row == null || row.interval == null) {
-			return new ProphylaxisSummary(null, null, null, null, null, "none", null);
+			return new ProphylaxisSummary(null, null, null, null, null, "none", null, injections);
 		}
 		boolean injected = row.interval > 0;
 		LocalDate nextDue = row.result.getNextDue();
@@ -67,7 +74,7 @@ public final class ProphylaxisSummary {
 			nextDue = row.started.plusDays(row.interval);
 		}
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, nextDue,
-		        status(nextDue, today), injected ? onTime(history.prescriptions, history.injections, today) : null);
+		        status(nextDue, today), injected ? onTime(injections, today) : null, injections);
 	}
 	
 	private static String name(Integer conceptId) {
@@ -103,33 +110,44 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * The last six months' injections, each measured as AdherenceCalculation measures it: against the
-	 * one before it, even one left out, or the start of the prescription in force for the first under
-	 * it.
+	 * Every injection up to today, newest first, timed as AdherenceCalculation does: against the
+	 * previous injection, even an untimed one, or its course's start.
 	 */
-	private static OnTime onTime(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
+	private static List<Injection> timings(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
 	        SortedSet<LocalDate> injections, LocalDate today) {
-		LocalDate from = today.minusMonths(ON_TIME_MONTHS);
-		int given = 0;
-		int total = 0;
+		List<Injection> timed = new ArrayList<Injection>();
 		LocalDate start = null;
 		LocalDate previous = null;
 		for (LocalDate injection : injections.headSet(today.plusDays(1))) {
-			Map.Entry<LocalDate, AdherenceReplay.Course> inForce = inForce(prescriptions, injection);
+			Map.Entry<LocalDate, AdherenceReplay.Course> inForce = prescriptions.isEmpty() ? null
+			        : inForce(prescriptions, injection);
+			Boolean onTime = null;
 			// A course re-recorded after a gap keeps its start, so a null between does not reset previous.
 			if (inForce != null) {
 				if (!inForce.getKey().equals(start)) {
 					start = inForce.getKey();
 					previous = start;
 				}
-				if (!injection.isBefore(from)) {
-					total++;
-					if (!injection.isAfter(previous.plusDays(inForce.getValue().interval))) {
-						given++;
-					}
+				onTime = !injection.isAfter(previous.plusDays(inForce.getValue().interval));
+			}
+			timed.add(new Injection(injection, onTime));
+			previous = injection;
+		}
+		Collections.reverse(timed);
+		return timed;
+	}
+	
+	private static OnTime onTime(List<Injection> injections, LocalDate today) {
+		LocalDate from = today.minusMonths(ON_TIME_MONTHS);
+		int given = 0;
+		int total = 0;
+		for (Injection injection : injections) {
+			if (injection.onTime != null && !injection.date.isBefore(from)) {
+				total++;
+				if (injection.onTime) {
+					given++;
 				}
 			}
-			previous = injection;
 		}
 		return new OnTime(given, total);
 	}
@@ -185,6 +203,32 @@ public final class ProphylaxisSummary {
 	/** Null for an oral regimen, which records an adherence estimate rather than injections. */
 	public OnTime getOnTime() {
 		return onTime;
+	}
+	
+	/** Every BPG injection recorded up to today, newest first, whatever the regimen in force now. */
+	public List<Injection> getInjections() {
+		return injections;
+	}
+	
+	public static final class Injection {
+		
+		private final LocalDate date;
+		
+		private final Boolean onTime;
+		
+		Injection(LocalDate date, Boolean onTime) {
+			this.date = date;
+			this.onTime = onTime;
+		}
+		
+		public LocalDate getDate() {
+			return date;
+		}
+		
+		/** Null when no injection course was in force on the day. */
+		public Boolean getOnTime() {
+			return onTime;
+		}
 	}
 	
 	public static final class OnTime {
