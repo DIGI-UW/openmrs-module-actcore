@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.adherence;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -51,6 +52,7 @@ public class AdherenceCalculationParityTest {
 		LocalDate today = LocalDate.parse(fixture.get("today").asText());
 		
 		int index = 0;
+		int deviations = 0;
 		for (JsonNode c : fixture.get("cases")) {
 			TreeMap<LocalDate, Integer> prescriptions = new TreeMap<LocalDate, Integer>();
 			for (JsonNode p : c.get("prescriptions")) {
@@ -76,11 +78,32 @@ public class AdherenceCalculationParityTest {
 			} else {
 				assertEquals(label, c.get("adherence").asDouble(), result.getAdherence(), 0.0);
 			}
-			if (c.get("nextDue").isNull()) {
+			LocalDate deviation = dueFromInjectionBeforeTheYear(prescriptions, injections, today);
+			if (deviation != null) {
+				assertEquals(label, deviation, result.getNextDue());
+				deviations++;
+			} else if (c.get("nextDue").isNull()) {
 				assertNull(label, result.getNextDue());
 			} else {
 				assertEquals(label, LocalDate.parse(c.get("nextDue").asText()), result.getNextDue());
 			}
 		}
+		assertTrue("the fixture has a case of the deviation", deviations > 0);
+	}
+	
+	/**
+	 * ACT 2.0 dates the next injection from the past year's latest injection, else from the
+	 * prescription's start; ACT Core dates it from the latest injection however old. They differ only
+	 * when that injection is over a year old and follows the latest prescription.
+	 */
+	private static LocalDate dueFromInjectionBeforeTheYear(TreeMap<LocalDate, Integer> prescriptions,
+	        TreeSet<LocalDate> injections, LocalDate today) {
+		Map.Entry<LocalDate, Integer> latest = prescriptions.floorEntry(today);
+		LocalDate injection = injections.floor(today);
+		if (latest == null || latest.getValue() == 0 || injection == null || !injection.isAfter(latest.getKey())
+		        || !injection.isBefore(today.minusDays(365))) {
+			return null;
+		}
+		return injection.plusDays(latest.getValue());
 	}
 }
