@@ -212,7 +212,7 @@ The module is `omod/target/actcore-omod-*.omod`.
 Each push to `main` publishes the SNAPSHOT, and the Release workflow publishes each release, to
 DIGI-UW's GitHub Packages at `https://maven.pkg.github.com/digi-uw/openmrs-module-actcore`. A
 release publishes as the `uwdigi` bot, which needs write access to this repository. To resolve the
-artifacts from there, Maven needs a token with `read:packages`, even though the packages are public.
+artifacts from there, Maven needs a token with `read:packages`.
 
 ## License
 
