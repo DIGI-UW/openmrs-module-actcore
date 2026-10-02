@@ -51,3 +51,4 @@ nbdist/
 # macOS and Windows
 .DS_Store
 Thumbs.db
+api/META-INF/

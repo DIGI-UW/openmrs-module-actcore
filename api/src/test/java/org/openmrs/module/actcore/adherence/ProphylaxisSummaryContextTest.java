@@ -12,6 +12,11 @@ package org.openmrs.module.actcore.adherence;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
@@ -295,5 +300,59 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.plusDays(21), summary(7).getNextDue());
 		assertEquals("ok", summary(7).getStatus());
 		assertEquals(TODAY.minusDays(6), date(row(7).get(5)));
+	}
+	
+	@Test
+	public void of_shouldTimeEachInjectionAgainstTheOneBeforeItNewestFirst() {
+		prescribe(encounter(7, 100), q28, 100, null);
+		for (int daysAgo : new int[] { 100, 72, 43 }) {
+			given(encounter(7, daysAgo), daysAgo);
+		}
+		
+		List<ProphylaxisSummary.Injection> injections = summary(7).getInjections();
+		
+		assertEquals(Arrays.asList(TODAY.minusDays(43), TODAY.minusDays(72), TODAY.minusDays(100)),
+		    injections.stream().map(ProphylaxisSummary.Injection::getDate).collect(Collectors.toList()));
+		assertEquals(Arrays.asList(false, true, true),
+		    injections.stream().map(ProphylaxisSummary.Injection::getOnTime).collect(Collectors.toList()));
+	}
+	
+	@Test
+	public void of_shouldTimeThePastInjectionsOfAPatientNowOnOral() {
+		prescribe(encounter(7, 100), q28, 100, null);
+		given(encounter(7, 100), 100);
+		given(encounter(7, 72), 72);
+		prescribe(encounter(7, 30), oralPenicillin, 30, null);
+		
+		ProphylaxisSummary s = summary(7);
+		
+		assertEquals("Oral", s.getType());
+		assertEquals(Arrays.asList(true, true),
+		    s.getInjections().stream().map(ProphylaxisSummary.Injection::getOnTime).collect(Collectors.toList()));
+	}
+	
+	@Test
+	public void of_shouldListTheInjectionsOfAPatientWithNoPrescriptionUntimed() {
+		given(encounter(7, 20), 20);
+		
+		List<ProphylaxisSummary.Injection> injections = summary(7).getInjections();
+		
+		assertEquals(Collections.singletonList(TODAY.minusDays(20)),
+		    injections.stream().map(ProphylaxisSummary.Injection::getDate).collect(Collectors.toList()));
+		assertNull(injections.get(0).getOnTime());
+	}
+	
+	@Test
+	public void of_shouldLeaveAnInjectionWithNoCourseInForceUntimed() {
+		given(encounter(7, 50), 50);
+		prescribe(encounter(7, 30), q28, 30, null);
+		given(encounter(7, 2), 2);
+		
+		List<ProphylaxisSummary.Injection> injections = summary(7).getInjections();
+		
+		// 2 days ago is 28 after the course started; 50 days ago no course was in force.
+		assertEquals(2, injections.size());
+		assertEquals(Boolean.TRUE, injections.get(0).getOnTime());
+		assertNull(injections.get(1).getOnTime());
 	}
 }

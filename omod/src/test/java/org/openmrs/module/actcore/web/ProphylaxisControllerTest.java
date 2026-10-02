@@ -16,6 +16,7 @@ import static org.junit.Assert.assertTrue;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.UUID;
@@ -64,12 +65,12 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		SimpleObject summary = controller.getSummary(PATIENT_7);
 		
 		assertEquals("none", summary.get("status"));
-		assertEquals(
-		    new HashSet<String>(
-		            Arrays.asList("regimen", "type", "intervalDays", "lastGiven", "nextDue", "status", "onTime")),
+		assertEquals(new HashSet<String>(
+		        Arrays.asList("regimen", "type", "intervalDays", "lastGiven", "nextDue", "status", "onTime", "injections")),
 		    summary.keySet());
 		assertNull(summary.get("regimen"));
 		assertNull(summary.get("onTime"));
+		assertEquals(Collections.emptyList(), summary.get("injections"));
 	}
 	
 	@Test
@@ -112,6 +113,10 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		assertEquals(Integer.valueOf(1), onTime.get("given"));
 		assertEquals(Integer.valueOf(1), onTime.get("total"));
 		assertEquals(Integer.valueOf(6), onTime.get("months"));
+		assertEquals(
+		    Collections.singletonList(
+		        new SimpleObject().add("date", LocalDate.now().minusDays(27).toString()).add("onTime", true)),
+		    summary.get("injections"));
 	}
 	
 	@Test(expected = IllegalRequestException.class)
