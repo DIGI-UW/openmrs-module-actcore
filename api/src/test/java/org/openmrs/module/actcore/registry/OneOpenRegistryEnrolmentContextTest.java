@@ -10,17 +10,23 @@
 package org.openmrs.module.actcore.registry;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Date;
+import java.util.List;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
+import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientProgram;
+import org.openmrs.PersonName;
 import org.openmrs.Program;
+import org.openmrs.api.PatientService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
@@ -36,6 +42,10 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	private Patient patient;
 	
 	private ProgramWorkflowService programs;
+	
+	private final EnrolOnRegistration enrolOnRegistration = new EnrolOnRegistration();
+	
+	private final OneOpenRegistryEnrolment guard = new OneOpenRegistryEnrolment();
 	
 	@Before
 	public void setUp() {
@@ -66,19 +76,21 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	}
 	
 	@Test
-	public void savePatientProgram_shouldAllowEnrollingAgainOnceTheEnrolmentIsCompleted() {
-		programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(1)));
+	public void savePatientProgram_shouldAllowEnrollingAgainTheInstantTheEnrolmentIsCompleted() {
+		Date completed = daysAgo(1);
+		programs.savePatientProgram(enrolment(registry, daysAgo(30), completed));
 		
-		programs.savePatientProgram(enrolment(registry, daysAgo(1), null));
+		programs.savePatientProgram(enrolment(registry, completed, null));
 		
 		assertEquals(1, open(registry));
 	}
 	
 	@Test
-	public void savePatientProgram_shouldAllowAddingACompletedEnrolmentThatEndsBeforeTheOpenOneStarts() {
-		programs.savePatientProgram(enrolment(registry, daysAgo(1), null));
+	public void savePatientProgram_shouldAllowAddingACompletedEnrolmentThatEndsTheInstantTheOpenOneStarts() {
+		Date enrolled = daysAgo(1);
+		programs.savePatientProgram(enrolment(registry, enrolled, null));
 		
-		programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(10)));
+		programs.savePatientProgram(enrolment(registry, daysAgo(30), enrolled));
 		
 		assertEquals(2, all(registry));
 	}
@@ -153,6 +165,108 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		assertEquals(2, open(other));
 	}
 	
+	@Test
+	public void mergePatients_shouldLeaveOneOpenRegistryEnrolmentFromTheEarlierDate() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		Date enrolled = daysAgo(30);
+		PatientProgram earlier = registryEnrolments(duplicate).get(0);
+		earlier.setDateEnrolled(enrolled);
+		Context.getProgramWorkflowService().savePatientProgram(earlier);
+		
+		Context.getPatientService().mergePatients(preferred, duplicate);
+		
+		List<PatientProgram> left = registryEnrolments(preferred);
+		assertEquals(1, left.size());
+		assertNull(left.get(0).getDateCompleted());
+		assertEquals(enrolled.getTime(), left.get(0).getDateEnrolled().getTime());
+	}
+	
+	@Test
+	public void mergePatients_shouldFoldACompletedEnrolmentIntoTheOpenOneItOverlaps() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		Date enrolled = daysAgo(30);
+		PatientProgram completed = registryEnrolments(preferred).get(0);
+		completed.setDateEnrolled(enrolled);
+		completed.setDateCompleted(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(completed);
+		PatientProgram open = registryEnrolments(duplicate).get(0);
+		open.setDateEnrolled(daysAgo(20));
+		Context.getProgramWorkflowService().savePatientProgram(open);
+		
+		Context.getPatientService().mergePatients(preferred, duplicate);
+		
+		List<PatientProgram> left = registryEnrolments(preferred);
+		assertEquals(1, left.size());
+		assertNull(left.get(0).getDateCompleted());
+		assertEquals(enrolled.getTime(), left.get(0).getDateEnrolled().getTime());
+	}
+	
+	@Test
+	public void mergePatients_shouldKeepACompletedEnrolmentThatEndedBeforeTheOpenOneStarted() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		PatientProgram past = registryEnrolments(preferred).get(0);
+		past.setDateEnrolled(daysAgo(30));
+		past.setDateCompleted(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(past);
+		
+		Context.getPatientService().mergePatients(preferred, duplicate);
+		
+		assertEquals(2, registryEnrolments(preferred).size());
+	}
+	
+	@Test
+	public void mergePatients_shouldStillRefuseASecondOpenEnrolmentOnceTheMergeIsDone() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		Context.getPatientService().mergePatients(preferred, duplicate);
+		PatientProgram second = enrolment(registry, null);
+		second.setPatient(preferred);
+		
+		try {
+			Context.getProgramWorkflowService().savePatientProgram(second);
+			fail("a second open enrolment was saved after the merge");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled"));
+		}
+	}
+	
+	private void adviseAsTheModuleDoes() {
+		Context.addAdvice(PatientService.class, enrolOnRegistration);
+		Context.addAdvice(PatientService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, guard);
+	}
+	
+	@After
+	public void removeModuleAdvice() {
+		Context.removeAdvice(PatientService.class, enrolOnRegistration);
+		Context.removeAdvice(PatientService.class, guard);
+		Context.removeAdvice(ProgramWorkflowService.class, guard);
+	}
+	
+	private List<PatientProgram> registryEnrolments(Patient patient) {
+		return Context.getProgramWorkflowService().getPatientPrograms(patient, registry, null, null, null, null, false);
+	}
+	
+	private static Patient register(String identifier) {
+		Patient patient = new Patient();
+		patient.addName(new PersonName("Paul", null, "Ocen"));
+		patient.setGender("M");
+		patient.setBirthdate(daysAgo(3650));
+		PatientIdentifier id = new PatientIdentifier(identifier, Context.getPatientService().getPatientIdentifierType(2),
+		        Context.getLocationService().getLocation(1));
+		id.setPreferred(true);
+		patient.addIdentifier(id);
+		return Context.getPatientService().savePatient(patient);
+	}
+	
 	private int open(Program program) {
 		int n = 0;
 		for (PatientProgram pp : Context.getProgramWorkflowService().getPatientPrograms(patient, program, null, null, null,
@@ -181,7 +295,8 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	}
 	
 	private static Date daysAgo(int days) {
-		return new Date(System.currentTimeMillis() - 86400000L * days);
+		// Whole seconds, as core stores dates, so a date shared by two enrolments stays equal after a flush.
+		return new Date((System.currentTimeMillis() / 1000 - 86400L * days) * 1000);
 	}
 	
 	private static Program program(String name) {
