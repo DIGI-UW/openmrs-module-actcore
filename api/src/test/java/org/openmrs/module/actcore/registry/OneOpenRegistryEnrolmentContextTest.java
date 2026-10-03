@@ -14,13 +14,17 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
+import org.openmrs.Location;
 import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientProgram;
@@ -31,9 +35,16 @@ import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.framework.ProxyFactory;
 
 public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensitiveTest {
+	
+	private static final String[] MERGE_PRIVILEGES = { PrivilegeConstants.EDIT_PATIENTS, PrivilegeConstants.GET_ORDERS,
+	        PrivilegeConstants.GET_VISITS, PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_PATIENT_PROGRAMS,
+	        PrivilegeConstants.ADD_PATIENT_PROGRAMS, PrivilegeConstants.GET_RELATIONSHIPS, PrivilegeConstants.GET_OBS,
+	        PrivilegeConstants.DELETE_PATIENTS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_PATIENT_COHORTS,
+	        PrivilegeConstants.EDIT_PERSONS, PrivilegeConstants.GET_PATIENTS };
 	
 	private Program registry;
 	
@@ -46,6 +57,16 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	private final EnrolOnRegistration enrolOnRegistration = new EnrolOnRegistration();
 	
 	private final OneOpenRegistryEnrolment guard = new OneOpenRegistryEnrolment();
+	
+	private final AtomicInteger voids = new AtomicInteger();
+	
+	// Fails a fold that never ends, which dropping its remove would make, instead of hanging the build.
+	private final MethodInterceptor stopper = invocation -> {
+		if ("voidPatientProgram".equals(invocation.getMethod().getName()) && voids.incrementAndGet() > 2) {
+			throw new AssertionError("the fold voided more than two enrolments");
+		}
+		return invocation.proceed();
+	};
 	
 	@Before
 	public void setUp() {
@@ -166,13 +187,15 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	}
 	
 	@Test
-	public void mergePatients_shouldLeaveOneOpenRegistryEnrolmentFromTheEarlierDate() throws Exception {
+	public void mergePatients_shouldKeepTheEarlierOfTwoOpenRegistryEnrolments() throws Exception {
 		adviseAsTheModuleDoes();
 		Patient preferred = register("M-1");
 		Patient duplicate = register("M-2");
 		Date enrolled = daysAgo(30);
+		Location clinic = Context.getLocationService().getLocation(2);
 		PatientProgram earlier = registryEnrolments(duplicate).get(0);
 		earlier.setDateEnrolled(enrolled);
+		earlier.setLocation(clinic);
 		Context.getProgramWorkflowService().savePatientProgram(earlier);
 		
 		Context.getPatientService().mergePatients(preferred, duplicate);
@@ -181,6 +204,104 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		assertEquals(1, left.size());
 		assertNull(left.get(0).getDateCompleted());
 		assertEquals(enrolled.getTime(), left.get(0).getDateEnrolled().getTime());
+		assertEquals(clinic, left.get(0).getLocation());
+	}
+	
+	@Test
+	public void mergePatients_shouldFoldTheOpenEnrolmentsOfTwoDuplicatesMergedAtOnce() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient first = register("M-2");
+		Patient second = register("M-3");
+		
+		Context.getPatientService().mergePatients(preferred, Arrays.asList(first, second));
+		
+		List<PatientProgram> left = registryEnrolments(preferred);
+		assertEquals(1, left.size());
+		assertNull(left.get(0).getDateCompleted());
+		List<PatientProgram> withVoided = Context.getProgramWorkflowService().getPatientPrograms(preferred, registry, null,
+		    null, null, null, true);
+		assertEquals(3, withVoided.size());
+	}
+	
+	@Test
+	public void mergePatients_shouldLeaveAnOpenEnrolmentInAnotherProgramAlone() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		PatientProgram research = enrolment(other, null);
+		research.setPatient(preferred);
+		Context.getProgramWorkflowService().savePatientProgram(research);
+		
+		Context.getPatientService().mergePatients(preferred, duplicate);
+		
+		assertEquals(1, registryEnrolments(preferred).size());
+		assertEquals(1,
+		    Context.getProgramWorkflowService().getPatientPrograms(preferred, other, null, null, null, null, false).size());
+	}
+	
+	@Test
+	public void mergePatients_shouldFoldEnrolmentsForAUserWithoutDeletePatientPrograms() throws Exception {
+		adviseAsTheModuleDoes();
+		Patient preferred = register("M-1");
+		Patient duplicate = register("M-2");
+		Context.becomeUser("butch");
+		for (String privilege : MERGE_PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
+			Context.getPatientService().mergePatients(preferred, duplicate);
+		}
+		finally {
+			for (String privilege : MERGE_PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
+			authenticate();
+		}
+		
+		assertEquals(1, registryEnrolments(preferred).size());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldEnrolForAUserWithoutGetPatientPrograms() {
+		Context.becomeUser("butch");
+		Context.addProxyPrivilege(PrivilegeConstants.ADD_PATIENT_PROGRAMS);
+		try {
+			programs.savePatientProgram(enrolment(registry, null));
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.ADD_PATIENT_PROGRAMS);
+			authenticate();
+		}
+		
+		assertEquals(1, open(registry));
+	}
+	
+	@Test
+	public void voidPatientProgram_shouldVoidOneOfTwoOverlappingEnrolments() {
+		Context.getProgramWorkflowService().savePatientProgram(enrolment(registry, null));
+		PatientProgram duplicate = Context.getProgramWorkflowService().savePatientProgram(enrolment(registry, null));
+		adviseAsTheModuleDoes();
+		
+		Context.getProgramWorkflowService().voidPatientProgram(duplicate, "duplicate");
+		
+		assertEquals(1, open(registry));
+	}
+	
+	@Test
+	public void unvoidPatientProgram_shouldRefuseRestoringAnEnrolmentThatOverlapsTheOpenOne() {
+		Context.getProgramWorkflowService().savePatientProgram(enrolment(registry, null));
+		PatientProgram duplicate = Context.getProgramWorkflowService().savePatientProgram(enrolment(registry, null));
+		Context.getProgramWorkflowService().voidPatientProgram(duplicate, "duplicate");
+		adviseAsTheModuleDoes();
+		
+		try {
+			Context.getProgramWorkflowService().unvoidPatientProgram(duplicate);
+			fail("a voided enrolment was restored beside the open one");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled"));
+		}
 	}
 	
 	@Test
@@ -242,6 +363,7 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		Context.addAdvice(PatientService.class, enrolOnRegistration);
 		Context.addAdvice(PatientService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, stopper);
 	}
 	
 	@After
@@ -249,6 +371,7 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		Context.removeAdvice(PatientService.class, enrolOnRegistration);
 		Context.removeAdvice(PatientService.class, guard);
 		Context.removeAdvice(ProgramWorkflowService.class, guard);
+		Context.removeAdvice(ProgramWorkflowService.class, stopper);
 	}
 	
 	private List<PatientProgram> registryEnrolments(Patient patient) {

@@ -51,6 +51,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		MERGING.set(true);
 		try {
 			Object merged = invocation.proceed();
+			// Runs outside core's merge transaction: a failed fold leaves the merge committed, not undone.
 			foldOverlappingEnrolments(preferred);
 			return merged;
 		}
