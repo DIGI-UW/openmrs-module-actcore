@@ -39,6 +39,18 @@
     <aware_of_module>org.openmrs.module.initializer</aware_of_module>
   </aware_of_modules>
 
+  <advice>
+    <point>org.openmrs.api.PatientService</point>
+    <class>org.openmrs.module.actcore.registry.EnrolOnRegistration</class>
+  </advice>
+  <globalProperty>
+    <property>actcore.registryProgram</property>
+    <defaultValue>7d73e143-a550-5a9d-aecd-dd771add098d</defaultValue>
+    <description>
+      The program every newly registered patient is enrolled in, at the session location on the day
+      they are registered. Leave empty to enrol nobody, for example while migrating ACT 2.0 data.
+    </description>
+  </globalProperty>
   <globalProperty>
     <property>actcore.listFlagTag</property>
     <defaultValue></defaultValue>
