@@ -23,7 +23,8 @@ import org.springframework.validation.Errors;
 
 /**
  * Advice on ProgramWorkflowService that refuses a second open RHD Registry enrolment, which core
- * allows and which would list the patient twice in the registry.
+ * allows; the registry shows only the latest-dated one, so the patient's real enrolment date is
+ * lost.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
