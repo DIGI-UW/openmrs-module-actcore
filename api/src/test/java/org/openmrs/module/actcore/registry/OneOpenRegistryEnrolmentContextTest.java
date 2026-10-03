@@ -67,11 +67,72 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	
 	@Test
 	public void savePatientProgram_shouldAllowEnrollingAgainOnceTheEnrolmentIsCompleted() {
-		programs.savePatientProgram(enrolment(registry, new Date()));
+		programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(1)));
 		
-		programs.savePatientProgram(enrolment(registry, null));
+		programs.savePatientProgram(enrolment(registry, daysAgo(1), null));
 		
 		assertEquals(1, open(registry));
+	}
+	
+	@Test
+	public void savePatientProgram_shouldAllowAddingACompletedEnrolmentThatEndsBeforeTheOpenOneStarts() {
+		programs.savePatientProgram(enrolment(registry, daysAgo(1), null));
+		
+		programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(10)));
+		
+		assertEquals(2, all(registry));
+	}
+	
+	@Test
+	public void savePatientProgram_shouldAllowOverlappingCompletedEnrolments() {
+		programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(10)));
+		
+		programs.savePatientProgram(enrolment(registry, daysAgo(20), daysAgo(5)));
+		
+		assertEquals(2, all(registry));
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseReopeningACompletedEnrolmentWhileAnotherIsOpen() {
+		PatientProgram old = programs.savePatientProgram(enrolment(registry, daysAgo(30), daysAgo(10)));
+		programs.savePatientProgram(enrolment(registry, daysAgo(1), null));
+		old.setDateCompleted(null);
+		
+		try {
+			programs.savePatientProgram(old);
+			fail("a completed enrolment was reopened beside the open one");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled"));
+		}
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseACompletedEnrolmentThatOverlapsTheOpenOne() {
+		programs.savePatientProgram(enrolment(registry, daysAgo(10), null));
+		
+		try {
+			programs.savePatientProgram(enrolment(registry, daysAgo(5), daysAgo(1)));
+			fail("a completed enrolment overlapping the open one was saved");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled"));
+		}
+		assertEquals(1, all(registry));
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseAnOpenEnrolmentThatStartsBeforeACompletedOneEnds() {
+		programs.savePatientProgram(enrolment(registry, daysAgo(10), daysAgo(5)));
+		
+		try {
+			programs.savePatientProgram(enrolment(registry, daysAgo(20), null));
+			fail("an open enrolment overlapping a completed one was saved");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("overlaps"));
+		}
+		assertEquals(0, open(registry));
 	}
 	
 	@Test
@@ -101,13 +162,26 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		return n;
 	}
 	
+	private int all(Program program) {
+		return Context.getProgramWorkflowService().getPatientPrograms(patient, program, null, null, null, null, false)
+		        .size();
+	}
+	
 	private PatientProgram enrolment(Program program, Date completed) {
+		return enrolment(program, daysAgo(1), completed);
+	}
+	
+	private PatientProgram enrolment(Program program, Date enrolled, Date completed) {
 		PatientProgram pp = new PatientProgram();
 		pp.setPatient(patient);
 		pp.setProgram(program);
-		pp.setDateEnrolled(new Date(System.currentTimeMillis() - 86400000L));
+		pp.setDateEnrolled(enrolled);
 		pp.setDateCompleted(completed);
 		return pp;
+	}
+	
+	private static Date daysAgo(int days) {
+		return new Date(System.currentTimeMillis() - 86400000L * days);
 	}
 	
 	private static Program program(String name) {

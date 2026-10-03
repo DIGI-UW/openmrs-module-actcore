@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.Date;
 import java.util.List;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
@@ -24,9 +25,12 @@ import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientProgram;
 import org.openmrs.PersonName;
 import org.openmrs.Program;
+import org.openmrs.api.APIException;
 import org.openmrs.api.PatientService;
+import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.framework.ProxyFactory;
 
 public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTest {
@@ -90,6 +94,45 @@ public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTe
 		    new GlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY, "00000000-0000-0000-0000-000000000000"));
 		
 		Patient paul = patients.savePatient(newPatient());
+		
+		assertTrue(paul.getPatientId() != null);
+		assertEquals(0, enrolments(paul).size());
+	}
+	
+	@Test
+	public void savePatient_shouldEnrolANewPatientRegisteredByAUserWithoutProgramPrivileges() {
+		String[] registering = { PrivilegeConstants.ADD_PATIENTS, PrivilegeConstants.GET_PATIENTS,
+		        PrivilegeConstants.GET_IDENTIFIER_TYPES, PrivilegeConstants.GET_LOCATIONS };
+		Context.becomeUser("butch");
+		for (String privilege : registering) {
+			Context.addProxyPrivilege(privilege);
+		}
+		
+		Patient paul = patients.savePatient(newPatient());
+		
+		for (String privilege : registering) {
+			Context.removeProxyPrivilege(privilege);
+		}
+		authenticate();
+		assertEquals(1, enrolments(paul).size());
+	}
+	
+	@Test
+	public void savePatient_shouldStillRegisterThePatientWhenEnrolmentFails() {
+		MethodInterceptor failing = invocation -> {
+			if ("savePatientProgram".equals(invocation.getMethod().getName())) {
+				throw new APIException("enrolment failed");
+			}
+			return invocation.proceed();
+		};
+		Context.addAdvice(ProgramWorkflowService.class, failing);
+		Patient paul;
+		try {
+			paul = patients.savePatient(newPatient());
+		}
+		finally {
+			Context.removeAdvice(ProgramWorkflowService.class, failing);
+		}
 		
 		assertTrue(paul.getPatientId() != null);
 		assertEquals(0, enrolments(paul).size());
