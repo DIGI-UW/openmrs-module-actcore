@@ -46,6 +46,8 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `configuration/reports/reportdescriptors` itself when that property is true. It logs whether it
   loaded, skipped or failed. Remove this once the reporting module does it
   ([mherman22/openmrs-module-reporting#1](https://github.com/mherman22/openmrs-module-reporting/issues/1)).
+- **Users from a file.** At startup it creates the users listed in `actcore/users.csv` in the
+  application data directory, each with a provider; see [Users file](#users-file).
 
 ### Gap look-up
 
@@ -184,6 +186,30 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, and the regimen intervals and prescription durations as `uuid:days` pairs; see `config.xml` |
+
+### Users file
+
+Each server can keep a `users.csv` in an `actcore` folder of its application data directory
+(`/openmrs/data/actcore/users.csv` in the OpenMRS Docker image). The file stays on the server, not in
+the distribution, so a demo server and a production site each list their own people. At every
+startup the module creates whichever listed username does not exist yet, with a provider so the user
+can save forms. An existing user is left alone, so a later change to their password or roles stays.
+
+    username,given name,family name,gender,roles,password
+    act.clinician,Amina,Okello,F,Organizational: ACT Clinician,
+    j.odongo,James,Odongo,M,Organizational: ACT Site Administrator|Organizational: ACT Clinician,
+
+- `roles` are role names separated by `|`. A row naming a role that does not exist is skipped.
+- `password` is optional. A row without one gets the runtime property `actcore.users.password`
+  (the environment variable `OMRS_EXTRA_ACTCORE_USERS_PASSWORD` in the Docker image), which suits a
+  demo server; with neither, the user gets a random password and must change it at next sign-in,
+  which suits real staff whose administrator then resets it. OpenMRS 3 does not yet enforce that
+  change; the legacy UI does.
+- A password the server's password policy refuses skips the row.
+- Each skipped row is logged with its line number, never its password; the module still starts.
+- Removing the environment variable does not remove `actcore.users.password`: the image merges its
+  variables into `openmrs-runtime.properties` and does not take them out, so delete the line there
+  too.
 
 ## Security
 

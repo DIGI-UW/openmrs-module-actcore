@@ -16,16 +16,17 @@ import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.users.UserFile;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads the report descriptors, then registers the flag and adherence refreshes with the scheduler
- * on first start. Initializer has no domain for scheduler_task_config, and the patientflags module
- * registers nothing of its own, so without this the task would have to be created by hand in the
- * admin UI on every environment.
+ * Loads the report descriptors, creates the users its users file lists, then registers the flag and
+ * adherence refreshes with the scheduler on first start. Initializer has no domain for
+ * scheduler_task_config, and the patientflags module registers nothing of its own, so without this
+ * the task would have to be created by hand in the admin UI on every environment.
  */
 public class ActCoreActivator extends BaseModuleActivator {
 	
@@ -51,6 +52,8 @@ public class ActCoreActivator extends BaseModuleActivator {
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
+		UserFile.load(UserFile.defaultFile(),
+		    Context.getRuntimeProperties().getProperty(UserFile.DEFAULT_PASSWORD_PROPERTY));
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 		            + " of the same name.");
