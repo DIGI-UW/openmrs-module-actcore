@@ -68,13 +68,8 @@ public final class ProphylaxisSummary {
 			return new ProphylaxisSummary(null, null, null, null, null, "none", null, injections);
 		}
 		boolean injected = row.interval > 0;
-		LocalDate nextDue = row.result.getNextDue();
-		if (nextDue == null && injected) {
-			// As AdherenceCalculation dues a first injection: one interval after the prescription starts.
-			nextDue = row.started.plusDays(row.interval);
-		}
-		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, nextDue,
-		        status(nextDue, today), injected ? onTime(injections, today) : null, injections);
+		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, row.nextDue,
+		        status(row.nextDue, today), injected ? onTime(injections, today) : null, injections);
 	}
 	
 	private static String name(Integer conceptId) {

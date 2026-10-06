@@ -79,17 +79,17 @@ final class AdherenceReplay {
 		
 		final LocalDate lastGiven;
 		
-		final AdherenceCalculation.Result result;
+		final Double adherence;
 		
-		/** When the regimen in force started. */
-		final LocalDate started;
+		/** The calculation's, kept with no injection recorded: one interval after the regimen starts. */
+		final LocalDate nextDue;
 		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate started) {
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, Double adherence, LocalDate nextDue) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
-			this.result = result;
-			this.started = started;
+			this.adherence = adherence;
+			this.nextDue = nextDue;
 		}
 	}
 	
@@ -156,10 +156,11 @@ final class AdherenceReplay {
 		boolean noRecord = stored.interval != null
 		        && (stored.interval > 0 ? h.injections.headSet(computed.plusDays(1)).isEmpty()
 		                : h.oral.headMap(computed.plusDays(1)).isEmpty());
-		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores none.
-		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null)
-		        : AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections, h.oral, computed);
-		return new Row(regimen, stored.interval, stored.lastGiven, result, stored.started);
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections,
+		    h.oral, computed);
+		// ACT 2.0 computed no adherence for a regimen with no injection, or no estimate, recorded.
+		return new Row(regimen, stored.interval, stored.lastGiven, noRecord ? null : result.getAdherence(),
+		        result.getNextDue());
 	}
 	
 	/**

@@ -101,11 +101,24 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		
 		refresh.refreshAll(TODAY);
 		
-		// ACT 2.0 stopped before calculating; the calculation alone would say 100% and covered.
+		// ACT 2.0 stopped before calculating, so no adherence; the first injection is due 28 days after the start.
 		List<Object> row = row(7);
 		assertEquals((int) q28.getConceptId(), number(row.get(1)));
 		assertNull(row.get(3));
-		assertNull(row.get(5));
+		assertEquals(TODAY.plusDays(18), date(row.get(5)));
+	}
+	
+	@Test
+	public void refreshAll_shouldStoreTheFirstDueDateTheChartShowsOfAnInjectionRegimenNeverInjected() {
+		prescribe(encounter(7, 40), q28, 40, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Overdue since 12 days ago, so the due list, which reads next_due, lists the patient.
+		List<Object> row = row(7);
+		assertNull(row.get(3));
+		assertEquals(TODAY.minusDays(12), date(row.get(5)));
+		assertEquals(date(row.get(5)), ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY).getNextDue());
 	}
 	
 	@Test
