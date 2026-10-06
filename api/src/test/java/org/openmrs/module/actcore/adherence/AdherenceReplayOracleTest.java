@@ -58,10 +58,10 @@ public class AdherenceReplayOracleTest {
 		patient.regimen = regimen;
 		patient.interval = interval;
 		if (interval != null && (interval > 0 ? injected.isEmpty() : estimated.isEmpty())) {
-			// ACT 2.0 left adherence and the due date as they were; the replay's result holds neither.
+			// ACT 2.0 left both as they were; the port stores no adherence and the first due date.
 			patient.last = null;
 			patient.adherence = null;
-			patient.due = null;
+			patient.due = interval > 0 ? started.lastKey().plusDays(interval) : null;
 			return;
 		}
 		AdherenceCalculation.Result result = AdherenceCalculation.calculate(p.intervals, h.injections, h.oral, day);
@@ -165,8 +165,8 @@ public class AdherenceReplayOracleTest {
 			}
 			assertEquals(label, expected.regimen, row.regimen);
 			assertEquals(label, expected.interval, row.interval);
-			assertEquals(label, expected.adherence, row.result.getAdherence());
-			assertEquals(label, expected.due, row.result.getNextDue());
+			assertEquals(label, expected.adherence, row.adherence);
+			assertEquals(label, expected.due, row.nextDue);
 			assertEquals(label, expected.last, row.lastGiven);
 		}
 	}

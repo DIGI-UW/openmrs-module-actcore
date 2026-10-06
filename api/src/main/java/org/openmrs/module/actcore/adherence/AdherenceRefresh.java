@@ -105,8 +105,8 @@ public class AdherenceRefresh {
 			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today);
 			if (row != null) {
 				rows.add("(" + entry.getKey() + ", " + sqlValue(row.regimen) + ", " + sqlValue(row.interval) + ", "
-				        + sqlValue(row.result.getAdherence()) + ", " + sqlValue(row.lastGiven) + ", " + sqlValue(row.nextDue)
-				        + ", " + sqlValue(computedAt) + ")");
+				        + sqlValue(row.adherence) + ", " + sqlValue(row.lastGiven) + ", " + sqlValue(row.nextDue) + ", "
+				        + sqlValue(computedAt) + ")");
 			}
 		}
 		

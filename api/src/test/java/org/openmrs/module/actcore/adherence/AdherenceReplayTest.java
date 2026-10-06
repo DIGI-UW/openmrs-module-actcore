@@ -68,7 +68,7 @@ public class AdherenceReplayTest {
 		AdherenceReplay.Row row = AdherenceReplay.replay(h, TODAY);
 		
 		assertEquals(Integer.valueOf(Q28_ID), row.regimen);
-		assertEquals(asOf(0).getAdherence(), row.result.getAdherence());
+		assertEquals(asOf(0).getAdherence(), row.adherence);
 	}
 	
 	@Test
@@ -78,12 +78,12 @@ public class AdherenceReplayTest {
 		h.consultations.add(ago(84));
 		h.batchDays.put(ago(84), 90);
 		
-		assertEquals(asOf(84).getAdherence(), AdherenceReplay.replay(h, TODAY).result.getAdherence());
+		assertEquals(asOf(84).getAdherence(), AdherenceReplay.replay(h, TODAY).adherence);
 		// Once the 90 days have passed, ACT 2.0's nightly run takes them up again.
 		assertEquals(AdherenceCalculation
 		        .calculate(h.prescriptions.lastEntry().getValue().intervals, h.injections, h.oral, TODAY.plusDays(10))
 		        .getAdherence(),
-		    AdherenceReplay.replay(h, TODAY.plusDays(10)).result.getAdherence());
+		    AdherenceReplay.replay(h, TODAY.plusDays(10)).adherence);
 	}
 	
 	@Test
@@ -99,8 +99,8 @@ public class AdherenceReplayTest {
 		
 		// The nightly run stored oral on the start date and never ran again.
 		assertEquals(Integer.valueOf(ORAL_ID), row.regimen);
-		assertEquals(asOf(3).getAdherence(), row.result.getAdherence());
-		assertEquals(0.931507, row.result.getAdherence(), 1e-6);
+		assertEquals(asOf(3).getAdherence(), row.adherence);
+		assertEquals(0.931507, row.adherence, 1e-6);
 	}
 	
 	@Test
@@ -115,8 +115,8 @@ public class AdherenceReplayTest {
 		AdherenceReplay.Row row = AdherenceReplay.replay(h, TODAY);
 		
 		assertEquals(Integer.valueOf(ORAL_ID), row.regimen);
-		assertEquals(0.8, row.result.getAdherence(), 1e-12);
-		assertEquals(TODAY.plusDays(60), row.result.getNextDue());
+		assertEquals(0.8, row.adherence, 1e-12);
+		assertEquals(TODAY.plusDays(60), row.nextDue);
 	}
 	
 	@Test
@@ -128,8 +128,8 @@ public class AdherenceReplayTest {
 		AdherenceReplay.Row row = AdherenceReplay.replay(h, TODAY);
 		
 		assertNull(row.regimen);
-		assertNull(row.result.getAdherence());
-		assertNull(row.result.getNextDue());
+		assertNull(row.adherence);
+		assertNull(row.nextDue);
 	}
 	
 	@Test
@@ -144,7 +144,7 @@ public class AdherenceReplayTest {
 		AdherenceReplay.Row row = AdherenceReplay.replay(h, TODAY);
 		
 		assertEquals(Integer.valueOf(Q28_ID), row.regimen);
-		assertEquals(TODAY.minusDays(20).plusDays(28), row.result.getNextDue());
+		assertEquals(TODAY.minusDays(20).plusDays(28), row.nextDue);
 	}
 	
 	@Test

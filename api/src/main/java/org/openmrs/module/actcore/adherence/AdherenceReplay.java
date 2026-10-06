@@ -79,20 +79,16 @@ final class AdherenceReplay {
 		
 		final LocalDate lastGiven;
 		
-		final AdherenceCalculation.Result result;
+		final Double adherence;
 		
-		/**
-		 * The next due date the table stores and the chart shows: the calculation's, kept even where result
-		 * leaves adherence out, so an injection regimen with no injection is due one interval after it
-		 * starts.
-		 */
+		/** The calculation's, kept with no injection recorded: one interval after the regimen starts. */
 		final LocalDate nextDue;
 		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate nextDue) {
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, Double adherence, LocalDate nextDue) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
-			this.result = result;
+			this.adherence = adherence;
 			this.nextDue = nextDue;
 		}
 	}
@@ -160,11 +156,11 @@ final class AdherenceReplay {
 		boolean noRecord = stored.interval != null
 		        && (stored.interval > 0 ? h.injections.headSet(computed.plusDays(1)).isEmpty()
 		                : h.oral.headMap(computed.plusDays(1)).isEmpty());
-		AdherenceCalculation.Result calculated = AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections,
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections,
 		    h.oral, computed);
-		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores no adherence.
-		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null) : calculated;
-		return new Row(regimen, stored.interval, stored.lastGiven, result, calculated.getNextDue());
+		// ACT 2.0 computed no adherence for a regimen with no injection, or no estimate, recorded.
+		return new Row(regimen, stored.interval, stored.lastGiven, noRecord ? null : result.getAdherence(),
+		        result.getNextDue());
 	}
 	
 	/**
