@@ -82,27 +82,18 @@ final class AdherenceReplay {
 		final AdherenceCalculation.Result result;
 		
 		/**
-		 * The calculation's due date for an injection regimen with no injection recorded, which result
-		 * leaves out.
+		 * The next due date the table stores and the chart shows: the calculation's, kept even where result
+		 * leaves adherence out, so an injection regimen with no injection is due one interval after it
+		 * starts.
 		 */
-		private final LocalDate firstDue;
+		final LocalDate nextDue;
 		
-		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate firstDue) {
+		Row(Integer regimen, Integer interval, LocalDate lastGiven, AdherenceCalculation.Result result, LocalDate nextDue) {
 			this.regimen = regimen;
 			this.interval = interval;
 			this.lastGiven = lastGiven;
 			this.result = result;
-			this.firstDue = firstDue;
-		}
-		
-		/**
-		 * The next due date the table stores and the chart shows: the calculation's, or for an injection
-		 * regimen with no injection recorded, the first injection's. Unlike adherence, which ACT 2.0 left
-		 * empty for such a regimen, the due date is kept, so the readers of the table see the patient as
-		 * due.
-		 */
-		LocalDate nextDue() {
-			return result.getNextDue() != null ? result.getNextDue() : firstDue;
+			this.nextDue = nextDue;
 		}
 	}
 	
@@ -173,10 +164,7 @@ final class AdherenceReplay {
 		    h.oral, computed);
 		// ACT 2.0 computed nothing for a regimen with no injection, or no estimate, recorded; this stores no adherence.
 		AdherenceCalculation.Result result = noRecord ? new AdherenceCalculation.Result(null, null) : calculated;
-		// The calculation dues an injection regimen's first injection one interval after its start, and gives an
-		// oral regimen with no estimate no due date.
-		LocalDate firstDue = noRecord ? calculated.getNextDue() : null;
-		return new Row(regimen, stored.interval, stored.lastGiven, result, firstDue);
+		return new Row(regimen, stored.interval, stored.lastGiven, result, calculated.getNextDue());
 	}
 	
 	/**

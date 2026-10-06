@@ -58,7 +58,7 @@ public class AdherenceReplayOracleTest {
 		patient.regimen = regimen;
 		patient.interval = interval;
 		if (interval != null && (interval > 0 ? injected.isEmpty() : estimated.isEmpty())) {
-			// ACT 2.0 left adherence and the due date as they were; the replay's result holds neither, as its README says.
+			// ACT 2.0 left adherence and the due date as they were; the replay's result holds neither.
 			patient.last = null;
 			patient.adherence = null;
 			patient.due = null;

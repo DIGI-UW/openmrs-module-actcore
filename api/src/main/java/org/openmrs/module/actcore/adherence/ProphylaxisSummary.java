@@ -68,7 +68,7 @@ public final class ProphylaxisSummary {
 			return new ProphylaxisSummary(null, null, null, null, null, "none", null, injections);
 		}
 		boolean injected = row.interval > 0;
-		LocalDate nextDue = row.nextDue();
+		LocalDate nextDue = row.nextDue;
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, nextDue,
 		        status(nextDue, today), injected ? onTime(injections, today) : null, injections);
 	}
