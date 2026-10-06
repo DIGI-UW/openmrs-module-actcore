@@ -104,9 +104,12 @@ record to have been saved on the date it records, and each row is the calculatio
 ACT 2.0 would have run it. So a regimen that starts after the consultation recording it counts from
 the first run on or after its start date, as it did in ACT 2.0.
 
-A regimen with no injection, or no estimate, recorded by then gets no adherence or due date. Here this
-differs from ACT 2.0, which left the previous regimen's values on the record: under the new regimen's
-name they would be wrong.
+A regimen with no injection, or no estimate, recorded by then gets no adherence. Here this differs
+from ACT 2.0, which left the previous regimen's values on the record: under the new regimen's name
+they would be wrong. An injection regimen with no injection still gets a next due date, the first
+injection's, one interval after the regimen starts, as the chart shows it, so the registry and the due
+list see the patient as due. ACT 2.0 stored no due date for such a patient. An oral regimen with no
+estimate gets none.
 
 Two rare forms also differ: an oral adherence form with neither an estimate nor a prescription
 duration is not read at all, and a prescription with a start date but no regimen is taken as oral.
