@@ -488,9 +488,8 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	/**
-	 * Matches both patients; its message fails for the matching patient, after the other's row is
-	 * raised. The refresh takes the matches from a HashSet, which holds these two ids in ascending
-	 * order.
+	 * Fails on the second patient's message, after the first's row is raised. Ascending: the refresh
+	 * takes the matches from a HashSet, which holds these two ids in that order.
 	 */
 	public static class FailsForOnePatient implements FlagEvaluator {
 		
