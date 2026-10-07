@@ -28,7 +28,8 @@ public class AdherenceRefreshTask extends AbstractTask {
 	@Override
 	public void execute() {
 		if (!RUNNING.tryLock()) {
-			log.warn("Prophylaxis adherence refresh skipped: another run is in progress");
+			// Expected nightly, as the flag refresh starts with the same recompute.
+			log.info("Prophylaxis adherence refresh skipped: another run is in progress");
 			return;
 		}
 		try {

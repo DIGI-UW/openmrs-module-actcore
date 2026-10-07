@@ -67,8 +67,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
 		
-		// The overdue flag reads the adherence table, so bring it up to date first, whenever the
-		// adherence task itself runs; both tasks are registered to start at the same time.
+		// The overdue flag reads the adherence table, so recompute it first.
 		try {
 			AdherenceRefreshTask.refreshBeforeFlags();
 		}
