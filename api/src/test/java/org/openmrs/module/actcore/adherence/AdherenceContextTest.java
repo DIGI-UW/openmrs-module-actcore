@@ -66,6 +66,12 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		        + " last_given date, next_due date, date_computed datetime not null)",
 		    false);
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
+		Context.getAdministrationService()
+		        .executeSQL("create table if not exists " + AdherenceRefresh.TIMING_TABLE
+		                + " (patient_id int not null, injection_date date not null, on_time boolean not null,"
+		                + " primary key (patient_id, injection_date))",
+		            false);
+		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
 		prescription = concept("Prophylaxis", "Coded");
 		q21 = concept("Q21 day BPG", "N/A");
 		q28 = concept("Q28 day BPG", "N/A");

@@ -36,4 +36,25 @@
       </column>
     </createTable>
   </changeSet>
+  <changeSet id="actcore-2026-10-07-injection-timing" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_injection_timing"/></not>
+    </preConditions>
+    <comment>Each BPG injection given while a course was in force, and whether it was on time, as the adherence refresh last timed it</comment>
+    <createTable tableName="actcore_injection_timing">
+      <column name="patient_id" type="int">
+        <constraints primaryKey="true" nullable="false"
+            foreignKeyName="actcore_injection_timing_patient" references="patient(patient_id)"/>
+      </column>
+      <column name="injection_date" type="date">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="on_time" type="boolean">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="actcore_injection_timing" indexName="actcore_injection_timing_date">
+      <column name="injection_date"/>
+    </createIndex>
+  </changeSet>
 </databaseChangeLog>

@@ -23,6 +23,43 @@ import org.openmrs.api.context.Context;
 public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
+	public void refreshAll_shouldStoreEachInjectionTimedAsTheChartTimesIt() {
+		prescribe(encounter(7, 100), q21, 100, null);
+		// 20 days after the course starts, then 30 days after that (9 days late), then 20 days after that.
+		given(encounter(7, 80), 80);
+		given(encounter(7, 50), 50);
+		given(encounter(7, 30), 30);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<List<Object>> timings = Context.getAdministrationService().executeSQL("select injection_date, on_time from "
+		        + AdherenceRefresh.TIMING_TABLE + " where patient_id = 7 order by injection_date",
+		    true);
+		assertEquals(3, timings.size());
+		assertEquals(TODAY.minusDays(80), date(timings.get(0).get(0)));
+		assertEquals(Boolean.TRUE, timings.get(0).get(1));
+		assertEquals(TODAY.minusDays(50), date(timings.get(1).get(0)));
+		assertEquals(Boolean.FALSE, timings.get(1).get(1));
+		assertEquals(TODAY.minusDays(30), date(timings.get(2).get(0)));
+		assertEquals(Boolean.TRUE, timings.get(2).get(1));
+	}
+	
+	@Test
+	public void refreshAll_shouldStoreNoTimingForAnInjectionGivenWithNoCourseInForce() {
+		prescribe(encounter(7, 40), q28, 40, null);
+		// Before the course starts, so nothing times it, as the chart leaves it untimed.
+		given(encounter(7, 60), 60);
+		given(encounter(7, 20), 20);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<List<Object>> timings = Context.getAdministrationService()
+		        .executeSQL("select injection_date from " + AdherenceRefresh.TIMING_TABLE + " where patient_id = 7", true);
+		assertEquals(1, timings.size());
+		assertEquals(TODAY.minusDays(20), date(timings.get(0).get(0)));
+	}
+	
+	@Test
 	public void refreshAll_shouldStoreTheAdherenceAndDueDateOfAnInjectionRegimen() {
 		Encounter consultation = encounter(7, 27);
 		prescribe(consultation, q21, 27, null);
