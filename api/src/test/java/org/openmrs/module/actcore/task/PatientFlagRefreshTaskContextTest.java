@@ -15,10 +15,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
@@ -32,7 +34,9 @@ import org.apache.logging.log4j.core.config.Property;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.Cohort;
 import org.openmrs.GlobalProperty;
+import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.cohort.CohortM;
 import org.openmrs.module.cohort.CohortMember;
@@ -41,9 +45,11 @@ import org.openmrs.module.cohort.api.CohortMemberService;
 import org.openmrs.module.cohort.api.CohortService;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.FlagValidationResult;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.evaluator.FlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
@@ -479,6 +485,50 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		assertEquals(Level.WARN, summary.getLevel());
 		String message = summary.getMessage().getFormattedMessage();
 		assertTrue(message, message.contains("1 flags and 0 lists failed"));
+	}
+	
+	/**
+	 * Matches both patients; its message fails for the matching patient, after the other's row is
+	 * raised. The refresh takes the matches from a HashSet, which holds these two ids in ascending
+	 * order.
+	 */
+	public static class FailsForOnePatient implements FlagEvaluator {
+		
+		@Override
+		public Boolean eval(Flag flag, Patient patient, Map<Object, Object> context) {
+			return true;
+		}
+		
+		@Override
+		public Cohort evalCohort(Flag flag, Cohort cohort, Map<Object, Object> context) {
+			return new Cohort(Arrays.asList(OTHER_PATIENT, MATCHING_PATIENT));
+		}
+		
+		@Override
+		public FlagValidationResult validate(Flag flag) {
+			return new FlagValidationResult(true);
+		}
+		
+		@Override
+		public String evalMessage(Flag flag, int patientId) {
+			if (patientId == MATCHING_PATIENT) {
+				throw new IllegalStateException("no message for this patient");
+			}
+			return flag.getMessage();
+		}
+	}
+	
+	@Test
+	public void countsTheRowsAFlagRaisedBeforeItFailed() {
+		Flag flag = saveFlag("partly broken", "unused");
+		flag.setEvaluator(FailsForOnePatient.class.getName());
+		flagService.saveFlag(flag);
+		
+		String summary = summaryOfARun();
+		
+		assertTrue(summary, summary.contains("1 rows raised"));
+		assertEquals(1, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
+		        + " and patient_id = " + OTHER_PATIENT + " and voided = false"));
 	}
 	
 	@Test

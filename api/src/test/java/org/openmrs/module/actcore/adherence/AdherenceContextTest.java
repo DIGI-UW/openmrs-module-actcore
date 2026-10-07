@@ -37,6 +37,8 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	
 	protected Concept oralPenicillin;
 	
+	protected Concept none;
+	
 	protected Concept started;
 	
 	protected Concept stopped;
@@ -76,6 +78,8 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		q21 = concept("Q21 day BPG", "N/A");
 		q28 = concept("Q28 day BPG", "N/A");
 		oralPenicillin = concept("Oral penicillin V", "N/A");
+		none = concept("None", "N/A");
+		property(AdherenceRefresh.GP_NO_PROPHYLAXIS, none.getUuid());
 		started = concept("Date started", "Datetime");
 		stopped = concept("Date stopped", "Datetime");
 		injectionDate = concept("Date of injection", "Datetime");

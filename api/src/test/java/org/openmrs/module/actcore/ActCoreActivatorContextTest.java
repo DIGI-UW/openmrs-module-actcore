@@ -48,6 +48,32 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void movesATaskAnEarlierVersionRegisteredUnderItsOldClass() {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		TaskDefinition task = new TaskDefinition();
+		task.setName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		task.setTaskClass(AdherenceRefreshTask.class.getName());
+		task.setRepeatInterval(3600L);
+		task.setStartTime(new Date(1500000000000L));
+		task.setStartOnStartup(Boolean.TRUE);
+		task.setStarted(Boolean.FALSE);
+		schedulerService.saveTaskDefinition(task);
+		// As a database that ran rhdflags holds it: core will not save a class it cannot load, so the row is set directly.
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL(
+		    "update scheduler_task_config set schedulable_class ="
+		            + " 'org.openmrs.module.rhdflags.adherence.AdherenceRefreshTask' where task_config_id = " + task.getId(),
+		    false);
+		Context.clearSession();
+		
+		new ActCoreActivator().started();
+		
+		TaskDefinition moved = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		assertEquals(AdherenceRefreshTask.class.getName(), moved.getTaskClass());
+		assertEquals(Long.valueOf(3600L), moved.getRepeatInterval());
+	}
+	
+	@Test
 	public void registersTheDailyAdherenceRefresh() {
 		new ActCoreActivator().started();
 		

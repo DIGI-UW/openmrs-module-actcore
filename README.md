@@ -114,6 +114,10 @@ date, if there was one. An oral regimen with no estimate gets no due date.
 
 Two rare forms also differ: an oral adherence form with neither an estimate nor a prescription
 duration is not read at all, and a prescription with a start date but no regimen is taken as oral.
+
+A prescription answered None (`actcore.adherence.noProphylaxisAnswers`) is no course at all, so a patient whose latest
+consultation prescribes None has no regimen: no row in the table, and the chart's status is none. ACT 2.0 took None
+as an oral regimen; the registry already shows such a patient as No prescription, and the chart now agrees.
 ACT 2.0 counted the first as a save and treated the second as no regimen.
 
 It also differs in not asking whether the patient is still active. ACT 2.0's nightly run covered only
@@ -176,7 +180,9 @@ OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.
 ## Installing and running
 
 Put the omod in the modules directory (or mount it in a distribution) and restart. The module
-registers its task on first start; there is nothing else to set up.
+registers its tasks on first start; there is nothing else to set up. On every start it also corrects a task
+saved under a class that has since moved, as the rhdflags tasks were when the module became actcore, and
+reschedules it, so an upgraded database keeps refreshing.
 
 To run the refresh now (or `RHD Prophylaxis Adherence Refresh` for adherence):
 
@@ -193,7 +199,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
-| `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, and the regimen intervals and prescription durations as `uuid:days` pairs; see `config.xml` |
+| `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
 

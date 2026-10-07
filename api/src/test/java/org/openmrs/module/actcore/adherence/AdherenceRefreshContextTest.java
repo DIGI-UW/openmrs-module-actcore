@@ -23,6 +23,20 @@ import org.openmrs.api.context.Context;
 public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
+	public void refreshAll_shouldGiveNoRegimenToAConsultationThatPrescribesNone() {
+		Encounter earlier = encounter(7, 120);
+		prescribe(earlier, oralPenicillin, 120, null);
+		// The latest consultation answers None, with a start date, as the form allows.
+		prescribe(encounter(7, 20), none, 20, null);
+		
+		assertEquals(0, refresh.refreshAll(TODAY));
+		
+		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		assertEquals("none", summary.getStatus());
+		assertNull(summary.getType());
+	}
+	
+	@Test
 	public void refreshAll_shouldStoreEachInjectionTimedAsTheChartTimesIt() {
 		prescribe(encounter(7, 100), q21, 100, null);
 		// 20 days after the course starts, then 30 days after that (9 days late), then 20 days after that.
