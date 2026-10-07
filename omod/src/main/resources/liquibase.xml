@@ -43,11 +43,11 @@
     <comment>Each BPG injection given while a course was in force, and whether it was on time, as the adherence refresh last timed it</comment>
     <createTable tableName="actcore_injection_timing">
       <column name="patient_id" type="int">
-        <constraints nullable="false"
+        <constraints primaryKey="true" nullable="false"
             foreignKeyName="actcore_injection_timing_patient" references="patient(patient_id)"/>
       </column>
       <column name="injection_date" type="date">
-        <constraints nullable="false"/>
+        <constraints primaryKey="true" nullable="false"/>
       </column>
       <column name="on_time" type="boolean">
         <constraints nullable="false"/>

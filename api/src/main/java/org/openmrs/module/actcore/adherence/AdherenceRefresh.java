@@ -30,7 +30,10 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Recomputes every patient's adherence and next due date into actcore_prophylaxis_adherence. */
+/**
+ * Recomputes every patient's adherence and next due date into actcore_prophylaxis_adherence, and
+ * each injection's timing into actcore_injection_timing.
+ */
 public class AdherenceRefresh {
 	
 	public static final String TABLE = "actcore_prophylaxis_adherence";
@@ -333,7 +336,7 @@ public class AdherenceRefresh {
 		return new Timestamp(((Date) value).getTime()).toLocalDateTime().toLocalDate();
 	}
 	
-	private static String sqlValue(Object value) {
+	static String sqlValue(Object value) {
 		if (value == null) {
 			return "null";
 		}

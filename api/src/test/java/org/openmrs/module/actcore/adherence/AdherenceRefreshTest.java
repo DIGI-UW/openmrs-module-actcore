@@ -19,6 +19,13 @@ import org.junit.Test;
 
 public class AdherenceRefreshTest {
 	
+	@Test
+	public void sqlValue_shouldWriteABooleanAsABareLiteral() {
+		// MariaDB in strict mode rejects a quoted 'true' for the timing table's tinyint column; H2 accepts it.
+		assertEquals("true", AdherenceRefresh.sqlValue(Boolean.TRUE));
+		assertEquals("false", AdherenceRefresh.sqlValue(Boolean.FALSE));
+	}
+	
 	private static final LocalDate DAY = LocalDate.of(2026, 9, 2);
 	
 	@Test
