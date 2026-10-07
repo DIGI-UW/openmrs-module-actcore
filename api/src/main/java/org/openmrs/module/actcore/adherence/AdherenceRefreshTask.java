@@ -28,7 +28,8 @@ public class AdherenceRefreshTask extends AbstractTask {
 	@Override
 	public void execute() {
 		if (!RUNNING.tryLock()) {
-			log.warn("Prophylaxis adherence refresh skipped: another run is in progress");
+			// Expected nightly, as the flag refresh starts with the same recompute.
+			log.info("Prophylaxis adherence refresh skipped: another run is in progress");
 			return;
 		}
 		try {
@@ -39,6 +40,20 @@ public class AdherenceRefreshTask extends AbstractTask {
 		}
 		catch (RuntimeException e) {
 			log.error("Prophylaxis adherence refresh failed", e);
+		}
+		finally {
+			RUNNING.unlock();
+		}
+	}
+	
+	/**
+	 * Recomputes every patient as of today for the flag refresh, whose overdue flag reads these rows.
+	 * Waits for a run already in progress rather than skipping, so the flags read finished rows.
+	 */
+	public static void refreshBeforeFlags() {
+		RUNNING.lock();
+		try {
+			new AdherenceRefresh().refreshAll(LocalDate.now());
 		}
 		finally {
 			RUNNING.unlock();

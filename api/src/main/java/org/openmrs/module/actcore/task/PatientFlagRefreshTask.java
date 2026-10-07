@@ -21,6 +21,7 @@ import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -65,6 +66,14 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	private void refresh() {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
+		
+		// The overdue flag reads the adherence table, so recompute it first.
+		try {
+			AdherenceRefreshTask.refreshBeforeFlags();
+		}
+		catch (RuntimeException e) {
+			log.error("Prophylaxis adherence refresh before the flags failed; the flags read its last run", e);
+		}
 		
 		FlagService flagService = Context.getService(FlagService.class);
 		int evaluated = 0;

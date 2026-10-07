@@ -24,7 +24,8 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 ## What it does
 
 - **Daily refresh.** The task **RHD Patient Flag Refresh** re-evaluates every enabled flag and
-  writes only the rows that changed.
+  writes only the rows that changed. It first recomputes the prophylaxis adherence below, as a flag
+  may read it (the distribution's RHD prophylaxis overdue flag reads the next due date).
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
