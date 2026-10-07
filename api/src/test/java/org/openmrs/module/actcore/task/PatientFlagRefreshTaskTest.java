@@ -47,7 +47,14 @@ public class PatientFlagRefreshTaskTest {
 	@Before
 	public void setUp() {
 		flagService = mock(FlagService.class);
-		flag = new Flag();
+		// Its message as given: Flag.evalMessage would otherwise ask an OpenMRS context this unit test does not start.
+		flag = new Flag() {
+			
+			@Override
+			public String evalMessage(Integer patientId) {
+				return getMessage();
+			}
+		};
 		flag.setFlagId(1);
 		flag.setName("overdue");
 		flag.setMessage("overdue");
