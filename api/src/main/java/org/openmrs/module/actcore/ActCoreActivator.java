@@ -65,10 +65,17 @@ public class ActCoreActivator extends BaseModuleActivator {
 			SchedulerService schedulerService = Context.getSchedulerService();
 			TaskDefinition existing = schedulerService.getTaskByName(name);
 			if (existing != null) {
-				// Only the description: the interval and start time are the administrator's to change.
-				if (!description.equals(existing.getDescription())) {
+				// The description and the class: the interval and start time are the administrator's to change.
+				boolean moved = !taskClass.equals(existing.getTaskClass());
+				if (moved || !description.equals(existing.getDescription())) {
 					existing.setDescription(description);
+					existing.setTaskClass(taskClass);
 					schedulerService.saveTaskDefinition(existing);
+				}
+				// A task saved under a class that has since moved (rhdflags' before the rename) could not load.
+				if (moved && Boolean.TRUE.equals(existing.getStarted())) {
+					schedulerService.rescheduleTask(existing);
+					log.info("Moved '{}' to {}", name, taskClass);
 				}
 				return;
 			}
