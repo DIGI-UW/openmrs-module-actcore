@@ -15,9 +15,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
@@ -65,6 +67,8 @@ public class AdherenceRefresh {
 	static final String GP_DATA_ENTRY = "actcore.adherence.dataEntryConcept";
 	
 	static final String GP_DATA_ENTRY_INTERVALS = "actcore.adherence.dataEntryIntervals";
+	
+	static final String GP_NO_PROPHYLAXIS = "actcore.adherence.noProphylaxisAnswers";
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
@@ -134,7 +138,8 @@ public class AdherenceRefresh {
 	/** Every patient's history, or only that of the patient given. */
 	private Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
 		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
-		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), only("g.person_id", patientId), histories);
+		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS),
+		    only("g.person_id", patientId), histories);
 		readInjections(admin, only("o.person_id", patientId), histories);
 		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), only("e.patient_id", patientId), histories);
 		readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), only("o.person_id", patientId), histories);
@@ -185,8 +190,8 @@ public class AdherenceRefresh {
 	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
 	 * date kept; and its courses, stopped ones too.
 	 */
-	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, String patientFilter,
-	        Map<Integer, AdherenceReplay.History> histories) {
+	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, Set<String> noProphylaxis,
+	        String patientFilter, Map<Integer, AdherenceReplay.History> histories) {
 		List<List<Object>> rows = admin.executeSQL("select g.person_id, coalesce(cd.value_datetime, e.encounter_datetime),"
 		        + " e.encounter_id, rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
 		        + " from obs g join encounter e on e.encounter_id = g.encounter_id and e.voided = false"
@@ -220,7 +225,8 @@ public class AdherenceRefresh {
 				continue;
 			}
 			AdherenceReplay.Prescriptions p = h.prescriptions.get(day);
-			if (row.get(5) == null) {
+			// No start, or an answer such as None that prescribes nothing: the consultation records no course.
+			if (row.get(5) == null || (row.get(3) != null && noProphylaxis.contains(row.get(3).toString()))) {
 				continue;
 			}
 			LocalDate started = localDate(row.get(5));
@@ -316,6 +322,15 @@ public class AdherenceRefresh {
 			days.put(uuid(parts[0].trim(), property), Integer.valueOf(parts[1].trim()));
 		}
 		return days;
+	}
+	
+	/** A global property of concept uuids, separated by commas; none when blank. */
+	private Set<String> uuids(AdministrationService admin, String property) {
+		Set<String> found = new HashSet<String>();
+		for (String value : StringUtils.split(StringUtils.defaultString(admin.getGlobalProperty(property)), ',')) {
+			found.add(uuid(value, property));
+		}
+		return found;
 	}
 	
 	private static String uuid(String value, String property) {

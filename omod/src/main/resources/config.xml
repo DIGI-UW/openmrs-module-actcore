@@ -98,6 +98,14 @@
   </globalProperty>
 
   <globalProperty>
+    <property>actcore.adherence.noProphylaxisAnswers</property>
+    <defaultValue>1107AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+    <description>
+      Regimen answers that prescribe no prophylaxis, as concept uuids separated by commas: None by default. A consultation recording one has no course, so the patient has no regimen, as the registry already reads None.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
     <property>actcore.adherence.dateStartedConcept</property>
     <defaultValue>5bcc7d12-b279-5955-815c-090a1f392071</defaultValue>
     <description>
