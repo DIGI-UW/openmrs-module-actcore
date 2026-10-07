@@ -108,7 +108,7 @@ public final class ProphylaxisSummary {
 	 * Every injection up to today, newest first, timed as AdherenceCalculation does: against the
 	 * previous injection, even an untimed one, or its course's start.
 	 */
-	private static List<Injection> timings(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
+	static List<Injection> timings(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
 	        SortedSet<LocalDate> injections, LocalDate today) {
 		List<Injection> timed = new ArrayList<Injection>();
 		LocalDate start = null;

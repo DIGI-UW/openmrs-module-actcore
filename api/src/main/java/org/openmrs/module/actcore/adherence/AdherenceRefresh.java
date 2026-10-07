@@ -35,6 +35,12 @@ public class AdherenceRefresh {
 	
 	public static final String TABLE = "actcore_prophylaxis_adherence";
 	
+	/**
+	 * Each injection timed as the chart times it, for reports that count on-time injections over a
+	 * period.
+	 */
+	public static final String TIMING_TABLE = "actcore_injection_timing";
+	
 	static final String GP_PRESCRIPTION = "actcore.adherence.prescriptionConcept";
 	
 	static final String GP_INJECTION_INTERVALS = "actcore.adherence.injectionIntervals";
@@ -98,9 +104,17 @@ public class AdherenceRefresh {
 		
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		List<String> rows = new ArrayList<String>();
+		List<String> timings = new ArrayList<String>();
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
 			if (entry.getValue().prescriptions.isEmpty()) {
 				continue;
+			}
+			for (ProphylaxisSummary.Injection injection : ProphylaxisSummary.timings(entry.getValue().prescriptions,
+			    entry.getValue().injections, today)) {
+				if (injection.getOnTime() != null) {
+					timings.add("(" + entry.getKey() + ", " + sqlValue(injection.getDate()) + ", "
+					        + sqlValue(injection.getOnTime()) + ")");
+				}
 			}
 			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today);
 			if (row != null) {
@@ -110,7 +124,7 @@ public class AdherenceRefresh {
 			}
 		}
 		
-		rewrite(admin, rows);
+		rewrite(admin, rows, timings);
 		return rows.size();
 	}
 	
@@ -128,8 +142,10 @@ public class AdherenceRefresh {
 		return patientId == null ? "" : " and " + column + " = " + patientId;
 	}
 	
-	/** Replaces every row in one transaction, so no run leaves the table empty or part filled. */
-	private void rewrite(final AdministrationService admin, final List<String> rows) {
+	/**
+	 * Replaces every row of both tables in one transaction, so no run leaves them empty or part filled.
+	 */
+	private void rewrite(final AdministrationService admin, final List<String> rows, final List<String> timings) {
 		PlatformTransactionManager transactions = Context.getRegisteredComponent("transactionManager",
 		    PlatformTransactionManager.class);
 		new TransactionTemplate(transactions).execute(new TransactionCallbackWithoutResult() {
@@ -141,6 +157,13 @@ public class AdherenceRefresh {
 					admin.executeSQL("insert into " + TABLE + " (patient_id, regimen_concept_id, injection_interval_days,"
 					        + " adherence, last_given, next_due, date_computed) values "
 					        + StringUtils.join(rows.subList(i, Math.min(rows.size(), i + rowsPerInsert)), ", "),
+					    false);
+				}
+				admin.executeSQL("delete from " + TIMING_TABLE, false);
+				for (int i = 0; i < timings.size(); i += rowsPerInsert) {
+					admin.executeSQL(
+					    "insert into " + TIMING_TABLE + " (patient_id, injection_date, on_time) values "
+					            + StringUtils.join(timings.subList(i, Math.min(timings.size(), i + rowsPerInsert)), ", "),
 					    false);
 				}
 			}
@@ -316,6 +339,9 @@ public class AdherenceRefresh {
 		}
 		if (value instanceof Number) {
 			return value.toString();
+		}
+		if (value instanceof Boolean) {
+			return (Boolean) value ? "true" : "false";
 		}
 		return "'" + value + "'";
 	}

@@ -125,6 +125,12 @@ Each row holds the patient, the latest regimen and its injection interval (0 for
 adherence as a fraction, the last injection or estimate, the next due date and when it was computed.
 Each run replaces every row in one transaction, so a failed run leaves the previous rows in place.
 
+The same run fills `actcore_injection_timing`: one row per BPG injection given while a course was in
+force, with whether it was on time, timed as the chart's injection history times it (no later than the
+previous injection, or the course's start, plus the course's interval). Reports count on-time injections
+over a period from it, so they agree with the chart. An injection given with no course in force is left
+out, as the chart leaves it untimed.
+
 `AdherenceCalculationParityTest` holds the port to ACT 2.0 itself. Its fixture,
 `api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
 pinned, for every call in its `test_adherence.py`, for prescriptions either side of the 365-day
