@@ -44,4 +44,18 @@ public class AdherenceRefreshTask extends AbstractTask {
 			RUNNING.unlock();
 		}
 	}
+	
+	/**
+	 * Recomputes every patient as of today for the flag refresh, whose overdue flag reads these rows.
+	 * Waits for a run already in progress rather than skipping, so the flags read finished rows.
+	 */
+	public static void refreshBeforeFlags() {
+		RUNNING.lock();
+		try {
+			new AdherenceRefresh().refreshAll(LocalDate.now());
+		}
+		finally {
+			RUNNING.unlock();
+		}
+	}
 }
