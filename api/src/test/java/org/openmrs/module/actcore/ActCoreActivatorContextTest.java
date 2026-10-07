@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Date;
+import java.util.List;
 
 import org.junit.Test;
 import org.openmrs.api.context.Context;
@@ -58,7 +59,7 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		task.setStartOnStartup(Boolean.TRUE);
 		task.setStarted(Boolean.FALSE);
 		schedulerService.saveTaskDefinition(task);
-		// As a database that ran rhdflags holds it: core will not save a class it cannot load, so the row is set directly.
+		// As a database that ran rhdflags holds it; core will not save a class it cannot load.
 		Context.flushSession();
 		Context.getAdministrationService().executeSQL(
 		    "update scheduler_task_config set schedulable_class ="
@@ -67,10 +68,13 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		Context.clearSession();
 		
 		new ActCoreActivator().started();
+		Context.flushSession();
 		
-		TaskDefinition moved = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
-		assertEquals(AdherenceRefreshTask.class.getName(), moved.getTaskClass());
-		assertEquals(Long.valueOf(3600L), moved.getRepeatInterval());
+		List<List<Object>> saved = Context.getAdministrationService().executeSQL(
+		    "select schedulable_class, repeat_interval from scheduler_task_config where task_config_id = " + task.getId(),
+		    true);
+		assertEquals(AdherenceRefreshTask.class.getName(), saved.get(0).get(0));
+		assertEquals(3600L, ((Number) saved.get(0).get(1)).longValue());
 	}
 	
 	@Test

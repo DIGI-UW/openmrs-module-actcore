@@ -114,11 +114,11 @@ date, if there was one. An oral regimen with no estimate gets no due date.
 
 Two rare forms also differ: an oral adherence form with neither an estimate nor a prescription
 duration is not read at all, and a prescription with a start date but no regimen is taken as oral.
+ACT 2.0 counted the first as a save and treated the second as no regimen.
 
 A prescription answered None (`actcore.adherence.noProphylaxisAnswers`) is no course at all, so a patient whose latest
 consultation prescribes None has no regimen: no row in the table, and the chart's status is none. ACT 2.0 took None
 as an oral regimen; the registry already shows such a patient as No prescription, and the chart now agrees.
-ACT 2.0 counted the first as a save and treated the second as no regimen.
 
 It also differs in not asking whether the patient is still active. ACT 2.0's nightly run covered only
 active patients, so a patient who left the registry kept the adherence of their last save; here their

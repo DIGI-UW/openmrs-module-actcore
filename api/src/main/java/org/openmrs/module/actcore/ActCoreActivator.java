@@ -73,9 +73,12 @@ public class ActCoreActivator extends BaseModuleActivator {
 					schedulerService.saveTaskDefinition(existing);
 				}
 				// A task saved under a class that has since moved (rhdflags' before the rename) could not load.
-				if (moved && Boolean.TRUE.equals(existing.getStarted())) {
-					schedulerService.rescheduleTask(existing);
-					log.info("Moved '{}' to {}", name, taskClass);
+				if (moved) {
+					log.warn("Moved '{}' to {}", name, taskClass);
+					// Its started flag is stale, as it never ran; at boot core schedules it after this anyway.
+					if (Boolean.TRUE.equals(existing.getStarted()) || Boolean.TRUE.equals(existing.getStartOnStartup())) {
+						schedulerService.rescheduleTask(existing);
+					}
 				}
 				return;
 			}
