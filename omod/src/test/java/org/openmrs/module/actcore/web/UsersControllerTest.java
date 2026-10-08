@@ -18,10 +18,13 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -48,12 +51,17 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 		clinicA = Context.getLocationService().getLocation(1).getUuid();
 		String clinicB = Context.getLocationService().getLocation(2).getUuid();
 		Role clinician = role("Test Clinician", PrivilegeConstants.GET_PATIENTS);
+		role("Test Exports", PrivilegeConstants.GET_PATIENTS);
 		Role siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS,
 		    PrivilegeConstants.GET_USERS, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS,
 		    PrivilegeConstants.GET_ROLES);
 		Role instanceAdministrator = role("Test Instance Administrator", ClinicUsers.ALL_CLINICS_PRIVILEGE);
 		instanceAdministrator.getInheritedRoles().add(siteAdministrator);
 		Context.getUserService().saveRole(instanceAdministrator);
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ClinicUsers.CLINICIAN_ROLES_PROPERTY, clinician.getUuid()));
+		Context.getAdministrationService().saveGlobalProperty(
+		    new GlobalProperty(ClinicUsers.SITE_ADMINISTRATOR_ROLES_PROPERTY, siteAdministrator.getUuid()));
 		user("siteadmin", clinicA, siteAdministrator);
 		user("instanceadmin", null, instanceAdministrator);
 		user("clinicianatA", clinicA, clinician);
@@ -73,15 +81,12 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void offersAClinicLimitedAdministratorOnlyRolesThatDoNotManageUsers() {
+	public void offersAClinicLimitedAdministratorOnlyTheClinicianRoles() {
 		signInAs("siteadmin");
 		
 		List<String> roles = names(controller.getUsers().get("assignableRoles"));
 		
-		assertTrue(roles.contains("Test Clinician"));
-		assertFalse(roles.contains("Test Site Administrator"));
-		assertFalse(roles.contains("Test Instance Administrator"));
-		assertFalse(roles.contains("System Developer"));
+		assertEquals(Collections.singletonList("Test Clinician"), roles);
 	}
 	
 	@Test
@@ -93,9 +98,36 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Boolean.FALSE, response.get("clinicLimited"));
 		assertNull(response.get("clinics"));
 		assertTrue(usernames(response).containsAll(Arrays.asList("clinicianatA", "clinicianatB", "siteadmin", "admin")));
-		List<String> roles = names(response.get("assignableRoles"));
-		assertTrue(roles.containsAll(Arrays.asList("Test Clinician", "Test Site Administrator")));
-		assertFalse(roles.contains("System Developer"));
+		assertEquals(Arrays.asList("Test Clinician", "Test Site Administrator"),
+		    sorted(names(response.get("assignableRoles"))));
+	}
+	
+	@Test
+	public void listsTheRolesWithoutGivingTheCallerManageRoles() {
+		signInAs("siteadmin");
+		AtomicBoolean held = new AtomicBoolean();
+		AtomicBoolean probing = new AtomicBoolean();
+		MethodInterceptor probe = invocation -> {
+			// Checking a privilege calls the user service again.
+			if (probing.compareAndSet(false, true)) {
+				try {
+					held.compareAndSet(false, Context.hasPrivilege(PrivilegeConstants.MANAGE_ROLES));
+				}
+				finally {
+					probing.set(false);
+				}
+			}
+			return invocation.proceed();
+		};
+		Context.addAdvice(UserService.class, probe);
+		try {
+			controller.getUsers();
+		}
+		finally {
+			Context.removeAdvice(UserService.class, probe);
+		}
+		
+		assertFalse(held.get());
 	}
 	
 	@Test

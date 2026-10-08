@@ -33,10 +33,13 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   and whether one is running. ACT's admin page calls it.
 - **Users at their clinics.** A user's clinics are the location uuids in its `act.clinics` user
   property. An administrator without `Task: act.users.allClinics` manages only the users sharing one
-  of its clinics, adds or removes only its own clinics, and gives only roles that don't manage users,
-  as in ACT 2.0. ACT Core checks the UserService calls that change a user (create, save, disable,
-  password reset, setting a user property), whether REST or the legacy screens make them. `GET /ws/rest/v1/actcore/users` lists the users
-  an administrator manages and the roles it may give; ACT's Users and roles page calls it.
+  of its clinics, with their person and provider, and adds or removes only its own clinics, as in
+  ACT 2.0. An administrator gives or removes only the clinician roles (`actcore.users.clinicianRoles`),
+  plus Site Administrator (`actcore.users.siteAdministratorRoles`) with `Task: act.users.allClinics`;
+  a superuser gives any role. ACT Core checks the UserService, PersonService and ProviderService
+  calls that change a user, its person or its provider, whether REST or the legacy screens make
+  them. `GET /ws/rest/v1/actcore/users` lists the users an administrator manages and the roles it
+  may give; ACT's Users and roles page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
@@ -212,6 +215,8 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `actcore.users.clinicianRoles` | the distribution's three clinician roles | Role uuids any administrator may give or remove |
+| `actcore.users.siteAdministratorRoles` | the distribution's Site Administrator | Role uuids an administrator with `Task: act.users.allClinics` may also give or remove |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
@@ -220,10 +225,10 @@ The refresh endpoint needs `Task: act.refreshFlags`, which the distribution crea
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
 
-The users endpoint needs Edit Users. It lists roles with Manage Roles added for that one read, as
-core 2.8 requires it to list them and an administrator no longer holds it: Manage Roles would let it
-change role definitions. `Task: act.users.allClinics`, which the distribution creates, lifts the
-clinic limit, so grant it only to administrators of every clinic.
+The users endpoint needs Edit Users. It reads the roles without Manage Roles, which core 2.8 needs
+to list them and which would let an administrator change role definitions.
+`Task: act.users.allClinics`, which the distribution creates, lifts the clinic limit and lets its
+holder give Site Administrator, so grant it only to administrators of every clinic.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as

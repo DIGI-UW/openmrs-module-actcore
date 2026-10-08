@@ -55,6 +55,28 @@
     <point>org.openmrs.api.UserService</point>
     <class>org.openmrs.module.actcore.users.ClinicLimitedUserManagement</class>
   </advice>
+  <advice>
+    <point>org.openmrs.api.PersonService</point>
+    <class>org.openmrs.module.actcore.users.ClinicLimitedPersonManagement</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.ProviderService</point>
+    <class>org.openmrs.module.actcore.users.ClinicLimitedPersonManagement</class>
+  </advice>
+  <globalProperty>
+    <property>actcore.users.clinicianRoles</property>
+    <defaultValue>b9ab4b76-e7b9-46a7-b4ec-5b7fdd8fa540,61e9bb28-11df-4df1-965d-11ef928d5239,60625a0c-3cea-4fe5-b6ca-615c743ad9d4</defaultValue>
+    <description>
+      The roles an administrator may give or remove, as role uuids separated by commas: by default the distribution's Community Clinician, Data Clerk and Clinician. A superuser gives any role.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.users.siteAdministratorRoles</property>
+    <defaultValue>a1295a20-7273-4339-b5df-2f8a3a841c77</defaultValue>
+    <description>
+      The roles an administrator with Task: act.users.allClinics may also give or remove, as role uuids separated by commas: by default the distribution's Site Administrator.
+    </description>
+  </globalProperty>
   <globalProperty>
     <property>actcore.registryProgram</property>
     <defaultValue>7d73e143-a550-5a9d-aecd-dd771add098d</defaultValue>

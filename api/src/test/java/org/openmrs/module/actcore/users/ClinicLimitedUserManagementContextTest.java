@@ -13,19 +13,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Collections;
+
+import org.aopalliance.intercept.MethodInterceptor;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
+import org.openmrs.Provider;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.AdministrationService;
+import org.openmrs.api.PersonService;
+import org.openmrs.api.ProviderService;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
-import org.springframework.aop.framework.ProxyFactory;
 
 public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -39,17 +47,44 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	
 	private Role siteAdministrator;
 	
+	private Role instanceAdministrator;
+	
+	private Role exports;
+	
+	private Provider providerAtB;
+	
+	private final ClinicLimitedUserManagement userGuard = new ClinicLimitedUserManagement();
+	
+	private final ClinicLimitedPersonManagement personGuard = new ClinicLimitedPersonManagement();
+	
+	// Core 2.8 reads a global property only for Get Global Properties, which an administrator lacks.
+	private final MethodInterceptor coreTwoEightAuthorization = invocation -> {
+		Object[] args = invocation.getArguments();
+		if ("getGlobalProperty".equals(invocation.getMethod().getName())
+		        && String.valueOf(args[0]).startsWith("actcore.users.")
+		        && !Context.hasPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES)) {
+			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		}
+		return invocation.proceed();
+	};
+	
 	@Before
 	public void setUp() {
 		clinicA = Context.getLocationService().getLocation(1).getUuid();
 		clinicB = Context.getLocationService().getLocation(2).getUuid();
+		exports = role("Test Exports", PrivilegeConstants.GET_PATIENTS);
 		clinician = role("Test Clinician", PrivilegeConstants.GET_PATIENTS);
+		clinician.getInheritedRoles().add(exports);
+		Context.getUserService().saveRole(clinician);
 		siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS, PrivilegeConstants.GET_ROLES,
-		    PrivilegeConstants.EDIT_USER_PASSWORDS);
-		Role instanceAdministrator = role("Test Instance Administrator", ClinicUsers.ALL_CLINICS_PRIVILEGE);
+		    PrivilegeConstants.EDIT_USER_PASSWORDS, PrivilegeConstants.ADD_PERSONS, PrivilegeConstants.EDIT_PERSONS,
+		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.MANAGE_PROVIDERS, PrivilegeConstants.GET_PROVIDERS);
+		instanceAdministrator = role("Test Instance Administrator", ClinicUsers.ALL_CLINICS_PRIVILEGE);
 		instanceAdministrator.getInheritedRoles().add(siteAdministrator);
 		Context.getUserService().saveRole(instanceAdministrator);
+		property(ClinicUsers.CLINICIAN_ROLES_PROPERTY, clinician.getUuid());
+		property(ClinicUsers.SITE_ADMINISTRATOR_ROLES_PROPERTY, siteAdministrator.getUuid());
 		
 		save(newUser("siteadmin", clinicA, siteAdministrator));
 		save(newUser("otheradmin", clinicA, siteAdministrator));
@@ -58,19 +93,27 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		save(newUser("clinicianatA", clinicA, clinician));
 		save(newUser("clinicianatB", clinicB, clinician));
 		save(newUser("clinicianatAB", clinicA + "," + clinicB, clinician));
+		providerAtB = new Provider();
+		providerAtB.setPerson(Context.getUserService().getUserByUsername("clinicianatB").getPerson());
+		providerAtB.setIdentifier("providerAtB");
+		Context.getProviderService().saveProvider(providerAtB);
 		// The check reads what the database holds, so the fixture must be there, not only in the session.
 		Context.flushSession();
 		
-		wrapTheUserService();
+		Context.addAdvice(UserService.class, userGuard);
+		Context.addAdvice(PersonService.class, personGuard);
+		Context.addAdvice(ProviderService.class, personGuard);
+		Context.addAdvice(AdministrationService.class, coreTwoEightAuthorization);
+		users = Context.getUserService();
+		signInAs("siteadmin");
 	}
 	
-	private void wrapTheUserService() {
-		// The user service as the module's advice wraps it at runtime.
-		ProxyFactory proxy = new ProxyFactory(Context.getUserService());
-		proxy.addInterface(UserService.class);
-		proxy.addAdvice(new ClinicLimitedUserManagement());
-		users = (UserService) proxy.getProxy();
-		signInAs("siteadmin");
+	@After
+	public void removeModuleAdvice() {
+		Context.removeAdvice(UserService.class, userGuard);
+		Context.removeAdvice(PersonService.class, personGuard);
+		Context.removeAdvice(ProviderService.class, personGuard);
+		Context.removeAdvice(AdministrationService.class, coreTwoEightAuthorization);
 	}
 	
 	@Test
@@ -91,6 +134,47 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		refused(() -> users.retireUser(user, "gone"), "is not at your clinics");
 		refused(() -> users.changePassword(user, "Changed123"), "is not at your clinics");
 		refused(() -> users.setUserProperty(user, "defaultLocale", "fr"), "is not at your clinics");
+		refused(() -> users.changeQuestionAnswer(user, "Pet?", "Rex"), "is not at your clinics");
+	}
+	
+	@Test
+	public void refusesEditingThePersonOrProviderOfAUserAtAnotherClinic() {
+		Person person = Context.getUserService().getUserByUsername("clinicianatB").getPerson();
+		person.getPersonName().setGivenName("Renamed");
+		refused(() -> Context.getPersonService().savePerson(person), "is not at your clinics");
+		refused(() -> Context.getPersonService().savePersonName(person.getPersonName()), "is not at your clinics");
+		
+		Person admin = Context.getUserService().getUserByUsername("otheradmin").getPerson();
+		refused(() -> Context.getPersonService().savePerson(admin), "administers users");
+		
+		providerAtB.setIdentifier("changed");
+		refused(() -> Context.getProviderService().saveProvider(providerAtB), "is not at your clinics");
+		refused(() -> Context.getProviderService().retireProvider(providerAtB, "gone"), "is not at your clinics");
+	}
+	
+	@Test
+	public void refusesMovingAProviderFromAUserAtAnotherClinic() {
+		// What REST does: change the loaded provider, then save it.
+		providerAtB.setPerson(Context.getUserService().getUserByUsername("clinicianatA").getPerson());
+		
+		refused(() -> Context.getProviderService().saveProvider(providerAtB), "is not at your clinics");
+	}
+	
+	@Test
+	public void editsThePersonAndProviderOfAUserAtItsClinicAndANewPerson() {
+		Person person = Context.getUserService().getUserByUsername("clinicianatA").getPerson();
+		person.getPersonName().setGivenName("Renamed");
+		Context.getPersonService().savePerson(person);
+		
+		Provider provider = new Provider();
+		provider.setPerson(person);
+		provider.setIdentifier("providerAtA");
+		Context.getProviderService().saveProvider(provider);
+		
+		Person newcomer = new Person();
+		newcomer.addName(new PersonName("Newcomer", null, "Tester"));
+		newcomer.setGender("M");
+		Context.getPersonService().savePerson(newcomer);
 	}
 	
 	@Test
@@ -118,13 +202,29 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	}
 	
 	@Test
-	public void refusesGivingARoleThatManagesUsers() {
+	public void refusesGivingARoleOutsideTheClinicianRoles() {
 		refused(() -> users.createUser(newUser("newadmin", clinicA, siteAdministrator), "Created123"),
-		    "roles that do not manage users");
+		    "give or remove the role Test Site Administrator");
+		// A role the clinician role inherits is not a clinician role of its own.
+		refused(() -> users.createUser(newUser("newexporter", clinicA, exports), "Created123"),
+		    "give or remove the role Test Exports");
 		
 		User user = Context.getUserService().getUserByUsername("clinicianatA");
 		user.addRole(siteAdministrator);
-		refused(() -> users.saveUser(user), "roles that do not manage users");
+		refused(() -> users.saveUser(user), "give or remove the role Test Site Administrator");
+	}
+	
+	@Test
+	public void refusesRemovingARoleOutsideTheClinicianRoles() {
+		signInAsSuperuser();
+		User exporter = newUser("exporter", clinicA, clinician);
+		exporter.addRole(exports);
+		save(exporter);
+		signInAs("siteadmin");
+		
+		User user = Context.getUserService().getUserByUsername("exporter");
+		user.removeRole(exports);
+		refused(() -> users.saveUser(user), "give or remove the role Test Exports");
 	}
 	
 	@Test
@@ -154,6 +254,21 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		
 		me.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA + "," + clinicB);
 		refused(() -> users.saveUser(me), "your own clinics or roles");
+		
+		me.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA);
+		me.addRole(clinician);
+		refused(() -> users.saveUser(me), "your own clinics or roles");
+	}
+	
+	@Test
+	public void refusesWideningItsOwnClinicsThroughItsOwnProperties() {
+		users.saveUserProperty("defaultLocale", "fr");
+		
+		refused(() -> users.saveUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA + "," + clinicB),
+		    "your own clinics or roles");
+		refused(
+		    () -> users.saveUserProperties(Collections.singletonMap(ClinicUsers.CLINICS_PROPERTY, clinicA + "," + clinicB)),
+		    "your own clinics or roles");
 	}
 	
 	@Test
@@ -164,6 +279,22 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		
 		users.saveUser(user);
 		users.createUser(newUser("newsiteadmin", clinicB, siteAdministrator), "Created123");
+		Context.getPersonService().savePerson(Context.getUserService().getUserByUsername("clinicianatB").getPerson());
+	}
+	
+	@Test
+	public void refusesAnAdministratorOfEveryClinicARoleBeyondSiteAdministrator() {
+		signInAs("instanceadmin");
+		
+		refused(() -> users.createUser(newUser("newinstanceadmin", clinicB, instanceAdministrator), "Created123"),
+		    "give or remove the role Test Instance Administrator");
+	}
+	
+	@Test
+	public void letsASuperuserGiveAnyRole() {
+		signInAsSuperuser();
+		
+		users.createUser(newUser("newinstanceadmin", null, instanceAdministrator), "Created123");
 	}
 	
 	@Test
@@ -183,6 +314,10 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		return service.saveRole(role);
 	}
 	
+	private static void property(String name, String value) {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(name, value));
+	}
+	
 	private static User newUser(String username, String clinics, Role role) {
 		Person person = new Person();
 		person.addName(new PersonName(username, null, "Tester"));
@@ -198,6 +333,12 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	
 	private static void save(User user) {
 		Context.getUserService().createUser(user, "Tester123");
+	}
+	
+	private void signInAsSuperuser() {
+		Context.flushSession();
+		Context.logout();
+		authenticate();
 	}
 	
 	private static void signInAs(String username) {

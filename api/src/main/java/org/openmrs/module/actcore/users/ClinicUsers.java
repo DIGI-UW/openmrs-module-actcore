@@ -14,7 +14,10 @@ import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
@@ -23,14 +26,15 @@ import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
+import org.openmrs.api.db.AdministrationDAO;
+import org.openmrs.api.db.UserDAO;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
 
 /**
- * A user's clinics, and who may manage which users. A user's clinics are the location uuids in its
- * {@link #CLINICS_PROPERTY} user property. An administrator without {@link #ALL_CLINICS_PRIVILEGE}
- * manages only users at its own clinics, and gives only roles that don't manage users, as in ACT
- * 2.0.
+ * A user's clinics, the location uuids in its {@link #CLINICS_PROPERTY} user property, and which
+ * users and roles an administrator may manage, as in ACT 2.0.
  */
 public final class ClinicUsers {
 	
@@ -39,6 +43,12 @@ public final class ClinicUsers {
 	
 	/** The distribution creates it; its holders manage users at every clinic. */
 	public static final String ALL_CLINICS_PRIVILEGE = "Task: act.users.allClinics";
+	
+	/** Comma-separated uuids of the roles any administrator may give. */
+	public static final String CLINICIAN_ROLES_PROPERTY = "actcore.users.clinicianRoles";
+	
+	/** Comma-separated uuids of the roles an administrator of every clinic may also give. */
+	public static final String SITE_ADMINISTRATOR_ROLES_PROPERTY = "actcore.users.siteAdministratorRoles";
 	
 	private ClinicUsers() {
 	}
@@ -69,12 +79,33 @@ public final class ClinicUsers {
 		        || grants(role, PrivilegeConstants.ADD_USERS);
 	}
 	
+	/** The names of the roles the authenticated user may give, or null for any role. */
+	public static Set<String> givableRoles() {
+		User actor = Context.getAuthenticatedUser();
+		if (actor.isSuperUser() || Daemon.isDaemonThread()) {
+			return null;
+		}
+		// Read without granting Get Global Properties, which core 2.8 needs and an administrator lacks.
+		AdministrationDAO properties = Context.getRegisteredComponent("adminDAO", AdministrationDAO.class);
+		Set<String> uuids = parse(properties.getGlobalProperty(CLINICIAN_ROLES_PROPERTY));
+		if (!isClinicLimited()) {
+			uuids.addAll(parse(properties.getGlobalProperty(SITE_ADMINISTRATOR_ROLES_PROPERTY)));
+		}
+		Set<String> names = new HashSet<>();
+		for (String uuid : uuids) {
+			Role role = userDao().getRoleByUuid(uuid);
+			if (role != null) {
+				names.add(role.getRole());
+			}
+		}
+		return names;
+	}
+	
 	/**
-	 * Whether the current user may give the role: OpenMRS's own rule (every privilege of the role and
-	 * the roles it inherits, and a superuser role only by a superuser), and, if clinic-limited, ACT
-	 * 2.0's.
+	 * Whether the current user may give the role: one of {@code givable} (null for any), and OpenMRS's
+	 * own rule, every privilege of the role and its parents, and a superuser role only by a superuser.
 	 */
-	public static boolean mayGive(Role role) {
+	public static boolean mayGive(Role role, Set<String> givable) {
 		User actor = Context.getAuthenticatedUser();
 		if (actor == null) {
 			return false;
@@ -82,7 +113,7 @@ public final class ClinicUsers {
 		if (actor.isSuperUser()) {
 			return true;
 		}
-		if (isSuperUserRole(role) || (isClinicLimited() && managesUsers(role))) {
+		if (isSuperUserRole(role) || (givable != null && !givable.contains(role.getRole()))) {
 			return false;
 		}
 		for (Privilege privilege : allPrivileges(role)) {
@@ -91,6 +122,22 @@ public final class ClinicUsers {
 			}
 		}
 		return true;
+	}
+	
+	/**
+	 * Every role, read without granting Manage Roles: holding it, even briefly, lets the session edit
+	 * roles.
+	 */
+	public static List<Role> allRoles() {
+		return userDao().getAllRoles();
+	}
+	
+	static Role role(String name) {
+		return userDao().getRole(name);
+	}
+	
+	private static UserDAO userDao() {
+		return Context.getRegisteredComponent("userDAO", UserDAO.class);
 	}
 	
 	private static boolean isSuperUserRole(Role role) {
@@ -172,6 +219,46 @@ public final class ClinicUsers {
 				return new Stored(clinics, roles);
 			});
 		}
+	}
+	
+	/** The users of a person, as user id to username or system id, read as {@link Stored#of} reads. */
+	static Map<Integer, String> usersOf(Integer personId) {
+		if (personId == null) {
+			return Collections.emptyMap();
+		}
+		SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
+		return sessions.getCurrentSession().doReturningWork(connection -> {
+			Map<Integer, String> users = new LinkedHashMap<>();
+			try (PreparedStatement query = connection
+			        .prepareStatement("select user_id, coalesce(username, system_id) from users where person_id = ?")) {
+				query.setInt(1, personId);
+				try (ResultSet rows = query.executeQuery()) {
+					while (rows.next()) {
+						users.put(rows.getInt(1), rows.getString(2));
+					}
+				}
+			}
+			return users;
+		});
+	}
+	
+	/**
+	 * The person a provider belongs to, read as {@link Stored#of} reads, or null for a new provider.
+	 */
+	static Integer personOfProvider(Integer providerId) {
+		if (providerId == null) {
+			return null;
+		}
+		SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
+		return sessions.getCurrentSession().doReturningWork(connection -> {
+			try (PreparedStatement query = connection
+			        .prepareStatement("select person_id from provider where provider_id = ?")) {
+				query.setInt(1, providerId);
+				try (ResultSet rows = query.executeQuery()) {
+					return rows.next() ? (Integer) rows.getObject(1) : null;
+				}
+			}
+		});
 	}
 	
 	static Set<String> roleNames(Collection<Role> roles) {
