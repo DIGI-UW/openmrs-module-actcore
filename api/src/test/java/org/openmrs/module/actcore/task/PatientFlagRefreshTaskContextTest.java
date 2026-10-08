@@ -14,6 +14,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,6 +70,57 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	public void setUp() {
 		flagService = Context.getService(FlagService.class);
 		saveCohortType("System List");
+	}
+	
+	@Test
+	public void recordsWhenItFinished() {
+		Instant before = Instant.now();
+		
+		PatientFlagRefreshTask.Result ran = new PatientFlagRefreshTask() {
+			
+			@Override
+			void refreshAdherence() {
+			}
+		}.runIfIdle();
+		
+		assertEquals(0, ran.flagsFailed);
+		assertEquals(0, ran.listsFailed);
+		assertTrue(!ran.adherenceFailed);
+		Instant finished = Instant
+		        .parse(Context.getAdministrationService().getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY));
+		assertTrue(!finished.isBefore(before) && !finished.isAfter(Instant.now()));
+		assertTrue(!PatientFlagRefreshTask.isRunning());
+	}
+	
+	@Test
+	public void saysWhatFailedInARunAndStillRecordsThatItFinished() {
+		saveFlag("overdue", MATCHES_ONE);
+		PatientFlagRefreshTask failing = new PatientFlagRefreshTask() {
+			
+			@Override
+			void refreshAdherence() {
+				throw new IllegalStateException("adherence is broken");
+			}
+			
+			@Override
+			void reconcile(FlagService flagService, Flag flag) {
+				throw new IllegalStateException("criteria is broken");
+			}
+			
+			@Override
+			FlagListSync.Result syncLists() {
+				FlagListSync.Result lists = super.syncLists();
+				lists.failures = 2;
+				return lists;
+			}
+		};
+		
+		PatientFlagRefreshTask.Result ran = failing.runIfIdle();
+		
+		assertEquals(1, ran.flagsFailed);
+		assertEquals(2, ran.listsFailed);
+		assertTrue(ran.adherenceFailed);
+		assertNotNull(Context.getAdministrationService().getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY));
 	}
 	
 	@Test
@@ -549,6 +601,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		final Thread first = Thread.currentThread();
 		final List<LogEvent> secondRunLogged = new CopyOnWriteArrayList<LogEvent>();
 		final AtomicReference<Throwable> secondRunThrew = new AtomicReference<Throwable>();
+		final List<Boolean> secondRunSaw = new CopyOnWriteArrayList<Boolean>();
 		AbstractAppender appender = new AbstractAppender("overlap", null, null, true, Property.EMPTY_ARRAY) {
 			
 			@Override
@@ -565,7 +618,8 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 					@Override
 					public void run() {
 						try {
-							new PatientFlagRefreshTask().execute();
+							secondRunSaw.add(PatientFlagRefreshTask.isRunning());
+							secondRunSaw.add(new PatientFlagRefreshTask().runIfIdle() == null);
 						}
 						catch (Throwable t) {
 							secondRunThrew.set(t);
@@ -588,6 +642,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		runScheduledWorkWith(appender, PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask());
 		
 		assertNull(String.valueOf(secondRunThrew.get()), secondRunThrew.get());
+		assertEquals(Arrays.asList(true, true), secondRunSaw);
 		assertEquals(1, secondRunLogged.size());
 		assertEquals(Level.WARN, secondRunLogged.get(0).getLevel());
 		assertTrue(secondRunLogged.get(0).getMessage().getFormattedMessage().contains("another run is in progress"));

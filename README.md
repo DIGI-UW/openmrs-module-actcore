@@ -26,6 +26,11 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Daily refresh.** The task **RHD Patient Flag Refresh** re-evaluates every enabled flag and
   writes only the rows that changed. It first recomputes the prophylaxis adherence below, as a flag
   may read it (the distribution's RHD prophylaxis overdue flag reads the next due date).
+- **Refresh on demand.** `POST /ws/rest/v1/actcore/refresh` runs that refresh now, as the scheduler's
+  daemon user, and answers once it has finished with `flagsFailed`, `listsFailed` and
+  `adherenceFailed`, or with `refreshed` false when another run was already going. `GET` says when
+  it last finished (`actcore.refresh.lastFinished`, written even by a run in which some flags failed)
+  and whether one is running. ACT's admin page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
@@ -184,7 +189,9 @@ registers its tasks on first start; there is nothing else to set up. On every st
 saved under a class that has since moved, as the rhdflags tasks were when the module became actcore, and
 reschedules it, so an upgraded database keeps refreshing.
 
-To run the refresh now (or `RHD Prophylaxis Adherence Refresh` for adherence):
+To run the refresh now, a user with `Task: act.refreshFlags` can use ACT's admin page, which calls
+`POST /ws/rest/v1/actcore/refresh`. From the command line (or `RHD Prophylaxis Adherence Refresh` for
+adherence alone), with Manage Scheduler; it runs on the request thread, so use a superuser:
 
     curl -u admin:<password> -X POST -H 'Content-Type: application/json' \
       -d '{"action":"runtask","tasks":["RHD Patient Flag Refresh"]}' \
@@ -202,6 +209,10 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
+
+The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
+refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
+patient's flags.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as

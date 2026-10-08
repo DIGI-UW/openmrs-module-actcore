@@ -13,6 +13,8 @@ import java.util.Date;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
+import org.openmrs.module.DaemonToken;
+import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
@@ -27,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * registers nothing of its own, so without this the task would have to be created by hand in the
  * admin UI on every environment.
  */
-public class ActCoreActivator extends BaseModuleActivator {
+public class ActCoreActivator extends BaseModuleActivator implements DaemonTokenAware {
 	
 	public static final String REFRESH_TASK_NAME = "RHD Patient Flag Refresh";
 	
@@ -47,6 +49,21 @@ public class ActCoreActivator extends BaseModuleActivator {
 	private static final long INITIAL_DELAY_MILLIS = 300000L;
 	
 	private static final Logger log = LoggerFactory.getLogger(ActCoreActivator.class);
+	
+	private static volatile DaemonToken daemonToken;
+	
+	@Override
+	public void setDaemonToken(DaemonToken token) {
+		daemonToken = token;
+	}
+	
+	/**
+	 * What the refresh endpoint runs the refresh with, as the scheduler's daemon user; null until the
+	 * module has started.
+	 */
+	public static DaemonToken getDaemonToken() {
+		return daemonToken;
+	}
 	
 	@Override
 	public void started() {
