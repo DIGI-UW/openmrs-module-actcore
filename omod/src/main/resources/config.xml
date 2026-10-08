@@ -51,6 +51,10 @@
     <point>org.openmrs.api.ProgramWorkflowService</point>
     <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
   </advice>
+  <advice>
+    <point>org.openmrs.api.UserService</point>
+    <class>org.openmrs.module.actcore.users.ClinicLimitedUserManagement</class>
+  </advice>
   <globalProperty>
     <property>actcore.registryProgram</property>
     <defaultValue>7d73e143-a550-5a9d-aecd-dd771add098d</defaultValue>

@@ -31,6 +31,12 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `adherenceFailed`, or with `refreshed` false when another run was already going. `GET` says when
   it last finished (`actcore.refresh.lastFinished`, written even by a run in which some flags failed)
   and whether one is running. ACT's admin page calls it.
+- **Users at their clinics.** A user's clinics are the location uuids in its `act.clinics` user
+  property. An administrator without `Task: act.users.allClinics` manages only the users sharing one
+  of its clinics, adds or removes only its own clinics, and gives only roles that don't manage users,
+  as in ACT 2.0. ACT Core checks the UserService calls that change a user (create, save, disable,
+  password reset, setting a user property), whether REST or the legacy screens make them. `GET /ws/rest/v1/actcore/users` lists the users
+  an administrator manages and the roles it may give; ACT's Users and roles page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
@@ -213,6 +219,11 @@ stopped, this module will not start on the next boot either; start Initializer f
 The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
+
+The users endpoint needs Edit Users. It lists roles with Manage Roles added for that one read, as
+core 2.8 requires it to list them and an administrator no longer holds it: Manage Roles would let it
+change role definitions. `Task: act.users.allClinics`, which the distribution creates, lifts the
+clinic limit, so grant it only to administrators of every clinic.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as
