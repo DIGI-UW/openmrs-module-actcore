@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.task;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -39,8 +40,14 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefreshTask.class);
 	
 	/**
-	 * Static because the REST taskaction resource runs a new instance of the task, on the request
-	 * thread, alongside the scheduler's.
+	 * When the last refresh finished, as an ISO-8601 instant, for the scheduled and on-demand runs
+	 * alike.
+	 */
+	public static final String LAST_FINISHED_PROPERTY = "actcore.refresh.lastFinished";
+	
+	/**
+	 * Static because the REST taskaction resource and the refresh endpoint each run a new instance of
+	 * the task alongside the scheduler's.
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
@@ -51,16 +58,28 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	@Override
 	public void execute() {
+		runIfIdle();
+	}
+	
+	/**
+	 * Runs the refresh unless another run is in progress, and says whether this call ran it.
+	 */
+	public boolean runIfIdle() {
 		if (!RUNNING.tryLock()) {
 			log.warn("Patient flag refresh skipped: another run is in progress");
-			return;
+			return false;
 		}
 		try {
 			refresh();
+			return true;
 		}
 		finally {
 			RUNNING.unlock();
 		}
+	}
+	
+	public static boolean isRunning() {
+		return RUNNING.isLocked();
 	}
 	
 	private void refresh() {
@@ -102,6 +121,16 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		FlagListSync.Result lists = new FlagListSync().syncAll();
 		
 		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
+		recordFinished();
+	}
+	
+	private static void recordFinished() {
+		try {
+			Context.getAdministrationService().setGlobalProperty(LAST_FINISHED_PROPERTY, Instant.now().toString());
+		}
+		catch (RuntimeException e) {
+			log.error("Could not record when the patient flag refresh finished", e);
+		}
 	}
 	
 	/**

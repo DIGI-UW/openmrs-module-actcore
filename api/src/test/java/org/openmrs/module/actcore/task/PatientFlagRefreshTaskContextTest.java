@@ -14,6 +14,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,6 +70,19 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	public void setUp() {
 		flagService = Context.getService(FlagService.class);
 		saveCohortType("System List");
+	}
+	
+	@Test
+	public void recordsWhenItFinished() {
+		Instant before = Instant.now();
+		
+		boolean ran = new PatientFlagRefreshTask().runIfIdle();
+		
+		assertTrue(ran);
+		Instant finished = Instant
+		        .parse(Context.getAdministrationService().getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY));
+		assertTrue(!finished.isBefore(before) && !finished.isAfter(Instant.now()));
+		assertTrue(!PatientFlagRefreshTask.isRunning());
 	}
 	
 	@Test
