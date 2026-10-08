@@ -10,12 +10,14 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.UUID;
 
+import org.junit.After;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
@@ -27,19 +29,36 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.DaemonTokens;
+import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Running the refresh as the daemon user needs the token the module receives when it starts, which
- * a context test never has, so that path is checked on a running server.
- */
 public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private RefreshController controller;
+	
+	@After
+	public void forgetTheDaemonToken() {
+		new ActCoreActivator().setDaemonToken(null);
+	}
+	
+	@Test
+	public void runsTheRefreshAsTheDaemonForAUserWithOnlyThePrivilege() {
+		DaemonTokens.pass("actcore", new ActCoreActivator());
+		authenticateWith(RefreshController.PRIVILEGE);
+		
+		SimpleObject response = controller.refresh();
+		
+		assertEquals(Boolean.TRUE, response.get("refreshed"));
+		assertEquals(Integer.valueOf(0), response.get("flagsFailed"));
+		assertEquals(Integer.valueOf(0), response.get("listsFailed"));
+		assertNotNull(response.get("adherenceFailed"));
+		assertNotNull(response.get("lastRefreshed"));
+	}
 	
 	@Test
 	public void refusesAUserWithoutThePrivilege() {

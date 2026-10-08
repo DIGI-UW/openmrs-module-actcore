@@ -85,7 +85,7 @@
     <property>actcore.refresh.lastFinished</property>
     <defaultValue></defaultValue>
     <description>
-      When the patient flag refresh last finished, scheduled or on demand, as an ISO-8601 instant. The refresh writes it; ACT's admin page reads it.
+      When the patient flag refresh last finished, scheduled or on demand, as an ISO-8601 instant, even if some flags failed in it. The refresh writes it; ACT's admin page reads it.
     </description>
   </globalProperty>
   <globalProperty>

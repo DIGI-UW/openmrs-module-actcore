@@ -41,7 +41,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	/**
 	 * When the last refresh finished, as an ISO-8601 instant, for the scheduled and on-demand runs
-	 * alike.
+	 * alike. Written even when some flags failed, or one broken flag would hide every run after it.
 	 */
 	public static final String LAST_FINISHED_PROPERTY = "actcore.refresh.lastFinished";
 	
@@ -56,22 +56,37 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	int cleared;
 	
+	public static class Result {
+		
+		public final int flagsFailed;
+		
+		public final int listsFailed;
+		
+		public final boolean adherenceFailed;
+		
+		Result(int flagsFailed, int listsFailed, boolean adherenceFailed) {
+			this.flagsFailed = flagsFailed;
+			this.listsFailed = listsFailed;
+			this.adherenceFailed = adherenceFailed;
+		}
+	}
+	
 	@Override
 	public void execute() {
 		runIfIdle();
 	}
 	
 	/**
-	 * Runs the refresh unless another run is in progress, and says whether this call ran it.
+	 * Runs the refresh unless another run is in progress, returning what failed in it, or null when
+	 * this call did not run it.
 	 */
-	public boolean runIfIdle() {
+	public Result runIfIdle() {
 		if (!RUNNING.tryLock()) {
 			log.warn("Patient flag refresh skipped: another run is in progress");
-			return false;
+			return null;
 		}
 		try {
-			refresh();
-			return true;
+			return refresh();
 		}
 		finally {
 			RUNNING.unlock();
@@ -82,15 +97,17 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		return RUNNING.isLocked();
 	}
 	
-	private void refresh() {
+	private Result refresh() {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
 		
 		// The overdue flag reads the adherence table, so recompute it first.
+		boolean adherenceFailed = false;
 		try {
-			AdherenceRefreshTask.refreshBeforeFlags();
+			refreshAdherence();
 		}
 		catch (RuntimeException e) {
+			adherenceFailed = true;
 			log.error("Prophylaxis adherence refresh before the flags failed; the flags read its last run", e);
 		}
 		
@@ -118,10 +135,19 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		// Clear the refresh's rows first, or every commit the sync makes dirty-checks them all.
 		Context.flushSession();
 		Context.clearSession();
-		FlagListSync.Result lists = new FlagListSync().syncAll();
+		FlagListSync.Result lists = syncLists();
 		
 		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
 		recordFinished();
+		return new Result(failed, lists.failures, adherenceFailed);
+	}
+	
+	void refreshAdherence() {
+		AdherenceRefreshTask.refreshBeforeFlags();
+	}
+	
+	FlagListSync.Result syncLists() {
+		return new FlagListSync().syncAll();
 	}
 	
 	private static void recordFinished() {

@@ -27,8 +27,10 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   writes only the rows that changed. It first recomputes the prophylaxis adherence below, as a flag
   may read it (the distribution's RHD prophylaxis overdue flag reads the next due date).
 - **Refresh on demand.** `POST /ws/rest/v1/actcore/refresh` runs that refresh now, as the scheduler's
-  daemon user, and answers once it has finished; `GET` says when it last finished
-  (`actcore.refresh.lastFinished`) and whether one is running. ACT's admin page calls it.
+  daemon user, and answers once it has finished with `flagsFailed`, `listsFailed` and
+  `adherenceFailed`, or with `refreshed` false when another run was already going. `GET` says when
+  it last finished (`actcore.refresh.lastFinished`, written even by a run in which some flags failed)
+  and whether one is running. ACT's admin page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.

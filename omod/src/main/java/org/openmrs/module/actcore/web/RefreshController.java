@@ -55,7 +55,7 @@ public class RefreshController extends BaseRestController {
 		if (token == null) {
 			throw new APIException("ACT Core has not started, so it cannot run the refresh");
 		}
-		final boolean[] ran = new boolean[1];
+		final PatientFlagRefreshTask.Result[] ran = new PatientFlagRefreshTask.Result[1];
 		final RuntimeException[] failure = new RuntimeException[1];
 		Daemon.runInDaemonThreadAndWait(new Runnable() {
 			
@@ -72,7 +72,12 @@ public class RefreshController extends BaseRestController {
 		if (failure[0] != null) {
 			throw new APIException("The patient flag refresh failed", failure[0]);
 		}
-		return status().add("refreshed", ran[0]);
+		SimpleObject response = status().add("refreshed", ran[0] != null);
+		if (ran[0] != null) {
+			response.add("flagsFailed", ran[0].flagsFailed).add("listsFailed", ran[0].listsFailed).add("adherenceFailed",
+			    ran[0].adherenceFailed);
+		}
+		return response;
 	}
 	
 	private static SimpleObject status() {
