@@ -11,10 +11,13 @@ package org.openmrs.module.actcore.users;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +30,6 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
-import org.openmrs.api.db.AdministrationDAO;
 import org.openmrs.api.db.UserDAO;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
@@ -67,36 +69,55 @@ public final class ClinicUsers {
 		return parse(user.getUserProperty(CLINICS_PROPERTY));
 	}
 	
-	/** True unless the current user is a superuser or holds {@link #ALL_CLINICS_PRIVILEGE}. */
+	/**
+	 * True unless the current user is a superuser or its roles grant {@link #ALL_CLINICS_PRIVILEGE}:
+	 * its roles, not Context.hasPrivilege, which may query roles, and a flush must not query.
+	 */
 	public static boolean isClinicLimited() {
 		User actor = Context.getAuthenticatedUser();
-		return actor != null && !actor.isSuperUser() && !Context.hasPrivilege(ALL_CLINICS_PRIVILEGE);
+		return actor != null && !actor.isSuperUser() && !actor.hasPrivilege(ALL_CLINICS_PRIVILEGE);
 	}
 	
-	/** Whether the role, with the roles it inherits, can create or edit users. */
-	public static boolean managesUsers(Role role) {
-		return isSuperUserRole(role) || grants(role, PrivilegeConstants.EDIT_USERS)
-		        || grants(role, PrivilegeConstants.ADD_USERS);
+	/** Whether the stored roles, with the roles they inherit, can create or edit users. */
+	static boolean managesUsers(Set<String> roleNames) {
+		Set<String> roles = new HashSet<>();
+		Deque<String> unread = new ArrayDeque<>(roleNames);
+		while (!unread.isEmpty()) {
+			String role = unread.pop();
+			if (roles.add(role)) {
+				unread.addAll(column("select parent_role from role_role where child_role = ?", role));
+			}
+		}
+		if (roles.contains(RoleConstants.SUPERUSER)) {
+			return true;
+		}
+		for (String role : roles) {
+			List<String> privileges = column("select privilege from role_privilege where role = ?", role);
+			if (privileges.contains(PrivilegeConstants.EDIT_USERS) || privileges.contains(PrivilegeConstants.ADD_USERS)) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
-	/** The names of the roles the authenticated user may give, or null for any role. */
+	/**
+	 * The names of the roles the current user may give, or null for any, read through the connection:
+	 * core 2.8's service needs Get Global Properties, which an administrator lacks.
+	 */
 	public static Set<String> givableRoles() {
 		User actor = Context.getAuthenticatedUser();
 		if (actor.isSuperUser() || Daemon.isDaemonThread()) {
 			return null;
 		}
-		// Read without granting Get Global Properties, which core 2.8 needs and an administrator lacks.
-		AdministrationDAO properties = Context.getRegisteredComponent("adminDAO", AdministrationDAO.class);
-		Set<String> uuids = parse(properties.getGlobalProperty(CLINICIAN_ROLES_PROPERTY));
+		Set<String> uuids = parse(
+		    first(column("select property_value from global_property where property = ?", CLINICIAN_ROLES_PROPERTY)));
 		if (!isClinicLimited()) {
-			uuids.addAll(parse(properties.getGlobalProperty(SITE_ADMINISTRATOR_ROLES_PROPERTY)));
+			uuids.addAll(parse(first(column("select property_value from global_property where property = ?",
+			    SITE_ADMINISTRATOR_ROLES_PROPERTY))));
 		}
 		Set<String> names = new HashSet<>();
 		for (String uuid : uuids) {
-			Role role = userDao().getRoleByUuid(uuid);
-			if (role != null) {
-				names.add(role.getRole());
-			}
+			names.addAll(column("select role from role where uuid = ?", uuid));
 		}
 		return names;
 	}
@@ -132,10 +153,6 @@ public final class ClinicUsers {
 		return userDao().getAllRoles();
 	}
 	
-	static Role role(String name) {
-		return userDao().getRole(name);
-	}
-	
 	private static UserDAO userDao() {
 		return Context.getRegisteredComponent("userDAO", UserDAO.class);
 	}
@@ -155,15 +172,6 @@ public final class ClinicUsers {
 		return roles;
 	}
 	
-	private static boolean grants(Role role, String privilege) {
-		for (Privilege held : allPrivileges(role)) {
-			if (privilege.equals(held.getPrivilege())) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
 	private static Set<Privilege> allPrivileges(Role role) {
 		Set<Privilege> privileges = new HashSet<>();
 		for (Role each : withParents(role)) {
@@ -174,15 +182,27 @@ public final class ClinicUsers {
 		return privileges;
 	}
 	
-	/** A user's clinics and role names as the database holds them, before the edit being saved. */
+	/** A user's row, properties, clinics and role names as the database holds them. */
 	public static final class Stored {
+		
+		static final Stored NONE = new Stored(null, null, Collections.<String, String> emptyMap(),
+		        Collections.<String> emptySet());
+		
+		public final String name;
+		
+		public final Integer personId;
+		
+		public final Map<String, String> properties;
 		
 		public final Set<String> clinics;
 		
 		public final Set<String> roles;
 		
-		private Stored(Set<String> clinics, Set<String> roles) {
-			this.clinics = clinics;
+		private Stored(String name, Integer personId, Map<String, String> properties, Set<String> roles) {
+			this.name = name;
+			this.personId = personId;
+			this.properties = properties;
+			this.clinics = parse(properties.get(CLINICS_PROPERTY));
 			this.roles = roles;
 		}
 		
@@ -192,72 +212,59 @@ public final class ClinicUsers {
 		 */
 		public static Stored of(Integer userId) {
 			if (userId == null) {
-				return new Stored(Collections.<String> emptySet(), Collections.<String> emptySet());
+				return NONE;
 			}
-			SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
-			return sessions.getCurrentSession().doReturningWork(connection -> {
-				Set<String> clinics = Collections.emptySet();
-				try (PreparedStatement query = connection
-				        .prepareStatement("select property_value from user_property where user_id = ? and property = ?")) {
-					query.setInt(1, userId);
-					query.setString(2, CLINICS_PROPERTY);
-					try (ResultSet rows = query.executeQuery()) {
-						if (rows.next()) {
-							clinics = parse(rows.getString(1));
-						}
-					}
-				}
-				Set<String> roles = new HashSet<>();
-				try (PreparedStatement query = connection.prepareStatement("select role from user_role where user_id = ?")) {
-					query.setInt(1, userId);
-					try (ResultSet rows = query.executeQuery()) {
-						while (rows.next()) {
-							roles.add(rows.getString(1));
-						}
-					}
-				}
-				return new Stored(clinics, roles);
-			});
+			List<String[]> user = rows("select coalesce(username, system_id), person_id from users where user_id = ?",
+			    userId);
+			Map<String, String> properties = new HashMap<>();
+			for (String[] row : rows("select property, property_value from user_property where user_id = ?", userId)) {
+				properties.put(row[0], row[1]);
+			}
+			return new Stored(user.isEmpty() ? null : user.get(0)[0],
+			        user.isEmpty() ? null : Integer.valueOf(user.get(0)[1]), properties,
+			        new HashSet<>(column("select role from user_role where user_id = ?", userId)));
 		}
 	}
 	
-	/** The users of a person, as user id to username or system id, read as {@link Stored#of} reads. */
-	static Map<Integer, String> usersOf(Integer personId) {
-		if (personId == null) {
-			return Collections.emptyMap();
+	/** The ids of a person's users, read as {@link Stored#of} reads. */
+	static List<Integer> usersOf(Integer personId) {
+		List<Integer> users = new ArrayList<>();
+		for (String id : column("select user_id from users where person_id = ?", personId)) {
+			users.add(Integer.valueOf(id));
 		}
+		return users;
+	}
+	
+	private static String first(List<String> values) {
+		return values.isEmpty() ? null : values.get(0);
+	}
+	
+	static List<String> column(String sql, Object parameter) {
+		List<String> values = new ArrayList<>();
+		for (String[] row : rows(sql, parameter)) {
+			values.add(row[0]);
+		}
+		return values;
+	}
+	
+	private static List<String[]> rows(String sql, Object parameter) {
 		SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
 		return sessions.getCurrentSession().doReturningWork(connection -> {
-			Map<Integer, String> users = new LinkedHashMap<>();
-			try (PreparedStatement query = connection
-			        .prepareStatement("select user_id, coalesce(username, system_id) from users where person_id = ?")) {
-				query.setInt(1, personId);
-				try (ResultSet rows = query.executeQuery()) {
-					while (rows.next()) {
-						users.put(rows.getInt(1), rows.getString(2));
+			List<String[]> rows = new ArrayList<>();
+			try (PreparedStatement query = connection.prepareStatement(sql)) {
+				query.setObject(1, parameter);
+				try (ResultSet results = query.executeQuery()) {
+					int columns = results.getMetaData().getColumnCount();
+					while (results.next()) {
+						String[] row = new String[columns];
+						for (int i = 0; i < columns; i++) {
+							row[i] = results.getString(i + 1);
+						}
+						rows.add(row);
 					}
 				}
 			}
-			return users;
-		});
-	}
-	
-	/**
-	 * The person a provider belongs to, read as {@link Stored#of} reads, or null for a new provider.
-	 */
-	static Integer personOfProvider(Integer providerId) {
-		if (providerId == null) {
-			return null;
-		}
-		SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
-		return sessions.getCurrentSession().doReturningWork(connection -> {
-			try (PreparedStatement query = connection
-			        .prepareStatement("select person_id from provider where provider_id = ?")) {
-				query.setInt(1, providerId);
-				try (ResultSet rows = query.executeQuery()) {
-					return rows.next() ? (Integer) rows.getObject(1) : null;
-				}
-			}
+			return rows;
 		});
 	}
 	

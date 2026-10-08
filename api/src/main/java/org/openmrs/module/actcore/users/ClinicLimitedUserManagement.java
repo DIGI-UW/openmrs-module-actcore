@@ -9,71 +9,269 @@
  */
 package org.openmrs.module.actcore.users;
 
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
-import org.aopalliance.intercept.MethodInterceptor;
-import org.aopalliance.intercept.MethodInvocation;
+import org.hibernate.EmptyInterceptor;
+import org.hibernate.Hibernate;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
+import org.hibernate.collection.spi.PersistentCollection;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.type.Type;
+import org.openmrs.OpenmrsObject;
+import org.openmrs.Person;
+import org.openmrs.PersonAddress;
+import org.openmrs.PersonAttribute;
+import org.openmrs.PersonName;
+import org.openmrs.Privilege;
+import org.openmrs.Provider;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
+import org.openmrs.api.db.LoginCredential;
+import org.openmrs.util.OpenmrsConstants;
+import org.openmrs.util.PrivilegeConstants;
+import org.springframework.stereotype.Component;
 
 /**
- * Keeps the UserService changes of a user to the users at the administrator's clinics, if it is
- * clinic-limited, and to the roles it may give (see {@link ClinicUsers}).
+ * Refuses, as the session flushes, a role change without Manage Roles, and a change to a user, its
+ * person or provider beyond the actor's clinics and the roles it may give.
  */
-public class ClinicLimitedUserManagement implements MethodInterceptor {
+@Component("actcore.clinicLimitedUserManagement")
+public class ClinicLimitedUserManagement extends EmptyInterceptor {
 	
-	private static final List<String> SAVES = Arrays.asList("createUser", "saveUser");
+	private static final long serialVersionUID = 1L;
 	
-	private static final List<String> OTHER_CHANGES = Arrays.asList("retireUser", "unretireUser", "purgeUser",
-	    "changePassword", "changeHashedPassword", "changeQuestionAnswer", "setUserProperty", "removeUserProperty",
-	    "setUserActivationKey");
+	// Core stamps these on every entity it updates, so they change even when nothing else did.
+	private static final Set<String> AUDIT = new HashSet<>(
+	        Arrays.asList("changedBy", "dateChanged", "personChangedBy", "personDateChanged"));
 	
-	private static final List<String> OWN_PROPERTIES = Arrays.asList("saveUserProperty", "saveUserProperties");
+	// Core writes these for whoever signs in, while the user signed in before is still the current one.
+	private static final Set<String> SIGN_IN_PROPERTIES = new HashSet<>(
+	        Arrays.asList(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS, OpenmrsConstants.USER_PROPERTY_LOCKOUT_TIMESTAMP,
+	            "lastLoginTimestamp"));
+	
+	// Users a clinic-limited user created in this transaction, whose clinics are not stored yet.
+	private static final ThreadLocal<Map<User, Integer>> CREATED = ThreadLocal.withInitial(IdentityHashMap::new);
 	
 	@Override
-	public Object invoke(MethodInvocation invocation) throws Throwable {
-		Object[] args = invocation.getArguments();
-		String method = invocation.getMethod().getName();
-		User actor = Context.getAuthenticatedUser();
-		User target = OWN_PROPERTIES.contains(method) ? actor : null;
-		if ((SAVES.contains(method) || OTHER_CHANGES.contains(method)) && args.length > 0 && args[0] instanceof User) {
-			target = (User) args[0];
+	public boolean onSave(Object entity, Serializable id, Object[] state, String[] names, Type[] types) {
+		User actor = actor();
+		if (actor != null && entity instanceof User) {
+			User user = (User) entity;
+			checkUser(actor, user, true);
+			checkPerson(actor, user.getPerson());
+			if (ClinicUsers.isClinicLimited()) {
+				CREATED.get().put(user, actor.getUserId());
+			}
+		} else if (actor != null) {
+			checkChange(actor, entity, null);
 		}
-		Set<String> givable = target != null && actor != null ? ClinicUsers.givableRoles() : null;
-		if (givable != null) {
-			check(method, args, target, actor, givable);
-		}
-		return invocation.proceed();
+		return false;
 	}
 	
-	private static void check(String method, Object[] args, User target, User actor, Set<String> givable) {
-		ClinicUsers.Stored stored = ClinicUsers.Stored.of(target.getUserId());
-		Set<String> clinics = clinicsAfter(method, args, target, stored);
-		Set<String> roles = SAVES.contains(method) ? ClinicUsers.roleNames(target.getRoles()) : stored.roles;
+	@Override
+	public boolean onFlushDirty(Object entity, Serializable id, Object[] current, Object[] previous, String[] names,
+	        Type[] types) {
+		User actor = actor();
+		if (actor == null || !(entity instanceof Role || entity instanceof User || entity instanceof LoginCredential
+		        || isPersonData(entity)) || !changed(entity, id, current, previous, names, types)) {
+			return false;
+		}
+		if (entity instanceof User) {
+			User user = (User) entity;
+			if (ClinicUsers.isClinicLimited()
+			        && !user.getPerson().getPersonId().equals(ClinicUsers.Stored.of(user.getUserId()).personId)) {
+				throw refusal("You cannot move a user to another person");
+			}
+			checkUser(actor, user, false);
+		} else if (entity instanceof LoginCredential) {
+			checkStoredUser(actor, ((LoginCredential) entity).getUserId());
+		} else {
+			int person = Arrays.asList(names).indexOf("person");
+			Object[] before = previous != null ? previous : snapshot(entity, id);
+			checkChange(actor, entity, person >= 0 && before != null ? idOf(before[person]) : null);
+		}
+		return false;
+	}
+	
+	@Override
+	public void onDelete(Object entity, Serializable id, Object[] state, String[] names, Type[] types) {
+		User actor = actor();
+		if (actor != null && entity instanceof User) {
+			checkStoredUser(actor, ((User) entity).getUserId());
+		} else if (actor != null) {
+			checkChange(actor, entity, null);
+		}
+	}
+	
+	@Override
+	public void onCollectionRecreate(Object collection, Serializable key) {
+		collectionChanged(collection);
+	}
+	
+	@Override
+	public void onCollectionRemove(Object collection, Serializable key) {
+		collectionChanged(collection);
+	}
+	
+	@Override
+	public void onCollectionUpdate(Object collection, Serializable key) {
+		collectionChanged(collection);
+	}
+	
+	@Override
+	public void afterTransactionCompletion(Transaction transaction) {
+		CREATED.remove();
+	}
+	
+	/** Whether the current user may change the user's clinics and roles: the rule the flush applies. */
+	public static boolean mayEdit(User user) {
+		if (!ClinicUsers.isClinicLimited()) {
+			return true;
+		}
+		User actor = Context.getAuthenticatedUser();
+		Set<String> mine = ClinicUsers.Stored.of(actor.getUserId()).clinics;
+		return !actor.getUserId().equals(user.getUserId()) && !mine.isEmpty()
+		        && unmanaged(ClinicUsers.Stored.of(user.getUserId()), mine) == null;
+	}
+	
+	/** The signed-in user whose changes are judged: none for a daemon, a superuser or no one. */
+	private static User actor() {
+		if (Daemon.isDaemonThread() || !Context.isSessionOpen()) {
+			return null;
+		}
+		User actor = Context.getAuthenticatedUser();
+		return actor == null || actor.isSuperUser() ? null : actor;
+	}
+	
+	private static void collectionChanged(Object collection) {
+		User actor = actor();
+		Object owner = collection instanceof PersistentCollection ? ((PersistentCollection) collection).getOwner() : null;
+		if (actor == null) {
+			return;
+		}
+		if (owner instanceof Role && roleChanged((Role) owner)) {
+			checkRoleChange(actor, (Role) owner);
+		} else if (owner instanceof User && userCollectionsChanged((User) owner)) {
+			checkUser(actor, (User) owner, false);
+		}
+	}
+	
+	private static boolean roleChanged(Role role) {
+		String name = role.getRole();
+		return !ClinicUsers.roleNames(role.getInheritedRoles())
+		        .equals(stored("select parent_role from role_role where child_role = ?", name))
+		        || !ClinicUsers.roleNames(role.getChildRoles())
+		                .equals(stored("select child_role from role_role where parent_role = ?", name))
+		        || !privilegeNames(role.getPrivileges())
+		                .equals(stored("select privilege from role_privilege where role = ?", name));
+	}
+	
+	private static boolean userCollectionsChanged(User user) {
+		if (isCreated(user)) {
+			return true;
+		}
+		ClinicUsers.Stored stored = ClinicUsers.Stored.of(user.getUserId());
+		if (!ClinicUsers.roleNames(user.getRoles()).equals(stored.roles)) {
+			return true;
+		}
+		if (!Hibernate.isInitialized(user.getUserProperties())) {
+			return false;
+		}
+		Map<String, String> now = new HashMap<>(user.getUserProperties());
+		Map<String, String> before = new HashMap<>(stored.properties);
+		now.keySet().removeAll(SIGN_IN_PROPERTIES);
+		before.keySet().removeAll(SIGN_IN_PROPERTIES);
+		return !now.equals(before);
+	}
+	
+	private static void checkChange(User actor, Object entity, Integer personBefore) {
+		if (entity instanceof Role) {
+			checkRoleChange(actor, (Role) entity);
+			return;
+		}
+		Person person = personOf(entity);
+		if (person != null) {
+			checkPerson(actor, person.getPersonId());
+		}
+		if (personBefore != null) {
+			checkPerson(actor, personBefore);
+		}
+	}
+	
+	private static void checkRoleChange(User actor, Role role) {
+		if (!actor.hasPrivilege(PrivilegeConstants.MANAGE_ROLES)) {
+			throw refusal("Changing the role " + role.getRole() + " needs " + PrivilegeConstants.MANAGE_ROLES);
+		}
+	}
+	
+	private static void checkPerson(User actor, Person person) {
+		if (person != null) {
+			checkPerson(actor, person.getPersonId());
+		}
+	}
+	
+	/** Refuses a change to a person one of whose users, other than the actor, it may not manage. */
+	private static void checkPerson(User actor, Integer personId) {
+		if (personId == null || !ClinicUsers.isClinicLimited()) {
+			return;
+		}
+		Set<String> mine = ClinicUsers.Stored.of(actor.getUserId()).clinics;
+		for (Integer userId : ClinicUsers.usersOf(personId)) {
+			if (!userId.equals(actor.getUserId()) && !isCreatedById(userId)) {
+				checkManaged(ClinicUsers.Stored.of(userId), mine);
+			}
+		}
+	}
+	
+	private static void checkStoredUser(User actor, Integer userId) {
+		if (!isCreatedById(userId)) {
+			ClinicUsers.Stored stored = ClinicUsers.Stored.of(userId);
+			check(actor, userId, false, stored, stored.clinics, stored.roles);
+		}
+	}
+	
+	private static void checkUser(User actor, User user, boolean isNew) {
+		boolean created = isNew || isCreated(user);
+		ClinicUsers.Stored stored = created ? ClinicUsers.Stored.NONE : ClinicUsers.Stored.of(user.getUserId());
+		Set<String> clinics = Hibernate.isInitialized(user.getUserProperties()) ? ClinicUsers.clinicsOf(user)
+		        : stored.clinics;
+		check(actor, user.getUserId(), created, stored, clinics, ClinicUsers.roleNames(user.getRoles()));
+	}
+	
+	private static void check(User actor, Integer userId, boolean created, ClinicUsers.Stored stored, Set<String> clinics,
+	        Set<String> roles) {
+		Set<String> givable = ClinicUsers.givableRoles();
 		if (!ClinicUsers.isClinicLimited()) {
 			checkRoles(roles, stored.roles, givable);
 			return;
 		}
-		if (target.getUserId() != null && target.getUserId().equals(actor.getUserId())) {
+		if (actor.getUserId().equals(userId)) {
 			// Saving one's own preferences, such as the login location, stays open.
 			if (!clinics.equals(stored.clinics) || !roles.equals(stored.roles)) {
 				throw refusal("You cannot change your own clinics or roles");
 			}
 			return;
 		}
-		Set<String> mine = ClinicUsers.clinicsOf(actor);
+		Set<String> mine = ClinicUsers.Stored.of(actor.getUserId()).clinics;
 		if (mine.isEmpty()) {
 			throw refusal("You have no clinics, so you cannot manage users");
 		}
-		if (target.getUserId() != null) {
-			checkManaged(name(target), stored, mine);
+		if (!created) {
+			checkManaged(stored, mine);
 		}
 		if (clinics.isEmpty()) {
 			throw refusal("Give the user at least one of your clinics");
@@ -92,31 +290,109 @@ public class ClinicLimitedUserManagement implements MethodInterceptor {
 		}
 	}
 	
-	/** Refuses a stored user who shares none of {@code mine} or who manages users. */
-	static void checkManaged(String name, ClinicUsers.Stored stored, Set<String> mine) {
-		if (Collections.disjoint(stored.clinics, mine)) {
-			throw refusal(name + " is not at your clinics");
-		}
-		if (anyManagesUsers(stored.roles)) {
-			throw refusal(name + " administers users, which only an instance administrator can change");
+	private static void checkManaged(ClinicUsers.Stored stored, Set<String> mine) {
+		String refusal = unmanaged(stored, mine);
+		if (refusal != null) {
+			throw refusal(refusal);
 		}
 	}
 	
-	private static Set<String> clinicsAfter(String method, Object[] args, User target, ClinicUsers.Stored stored) {
-		if (SAVES.contains(method)) {
-			return ClinicUsers.clinicsOf(target);
+	/** Why a stored user who shares none of {@code mine} or who manages users is refused, or null. */
+	private static String unmanaged(ClinicUsers.Stored stored, Set<String> mine) {
+		if (Collections.disjoint(stored.clinics, mine)) {
+			return stored.name + " is not at your clinics";
 		}
-		if ("saveUserProperties".equals(method)) {
-			return ClinicUsers.parse((String) ((Map<?, ?>) args[0]).get(ClinicUsers.CLINICS_PROPERTY));
+		if (ClinicUsers.managesUsers(stored.roles)) {
+			return stored.name + " administers users, which only an instance administrator can change";
 		}
-		int key = "saveUserProperty".equals(method) ? 0 : 1;
-		boolean property = "saveUserProperty".equals(method) || "setUserProperty".equals(method)
-		        || "removeUserProperty".equals(method);
-		if (property && ClinicUsers.CLINICS_PROPERTY.equals(args[key])) {
-			return "removeUserProperty".equals(method) ? Collections.<String> emptySet()
-			        : ClinicUsers.parse((String) args[key + 1]);
+		return null;
+	}
+	
+	private static boolean isCreated(User user) {
+		User actor = Context.getAuthenticatedUser();
+		return actor != null && actor.getUserId().equals(CREATED.get().get(user));
+	}
+	
+	private static boolean isCreatedById(Integer userId) {
+		for (User user : CREATED.get().keySet()) {
+			if (userId.equals(user.getUserId()) && isCreated(user)) {
+				return true;
+			}
 		}
-		return stored.clinics;
+		return false;
+	}
+	
+	private static boolean isPersonData(Object entity) {
+		return entity instanceof Person || entity instanceof PersonName || entity instanceof PersonAddress
+		        || entity instanceof PersonAttribute || entity instanceof Provider;
+	}
+	
+	private static Person personOf(Object entity) {
+		if (entity instanceof Person) {
+			return (Person) entity;
+		}
+		if (entity instanceof PersonName) {
+			return ((PersonName) entity).getPerson();
+		}
+		if (entity instanceof PersonAddress) {
+			return ((PersonAddress) entity).getPerson();
+		}
+		if (entity instanceof PersonAttribute) {
+			return ((PersonAttribute) entity).getPerson();
+		}
+		if (entity instanceof Provider) {
+			return ((Provider) entity).getPerson();
+		}
+		return null;
+	}
+	
+	/** The row as the database holds it, for an entity the session reattached without a snapshot. */
+	private static Object[] snapshot(Object entity, Serializable id) {
+		SessionImplementor session = sessions().getCurrentSession().unwrap(SessionImplementor.class);
+		return session.getPersistenceContext().getDatabaseSnapshot(id, session.getEntityPersister(null, entity));
+	}
+	
+	/** Whether a property other than the audit fields and the collections changed. */
+	private static boolean changed(Object entity, Serializable id, Object[] current, Object[] previous, String[] names,
+	        Type[] types) {
+		SessionImplementor session = sessions().getCurrentSession().unwrap(SessionImplementor.class);
+		EntityPersister persister = session.getEntityPersister(null, entity);
+		Object[] snapshot = previous == null ? snapshot(entity, id) : null;
+		if (previous == null && snapshot == null) {
+			return true;
+		}
+		int[] dirty = previous != null ? persister.findDirty(current, previous, entity, session)
+		        : persister.findModified(snapshot, current, entity, session);
+		for (int i : dirty != null ? dirty : new int[0]) {
+			if (!AUDIT.contains(names[i]) && !types[i].isCollectionType()) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	private static Integer idOf(Object value) {
+		if (value instanceof HibernateProxy) {
+			return (Integer) ((HibernateProxy) value).getHibernateLazyInitializer().getIdentifier();
+		}
+		if (value instanceof OpenmrsObject) {
+			return ((OpenmrsObject) value).getId();
+		}
+		return (Integer) value;
+	}
+	
+	private static Set<String> stored(String sql, String role) {
+		return new HashSet<>(ClinicUsers.column(sql, role));
+	}
+	
+	private static Set<String> privilegeNames(Collection<Privilege> privileges) {
+		Set<String> names = new HashSet<>();
+		if (privileges != null) {
+			for (Privilege privilege : privileges) {
+				names.add(privilege.getPrivilege());
+			}
+		}
+		return names;
 	}
 	
 	private static Set<String> changed(Set<String> after, Set<String> before) {
@@ -128,18 +404,8 @@ public class ClinicLimitedUserManagement implements MethodInterceptor {
 		return changed;
 	}
 	
-	private static boolean anyManagesUsers(Set<String> roleNames) {
-		for (String name : roleNames) {
-			Role role = ClinicUsers.role(name);
-			if (role != null && ClinicUsers.managesUsers(role)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	private static String name(User user) {
-		return user.getUsername() != null ? user.getUsername() : user.getSystemId();
+	private static SessionFactory sessions() {
+		return Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
 	}
 	
 	private static APIAuthenticationException refusal(String message) {

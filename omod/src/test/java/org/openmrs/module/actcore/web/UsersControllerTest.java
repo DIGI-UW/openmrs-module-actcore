@@ -17,7 +17,9 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -46,15 +48,16 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private String clinicA;
 	
+	private Role siteAdministrator;
+	
 	@Before
 	public void setUp() {
 		clinicA = Context.getLocationService().getLocation(1).getUuid();
 		String clinicB = Context.getLocationService().getLocation(2).getUuid();
 		Role clinician = role("Test Clinician", PrivilegeConstants.GET_PATIENTS);
 		role("Test Exports", PrivilegeConstants.GET_PATIENTS);
-		Role siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS,
-		    PrivilegeConstants.GET_USERS, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS,
-		    PrivilegeConstants.GET_ROLES);
+		siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_USERS,
+		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS, PrivilegeConstants.GET_ROLES);
 		Role instanceAdministrator = role("Test Instance Administrator", ClinicUsers.ALL_CLINICS_PRIVILEGE);
 		instanceAdministrator.getInheritedRoles().add(siteAdministrator);
 		Context.getUserService().saveRole(instanceAdministrator);
@@ -78,6 +81,22 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Boolean.TRUE, response.get("clinicLimited"));
 		assertEquals(Collections.singletonList(clinicA), response.get("clinics"));
 		assertEquals(Arrays.asList("clinicianatA", "clinicianatAB", "siteadmin"), sorted(usernames(response)));
+	}
+	
+	@Test
+	public void marksTheUsersAClinicLimitedAdministratorMayNotEdit() {
+		user("otheradmin", clinicA, siteAdministrator);
+		signInAs("siteadmin");
+		
+		Map<String, Object> editable = new HashMap<>();
+		for (SimpleObject user : users(controller.getUsers())) {
+			editable.put((String) user.get("username"), user.get("editable"));
+		}
+		
+		assertEquals(Boolean.TRUE, editable.get("clinicianatA"));
+		assertEquals(Boolean.TRUE, editable.get("clinicianatAB"));
+		assertEquals(Boolean.FALSE, editable.get("siteadmin"));
+		assertEquals(Boolean.FALSE, editable.get("otheradmin"));
 	}
 	
 	@Test
@@ -144,9 +163,12 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@SuppressWarnings("unchecked")
+	private static List<SimpleObject> users(SimpleObject response) {
+		return (List<SimpleObject>) response.get("users");
+	}
+	
 	private static List<String> usernames(SimpleObject response) {
-		return ((List<SimpleObject>) response.get("users")).stream().map(u -> (String) u.get("username"))
-		        .collect(Collectors.toList());
+		return users(response).stream().map(u -> (String) u.get("username")).collect(Collectors.toList());
 	}
 	
 	@SuppressWarnings("unchecked")

@@ -13,13 +13,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.sql.PreparedStatement;
+import java.sql.Timestamp;
 import java.util.Collections;
+import java.util.UUID;
 
 import org.aopalliance.intercept.MethodInterceptor;
+import org.hibernate.SessionFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
+import org.openmrs.Patient;
+import org.openmrs.PatientIdentifier;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -28,11 +34,11 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.AdministrationService;
-import org.openmrs.api.PersonService;
-import org.openmrs.api.ProviderService;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 
 public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSensitiveTest {
@@ -52,10 +58,6 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	private Role exports;
 	
 	private Provider providerAtB;
-	
-	private final ClinicLimitedUserManagement userGuard = new ClinicLimitedUserManagement();
-	
-	private final ClinicLimitedPersonManagement personGuard = new ClinicLimitedPersonManagement();
 	
 	// Core 2.8 reads a global property only for Get Global Properties, which an administrator lacks.
 	private final MethodInterceptor coreTwoEightAuthorization = invocation -> {
@@ -79,7 +81,10 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS, PrivilegeConstants.GET_ROLES,
 		    PrivilegeConstants.EDIT_USER_PASSWORDS, PrivilegeConstants.ADD_PERSONS, PrivilegeConstants.EDIT_PERSONS,
-		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.MANAGE_PROVIDERS, PrivilegeConstants.GET_PROVIDERS);
+		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.MANAGE_PROVIDERS, PrivilegeConstants.GET_PROVIDERS,
+		    PrivilegeConstants.ADD_PATIENTS, PrivilegeConstants.EDIT_PATIENTS, PrivilegeConstants.GET_IDENTIFIER_TYPES,
+		    PrivilegeConstants.GET_LOCATIONS, PrivilegeConstants.GET_PATIENT_IDENTIFIERS,
+		    PrivilegeConstants.ADD_PATIENT_IDENTIFIERS, PrivilegeConstants.EDIT_PATIENT_IDENTIFIERS);
 		instanceAdministrator = role("Test Instance Administrator", ClinicUsers.ALL_CLINICS_PRIVILEGE);
 		instanceAdministrator.getInheritedRoles().add(siteAdministrator);
 		Context.getUserService().saveRole(instanceAdministrator);
@@ -100,19 +105,13 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		// The check reads what the database holds, so the fixture must be there, not only in the session.
 		Context.flushSession();
 		
-		Context.addAdvice(UserService.class, userGuard);
-		Context.addAdvice(PersonService.class, personGuard);
-		Context.addAdvice(ProviderService.class, personGuard);
 		Context.addAdvice(AdministrationService.class, coreTwoEightAuthorization);
 		users = Context.getUserService();
 		signInAs("siteadmin");
 	}
 	
 	@After
-	public void removeModuleAdvice() {
-		Context.removeAdvice(UserService.class, userGuard);
-		Context.removeAdvice(PersonService.class, personGuard);
-		Context.removeAdvice(ProviderService.class, personGuard);
+	public void removeCoreTwoEightAuthorization() {
 		Context.removeAdvice(AdministrationService.class, coreTwoEightAuthorization);
 	}
 	
@@ -124,32 +123,44 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		users.saveUser(user);
 		users.retireUser(user, "left the clinic");
 		users.changePassword(user, "Changed123");
+		Context.flushSession();
 	}
 	
 	@Test
 	public void refusesAUserAtAnotherClinic() {
-		User user = Context.getUserService().getUserByUsername("clinicianatB");
+		User user = users.getUserByUsername("clinicianatB");
+		user.setUserProperty("defaultLocale", "fr");
 		
 		refused(() -> users.saveUser(user), "is not at your clinics");
-		refused(() -> users.retireUser(user, "gone"), "is not at your clinics");
-		refused(() -> users.changePassword(user, "Changed123"), "is not at your clinics");
-		refused(() -> users.setUserProperty(user, "defaultLocale", "fr"), "is not at your clinics");
-		refused(() -> users.changeQuestionAnswer(user, "Pet?", "Rex"), "is not at your clinics");
+		refused(() -> users.retireUser(users.getUserByUsername("clinicianatB"), "gone"), "is not at your clinics");
+		refused(() -> users.changePassword(users.getUserByUsername("clinicianatB"), "Changed123"), "is not at your clinics");
+		refused(() -> users.setUserProperty(users.getUserByUsername("clinicianatB"), "defaultLocale", "fr"),
+		    "is not at your clinics");
+		refused(() -> users.changeQuestionAnswer(users.getUserByUsername("clinicianatB"), "Pet?", "Rex"),
+		    "is not at your clinics");
 	}
 	
 	@Test
 	public void refusesEditingThePersonOrProviderOfAUserAtAnotherClinic() {
-		Person person = Context.getUserService().getUserByUsername("clinicianatB").getPerson();
+		Person person = users.getUserByUsername("clinicianatB").getPerson();
 		person.getPersonName().setGivenName("Renamed");
 		refused(() -> Context.getPersonService().savePerson(person), "is not at your clinics");
-		refused(() -> Context.getPersonService().savePersonName(person.getPersonName()), "is not at your clinics");
 		
-		Person admin = Context.getUserService().getUserByUsername("otheradmin").getPerson();
+		PersonName name = users.getUserByUsername("clinicianatB").getPersonName();
+		name.setFamilyName("Renamed");
+		refused(() -> Context.getPersonService().savePersonName(name), "is not at your clinics");
+		
+		Person admin = users.getUserByUsername("otheradmin").getPerson();
+		admin.setGender("M");
 		refused(() -> Context.getPersonService().savePerson(admin), "administers users");
 		
-		providerAtB.setIdentifier("changed");
-		refused(() -> Context.getProviderService().saveProvider(providerAtB), "is not at your clinics");
-		refused(() -> Context.getProviderService().retireProvider(providerAtB, "gone"), "is not at your clinics");
+		Provider provider = Context.getProviderService().getProviderByIdentifier("providerAtB");
+		provider.setIdentifier("changed");
+		refused(() -> Context.getProviderService().saveProvider(provider), "is not at your clinics");
+		refused(
+		    () -> Context.getProviderService()
+		            .retireProvider(Context.getProviderService().getProviderByIdentifier("providerAtB"), "gone"),
+		    "is not at your clinics");
 	}
 	
 	@Test
@@ -175,6 +186,7 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		newcomer.addName(new PersonName("Newcomer", null, "Tester"));
 		newcomer.setGender("M");
 		Context.getPersonService().savePerson(newcomer);
+		Context.flushSession();
 	}
 	
 	@Test
@@ -191,6 +203,7 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	@Test
 	public void createsAUserAtItsClinic() {
 		User created = users.createUser(newUser("newclinician", clinicA, clinician), "Created123");
+		Context.flushSession();
 		
 		assertEquals(clinicA, created.getUserProperty(ClinicUsers.CLINICS_PROPERTY));
 	}
@@ -244,25 +257,28 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		User again = Context.getUserService().getUserByUsername("clinicianatAB");
 		again.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicB);
 		users.saveUser(again);
+		Context.flushSession();
 	}
 	
 	@Test
 	public void savesItsOwnPreferencesButNotItsOwnClinicsOrRoles() {
-		User me = Context.getUserService().getUserByUsername("siteadmin");
+		User me = users.getUserByUsername("siteadmin");
 		me.setUserProperty("defaultLocation", clinicA);
 		users.saveUser(me);
+		Context.flushSession();
 		
 		me.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA + "," + clinicB);
 		refused(() -> users.saveUser(me), "your own clinics or roles");
 		
-		me.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA);
-		me.addRole(clinician);
-		refused(() -> users.saveUser(me), "your own clinics or roles");
+		User again = users.getUserByUsername("siteadmin");
+		again.addRole(clinician);
+		refused(() -> users.saveUser(again), "your own clinics or roles");
 	}
 	
 	@Test
 	public void refusesWideningItsOwnClinicsThroughItsOwnProperties() {
 		users.saveUserProperty("defaultLocale", "fr");
+		Context.flushSession();
 		
 		refused(() -> users.saveUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA + "," + clinicB),
 		    "your own clinics or roles");
@@ -279,7 +295,10 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		
 		users.saveUser(user);
 		users.createUser(newUser("newsiteadmin", clinicB, siteAdministrator), "Created123");
-		Context.getPersonService().savePerson(Context.getUserService().getUserByUsername("clinicianatB").getPerson());
+		Person person = users.getUserByUsername("clinicianatB").getPerson();
+		person.setGender("M");
+		Context.getPersonService().savePerson(person);
+		Context.flushSession();
 	}
 	
 	@Test
@@ -295,13 +314,141 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		signInAsSuperuser();
 		
 		users.createUser(newUser("newinstanceadmin", null, instanceAdministrator), "Created123");
+		Context.flushSession();
+	}
+	
+	@Test
+	public void refusesChangingARoleThroughAUserSave() {
+		// What REST does with a nested role: change the loaded role, then save the user.
+		User user = users.getUserByUsername("clinicianatA");
+		clinician.setDescription("changed through a user save");
+		
+		refused(() -> users.saveUser(user), "needs Manage Roles");
+	}
+	
+	@Test
+	public void refusesChangingWhatARoleInheritsThroughAUserSave() {
+		signInAsSuperuser();
+		Role communityClinician = role("Test Community Clinician", PrivilegeConstants.GET_PATIENTS);
+		signInAs("siteadmin");
+		
+		User user = users.getUserByUsername("clinicianatA");
+		communityClinician.getInheritedRoles().add(siteAdministrator);
+		
+		refused(() -> users.saveUser(user), "needs Manage Roles");
+	}
+	
+	@Test
+	public void refusesMovingAUserOntoAnotherPerson() {
+		User user = users.getUserByUsername("clinicianatA");
+		user.setPerson(users.getUserByUsername("clinicianatB").getPerson());
+		refused(() -> users.saveUser(user), "to another person");
+		
+		User again = users.getUserByUsername("clinicianatA");
+		again.setPerson(Context.getPersonService().getPerson(1));
+		refused(() -> users.saveUser(again), "to another person");
+	}
+	
+	@Test
+	public void refusesChangingThePersonOfAUserAtAnotherClinicThroughThePatientService() {
+		Integer personId = users.getUserByUsername("clinicianatB").getPerson().getPersonId();
+		signInAsSuperuser();
+		makePatient(personId);
+		signInAs("siteadmin");
+		
+		Patient patient = Context.getPatientService().getPatient(personId);
+		patient.setGender("M");
+		
+		refused(() -> Context.getPatientService().savePatient(patient), "is not at your clinics");
+	}
+	
+	@Test
+	public void refusesChangingThePersonOfAUserAtAnotherClinicStraightInTheSession() {
+		// What fhir2 does: save the changed person through the session, with no service call.
+		Person person = Context.getPersonService()
+		        .getPerson(users.getUserByUsername("clinicianatB").getPerson().getPersonId());
+		person.setGender("M");
+		
+		refused(() -> sessions().getCurrentSession().saveOrUpdate(person), "is not at your clinics");
+	}
+	
+	@Test
+	public void judgesObjectsLoadedInAnEarlierSessionByWhatTheDatabaseHolds() {
+		Person person = users.getUserByUsername("clinicianatB").getPerson();
+		User user = users.getUserByUsername("clinicianatA");
+		Context.clearSession();
+		
+		// Reattached, they have no snapshot: unchanged, the person and the user's roles stay open.
+		sessions().getCurrentSession().saveOrUpdate(person);
+		user.setUserProperty("defaultLocale", "fr");
+		users.saveUser(user);
+		Context.flushSession();
+		
+		Context.clearSession();
+		person.setGender("M");
+		refused(() -> sessions().getCurrentSession().saveOrUpdate(person), "is not at your clinics");
+	}
+	
+	@Test
+	public void refusesARoleOrClinicChangedBeforeRetiringOrRepasswordingAUser() {
+		User retired = users.getUserByUsername("clinicianatA");
+		retired.addRole(siteAdministrator);
+		refused(() -> users.retireUser(retired, "left"), "give or remove the role Test Site Administrator");
+		
+		User repassworded = users.getUserByUsername("clinicianatA");
+		repassworded.addRole(siteAdministrator);
+		refused(() -> users.changePassword(repassworded, "Changed123"), "give or remove the role Test Site Administrator");
+		
+		User unretired = users.getUserByUsername("clinicianatA");
+		unretired.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicB);
+		refused(() -> users.unretireUser(unretired), "only your own clinics");
+	}
+	
+	@Test
+	public void judgesTheClinicsAUserPropertyCallLeaves() {
+		refused(() -> users.setUserProperty(users.getUserByUsername("siteadmin"), ClinicUsers.CLINICS_PROPERTY,
+		    clinicA + "," + clinicB), "your own clinics or roles");
+		refused(() -> users.removeUserProperty(users.getUserByUsername("clinicianatA"), ClinicUsers.CLINICS_PROPERTY),
+		    "at least one of your clinics");
+	}
+	
+	@Test
+	public void registersAPatientAndSavesAnUnchangedUserAtAnotherClinic() {
+		Patient patient = new Patient();
+		patient.addName(new PersonName("Registered", null, "Patient"));
+		patient.setGender("F");
+		PatientIdentifier identifier = new PatientIdentifier("rhd99901",
+		        Context.getPatientService().getPatientIdentifierType(2), Context.getLocationService().getLocation(1));
+		identifier.setPreferred(true);
+		patient.addIdentifier(identifier);
+		Context.getPatientService().savePatient(patient);
+		
+		users.saveUser(users.getUserByUsername("clinicianatB"));
+		Context.flushSession();
+	}
+	
+	@Test
+	public void countsAFailedSignInOfAUserAtAnotherClinic() {
+		try {
+			Context.authenticate("clinicianatB", "Wrong123");
+			fail("expected the sign-in to fail");
+		}
+		catch (ContextAuthenticationException e) {
+			Context.flushSession();
+		}
+		
+		assertEquals("1",
+		    users.getUserByUsername("clinicianatB").getUserProperty(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
 	}
 	
 	@Test
 	public void refusesAClinicLimitedAdministratorWithNoClinics() {
 		signInAs("noclinicadmin");
 		
-		refused(() -> users.saveUser(Context.getUserService().getUserByUsername("clinicianatA")), "You have no clinics");
+		User user = users.getUserByUsername("clinicianatA");
+		user.setUserProperty("defaultLocale", "fr");
+		
+		refused(() -> users.saveUser(user), "You have no clinics");
 	}
 	
 	private static Role role(String name, String... privileges) {
@@ -350,10 +497,36 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	private static void refused(Runnable change, String reason) {
 		try {
 			change.run();
+			Context.flushSession();
 			fail("expected the change to be refused: " + reason);
 		}
 		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(reason));
+			// Drops the refused change, so the next one is judged alone.
+			Context.clearSession();
 		}
+	}
+	
+	private static SessionFactory sessions() {
+		return Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
+	}
+	
+	private static void makePatient(Integer personId) {
+		sessions().getCurrentSession().doWork(connection -> {
+			try (PreparedStatement insert = connection.prepareStatement(
+			    "insert into patient (patient_id, creator, date_created, voided, allergy_status) values (?, 1, ?, false, 'Unknown')")) {
+				insert.setInt(1, personId);
+				insert.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
+				insert.executeUpdate();
+			}
+			try (PreparedStatement insert = connection.prepareStatement(
+			    "insert into patient_identifier (patient_id, identifier, identifier_type, preferred, location_id, creator, date_created, voided, uuid) values (?, 'rhd99902', 2, true, 1, 1, ?, false, ?)")) {
+				insert.setInt(1, personId);
+				insert.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
+				insert.setString(3, UUID.randomUUID().toString());
+				insert.executeUpdate();
+			}
+		});
+		Context.clearSession();
 	}
 }

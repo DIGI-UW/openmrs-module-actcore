@@ -18,6 +18,7 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.users.ClinicLimitedUserManagement;
 import org.openmrs.module.actcore.users.ClinicUsers;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -30,8 +31,8 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The users an administrator manages, with their clinics, and the roles it may give. Saving goes
- * through core REST, where the module's advice checks it.
+ * The users an administrator manages, with their clinics and whether it may edit them, and the
+ * roles it may give. Saving goes through core REST, which ClinicLimitedUserManagement checks.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
@@ -55,7 +56,8 @@ public class UsersController extends BaseRestController {
 			        .add("systemId", user.getSystemId())
 			        .add("display", user.getPersonName() != null ? user.getPersonName().getFullName() : user.getUsername())
 			        .add("person", user.getPerson().getUuid()).add("roles", roles(user.getRoles()))
-			        .add("clinics", new ArrayList<>(clinics)).add("retired", user.getRetired()));
+			        .add("clinics", new ArrayList<>(clinics)).add("retired", user.getRetired())
+			        .add("editable", ClinicLimitedUserManagement.mayEdit(user)));
 		}
 		List<Role> assignable = new ArrayList<>();
 		Set<String> givable = ClinicUsers.givableRoles();
