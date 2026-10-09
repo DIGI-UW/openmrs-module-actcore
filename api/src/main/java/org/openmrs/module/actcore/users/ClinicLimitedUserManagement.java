@@ -41,7 +41,9 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.api.db.LoginCredential;
+import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Component;
 
@@ -57,6 +59,10 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 	// Core stamps these on every entity it updates, so they change even when nothing else did.
 	private static final Set<String> AUDIT = new HashSet<>(
 	        Arrays.asList("changedBy", "dateChanged", "personChangedBy", "personDateChanged"));
+	
+	// Core writes these on the user signing in while the session is still the previous user's.
+	private static final Set<String> SIGN_IN = new HashSet<>(Arrays.asList(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS,
+	    OpenmrsConstants.USER_PROPERTY_LOCKOUT_TIMESTAMP, "lastLoginTimestamp"));
 	
 	// Users a clinic-limited user created in this transaction, whose clinics are not stored yet.
 	private static final ThreadLocal<Map<User, Integer>> CREATED = ThreadLocal.withInitial(IdentityHashMap::new);
@@ -164,7 +170,7 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		}
 		if (owner instanceof Role && roleChanged((Role) owner)) {
 			checkRoleChange(actor, (Role) owner);
-		} else if (owner instanceof User && userCollectionsChanged((User) owner)) {
+		} else if (owner instanceof User && userCollectionsChanged((User) owner) && !isSignInBookkeeping((User) owner)) {
 			checkUser(actor, (User) owner, false);
 		}
 	}
@@ -189,6 +195,34 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		}
 		return Hibernate.isInitialized(user.getUserProperties())
 		        && !new HashMap<>(user.getUserProperties()).equals(stored.properties);
+	}
+	
+	/** Whether core is signing someone in and changed only the user's sign-in counters and times. */
+	private static boolean isSignInBookkeeping(User user) {
+		if (isCreated(user) || !Hibernate.isInitialized(user.getUserProperties()) || !isSigningIn()) {
+			return false;
+		}
+		ClinicUsers.Stored stored = ClinicUsers.Stored.of(user.getUserId());
+		return ClinicUsers.roleNames(user.getRoles()).equals(stored.roles)
+		        && withoutSignIn(user.getUserProperties()).equals(withoutSignIn(stored.properties));
+	}
+	
+	/**
+	 * Whether core's sign-in is flushing: the counters alone, sent through REST, must still be judged.
+	 */
+	private static boolean isSigningIn() {
+		for (StackTraceElement frame : new Throwable().getStackTrace()) {
+			if (UserContext.class.getName().equals(frame.getClassName()) && "authenticate".equals(frame.getMethodName())) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	private static Map<String, String> withoutSignIn(Map<String, String> properties) {
+		Map<String, String> rest = new HashMap<>(properties);
+		rest.keySet().removeAll(SIGN_IN);
+		return rest;
 	}
 	
 	private static void checkChange(User actor, Object entity, Integer personBefore) {
@@ -217,14 +251,19 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		}
 	}
 	
-	/** Refuses a change to a person one of whose users, other than the actor, it may not manage. */
+	/**
+	 * Refuses an administrator, a holder of Add Users or Edit Users, a change to a person one of whose
+	 * users, other than itself, it may not manage. Others edit people as OpenMRS lets them.
+	 */
 	private static void checkPerson(User actor, Integer personId) {
-		if (personId == null || !ClinicUsers.isClinicLimited()) {
+		if (personId == null || !(actor.hasPrivilege(PrivilegeConstants.ADD_USERS)
+		        || actor.hasPrivilege(PrivilegeConstants.EDIT_USERS))) {
 			return;
 		}
+		Set<String> mine = ClinicUsers.isClinicLimited() ? ClinicUsers.Stored.of(actor.getUserId()).clinics : null;
 		for (Integer userId : ClinicUsers.usersOf(personId)) {
 			if (!userId.equals(actor.getUserId()) && !isCreatedById(userId)) {
-				checkManaged(actor, ClinicUsers.Stored.of(userId), ClinicUsers.Stored.of(actor.getUserId()).clinics);
+				checkManaged(actor, ClinicUsers.Stored.of(userId), mine);
 			}
 		}
 	}

@@ -192,8 +192,8 @@ public final class ClinicUsers {
 			if (userId == null) {
 				return NONE;
 			}
-			List<String[]> user = rows("select coalesce(username, system_id), person_id from users where user_id = ?",
-			    userId);
+			List<String[]> user = rows(
+			    "select coalesce(nullif(username, ''), system_id), person_id from users where user_id = ?", userId);
 			Map<String, String> properties = new HashMap<>();
 			for (String[] row : rows("select property, property_value from user_property where user_id = ?", userId)) {
 				properties.put(row[0], row[1]);

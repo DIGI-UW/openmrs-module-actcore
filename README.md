@@ -37,14 +37,17 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   ACT 2.0. An administrator gives or removes only the clinician roles (`actcore.users.clinicianRoles`),
   plus Site Administrator (`actcore.users.siteAdministratorRoles`) with `Task: act.users.allClinics`;
   a superuser gives any role. No administrator changes, resets the password of or deletes another
-  user whose roles, with the roles they inherit, include System Developer or a privilege it lacks.
+  user whose roles, with the roles they inherit, include System Developer or a privilege it lacks,
+  or changes that user's person or provider.
   ACT Core checks each change as the database session flushes, so it holds whichever service, REST
   resource or module makes it: a change to a user, its password, roles, clinics or other properties,
-  to the person, names, addresses or attributes of a person who has a user, or to a provider. A
-  clinic-limited administrator cannot move a user to another person, and changing a role, even one
-  nested in a REST user save, needs Manage Roles. `GET /ws/rest/v1/actcore/users` lists the users
-  an administrator manages, whether it may edit each, and the roles it may give; ACT's Users and
-  roles page calls it.
+  to the person, names, addresses or attributes of a person who has a user, or to a provider. The
+  person and provider rules bind administrators, the holders of Add Users or Edit Users; other users
+  edit people as OpenMRS lets them. While someone signs in, core still counts and clears its sign-in
+  attempts, whoever the session was signed in as. A clinic-limited administrator cannot move a user
+  to another person, and changing a role, even one nested in a REST user save, needs Manage Roles.
+  `GET /ws/rest/v1/actcore/users` lists the users an administrator manages, whether it may edit
+  each, and the roles it may give; ACT's Users and roles page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
@@ -236,7 +239,8 @@ to list them and which would let an administrator change role definitions. Witho
 refuses a role change the session flushes, such as a role nested in a user save.
 `Task: act.users.allClinics`, which the distribution creates, lifts the clinic limit and lets its
 holder give Site Administrator, so grant it only to administrators of every clinic. Its holder still
-cannot reset the password of a user who holds a role or privilege it lacks, such as a superuser.
+cannot change or reset the password of a user who holds a role or privilege it lacks, such as a
+superuser, or edit that user's person or provider.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as

@@ -46,7 +46,7 @@ public class UsersController extends BaseRestController {
 			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.EDIT_USERS);
 		}
 		boolean limited = ClinicUsers.isClinicLimited();
-		Set<String> mine = ClinicUsers.clinicsOf(Context.getAuthenticatedUser());
+		Set<String> mine = ClinicUsers.Stored.of(Context.getAuthenticatedUser().getUserId()).clinics;
 		Predicate<User> editable = ClinicLimitedUserManagement.editable();
 		List<SimpleObject> users = new ArrayList<>();
 		for (User user : Context.getUserService().getAllUsers()) {

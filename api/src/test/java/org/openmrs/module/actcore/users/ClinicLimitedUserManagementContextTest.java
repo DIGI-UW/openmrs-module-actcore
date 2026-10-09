@@ -13,6 +13,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.util.Collections;
@@ -37,6 +39,7 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.api.db.ContextDAO;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
@@ -448,6 +451,47 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	}
 	
 	@Test
+	public void countsAndClearsTheSignInsOfAUserItMayNotManageFromASignedInSession() {
+		Integer userId = users.getUserByUsername("clinicianatB").getUserId();
+		ContextDAO dao = committingSignIns();
+		try {
+			try {
+				Context.authenticate("clinicianatB", "Wrong123");
+				fail("expected the sign-in to fail");
+			}
+			catch (ContextAuthenticationException e) {
+				assertEquals("siteadmin", Context.getAuthenticatedUser().getUsername());
+			}
+			assertEquals("1", ClinicUsers.Stored.of(userId).properties.get(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
+			
+			Context.authenticate("clinicianatB", "Tester123");
+		}
+		finally {
+			Context.setDAO(dao);
+		}
+		assertEquals("clinicianatB", Context.getAuthenticatedUser().getUsername());
+		assertEquals("0", ClinicUsers.Stored.of(userId).properties.get(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
+	}
+	
+	@Test
+	public void refusesAChangeBeyondTheSignInCountersFlushedWhileSigningIn() {
+		ContextDAO dao = committingSignIns();
+		try {
+			User user = users.getUserByUsername("clinicianatB");
+			user.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinicA);
+			refused(() -> Context.authenticate("clinicianatB", "Wrong123"), "is not at your clinics");
+			
+			User again = users.getUserByUsername("clinicianatB");
+			again.setUserProperty(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS, "0");
+			again.addRole(users.getRole("Test Site Administrator"));
+			refused(() -> Context.authenticate("clinicianatB", "Wrong123"), "is not at your clinics");
+		}
+		finally {
+			Context.setDAO(dao);
+		}
+	}
+	
+	@Test
 	public void refusesLockingOutAUserItMayNotManage() {
 		User user = users.getUserByUsername("clinicianatB");
 		user.setUserProperty(OpenmrsConstants.USER_PROPERTY_LOCKOUT_TIMESTAMP, String.valueOf(System.currentTimeMillis()));
@@ -473,6 +517,41 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		signInAs("siteadmin");
 		refused(() -> users.changePassword(users.getUserByUsername("clinicmanager"), "Taken123"),
 		    "a role or privilege you lack");
+	}
+	
+	@Test
+	public void refusesAnyAdministratorThePersonAndProviderOfAUserWhoseRolesOutrankItsOwn() {
+		signInAsSuperuser();
+		save(newUser("developer", null, Context.getUserService().getRole(RoleConstants.SUPERUSER)));
+		
+		signInAs("instanceadmin");
+		Person person = users.getUserByUsername("developer").getPerson();
+		person.setGender("M");
+		refused(() -> Context.getPersonService().savePerson(person), "a role or privilege you lack");
+		
+		Provider provider = new Provider();
+		provider.setPerson(users.getUserByUsername("developer").getPerson());
+		provider.setIdentifier("providerOfDeveloper");
+		refused(() -> Context.getProviderService().saveProvider(provider), "a role or privilege you lack");
+		
+		User second = new User(users.getUserByUsername("developer").getPerson());
+		second.setUsername("seconddeveloper");
+		second.addRole(users.getRole("Test Clinician"));
+		refused(() -> users.createUser(second, "Created123"), "a role or privilege you lack");
+	}
+	
+	@Test
+	public void namesAUserWithABlankUsernameByItsSystemId() {
+		sessions().getCurrentSession().doWork(connection -> {
+			try (PreparedStatement update = connection
+			        .prepareStatement("update users set username = '' where user_id = 1")) {
+				update.executeUpdate();
+			}
+		});
+		String systemId = users.getUser(1).getSystemId();
+		
+		signInAs("instanceadmin");
+		refused(() -> users.changePassword(users.getUser(1), "Taken123"), systemId + " holds a role or privilege you lack");
 	}
 	
 	@Test
@@ -533,6 +612,15 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		Person person = users.getUserByUsername("clinicianatA").getPerson();
 		person.setGender("M");
 		refused(() -> Context.getPersonService().savePerson(person), "is not at your clinics");
+	}
+	
+	@Test
+	public void leavesTheirPeopleToAUserWhoDoesNotAdministerUsers() {
+		Integer personId = users.getUserByUsername("clinicianatB").getPerson().getPersonId();
+		signInAs("clinicianatA");
+		
+		sessions().getCurrentSession().get(Person.class, personId).setGender("M");
+		Context.flushSession();
 	}
 	
 	@Test
@@ -599,6 +687,29 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 			// Drops the refused change, so the next one is judged alone.
 			Context.clearSession();
 		}
+	}
+	
+	/**
+	 * Flushes as core's sign-in commits outside a test, before the session becomes the new user's, and
+	 * returns the DAO to restore.
+	 */
+	private static ContextDAO committingSignIns() {
+		ContextDAO dao = Context.getRegisteredComponent("contextDAO", ContextDAO.class);
+		Context.setDAO((ContextDAO) Proxy.newProxyInstance(ContextDAO.class.getClassLoader(),
+		    new Class<?>[] { ContextDAO.class }, (proxy, method, args) -> {
+			    try {
+				    return method.invoke(dao, args);
+			    }
+			    catch (InvocationTargetException e) {
+				    throw e.getCause();
+			    }
+			    finally {
+				    if ("authenticate".equals(method.getName())) {
+					    dao.flushSession();
+				    }
+			    }
+		    }));
+		return dao;
 	}
 	
 	private static SessionFactory sessions() {

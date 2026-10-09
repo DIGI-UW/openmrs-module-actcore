@@ -15,6 +15,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.sql.PreparedStatement;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -24,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.aopalliance.intercept.MethodInterceptor;
+import org.hibernate.SessionFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
@@ -48,12 +50,14 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private String clinicA;
 	
+	private String clinicB;
+	
 	private Role siteAdministrator;
 	
 	@Before
 	public void setUp() {
 		clinicA = Context.getLocationService().getLocation(1).getUuid();
-		String clinicB = Context.getLocationService().getLocation(2).getUuid();
+		clinicB = Context.getLocationService().getLocation(2).getUuid();
 		Role clinician = role("Test Clinician", PrivilegeConstants.GET_PATIENTS);
 		role("Test Exports", PrivilegeConstants.GET_PATIENTS);
 		siteAdministrator = role("Test Site Administrator", PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_USERS,
@@ -81,6 +85,27 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Boolean.TRUE, response.get("clinicLimited"));
 		assertEquals(Collections.singletonList(clinicA), response.get("clinics"));
 		assertEquals(Arrays.asList("clinicianatA", "clinicianatAB", "siteadmin"), sorted(usernames(response)));
+	}
+	
+	@Test
+	public void listsTheUsersAtTheClinicsTheDatabaseHoldsForTheAdministrator() {
+		signInAs("siteadmin");
+		// What another administrator's change does: the signed-in user's copy keeps its old clinics.
+		Context.getRegisteredComponent("sessionFactory", SessionFactory.class).getCurrentSession().doWork(connection -> {
+			try (PreparedStatement update = connection
+			        .prepareStatement("update user_property set property_value = ? where property = ? and user_id = ?")) {
+				update.setString(1, clinicB);
+				update.setString(2, ClinicUsers.CLINICS_PROPERTY);
+				update.setInt(3, Context.getAuthenticatedUser().getUserId());
+				update.executeUpdate();
+			}
+		});
+		
+		SimpleObject response = controller.getUsers();
+		
+		assertEquals(Collections.singletonList(clinicB), response.get("clinics"));
+		assertTrue(usernames(response).contains("clinicianatB"));
+		assertFalse(usernames(response).contains("clinicianatA"));
 	}
 	
 	@Test
