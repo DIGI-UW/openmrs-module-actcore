@@ -31,6 +31,24 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `adherenceFailed`, or with `refreshed` false when another run was already going. `GET` says when
   it last finished (`actcore.refresh.lastFinished`, written even by a run in which some flags failed)
   and whether one is running. ACT's admin page calls it.
+- **Users at their clinics.** A user's clinics are the location uuids in its `act.clinics` user
+  property. An administrator without `Task: act.users.allClinics` manages only the users sharing one
+  of its clinics, with their person and provider, and adds or removes only its own clinics, as in
+  ACT 2.0. An administrator gives or removes only the clinician roles (`actcore.users.clinicianRoles`),
+  plus Site Administrator (`actcore.users.siteAdministratorRoles`) with `Task: act.users.allClinics`;
+  a superuser gives any role. No administrator changes, resets the password of or deletes another
+  user whose roles, with the roles they inherit, include System Developer or a privilege it lacks,
+  or changes that user's person or provider.
+  ACT Core checks each change as the database session flushes, so it holds whichever service, REST
+  resource or module makes it: a change to a user, its password, roles, clinics or other properties,
+  to the person, names, addresses or attributes of a person who has a user, or to a provider. The
+  person and provider rules bind administrators, the holders of Add Users or Edit Users; other users
+  edit people as OpenMRS lets them. While someone signs in, core still counts and clears its sign-in
+  attempts, whoever the session was signed in as. A clinic-limited administrator cannot move a user
+  to another person, and changing a role, even one nested in a REST user save, needs Manage Roles.
+  `GET /ws/rest/v1/actcore/users` lists the users an administrator manages, whether it may edit
+  each, the roles it may give, and core's password rules (`security.password*`), which an
+  administrator cannot read itself; ACT's Users and roles page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.
@@ -172,6 +190,7 @@ the consultations that record them.
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
 | Adherence is recomputed daily and on demand, replaying ACT 2.0's saves and nightly runs | A BPG delivery shows in the registry after the next run; run the task to see it at once. The replay needs no state of its own, so a run gives the same rows whatever ran before it. |
 | The latest consultation that records a prescription, not the latest consultation | ACT 2.0 read the latest consultation, by its date, and the first of a day. Here a consultation that leaves the prescriptions out does not drop the regimen the one before it recorded. |
+| Users are checked as the session flushes, not on service calls | A REST save converts nested objects, such as a user's roles or person, and changes them in the session without calling their services, and other modules (fhir2) and PatientService write people straight through the session. A Hibernate interceptor sees the changes the session flushes to roles, users, their passwords, people, their names, addresses and attributes, and providers. It does not check provider attributes, patient identifiers or bulk HQL and SQL updates. |
 
 How the ACT distribution uses the flags, for context: risk flags (overdue prophylaxis, lost to
 follow-up) have priority `RHD High` and show red; missing data flags have priority
@@ -206,6 +225,8 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `actcore.users.clinicianRoles` | the distribution's three clinician roles | Role uuids any administrator may give or remove |
+| `actcore.users.siteAdministratorRoles` | the distribution's Site Administrator | Role uuids an administrator with `Task: act.users.allClinics` may also give or remove |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
@@ -213,6 +234,14 @@ stopped, this module will not start on the next boot either; start Initializer f
 The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
+
+The users endpoint needs Edit Users. It reads the roles without Manage Roles, which core 2.8 needs
+to list them and which would let an administrator change role definitions. Without it, ACT Core
+refuses a role change the session flushes, such as a role nested in a user save.
+`Task: act.users.allClinics`, which the distribution creates, lifts the clinic limit and lets its
+holder give Site Administrator, so grant it only to administrators of every clinic. Its holder still
+cannot change or reset the password of a user who holds a role or privilege it lacks, such as a
+superuser, or edit that user's person or provider.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as
