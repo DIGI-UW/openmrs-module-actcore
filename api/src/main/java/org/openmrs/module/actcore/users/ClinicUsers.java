@@ -79,6 +79,29 @@ public final class ClinicUsers {
 	}
 	
 	/**
+	 * Core's password rules, which an administrator setting a password cannot read itself, with core's
+	 * defaults (OpenmrsUtil.validatePassword) when a global property is unset. Read through the
+	 * session's connection, like the other properties here: no proxy privilege.
+	 */
+	public static Map<String, Object> passwordRules() {
+		Map<String, Object> rules = new HashMap<>();
+		String minimumLength = setting("security.passwordMinimumLength", "8");
+		rules.put("minimumLength", StringUtils.isNumeric(minimumLength) ? Integer.parseInt(minimumLength) : 8);
+		rules.put("requiresUpperAndLowerCase",
+		    "true".equalsIgnoreCase(setting("security.passwordRequiresUpperAndLowerCase", "true")));
+		rules.put("requiresDigit", "true".equalsIgnoreCase(setting("security.passwordRequiresDigit", "true")));
+		rules.put("requiresNonDigit", "true".equalsIgnoreCase(setting("security.passwordRequiresNonDigit", "true")));
+		rules.put("cannotMatchUsername", "true".equalsIgnoreCase(setting("security.passwordCannotMatchUsername", "true")));
+		rules.put("customRegex", StringUtils.defaultIfBlank(setting("security.passwordCustomRegex", null), null));
+		return rules;
+	}
+	
+	private static String setting(String property, String defaultValue) {
+		String value = first(column("select property_value from global_property where property = ?", property));
+		return StringUtils.isBlank(value) ? defaultValue : value.trim();
+	}
+	
+	/**
 	 * The names of the roles the current user may give, or null for any, read through the connection:
 	 * core 2.8's service needs Get Global Properties, which an administrator lacks.
 	 */

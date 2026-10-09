@@ -109,6 +109,46 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void tellsAnAdministratorWhoCannotReadThemThePasswordRules() {
+		password("security.passwordMinimumLength", "12");
+		password("security.passwordRequiresUpperAndLowerCase", "false");
+		password("security.passwordRequiresDigit", "true");
+		password("security.passwordRequiresNonDigit", "false");
+		password("security.passwordCannotMatchUsername", "false");
+		password("security.passwordCustomRegex", ".*[!@#].*");
+		signInAs("siteadmin");
+		
+		Map<String, Object> rules = passwordRules(controller.getUsers());
+		
+		assertFalse(Context.hasPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES));
+		assertEquals(12, rules.get("minimumLength"));
+		assertEquals(Boolean.FALSE, rules.get("requiresUpperAndLowerCase"));
+		assertEquals(Boolean.TRUE, rules.get("requiresDigit"));
+		assertEquals(Boolean.FALSE, rules.get("requiresNonDigit"));
+		assertEquals(Boolean.FALSE, rules.get("cannotMatchUsername"));
+		assertEquals(".*[!@#].*", rules.get("customRegex"));
+	}
+	
+	@Test
+	public void givesCoresDefaultPasswordRulesWhereTheyAreUnset() {
+		for (String property : new String[] { "security.passwordMinimumLength", "security.passwordRequiresUpperAndLowerCase",
+		        "security.passwordRequiresDigit", "security.passwordRequiresNonDigit",
+		        "security.passwordCannotMatchUsername", "security.passwordCustomRegex" }) {
+			password(property, "");
+		}
+		signInAs("siteadmin");
+		
+		Map<String, Object> rules = passwordRules(controller.getUsers());
+		
+		assertEquals(8, rules.get("minimumLength"));
+		assertEquals(Boolean.TRUE, rules.get("requiresUpperAndLowerCase"));
+		assertEquals(Boolean.TRUE, rules.get("requiresDigit"));
+		assertEquals(Boolean.TRUE, rules.get("requiresNonDigit"));
+		assertEquals(Boolean.TRUE, rules.get("cannotMatchUsername"));
+		assertNull(rules.get("customRegex"));
+	}
+	
+	@Test
 	public void marksTheUsersAClinicLimitedAdministratorMayNotEdit() {
 		user("otheradmin", clinicA, siteAdministrator);
 		signInAs("siteadmin");
@@ -245,6 +285,17 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 			user.setUserProperty(ClinicUsers.CLINICS_PROPERTY, clinics);
 		}
 		Context.getUserService().createUser(user, "Tester123");
+	}
+	
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> passwordRules(SimpleObject response) {
+		return (Map<String, Object>) response.get("passwordRules");
+	}
+	
+	/** Saved and flushed: the rules are read through the session's connection, not the session. */
+	private static void password(String property, String value) {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(property, value));
+		Context.flushSession();
 	}
 	
 	private static void signInAs(String username) {

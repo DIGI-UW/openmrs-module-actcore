@@ -47,7 +47,8 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   attempts, whoever the session was signed in as. A clinic-limited administrator cannot move a user
   to another person, and changing a role, even one nested in a REST user save, needs Manage Roles.
   `GET /ws/rest/v1/actcore/users` lists the users an administrator manages, whether it may edit
-  each, and the roles it may give; ACT's Users and roles page calls it.
+  each, the roles it may give, and core's password rules (`security.password*`), which an
+  administrator cannot read itself; ACT's Users and roles page calls it.
 - **A list per flag.** Each flag is mirrored into a patient list of the same name. ACT home's
   worklist tiles count them, and the registry's RHD flag filter lists their patients: the worklists
   that replace the ACT 2.0 Critical Data Flags screen.

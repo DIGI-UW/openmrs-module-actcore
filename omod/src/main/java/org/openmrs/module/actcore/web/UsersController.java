@@ -69,7 +69,8 @@ public class UsersController extends BaseRestController {
 			}
 		}
 		return new SimpleObject().add("clinicLimited", limited).add("clinics", limited ? new ArrayList<>(mine) : null)
-		        .add("assignableRoles", roles(assignable)).add("users", users);
+		        .add("assignableRoles", roles(assignable)).add("users", users)
+		        .add("passwordRules", ClinicUsers.passwordRules());
 	}
 	
 	private static List<SimpleObject> roles(Iterable<Role> roles) {
