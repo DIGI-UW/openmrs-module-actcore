@@ -88,15 +88,26 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 		user("otheradmin", clinicA, siteAdministrator);
 		signInAs("siteadmin");
 		
-		Map<String, Object> editable = new HashMap<>();
-		for (SimpleObject user : users(controller.getUsers())) {
-			editable.put((String) user.get("username"), user.get("editable"));
-		}
+		Map<String, Object> editable = editable(controller.getUsers());
 		
 		assertEquals(Boolean.TRUE, editable.get("clinicianatA"));
 		assertEquals(Boolean.TRUE, editable.get("clinicianatAB"));
 		assertEquals(Boolean.FALSE, editable.get("siteadmin"));
 		assertEquals(Boolean.FALSE, editable.get("otheradmin"));
+	}
+	
+	@Test
+	public void marksTheUsersWhoseRolesOutrankTheAdministratorsAsNotEditable() {
+		user("clinicmanager", clinicA, role("Test Clinic Manager", PrivilegeConstants.MANAGE_LOCATIONS));
+		
+		signInAs("siteadmin");
+		assertEquals(Boolean.FALSE, editable(controller.getUsers()).get("clinicmanager"));
+		
+		signInAs("instanceadmin");
+		Map<String, Object> editable = editable(controller.getUsers());
+		assertEquals(Boolean.FALSE, editable.get("admin"));
+		assertEquals(Boolean.TRUE, editable.get("siteadmin"));
+		assertEquals(Boolean.TRUE, editable.get("clinicianatB"));
 	}
 	
 	@Test
@@ -165,6 +176,14 @@ public class UsersControllerTest extends BaseModuleWebContextSensitiveTest {
 	@SuppressWarnings("unchecked")
 	private static List<SimpleObject> users(SimpleObject response) {
 		return (List<SimpleObject>) response.get("users");
+	}
+	
+	private static Map<String, Object> editable(SimpleObject response) {
+		Map<String, Object> editable = new HashMap<>();
+		for (SimpleObject user : users(response)) {
+			editable.put((String) user.get("username"), user.get("editable"));
+		}
+		return editable;
 	}
 	
 	private static List<String> usernames(SimpleObject response) {

@@ -40,6 +40,7 @@ import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
+import org.openmrs.util.RoleConstants;
 
 public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -428,7 +429,10 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 	}
 	
 	@Test
-	public void countsAFailedSignInOfAUserAtAnotherClinic() {
+	public void countsAndClearsTheSignInsOfAUserAtAnotherClinic() {
+		Integer userId = users.getUserByUsername("clinicianatB").getUserId();
+		Context.flushSession();
+		Context.logout();
 		try {
 			Context.authenticate("clinicianatB", "Wrong123");
 			fail("expected the sign-in to fail");
@@ -436,9 +440,99 @@ public class ClinicLimitedUserManagementContextTest extends BaseModuleContextSen
 		catch (ContextAuthenticationException e) {
 			Context.flushSession();
 		}
+		assertEquals("1", ClinicUsers.Stored.of(userId).properties.get(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
 		
-		assertEquals("1",
-		    users.getUserByUsername("clinicianatB").getUserProperty(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
+		Context.authenticate("clinicianatB", "Tester123");
+		Context.flushSession();
+		assertEquals("0", ClinicUsers.Stored.of(userId).properties.get(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS));
+	}
+	
+	@Test
+	public void refusesLockingOutAUserItMayNotManage() {
+		User user = users.getUserByUsername("clinicianatB");
+		user.setUserProperty(OpenmrsConstants.USER_PROPERTY_LOCKOUT_TIMESTAMP, String.valueOf(System.currentTimeMillis()));
+		refused(() -> users.saveUser(user), "is not at your clinics");
+		
+		User admin = users.getUserByUsername("otheradmin");
+		admin.setUserProperty(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS, "1000");
+		refused(() -> users.saveUser(admin), "administers users");
+	}
+	
+	@Test
+	public void refusesResettingThePasswordOfAUserWhoseRolesOutrankItsOwn() {
+		signInAsSuperuser();
+		save(newUser("developer", null, Context.getUserService().getRole(RoleConstants.SUPERUSER)));
+		save(newUser("clinicmanager", clinicA, role("Test Clinic Manager", PrivilegeConstants.MANAGE_LOCATIONS)));
+		
+		signInAs("instanceadmin");
+		refused(() -> users.changePassword(users.getUserByUsername("developer"), "Taken123"),
+		    "a role or privilege you lack");
+		refused(() -> users.changeQuestionAnswer(users.getUserByUsername("developer"), "Pet?", "Rex"),
+		    "a role or privilege you lack");
+		
+		signInAs("siteadmin");
+		refused(() -> users.changePassword(users.getUserByUsername("clinicmanager"), "Taken123"),
+		    "a role or privilege you lack");
+	}
+	
+	@Test
+	public void resetsThePasswordsOfUsersItOutranksAndItsOwn() {
+		signInAsSuperuser();
+		save(newUser("encounterreader", clinicA, role("Test Encounter Reader", PrivilegeConstants.GET_ENCOUNTERS)));
+		Role authenticated = Context.getUserService().getRole(RoleConstants.AUTHENTICATED);
+		authenticated.addPrivilege(Context.getUserService().getPrivilege(PrivilegeConstants.GET_ENCOUNTERS));
+		Context.getUserService().saveRole(authenticated);
+		
+		signInAs("instanceadmin");
+		users.changePassword(users.getUserByUsername("otheradmin"), "Changed123");
+		users.changePassword(users.getUserByUsername("clinicianatB"), "Changed123");
+		users.changePassword("Tester123", "Changed456");
+		Context.flushSession();
+		
+		signInAs("siteadmin");
+		// It holds Get Encounters only through Authenticated, as every user does.
+		users.changePassword(users.getUserByUsername("encounterreader"), "Changed123");
+		Context.flushSession();
+	}
+	
+	@Test
+	public void refusesRemovingAPrivilegeFromARoleThroughAUserSave() {
+		User user = users.getUserByUsername("clinicianatA");
+		clinician.getPrivileges().clear();
+		
+		refused(() -> users.saveUser(user), "needs Manage Roles");
+	}
+	
+	@Test
+	public void refusesDeletingAUserAtAnotherClinicOrItsPersonsName() {
+		refused(() -> sessions().getCurrentSession().delete(users.getUserByUsername("clinicianatB")),
+		    "is not at your clinics");
+		refused(() -> sessions().getCurrentSession().delete(users.getUserByUsername("clinicianatB").getPersonName()),
+		    "is not at your clinics");
+	}
+	
+	@Test
+	public void editsThePersonOfAUserItCreatedInTheSameFlush() {
+		// What a REST create does: the new user's clinics reach the database only as the session flushes.
+		User created = newUser("newclinician", clinicA, clinician);
+		created.setSystemId("newclinician-1");
+		sessions().getCurrentSession().save(created);
+		created.getPersonName().setFamilyName("Renamed");
+		Context.flushSession();
+	}
+	
+	@Test
+	public void judgesAPersonByItsUsersBeforeTheAdministratorsClinics() {
+		signInAs("noclinicadmin");
+		Person newcomer = new Person();
+		newcomer.addName(new PersonName("Newcomer", null, "Tester"));
+		newcomer.setGender("M");
+		Context.getPersonService().savePerson(newcomer);
+		Context.flushSession();
+		
+		Person person = users.getUserByUsername("clinicianatA").getPerson();
+		person.setGender("M");
+		refused(() -> Context.getPersonService().savePerson(person), "is not at your clinics");
 	}
 	
 	@Test

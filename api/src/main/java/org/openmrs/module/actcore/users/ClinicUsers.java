@@ -78,28 +78,6 @@ public final class ClinicUsers {
 		return actor != null && !actor.isSuperUser() && !actor.hasPrivilege(ALL_CLINICS_PRIVILEGE);
 	}
 	
-	/** Whether the stored roles, with the roles they inherit, can create or edit users. */
-	static boolean managesUsers(Set<String> roleNames) {
-		Set<String> roles = new HashSet<>();
-		Deque<String> unread = new ArrayDeque<>(roleNames);
-		while (!unread.isEmpty()) {
-			String role = unread.pop();
-			if (roles.add(role)) {
-				unread.addAll(column("select parent_role from role_role where child_role = ?", role));
-			}
-		}
-		if (roles.contains(RoleConstants.SUPERUSER)) {
-			return true;
-		}
-		for (String role : roles) {
-			List<String> privileges = column("select privilege from role_privilege where role = ?", role);
-			if (privileges.contains(PrivilegeConstants.EDIT_USERS) || privileges.contains(PrivilegeConstants.ADD_USERS)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
 	/**
 	 * The names of the roles the current user may give, or null for any, read through the connection:
 	 * core 2.8's service needs Get Global Properties, which an administrator lacks.
@@ -226,6 +204,69 @@ public final class ClinicUsers {
 		}
 	}
 	
+	/** Every role's parents and privileges as the database holds them, read in two queries. */
+	static final class Roles {
+		
+		private final Map<String, Set<String>> parents = new HashMap<>();
+		
+		private final Map<String, Set<String>> privileges = new HashMap<>();
+		
+		static Roles stored() {
+			Roles roles = new Roles();
+			for (String[] row : rows("select child_role, parent_role from role_role")) {
+				roles.parents.computeIfAbsent(row[0], role -> new HashSet<>()).add(row[1]);
+			}
+			for (String[] row : rows("select role, privilege from role_privilege")) {
+				roles.privileges.computeIfAbsent(row[0], role -> new HashSet<>()).add(row[1]);
+			}
+			return roles;
+		}
+		
+		/** Whether the roles, with the roles they inherit, can create or edit users. */
+		boolean manageUsers(Set<String> names) {
+			Set<String> roles = withParents(names);
+			Set<String> held = privilegesOf(roles);
+			return roles.contains(RoleConstants.SUPERUSER) || held.contains(PrivilegeConstants.EDIT_USERS)
+			        || held.contains(PrivilegeConstants.ADD_USERS);
+		}
+		
+		/**
+		 * Whether the roles, with the roles they inherit, include a superuser role or a privilege the
+		 * actor's roles lack: OpenMRS's rule for giving a role, applied to whoever holds them.
+		 */
+		boolean outrank(User actor, Set<String> names) {
+			if (actor.isSuperUser()) {
+				return false;
+			}
+			Set<String> roles = withParents(names);
+			Set<String> actorRoles = roleNames(actor.getRoles());
+			actorRoles.add(RoleConstants.AUTHENTICATED);
+			actorRoles.add(RoleConstants.ANONYMOUS);
+			return roles.contains(RoleConstants.SUPERUSER)
+			        || !privilegesOf(withParents(actorRoles)).containsAll(privilegesOf(roles));
+		}
+		
+		private Set<String> withParents(Set<String> names) {
+			Set<String> roles = new HashSet<>();
+			Deque<String> unread = new ArrayDeque<>(names);
+			while (!unread.isEmpty()) {
+				String role = unread.pop();
+				if (roles.add(role)) {
+					unread.addAll(parents.getOrDefault(role, Collections.<String> emptySet()));
+				}
+			}
+			return roles;
+		}
+		
+		private Set<String> privilegesOf(Set<String> roles) {
+			Set<String> held = new HashSet<>();
+			for (String role : roles) {
+				held.addAll(privileges.getOrDefault(role, Collections.<String> emptySet()));
+			}
+			return held;
+		}
+	}
+	
 	/** The ids of a person's users, read as {@link Stored#of} reads. */
 	static List<Integer> usersOf(Integer personId) {
 		List<Integer> users = new ArrayList<>();
@@ -239,20 +280,22 @@ public final class ClinicUsers {
 		return values.isEmpty() ? null : values.get(0);
 	}
 	
-	static List<String> column(String sql, Object parameter) {
+	static List<String> column(String sql, Object... parameters) {
 		List<String> values = new ArrayList<>();
-		for (String[] row : rows(sql, parameter)) {
+		for (String[] row : rows(sql, parameters)) {
 			values.add(row[0]);
 		}
 		return values;
 	}
 	
-	private static List<String[]> rows(String sql, Object parameter) {
+	private static List<String[]> rows(String sql, Object... parameters) {
 		SessionFactory sessions = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
 		return sessions.getCurrentSession().doReturningWork(connection -> {
 			List<String[]> rows = new ArrayList<>();
 			try (PreparedStatement query = connection.prepareStatement(sql)) {
-				query.setObject(1, parameter);
+				for (int i = 0; i < parameters.length; i++) {
+					query.setObject(i + 1, parameters[i]);
+				}
 				try (ResultSet results = query.executeQuery()) {
 					int columns = results.getMetaData().getColumnCount();
 					while (results.next()) {

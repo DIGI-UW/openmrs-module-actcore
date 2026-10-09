@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.openmrs.Role;
 import org.openmrs.User;
@@ -46,6 +47,7 @@ public class UsersController extends BaseRestController {
 		}
 		boolean limited = ClinicUsers.isClinicLimited();
 		Set<String> mine = ClinicUsers.clinicsOf(Context.getAuthenticatedUser());
+		Predicate<User> editable = ClinicLimitedUserManagement.editable();
 		List<SimpleObject> users = new ArrayList<>();
 		for (User user : Context.getUserService().getAllUsers()) {
 			Set<String> clinics = ClinicUsers.clinicsOf(user);
@@ -57,7 +59,7 @@ public class UsersController extends BaseRestController {
 			        .add("display", user.getPersonName() != null ? user.getPersonName().getFullName() : user.getUsername())
 			        .add("person", user.getPerson().getUuid()).add("roles", roles(user.getRoles()))
 			        .add("clinics", new ArrayList<>(clinics)).add("retired", user.getRetired())
-			        .add("editable", ClinicLimitedUserManagement.mayEdit(user)));
+			        .add("editable", editable.test(user)));
 		}
 		List<Role> assignable = new ArrayList<>();
 		Set<String> givable = ClinicUsers.givableRoles();

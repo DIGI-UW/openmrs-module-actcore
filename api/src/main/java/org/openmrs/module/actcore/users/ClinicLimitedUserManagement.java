@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.hibernate.EmptyInterceptor;
 import org.hibernate.Hibernate;
@@ -41,13 +42,12 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.api.db.LoginCredential;
-import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Component;
 
 /**
- * Refuses, as the session flushes, a role change without Manage Roles, and a change to a user, its
- * person or provider beyond the actor's clinics and the roles it may give.
+ * Refuses at flush a role change without Manage Roles, a change to another user who outranks the
+ * actor, and a change to a user, its person or provider beyond the actor's clinics and roles.
  */
 @Component("actcore.clinicLimitedUserManagement")
 public class ClinicLimitedUserManagement extends EmptyInterceptor {
@@ -57,11 +57,6 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 	// Core stamps these on every entity it updates, so they change even when nothing else did.
 	private static final Set<String> AUDIT = new HashSet<>(
 	        Arrays.asList("changedBy", "dateChanged", "personChangedBy", "personDateChanged"));
-	
-	// Core writes these for whoever signs in, while the user signed in before is still the current one.
-	private static final Set<String> SIGN_IN_PROPERTIES = new HashSet<>(
-	        Arrays.asList(OpenmrsConstants.USER_PROPERTY_LOGIN_ATTEMPTS, OpenmrsConstants.USER_PROPERTY_LOCKOUT_TIMESTAMP,
-	            "lastLoginTimestamp"));
 	
 	// Users a clinic-limited user created in this transaction, whose clinics are not stored yet.
 	private static final ThreadLocal<Map<User, Integer>> CREATED = ThreadLocal.withInitial(IdentityHashMap::new);
@@ -137,15 +132,19 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		CREATED.remove();
 	}
 	
-	/** Whether the current user may change the user's clinics and roles: the rule the flush applies. */
-	public static boolean mayEdit(User user) {
-		if (!ClinicUsers.isClinicLimited()) {
-			return true;
-		}
+	/** Which users the current user may change the clinics and roles of: the rule the flush applies. */
+	public static Predicate<User> editable() {
 		User actor = Context.getAuthenticatedUser();
+		if (actor.isSuperUser()) {
+			return user -> true;
+		}
+		ClinicUsers.Roles roles = ClinicUsers.Roles.stored();
+		if (!ClinicUsers.isClinicLimited()) {
+			return user -> unmanaged(actor, roles, ClinicUsers.Stored.of(user.getUserId()), null) == null;
+		}
 		Set<String> mine = ClinicUsers.Stored.of(actor.getUserId()).clinics;
-		return !actor.getUserId().equals(user.getUserId()) && !mine.isEmpty()
-		        && unmanaged(ClinicUsers.Stored.of(user.getUserId()), mine) == null;
+		return user -> !actor.getUserId().equals(user.getUserId()) && !mine.isEmpty()
+		        && unmanaged(actor, roles, ClinicUsers.Stored.of(user.getUserId()), mine) == null;
 	}
 	
 	/** The signed-in user whose changes are judged: none for a daemon, a superuser or no one. */
@@ -188,14 +187,8 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		if (!ClinicUsers.roleNames(user.getRoles()).equals(stored.roles)) {
 			return true;
 		}
-		if (!Hibernate.isInitialized(user.getUserProperties())) {
-			return false;
-		}
-		Map<String, String> now = new HashMap<>(user.getUserProperties());
-		Map<String, String> before = new HashMap<>(stored.properties);
-		now.keySet().removeAll(SIGN_IN_PROPERTIES);
-		before.keySet().removeAll(SIGN_IN_PROPERTIES);
-		return !now.equals(before);
+		return Hibernate.isInitialized(user.getUserProperties())
+		        && !new HashMap<>(user.getUserProperties()).equals(stored.properties);
 	}
 	
 	private static void checkChange(User actor, Object entity, Integer personBefore) {
@@ -229,10 +222,9 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		if (personId == null || !ClinicUsers.isClinicLimited()) {
 			return;
 		}
-		Set<String> mine = ClinicUsers.Stored.of(actor.getUserId()).clinics;
 		for (Integer userId : ClinicUsers.usersOf(personId)) {
 			if (!userId.equals(actor.getUserId()) && !isCreatedById(userId)) {
-				checkManaged(ClinicUsers.Stored.of(userId), mine);
+				checkManaged(actor, ClinicUsers.Stored.of(userId), ClinicUsers.Stored.of(actor.getUserId()).clinics);
 			}
 		}
 	}
@@ -255,11 +247,15 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 	private static void check(User actor, Integer userId, boolean created, ClinicUsers.Stored stored, Set<String> clinics,
 	        Set<String> roles) {
 		Set<String> givable = ClinicUsers.givableRoles();
+		boolean self = actor.getUserId().equals(userId);
 		if (!ClinicUsers.isClinicLimited()) {
+			if (!created && !self) {
+				checkManaged(actor, stored, null);
+			}
 			checkRoles(roles, stored.roles, givable);
 			return;
 		}
-		if (actor.getUserId().equals(userId)) {
+		if (self) {
 			// Saving one's own preferences, such as the login location, stays open.
 			if (!clinics.equals(stored.clinics) || !roles.equals(stored.roles)) {
 				throw refusal("You cannot change your own clinics or roles");
@@ -271,7 +267,7 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 			throw refusal("You have no clinics, so you cannot manage users");
 		}
 		if (!created) {
-			checkManaged(stored, mine);
+			checkManaged(actor, stored, mine);
 		}
 		if (clinics.isEmpty()) {
 			throw refusal("Give the user at least one of your clinics");
@@ -290,20 +286,26 @@ public class ClinicLimitedUserManagement extends EmptyInterceptor {
 		}
 	}
 	
-	private static void checkManaged(ClinicUsers.Stored stored, Set<String> mine) {
-		String refusal = unmanaged(stored, mine);
+	private static void checkManaged(User actor, ClinicUsers.Stored stored, Set<String> mine) {
+		String refusal = unmanaged(actor, ClinicUsers.Roles.stored(), stored, mine);
 		if (refusal != null) {
 			throw refusal(refusal);
 		}
 	}
 	
-	/** Why a stored user who shares none of {@code mine} or who manages users is refused, or null. */
-	private static String unmanaged(ClinicUsers.Stored stored, Set<String> mine) {
-		if (Collections.disjoint(stored.clinics, mine)) {
+	/**
+	 * Why the actor may not change a stored user, or null: one whose roles outrank its own, and, with
+	 * {@code mine} (null when not clinic-limited), one sharing none of them or who manages users.
+	 */
+	private static String unmanaged(User actor, ClinicUsers.Roles roles, ClinicUsers.Stored stored, Set<String> mine) {
+		if (mine != null && Collections.disjoint(stored.clinics, mine)) {
 			return stored.name + " is not at your clinics";
 		}
-		if (ClinicUsers.managesUsers(stored.roles)) {
+		if (mine != null && roles.manageUsers(stored.roles)) {
 			return stored.name + " administers users, which only an instance administrator can change";
+		}
+		if (roles.outrank(actor, stored.roles)) {
+			return stored.name + " holds a role or privilege you lack";
 		}
 		return null;
 	}
