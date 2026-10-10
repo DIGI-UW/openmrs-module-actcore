@@ -45,6 +45,9 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   for an oral regimen whose supply end is unknown) and how many of the last six months' injections were
   on time. It replays the patient's saved forms when asked, as the nightly refresh does, so a dose
   saved today counts at once.
+- **Next steps.** `GET /ws/rest/v1/actcore/nextsteps?patient=<uuid>` lists what to do for a patient
+  at this visit: each step's `key`, `form`, `title`, `reason`, `isNew` and `done`, from the rules
+  below. The ACT frontend app shows them on the patient summary.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
@@ -52,6 +55,39 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `configuration/reports/reportdescriptors` itself when that property is true. It logs whether it
   loaded, skipped or failed. Remove this once the reporting module does it
   ([mherman22/openmrs-module-reporting#1](https://github.com/mherman22/openmrs-module-reporting/issues/1)).
+
+### Next steps
+
+The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose status and their flags:
+
+| Step | When |
+| --- | --- |
+| Give BPG injection, or Record oral prophylaxis visit (by the regimen in force) | the dose is overdue, due today or due within 2 days |
+| Consultation visit | the patient has the RHD prophylaxis not prescribed flag |
+| Echocardiogram | the latest echo before this visit is over 12 months old, or there is none; an echo is dated by its Date of Echocardiogram, else by its encounter |
+| Procedures and outcomes | the patient has the RHD 30-day follow-up due flag |
+| INR review | the patient has the RHD INR review due flag; the reason gives the latest Next INR Date |
+| Consultation visit, new | an echo was saved this visit |
+| Consultation visit, new | the latest BPG form reporting anaphylaxis, even with a later BPG form, has no consultation saved after it before this visit; the BPG step is on hold until the consultation is done, also after a dose given since |
+| Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation saved after it before this visit |
+
+- **One step per form.** A later rule's reason replaces an earlier one's, except that a new
+  consultation, or referral, gives the latest unreviewed trigger's reason in rule order, else the
+  latest trigger's.
+- **Review.** An echo saved this visit, an anaphylaxis or a low estimate (the trigger) is reviewed
+  by a consultation saved after it, by encounter date and then by which was saved first. A trigger
+  reviewed outside this visit raises no step. A trigger reviewed this visit still lists its step, done
+  unless another trigger is unreviewed; an anaphylaxis reviewed this visit lifts the BPG hold.
+- **Done.** A step is done once an encounter of its form's encounter type is in the patient's active
+  visit; for BPG, once that visit records a Date of Injection, so a withheld injection stays to do; for
+  a new consultation or referral, once this visit reviewed every trigger behind it. A form saved this
+  visit that no rule asked for, and an echo saved this visit, is listed done as "Entered this visit".
+  A done step is not new.
+- **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
+  privilege, as the frontend's forms list decides. A user who may not record the consultation gets
+  Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation
+  rules. The flag rules need View Patient Flags.
+- **Order.** Steps to do come first, new ones first among them.
 
 ### Gap look-up
 
@@ -206,6 +242,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml` |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
@@ -213,6 +250,9 @@ stopped, this module will not start on the next boot either; start Initializer f
 The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
+
+Calling the next steps needs Get Observations; the module reads the patient's records on the caller's
+behalf, and offers only the steps the caller may record.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as
