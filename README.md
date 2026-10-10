@@ -73,9 +73,10 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 
 - **One step per form.** A later rule's reason replaces an earlier one's.
 - **Done.** A step is done once an encounter of its form's encounter type is in the patient's active
-  visit; for BPG, once that visit records a Date of Injection, so a withheld injection stays to do. A
-  form saved this visit that no rule asked for, and an echo saved this visit, is listed done as
-  "Entered this visit". A done step is not new.
+  visit; for BPG, once that visit records a Date of Injection, so a withheld injection stays to do; for
+  a new consultation, once a consultation in that visit comes after the form that raised it, by
+  encounter date and then by which was saved first. A form saved this visit that no rule asked for,
+  and an echo saved this visit, is listed done as "Entered this visit". A done step is not new.
 - **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
   privilege, as the frontend's forms list decides. A user who may not record the consultation gets
   Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation

@@ -171,6 +171,22 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldHoldBpgWhenThisVisitsConsultationCameBeforeTheAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		inVisit(consult, 0);
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals(false, steps.get(0).isDone());
+		assertEquals(true, steps.get(0).isNew());
+		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+	}
+	
+	@Test
 	public void of_shouldNotCountThisVisitsConsultationAsTheReviewOfAnEarlierAnaphylaxis() {
 		lastGiven(36);
 		echoed(at(30));
@@ -329,6 +345,20 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldNotCountAConsultationBeforeThisVisitsEchoAsItsReview() {
+		echoed(at(400));
+		startVisit();
+		inVisit(consult, 0);
+		inVisit(echo, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|echo", keys(steps));
+		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
 	public void of_shouldCountAnEchoSavedWithoutItsDateByTheEncounter() {
 		encounterOf(echo, 30);
 		
@@ -376,6 +406,21 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		echoed(at(30));
 		
 		assertEquals("", keys(steps()).replace("oral", ""));
+	}
+	
+	@Test
+	public void of_shouldNotCountAConsultationBeforeThisVisitsLowEstimateAsItsReview() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		echoed(at(30));
+		startVisit();
+		inVisit(consult, 0);
+		estimate(inVisit(oral, 0), 50);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", steps.get(0).getKey());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
 	}
 	
 	@Test

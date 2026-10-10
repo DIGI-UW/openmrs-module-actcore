@@ -44,7 +44,7 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Before
 	public void setUp() {
-		// The dose rule reads the prophylaxis summary, which needs each concept named; patient 7 has no prescription.
+		// The dose rule needs each prophylaxis concept named; patient 7 has no prescription.
 		for (String property : Arrays.asList("prescriptionConcept", "dateStartedConcept", "dateStoppedConcept",
 		    "injectionDateConcept", "estimateConcept", "prescriptionDurationConcept", "consultationDateConcept",
 		    "dataEntryConcept")) {

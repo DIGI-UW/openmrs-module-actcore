@@ -45,7 +45,7 @@ public class NextStepsController extends BaseRestController {
 		if (patient == null) {
 			throw new ObjectNotFoundException();
 		}
-		// Thrown here rather than by requirePrivilege, whose exception the REST layer answers with a 500.
+		// Thrown here: the REST layer answers requirePrivilege's exception with a 500.
 		if (!Context.hasPrivilege(PrivilegeConstants.GET_OBS)) {
 			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_OBS);
 		}

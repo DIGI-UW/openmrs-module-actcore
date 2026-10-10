@@ -132,7 +132,7 @@ public class NextSteps {
 		finally {
 			proxyReads(false);
 		}
-		// As the ACT app's MayEnterForm decides: Add Encounters and the encounter type's edit privilege, if any.
+		// As MayEnterForm in the ACT app: Add Encounters, and the type's edit privilege if any.
 		Set<String> enterable = new HashSet<String>();
 		for (Map.Entry<String, String> edit : editPrivileges.entrySet()) {
 			if (addsEncounters && (edit.getValue() == null || Context.hasPrivilege(edit.getValue()))) {
@@ -182,7 +182,7 @@ public class NextSteps {
 			}
 		}
 		Collections.sort(encounters, BY_DATE);
-		// Read from the database rather than each encounter's obs set, which can lag obs saved on their own.
+		// From the database, not each encounter's obs set, which can lag obs saved on their own.
 		obsByEncounter = new HashMap<Encounter, List<Obs>>();
 		for (Obs obs : Context.getObsService().getObservationsByPerson(patient)) {
 			if (!obs.getVoided() && obs.getEncounter() != null) {
@@ -225,15 +225,17 @@ public class NextSteps {
 			put("inr", inrReason(), false);
 		}
 		if (savedThisVisit.contains("echo")) {
-			put("consult", "Review the new echo result and update the care plan", true);
+			review(latest("echo"), "Review the new echo result and update the care plan");
 		}
-		boolean anaphylaxis = anaphylaxisUnreviewed();
-		if (anaphylaxis) {
-			review(mayConsult, "Anaphylaxis reported after BPG: review before the next dose",
+		Encounter anaphylaxis = anaphylaxisUnreviewed();
+		if (anaphylaxis != null) {
+			review(mayConsult, anaphylaxis, "Anaphylaxis reported after BPG: review before the next dose",
 			    "Anaphylaxis reported: a clinician must review before the next dose");
 		}
-		if (lowAdherenceUnreviewed()) {
-			review(mayConsult, "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: consider switching to BPG",
+		Encounter lowAdherence = lowAdherenceUnreviewed();
+		if (lowAdherence != null) {
+			review(mayConsult, lowAdherence,
+			    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: consider switching to BPG",
 			    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: a clinician to review the plan");
 		}
 		// What was recorded at this visit is shown done, even when no rule asked for it.
@@ -243,20 +245,28 @@ public class NextSteps {
 			}
 		}
 		Step bpg = steps.get("bpg");
-		Step consult = steps.get("consult");
-		if (anaphylaxis && bpg != null && !bpg.done && (consult == null || !consult.done)) {
+		if (anaphylaxis != null && bpg != null && !bpg.done && !consultedThisVisitAfter(anaphylaxis)) {
 			bpg.reason = "On hold: complete the consultation before giving BPG";
 		}
 	}
 	
-	private void review(boolean mayConsult, String reason, String referral) {
+	private void review(boolean mayConsult, Encounter trigger, String reason, String referral) {
 		if (!types.containsKey("consult")) {
 			return;
 		}
 		if (mayConsult) {
-			put("consult", reason, true);
+			review(trigger, reason);
 		} else if (!steps.containsKey("refer")) {
 			steps.put("refer", new Step("refer", referral, true, false));
+		}
+	}
+	
+	/** A new consultation is done only by one saved this visit after the form that raised it. */
+	private void review(Encounter trigger, String reason) {
+		put("consult", reason, true);
+		Step consult = steps.get("consult");
+		if (consult != null) {
+			consult.done = consult.done && consultedThisVisitAfter(trigger);
 		}
 	}
 	
@@ -347,26 +357,29 @@ public class NextSteps {
 		return due.isBefore(today) ? "INR review overdue: was due " + DAY.format(due) : "INR review due " + DAY.format(due);
 	}
 	
-	/** The latest BPG form reports anaphylaxis and no consultation before this visit came after it. */
-	private boolean anaphylaxisUnreviewed() {
+	/**
+	 * The latest BPG form, if it reports anaphylaxis and no consultation before this visit came after
+	 * it.
+	 */
+	private Encounter anaphylaxisUnreviewed() {
 		String anaphylaxis = property(GP_ANAPHYLAXIS);
 		Encounter latest = latest("bpg");
 		if (latest == null) {
-			return false;
+			return null;
 		}
 		for (Obs obs : obsOf(latest)) {
 			if (obs.getValueCoded() != null && obs.getValueCoded().getUuid().equals(anaphylaxis)) {
-				return !consultedBeforeThisVisitAfter(latest);
+				return consultedBeforeThisVisitAfter(latest) ? null : latest;
 			}
 		}
-		return false;
+		return null;
 	}
 	
 	/**
-	 * On an oral regimen, the latest oral estimate is below the threshold and no consultation before
-	 * this visit came after it.
+	 * On an oral regimen, the latest oral estimate's form, if the estimate is below the threshold and
+	 * no consultation before this visit came after it.
 	 */
-	private boolean lowAdherenceUnreviewed() {
+	private Encounter lowAdherenceUnreviewed() {
 		String estimate = property(GP_ESTIMATE);
 		Obs latest = null;
 		for (Encounter encounter : encounters) {
@@ -379,14 +392,22 @@ public class NextSteps {
 		}
 		return "Oral".equals(summary.getType()) && latest != null
 		        && latest.getValueNumeric() < threshold(GP_ADHERENCE_BELOW, 80)
-		        && !consultedBeforeThisVisitAfter(latest.getEncounter());
+		        && !consultedBeforeThisVisitAfter(latest.getEncounter()) ? latest.getEncounter() : null;
 	}
 	
 	private boolean consultedBeforeThisVisitAfter(Encounter reviewed) {
+		return consultedAfter(reviewed, false);
+	}
+	
+	private boolean consultedThisVisitAfter(Encounter reviewed) {
+		return consultedAfter(reviewed, true);
+	}
+	
+	private boolean consultedAfter(Encounter reviewed, boolean inThisVisit) {
 		EncounterType consult = types.get("consult");
 		for (Encounter encounter : encounters) {
-			if (consult != null && consult.equals(encounter.getEncounterType()) && !thisVisit.contains(encounter)
-			        && BY_DATE.compare(encounter, reviewed) > 0) {
+			if (consult != null && consult.equals(encounter.getEncounterType())
+			        && thisVisit.contains(encounter) == inThisVisit && BY_DATE.compare(encounter, reviewed) > 0) {
 				return true;
 			}
 		}
@@ -514,7 +535,7 @@ public class NextSteps {
 		
 		private boolean isNew;
 		
-		private final boolean done;
+		private boolean done;
 		
 		private Step(String key, String reason, boolean isNew, boolean done) {
 			this.key = key;
