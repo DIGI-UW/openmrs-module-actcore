@@ -182,4 +182,68 @@
       The batch data entry answers, as answer uuid:days between batches, separated by commas. ACT 2.0's nightly run skipped such a patient until that long had passed since the later of their latest consultation and injection. Any other answer, such as continuous entry, is recomputed nightly.
     </description>
   </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.encounterTypes</property>
+    <defaultValue>bpg:04cf03db-3b8e-5020-84b0-50b06338767a,oral:55271793-ef37-58da-9d86-1d9092a5a809,consult:c2503561-c00d-5460-8157-43d594472b4a,echo:730f5ec2-7102-55d0-8602-2d792844f245,procedures:c9b87090-8768-50be-987e-8ca0a8983429,inr:b4bb88a3-9a04-5142-85bd-bb63c270f632</defaultValue>
+    <description>
+      The encounter type of each next step's form, as key:encounter type uuid, separated by commas. A step is done once an encounter of its type is saved in the patient's active visit, and it is offered only to a user with Add Encounters and the type's edit privilege.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.flags</property>
+    <defaultValue>notPrescribed:b1f7a2c0-0005-4a00-9000-000000000005,followUp:b1f7a2c0-0006-4a00-9000-000000000006,inr:b1f7a2c0-0017-4a00-9000-000000000017</defaultValue>
+    <description>
+      The flags that raise a next step, as rule:flag uuid: notPrescribed gives the consultation, followUp the procedures form, inr the INR review. Read only for a user with View Patient Flags.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.doseWithinDays</property>
+    <defaultValue>2</defaultValue>
+    <description>
+      How many days ahead a dose due shows as a next step, besides one due today or overdue.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.echoMonths</property>
+    <defaultValue>12</defaultValue>
+    <description>
+      How old the latest echocardiogram may be before a new one is a next step. A patient with none recorded gets one too.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.adherenceBelow</property>
+    <defaultValue>80</defaultValue>
+    <description>
+      The oral adherence estimate, in percent, below which a consultation is a new next step, until a consultation after it.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.echoDateConcept</property>
+    <defaultValue>911be530-9457-54be-8515-4bbcdb832ccb</defaultValue>
+    <description>
+      The date of an echocardiogram, whose latest value before this visit decides whether an echo is due.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.anaphylaxisAnswer</property>
+    <defaultValue>148888AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+    <description>
+      The answer that reports anaphylaxis on the latest BPG form, on any of its questions. It makes a consultation a new next step and puts the next BPG on hold.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.nextSteps.nextInrDateConcept</property>
+    <defaultValue>5096AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+    <description>
+      The next INR date, whose latest value dates the INR review step.
+    </description>
+  </globalProperty>
 </module>
