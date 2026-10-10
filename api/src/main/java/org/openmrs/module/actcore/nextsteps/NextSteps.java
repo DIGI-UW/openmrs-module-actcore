@@ -359,19 +359,23 @@ public class NextSteps {
 		return due.isBefore(today) ? "INR review overdue: was due " + DAY.format(due) : "INR review due " + DAY.format(due);
 	}
 	
-	/** The latest BPG form, if it reports anaphylaxis. */
+	/**
+	 * The latest BPG form reporting anaphylaxis, even with a later BPG form: only a consultation
+	 * reviews it.
+	 */
 	private Encounter anaphylaxis() {
 		String anaphylaxis = property(GP_ANAPHYLAXIS);
-		Encounter latest = latest("bpg");
-		if (latest == null) {
-			return null;
-		}
-		for (Obs obs : obsOf(latest)) {
-			if (obs.getValueCoded() != null && obs.getValueCoded().getUuid().equals(anaphylaxis)) {
-				return latest;
+		Encounter latest = null;
+		for (Encounter encounter : encounters) {
+			if (types.containsKey("bpg") && types.get("bpg").equals(encounter.getEncounterType())) {
+				for (Obs obs : obsOf(encounter)) {
+					if (obs.getValueCoded() != null && obs.getValueCoded().getUuid().equals(anaphylaxis)) {
+						latest = encounter;
+					}
+				}
 			}
 		}
-		return null;
+		return latest;
 	}
 	
 	/** On an oral regimen, the latest oral estimate's form, if the estimate is below the threshold. */

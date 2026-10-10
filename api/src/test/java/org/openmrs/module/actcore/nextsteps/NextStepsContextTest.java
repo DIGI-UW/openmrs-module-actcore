@@ -187,7 +187,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldNotCountThisVisitsConsultationAsTheReviewOfAnEarlierAnaphylaxis() {
+	public void of_shouldListTheConsultationDoneWhenThisVisitReviewedAnEarlierAnaphylaxis() {
 		lastGiven(36);
 		echoed(at(30));
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
@@ -199,6 +199,90 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("bpg|consult", keys(steps));
 		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(1).getReason());
 		assertEquals(true, steps.get(1).isDone());
+	}
+	
+	@Test
+	public void of_shouldKeepAnUnreviewedAnaphylaxisAfterALaterBpgFormWithoutIt() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(bpg, 5);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals(true, steps.get(0).isNew());
+		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldHoldTheNextBpgWhenAnInjectionWasGivenAfterAnUnreviewedAnaphylaxis() {
+		answered(encounterOf(bpg, 40), tolerance, anaphylaxis);
+		lastGiven(36);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldKeepTheConsultationAndListBpgDoneWhenThisVisitGaveADoseAfterAnUnreviewedAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		startVisit();
+		given(inVisit(bpg, 0), 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals(true, steps.get(0).isNew());
+		assertEquals("Entered this visit", steps.get(1).getReason());
+		assertEquals(true, steps.get(1).isDone());
+	}
+	
+	@Test
+	public void of_shouldReferAnUnreviewedAnaphylaxisAfterALaterBpgFormWithoutIt() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(bpg, 5);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer|bpg", keys(steps));
+		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", steps.get(0).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldLeaveOutAnEarlierAnaphylaxisAConsultationBeforeThisVisitReviewed() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 20), tolerance, anaphylaxis);
+		encounterOf(consult, 15);
+		encounterOf(bpg, 10);
+		
+		assertEquals("bpg", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldRaiseANewerAnaphylaxisAfterAConsultationReviewedAnEarlierOne() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 20), tolerance, anaphylaxis);
+		encounterOf(consult, 15);
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(bpg, 5);
+		
+		assertEquals("consult|bpg", keys(steps()));
 	}
 	
 	@Test
