@@ -245,7 +245,7 @@ public class NextSteps {
 	
 	/**
 	 * Adds the trigger's new consultation or referral, done once this visit reviewed every trigger,
-	 * with the first unreviewed trigger's reason.
+	 * with the latest unreviewed trigger's reason in rule order, else the latest trigger's.
 	 */
 	private Review review(boolean mayConsult, Encounter trigger, String reason, String referral) {
 		if (trigger == null) {
@@ -258,7 +258,7 @@ public class NextSteps {
 		String key = mayConsult || referral == null ? "consult" : "refer";
 		Step step = steps.get(key);
 		// A new step still done has only reviewed triggers behind it.
-		if (step == null || !step.isNew || step.done && review == Review.NONE) {
+		if (step == null || !step.isNew || step.done || review == Review.NONE) {
 			if ("consult".equals(key)) {
 				put(key, reason, true);
 			} else if (step == null) {

@@ -235,7 +235,7 @@
     <property>actcore.nextSteps.anaphylaxisAnswer</property>
     <defaultValue>148888AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
     <description>
-      The answer that reports anaphylaxis on the latest BPG form, on any of its questions. It makes a consultation a new next step and puts the next BPG on hold.
+      The answer that reports anaphylaxis on a BPG form, on any of its questions. The latest BPG form reporting it makes a consultation a new next step and puts the next BPG on hold until a consultation after it.
     </description>
   </globalProperty>
 

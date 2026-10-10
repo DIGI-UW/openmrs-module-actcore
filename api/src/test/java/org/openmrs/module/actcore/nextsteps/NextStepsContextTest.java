@@ -387,6 +387,40 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldGiveTheAnaphylaxisReasonOverAnUnreviewedEchoSavedThisVisit() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		inVisit(echo, 0);
+		Encounter injection = inVisit(bpg, 0);
+		given(injection, 0);
+		answered(injection, tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg|echo", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals(true, steps.get(0).isNew());
+		assertEquals(true, steps.get(1).isDone());
+	}
+	
+	@Test
+	public void of_shouldGiveTheAnaphylaxisReasonWhenThisVisitsConsultationReviewedItAndTheEcho() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		inVisit(echo, 0);
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|echo|consult", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(2).getReason());
+		assertEquals(true, steps.get(2).isDone());
+	}
+	
+	@Test
 	public void of_shouldNotReferANewEchoForAUserWhoMayNotRecordTheConsultation() {
 		echoed(at(400));
 		startVisit();

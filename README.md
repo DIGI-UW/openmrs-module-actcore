@@ -72,7 +72,8 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 | Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation saved after it before this visit |
 
 - **One step per form.** A later rule's reason replaces an earlier one's, except that a new
-  consultation, or referral, gives the first unreviewed trigger's reason, else the first trigger's.
+  consultation, or referral, gives the latest unreviewed trigger's reason in rule order, else the
+  latest trigger's.
 - **Review.** An echo saved this visit, an anaphylaxis or a low estimate (the trigger) is reviewed
   by a consultation saved after it, by encounter date and then by which was saved first. A trigger
   reviewed outside this visit raises no step. A trigger reviewed this visit still lists its step, done
