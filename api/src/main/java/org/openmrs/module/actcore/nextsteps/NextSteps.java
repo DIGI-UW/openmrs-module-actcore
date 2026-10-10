@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
 import org.openmrs.Form;
@@ -304,14 +305,23 @@ public class NextSteps {
 			if (thisVisit.contains(encounter)) {
 				continue;
 			}
+			LocalDate dated = null;
 			for (Obs obs : obsOf(encounter)) {
 				if (obs.getConcept().getUuid().equals(echoDate) && obs.getValueDatetime() != null) {
 					LocalDate day = day(obs.getValueDatetime());
-					last = last == null || day.isAfter(last) ? day : last;
+					dated = dated == null || day.isAfter(dated) ? day : dated;
 				}
 			}
+			if (dated == null && types.containsKey("echo") && types.get("echo").equals(encounter.getEncounterType())) {
+				dated = day(encounter.getEncounterDatetime());
+			}
+			if (dated != null && (last == null || dated.isAfter(last))) {
+				last = dated;
+			}
 		}
-		if (last == null) {
+		if (savedThisVisit.contains("echo")) {
+			put("echo", "Entered this visit", false);
+		} else if (last == null) {
 			put("echo", "No echocardiogram recorded", false);
 		} else if (last.isBefore(today.minusMonths(threshold(GP_ECHO_MONTHS, 12)))) {
 			put("echo", "Last echo was over " + threshold(GP_ECHO_MONTHS, 12) + " months ago (" + DAY.format(last) + ")",
@@ -346,7 +356,7 @@ public class NextSteps {
 		}
 		for (Obs obs : obsOf(latest)) {
 			if (obs.getValueCoded() != null && obs.getValueCoded().getUuid().equals(anaphylaxis)) {
-				return !consultedBeforeThisVisitAfter(latest.getEncounterDatetime());
+				return !consultedBeforeThisVisitAfter(latest);
 			}
 		}
 		return false;
@@ -369,14 +379,14 @@ public class NextSteps {
 		}
 		return "Oral".equals(summary.getType()) && latest != null
 		        && latest.getValueNumeric() < threshold(GP_ADHERENCE_BELOW, 80)
-		        && !consultedBeforeThisVisitAfter(latest.getEncounter().getEncounterDatetime());
+		        && !consultedBeforeThisVisitAfter(latest.getEncounter());
 	}
 	
-	private boolean consultedBeforeThisVisitAfter(Date after) {
+	private boolean consultedBeforeThisVisitAfter(Encounter reviewed) {
 		EncounterType consult = types.get("consult");
 		for (Encounter encounter : encounters) {
 			if (consult != null && consult.equals(encounter.getEncounterType()) && !thisVisit.contains(encounter)
-			        && encounter.getEncounterDatetime().after(after)) {
+			        && BY_DATE.compare(encounter, reviewed) > 0) {
 				return true;
 			}
 		}
@@ -457,7 +467,7 @@ public class NextSteps {
 	
 	private static int threshold(String name, int fallback) {
 		String value = property(name);
-		return StringUtils.isNumeric(StringUtils.trimToEmpty(value)) ? Integer.parseInt(value.trim()) : fallback;
+		return NumberUtils.toInt(StringUtils.trimToEmpty(value), fallback);
 	}
 	
 	/** A global property of key:value pairs, separated by commas. */
@@ -515,7 +525,7 @@ public class NextSteps {
 		
 		private NextStep toNextStep(String form) {
 			return new NextStep(key, "refer".equals(key) ? null : form,
-			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew, done);
+			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !done, done);
 		}
 	}
 }

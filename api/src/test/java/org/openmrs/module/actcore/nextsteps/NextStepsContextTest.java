@@ -157,6 +157,32 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
 		assertEquals(true, steps.get(1).isDone());
 		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(1).getReason());
+		assertEquals(false, steps.get(1).isNew());
+	}
+	
+	@Test
+	public void of_shouldCountAConsultationSavedAfterTheBpgAtTheSameTimeAsTheReview() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(consult, 10);
+		
+		assertEquals("bpg", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldNotCountThisVisitsConsultationAsTheReviewOfAnEarlierAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		startVisit();
+		inVisit(consult, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|consult", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(1).getReason());
+		assertEquals(true, steps.get(1).isDone());
 	}
 	
 	@Test
@@ -186,6 +212,29 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertNull(refer.getForm());
 		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", refer.getReason());
 		assertEquals(true, refer.isNew());
+	}
+	
+	@Test
+	public void of_shouldGiveNoFormStepsToAUserWithoutAddEncounters() {
+		authenticateWith("View Patient Flags");
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldGiveTheDoseDueToday() {
+		lastGiven(28);
+		echoed(at(30));
+		
+		assertEquals("Due today", steps().get(0).getReason());
+	}
+	
+	@Test
+	public void of_shouldGiveTheDoseDueTomorrow() {
+		lastGiven(27);
+		echoed(at(30));
+		
+		assertEquals("Due tomorrow", steps().get(0).getReason());
 	}
 	
 	@Test
@@ -276,7 +325,22 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
 		assertEquals(true, steps.get(0).isNew());
 		assertEquals(true, steps.get(1).isDone());
-		assertEquals("Last echo was over 12 months ago (25-Aug-2025)", steps.get(1).getReason());
+		assertEquals("Entered this visit", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldCountAnEchoSavedWithoutItsDateByTheEncounter() {
+		encounterOf(echo, 30);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldFallBackToTheDefaultForAThresholdTooLargeForAnInt() {
+		property(NextSteps.GP_ECHO_MONTHS, "99999999999");
+		echoed(at(395));
+		
+		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", steps().get(0).getReason());
 	}
 	
 	@Test
@@ -302,6 +366,31 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldLeaveOutALowEstimateAConsultationAfterItReviewed() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		encounterOf(consult, 5);
+		echoed(at(30));
+		
+		assertEquals("", keys(steps()).replace("oral", ""));
+	}
+	
+	@Test
+	public void of_shouldReferALowEstimateForAUserWhoMayNotRecordTheConsultation() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer", keys(steps).replace("|oral", "").replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
 	}
 	
 	@Test
@@ -331,6 +420,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		old.setRetireReason("replaced");
 		Context.getFormService().saveForm(old);
 		Form current = form(echo);
+		Form newer = form(echo);
+		newer.setRetired(true);
+		newer.setRetireReason("withdrawn");
+		Context.getFormService().saveForm(newer);
 		
 		assertEquals(current.getUuid(), steps().get(0).getForm());
 	}

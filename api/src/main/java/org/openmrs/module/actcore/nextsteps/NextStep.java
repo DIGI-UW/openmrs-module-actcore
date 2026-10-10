@@ -53,7 +53,10 @@ public class NextStep {
 		return reason;
 	}
 	
-	/** Whether something recorded since the patient was last seen raised this step. */
+	/**
+	 * Whether a finding still to act on raised this step: a new echo, or an unreviewed anaphylaxis or
+	 * low adherence.
+	 */
 	public boolean isNew() {
 		return isNew;
 	}

@@ -64,17 +64,18 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 | --- | --- |
 | Give BPG injection, or Record oral prophylaxis visit (by the regimen in force) | the dose is overdue, due today or due within 2 days |
 | Consultation visit | the patient has the RHD prophylaxis not prescribed flag |
-| Echocardiogram | the latest echo before this visit is over 12 months old, or there is none |
+| Echocardiogram | the latest echo before this visit is over 12 months old, or there is none; an echo is dated by its Date of Echocardiogram, else by its encounter |
 | Procedures and outcomes | the patient has the RHD 30-day follow-up due flag |
 | INR review | the patient has the RHD INR review due flag; the reason gives the latest Next INR Date |
 | Consultation visit, new | an echo was saved this visit |
-| Consultation visit, new | the latest BPG form reports anaphylaxis, with no consultation after it before this visit; the BPG step is on hold until the consultation is done |
-| Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation after it before this visit |
+| Consultation visit, new | the latest BPG form reports anaphylaxis, with no consultation saved after it before this visit; the BPG step is on hold until the consultation is done |
+| Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation saved after it before this visit |
 
 - **One step per form.** A later rule's reason replaces an earlier one's.
 - **Done.** A step is done once an encounter of its form's encounter type is in the patient's active
   visit; for BPG, once that visit records a Date of Injection, so a withheld injection stays to do. A
-  form saved this visit that no rule asked for is listed done as "Entered this visit".
+  form saved this visit that no rule asked for, and an echo saved this visit, is listed done as
+  "Entered this visit". A done step is not new.
 - **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
   privilege, as the frontend's forms list decides. A user who may not record the consultation gets
   Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation
