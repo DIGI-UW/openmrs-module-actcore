@@ -231,6 +231,105 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldMarkTheReferralDoneWhenAConsultationIsSavedThisVisitAfterAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|refer", keys(steps));
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals(true, steps.get(1).isDone());
+		assertEquals(false, steps.get(1).isNew());
+	}
+	
+	@Test
+	public void of_shouldReferTheUnreviewedLowEstimateWhenThisVisitsConsultationReviewedTheAnaphylaxis() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		estimate(inVisit(oral, 0), 50);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		NextStep refer = steps().get(0);
+		
+		assertEquals("refer", refer.getKey());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", refer.getReason());
+		assertEquals(false, refer.isDone());
+	}
+	
+	@Test
+	public void of_shouldGiveTheUnreviewedEchosReasonWhenThisVisitsConsultationReviewedTheAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		inVisit(echo, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg|echo", keys(steps));
+		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldGiveTheUnreviewedAnaphylaxisReasonWhenThisVisitsConsultationReviewedTheEcho() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		inVisit(echo, 0);
+		inVisit(consult, 0);
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg|echo", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotReferANewEchoForAUserWhoMayNotRecordTheConsultation() {
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		assertEquals("echo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldGiveTheReviewedEchosReasonOverTheNotPrescribedFlags() {
+		flagged(notPrescribed);
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		inVisit(consult, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|echo", keys(steps));
+		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	@Test
 	public void of_shouldGiveNoFormStepsToAUserWithoutAddEncounters() {
 		authenticateWith("View Patient Flags");
 		

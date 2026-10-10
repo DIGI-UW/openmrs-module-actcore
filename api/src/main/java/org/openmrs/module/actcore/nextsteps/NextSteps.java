@@ -224,20 +224,13 @@ public class NextSteps {
 		if (flags.contains(flagKeys.get("inr"))) {
 			put("inr", inrReason(), false);
 		}
-		if (savedThisVisit.contains("echo")) {
-			review(latest("echo"), "Review the new echo result and update the care plan");
-		}
-		Encounter anaphylaxis = anaphylaxisUnreviewed();
-		if (anaphylaxis != null) {
-			review(mayConsult, anaphylaxis, "Anaphylaxis reported after BPG: review before the next dose",
-			    "Anaphylaxis reported: a clinician must review before the next dose");
-		}
-		Encounter lowAdherence = lowAdherenceUnreviewed();
-		if (lowAdherence != null) {
-			review(mayConsult, lowAdherence,
-			    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: consider switching to BPG",
-			    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: a clinician to review the plan");
-		}
+		review(mayConsult, savedThisVisit.contains("echo") ? latest("echo") : null,
+		    "Review the new echo result and update the care plan", null);
+		Review anaphylaxis = review(mayConsult, anaphylaxis(), "Anaphylaxis reported after BPG: review before the next dose",
+		    "Anaphylaxis reported: a clinician must review before the next dose");
+		review(mayConsult, lowAdherence(),
+		    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: consider switching to BPG",
+		    "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: a clinician to review the plan");
 		// What was recorded at this visit is shown done, even when no rule asked for it.
 		for (String key : TITLES.keySet()) {
 			if (savedThisVisit.contains(key) && !steps.containsKey(key) && !"bpg".equals(key)) {
@@ -245,29 +238,38 @@ public class NextSteps {
 			}
 		}
 		Step bpg = steps.get("bpg");
-		if (anaphylaxis != null && bpg != null && !bpg.done && !consultedThisVisitAfter(anaphylaxis)) {
+		if (anaphylaxis == Review.NONE && bpg != null && !bpg.done) {
 			bpg.reason = "On hold: complete the consultation before giving BPG";
 		}
 	}
 	
-	private void review(boolean mayConsult, Encounter trigger, String reason, String referral) {
-		if (!types.containsKey("consult")) {
-			return;
+	/**
+	 * Adds the trigger's new consultation or referral, done once this visit reviewed every trigger,
+	 * with the first unreviewed trigger's reason.
+	 */
+	private Review review(boolean mayConsult, Encounter trigger, String reason, String referral) {
+		if (trigger == null) {
+			return null;
 		}
-		if (mayConsult) {
-			review(trigger, reason);
-		} else if (!steps.containsKey("refer")) {
-			steps.put("refer", new Step("refer", referral, true, false));
+		Review review = reviewOf(trigger);
+		if (review == Review.BEFORE_THIS_VISIT || !types.containsKey("consult")) {
+			return review;
 		}
-	}
-	
-	/** A new consultation is done only by one saved this visit after the form that raised it. */
-	private void review(Encounter trigger, String reason) {
-		put("consult", reason, true);
-		Step consult = steps.get("consult");
-		if (consult != null) {
-			consult.done = consult.done && consultedThisVisitAfter(trigger);
+		String key = mayConsult || referral == null ? "consult" : "refer";
+		Step step = steps.get(key);
+		// A new step still done has only reviewed triggers behind it.
+		if (step == null || !step.isNew || step.done && review == Review.NONE) {
+			if ("consult".equals(key)) {
+				put(key, reason, true);
+			} else if (step == null) {
+				steps.put(key, new Step(key, referral, true, true));
+			} else {
+				step.reason = referral;
+			}
+			step = steps.get(key);
 		}
+		step.done = step.done && review == Review.THIS_VISIT;
+		return review;
 	}
 	
 	private void dose() {
@@ -357,11 +359,8 @@ public class NextSteps {
 		return due.isBefore(today) ? "INR review overdue: was due " + DAY.format(due) : "INR review due " + DAY.format(due);
 	}
 	
-	/**
-	 * The latest BPG form, if it reports anaphylaxis and no consultation before this visit came after
-	 * it.
-	 */
-	private Encounter anaphylaxisUnreviewed() {
+	/** The latest BPG form, if it reports anaphylaxis. */
+	private Encounter anaphylaxis() {
 		String anaphylaxis = property(GP_ANAPHYLAXIS);
 		Encounter latest = latest("bpg");
 		if (latest == null) {
@@ -369,17 +368,14 @@ public class NextSteps {
 		}
 		for (Obs obs : obsOf(latest)) {
 			if (obs.getValueCoded() != null && obs.getValueCoded().getUuid().equals(anaphylaxis)) {
-				return consultedBeforeThisVisitAfter(latest) ? null : latest;
+				return latest;
 			}
 		}
 		return null;
 	}
 	
-	/**
-	 * On an oral regimen, the latest oral estimate's form, if the estimate is below the threshold and
-	 * no consultation before this visit came after it.
-	 */
-	private Encounter lowAdherenceUnreviewed() {
+	/** On an oral regimen, the latest oral estimate's form, if the estimate is below the threshold. */
+	private Encounter lowAdherence() {
 		String estimate = property(GP_ESTIMATE);
 		Obs latest = null;
 		for (Encounter encounter : encounters) {
@@ -391,27 +387,25 @@ public class NextSteps {
 			}
 		}
 		return "Oral".equals(summary.getType()) && latest != null
-		        && latest.getValueNumeric() < threshold(GP_ADHERENCE_BELOW, 80)
-		        && !consultedBeforeThisVisitAfter(latest.getEncounter()) ? latest.getEncounter() : null;
+		        && latest.getValueNumeric() < threshold(GP_ADHERENCE_BELOW, 80) ? latest.getEncounter() : null;
 	}
 	
-	private boolean consultedBeforeThisVisitAfter(Encounter reviewed) {
-		return consultedAfter(reviewed, false);
-	}
-	
-	private boolean consultedThisVisitAfter(Encounter reviewed) {
-		return consultedAfter(reviewed, true);
-	}
-	
-	private boolean consultedAfter(Encounter reviewed, boolean inThisVisit) {
+	/**
+	 * Whether a consultation after the trigger, by BY_DATE, was saved outside this visit, in it, or
+	 * not.
+	 */
+	private Review reviewOf(Encounter trigger) {
 		EncounterType consult = types.get("consult");
+		Review review = Review.NONE;
 		for (Encounter encounter : encounters) {
-			if (consult != null && consult.equals(encounter.getEncounterType())
-			        && thisVisit.contains(encounter) == inThisVisit && BY_DATE.compare(encounter, reviewed) > 0) {
-				return true;
+			if (consult != null && consult.equals(encounter.getEncounterType()) && BY_DATE.compare(encounter, trigger) > 0) {
+				if (!thisVisit.contains(encounter)) {
+					return Review.BEFORE_THIS_VISIT;
+				}
+				review = Review.THIS_VISIT;
 			}
 		}
-		return false;
+		return review;
 	}
 	
 	private Encounter latest(String key) {
@@ -526,6 +520,12 @@ public class NextSteps {
 			return 0;
 		}
 	};
+	
+	private enum Review {
+		BEFORE_THIS_VISIT,
+		THIS_VISIT,
+		NONE
+	}
 	
 	private static final class Step {
 		
