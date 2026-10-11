@@ -194,10 +194,11 @@ public class NextSteps {
 		}
 		thisVisit = new HashSet<Encounter>();
 		savedThisVisit = new HashSet<String>();
+		// Today's part of the active visit only: the ACT app never ends a visit, so one can hold weeks of forms.
 		Visit visit = activeVisit();
 		if (visit != null) {
 			for (Encounter encounter : encounters) {
-				if (visit.equals(encounter.getVisit())) {
+				if (visit.equals(encounter.getVisit()) && day(encounter.getEncounterDatetime()).equals(today)) {
 					thisVisit.add(encounter);
 					for (Map.Entry<String, EncounterType> type : types.entrySet()) {
 						if (type.getValue().equals(encounter.getEncounterType())) {
@@ -239,7 +240,8 @@ public class NextSteps {
 		}
 		Step bpg = steps.get("bpg");
 		if (anaphylaxis == Review.NONE && bpg != null && !bpg.done) {
-			bpg.reason = "On hold: complete the consultation before giving BPG";
+			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
+			        : "On hold: a clinician must review before the next dose";
 		}
 	}
 	
@@ -300,8 +302,10 @@ public class NextSteps {
 		String injectionDate = property(GP_INJECTION_DATE);
 		for (Encounter encounter : thisVisit) {
 			if (types.containsKey("bpg") && types.get("bpg").equals(encounter.getEncounterType())) {
+				// An earlier dose recorded today, such as from a paper record, does not give today's.
 				for (Obs obs : obsOf(encounter)) {
-					if (obs.getConcept().getUuid().equals(injectionDate)) {
+					if (obs.getConcept().getUuid().equals(injectionDate) && obs.getValueDatetime() != null
+					        && day(obs.getValueDatetime()).equals(today)) {
 						return true;
 					}
 				}
