@@ -807,7 +807,6 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		startVisit(0);
 	}
 	
-	/** A visit begun ``daysAgo`` days ago and never ended. */
 	private void startVisit(int daysAgo) {
 		visit = new Visit(patient, Context.getVisitService().getVisitType(1), at(daysAgo));
 		Context.getVisitService().saveVisit(visit);

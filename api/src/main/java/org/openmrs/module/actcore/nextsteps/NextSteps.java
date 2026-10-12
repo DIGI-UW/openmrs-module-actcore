@@ -194,10 +194,10 @@ public class NextSteps {
 		}
 		thisVisit = new HashSet<Encounter>();
 		savedThisVisit = new HashSet<String>();
-		// Today's part of the active visit only: the ACT app never ends a visit, so one can hold weeks of forms.
 		Visit visit = activeVisit();
 		if (visit != null) {
 			for (Encounter encounter : encounters) {
+				// Keep the today filter: the ACT app never ends a visit, so one visit can hold weeks of forms.
 				if (visit.equals(encounter.getVisit()) && day(encounter.getEncounterDatetime()).equals(today)) {
 					thisVisit.add(encounter);
 					for (Map.Entry<String, EncounterType> type : types.entrySet()) {
