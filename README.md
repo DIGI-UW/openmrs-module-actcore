@@ -69,7 +69,7 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 | INR review | the patient has the RHD INR review due flag; the reason gives the latest Next INR Date |
 | Consultation visit, new | an echo was saved this visit |
 | Consultation visit, new | the latest BPG form reporting anaphylaxis, even with a later BPG form, has no consultation saved after it before this visit; the BPG step is on hold until the consultation is done, also after a dose given since |
-| Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation saved after it before this visit; it suggests switching to BPG unless a BPG form reported anaphylaxis or a BPG prescription was stopped for it, when it asks a clinician to review the plan |
+| Consultation visit, new | on an oral regimen, the latest estimate is below 80%, with no consultation saved after it before this visit; it suggests switching to BPG unless a BPG form reported anaphylaxis or a BPG prescription records it, such as its Reason Stopped, when it asks a clinician to review the plan |
 
 - **One step per form.** A later rule's reason replaces an earlier one's, except that a new
   consultation, or referral, gives the latest unreviewed trigger's reason in rule order, else the
