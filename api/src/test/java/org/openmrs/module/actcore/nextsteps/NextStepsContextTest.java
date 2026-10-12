@@ -835,6 +835,46 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
 	}
 	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAnInjectionRegimenIsAnotherMemberOfAGroupStoppedForAnaphylaxis() {
+		Encounter consultation = encounterOf(consult, 60);
+		Obs group = prescriptionGroup(consultation, concept("Oral erythromycin", "N/A"), 120, 60);
+		Obs why = obs(consultation, reasonStopped);
+		why.setValueCoded(anaphylaxis);
+		group.addGroupMember(why);
+		Obs previous = obs(consultation, concept("Previous regimen", "Coded"));
+		previous.setValueCoded(q28);
+		group.addGroupMember(previous);
+		Context.getObsService().saveObs(group, null);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAMigratedRegimenStoppedForAnaphylaxisHasNoAnswer() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, q28, 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update obs set value_coded = null where value_coded = "
+		        + q28.getConceptId() + " and encounter_id = " + consultation.getEncounterId(),
+		    false);
+		Context.clearSession();
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
 	}
