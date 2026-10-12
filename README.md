@@ -74,18 +74,19 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 - **One step per form.** A later rule's reason replaces an earlier one's, except that a new
   consultation, or referral, gives the latest unreviewed trigger's reason in rule order, else the
   latest trigger's.
+- **This visit.** The encounters in the patient's active visit dated today. The ACT app never ends a
+  visit, so one left open holds forms from earlier days, and those count as before this visit: an echo
+  from an earlier day raises no review, and a consultation from one reviews its triggers outside this
+  visit, so they raise no step.
 - **Review.** An echo saved this visit, an anaphylaxis or a low estimate (the trigger) is reviewed
   by a consultation saved after it, by encounter date and then by which was saved first. A trigger
   reviewed outside this visit raises no step. A trigger reviewed this visit still lists its step, done
   unless another trigger is unreviewed; an anaphylaxis reviewed this visit lifts the BPG hold.
-- **This visit.** The encounters in the patient's active visit dated today. The ACT app never ends a
-  visit, so one left open holds forms from earlier days, and those count as before this visit.
-- **Done.** A step is done once an encounter of its form's encounter type is saved this visit; for
-  BPG, once this visit records a Date of Injection of today, so a withheld injection, or an earlier
-  dose recorded today, stays to do; for
-  a new consultation or referral, once this visit reviewed every trigger behind it. A form saved this
-  visit that no rule asked for, and an echo saved this visit, is listed done as "Entered this visit".
-  A done step is not new.
+- **Done.** A step is done once an encounter of its form's encounter type is saved this visit; for BPG,
+  once this visit records a Date of Injection of today, so a withheld injection, or an earlier dose
+  recorded today, stays to do; for a new consultation or referral, once this visit reviewed every
+  trigger behind it. A form saved this visit that no rule asked for, and an echo saved this visit, is
+  listed done as "Entered this visit". A done step is not new.
 - **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
   privilege, as the frontend's forms list decides. A user who may not record the consultation gets
   Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation

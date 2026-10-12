@@ -721,7 +721,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldTakeAConsultationOnAnEarlierDayOfAVisitLeftOpenAsBeforeThisVisit() {
+	public void of_shouldLeaveOutAnaphylaxisAConsultationOnAnEarlierDayOfAVisitLeftOpenReviewed() {
 		lastGiven(36);
 		echoed(at(30));
 		startVisit(25);
@@ -732,6 +732,14 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("bpg", keys(steps));
 		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotAskForAReviewOfAnEchoSavedOnAnEarlierDayOfAVisitLeftOpen() {
+		startVisit(3);
+		inVisit(echo, 3);
+		
+		assertEquals("", keys(steps()));
 	}
 	
 	@Test
