@@ -402,8 +402,8 @@ public class NextSteps {
 		Set<String> injections = pairs(GP_INJECTION_INTERVALS).keySet();
 		for (List<Obs> recorded : obsByEncounter.values()) {
 			for (Obs obs : recorded) {
-				if (obs.getValueCoded() == null || !obs.getValueCoded().getUuid().equals(answer) || obs.getObsGroup() == null
-				        || !obs.getObsGroup().getConcept().getUuid().equals(prescription)) {
+				if (obs.getValueCoded() == null || !obs.getValueCoded().getUuid().equals(answer)
+				        || obs.getObsGroup() == null) {
 					continue;
 				}
 				for (Obs member : obs.getObsGroup().getGroupMembers()) {
