@@ -389,8 +389,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * Whether a BPG form reported anaphylaxis, or an injection regimen's prescription records it, as
-	 * Reason Stopped does: BPG is then not a switch to suggest.
+	 * Whether a BPG form reported anaphylaxis, or an anaphylaxis answer sits in a prescription group
+	 * whose regimen is an injection: BPG is then not a switch to suggest.
 	 */
 	private boolean bpgAnaphylaxis() {
 		if (anaphylaxis() != null) {

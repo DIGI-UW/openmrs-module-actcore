@@ -129,7 +129,9 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		Context.getObsService().saveObs(prescriptionGroup(encounter, regimen, startedDaysAgo, stoppedDaysAgo), null);
 	}
 	
-	/** The prescription group the consultation saves, not yet saved. */
+	/**
+	 * The consultation's prescription group, left unsaved so a caller can add members before saving it.
+	 */
 	protected Obs prescriptionGroup(Encounter encounter, Concept regimen, int startedDaysAgo, Integer stoppedDaysAgo) {
 		Obs group = obs(encounter, prescription);
 		Obs chosen = obs(encounter, prescription);

@@ -823,7 +823,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		prescribe(encounterOf(consult, 60), oralPenicillin, 60, null);
 		estimate(encounterOf(oral, 10), 50);
 		echoed(at(30));
-		// Voided behind the API, as migrated data can be, so its obs stay live.
+		// Raw SQL rather than voidEncounter, so the obs stay unvoided as in migrated data.
 		Context.flushSession();
 		Context.getAdministrationService()
 		        .executeSQL("update encounter set voided = true where encounter_id = " + stopping.getEncounterId(), false);
@@ -900,7 +900,6 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		Context.getObsService().saveObs(date, null);
 	}
 	
-	/** A prescription group, as the consultation saves one, stopped for ``reason``. */
 	private void stoppedFor(Encounter encounter, Concept regimen, int startedDaysAgo, int stoppedDaysAgo, Concept reason) {
 		Obs group = prescriptionGroup(encounter, regimen, startedDaysAgo, stoppedDaysAgo);
 		Obs why = obs(encounter, reasonStopped);
