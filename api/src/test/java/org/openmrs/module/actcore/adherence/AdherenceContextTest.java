@@ -126,6 +126,11 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	protected void prescribe(Encounter encounter, Concept regimen, int startedDaysAgo, Integer stoppedDaysAgo) {
+		Context.getObsService().saveObs(prescriptionGroup(encounter, regimen, startedDaysAgo, stoppedDaysAgo), null);
+	}
+	
+	/** The prescription group the consultation saves, not yet saved. */
+	protected Obs prescriptionGroup(Encounter encounter, Concept regimen, int startedDaysAgo, Integer stoppedDaysAgo) {
 		Obs group = obs(encounter, prescription);
 		Obs chosen = obs(encounter, prescription);
 		chosen.setValueCoded(regimen);
@@ -138,7 +143,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 			stop.setValueDatetime(at(stoppedDaysAgo));
 			group.addGroupMember(stop);
 		}
-		Context.getObsService().saveObs(group, null);
+		return group;
 	}
 	
 	protected void given(Encounter encounter, int daysAgo) {

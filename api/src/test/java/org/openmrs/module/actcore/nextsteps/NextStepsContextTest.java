@@ -812,6 +812,26 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		List<NextStep> steps = steps();
 		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenOnlyAVoidedConsultationStoppedBpgForAnaphylaxis() {
+		Encounter stopping = encounterOf(consult, 70);
+		stoppedFor(stopping, q28, 120, 70, anaphylaxis);
+		prescribe(encounterOf(consult, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		// Voided behind the API, as migrated data can be, so its obs stay live.
+		Context.getAdministrationService()
+		        .executeSQL("update encounter set voided = 1 where encounter_id = " + stopping.getEncounterId(), false);
+		Context.flushSession();
+		Context.clearSession();
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
 	}
 	
@@ -882,16 +902,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	/** A prescription group, as the consultation saves one, stopped for ``reason``. */
 	private void stoppedFor(Encounter encounter, Concept regimen, int startedDaysAgo, int stoppedDaysAgo, Concept reason) {
-		Obs group = obs(encounter, prescription);
-		Obs chosen = obs(encounter, prescription);
-		chosen.setValueCoded(regimen);
-		group.addGroupMember(chosen);
-		Obs start = obs(encounter, started);
-		start.setValueDatetime(at(startedDaysAgo));
-		group.addGroupMember(start);
-		Obs stop = obs(encounter, stopped);
-		stop.setValueDatetime(at(stoppedDaysAgo));
-		group.addGroupMember(stop);
+		Obs group = prescriptionGroup(encounter, regimen, startedDaysAgo, stoppedDaysAgo);
 		Obs why = obs(encounter, reasonStopped);
 		why.setValueCoded(reason);
 		group.addGroupMember(why);

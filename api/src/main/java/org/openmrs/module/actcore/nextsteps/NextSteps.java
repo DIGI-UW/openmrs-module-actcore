@@ -233,12 +233,11 @@ public class NextSteps {
 		    "Review the new echo result and update the care plan", null);
 		Review anaphylaxis = review(mayConsult, anaphylaxis(), "Anaphylaxis reported after BPG: review before the next dose",
 		    "Anaphylaxis reported: a clinician must review before the next dose");
-		String reviewPlan = "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80)
-		        + "%: a clinician to review the plan";
-		review(mayConsult, lowAdherence(),
-		    bpgAnaphylaxis() ? reviewPlan
-		            : "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: consider switching to BPG",
-		    reviewPlan);
+		String below = "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: ";
+		Encounter lowEstimate = lowAdherence();
+		review(mayConsult, lowEstimate, below
+		        + (lowEstimate != null && bpgAnaphylaxis() ? "a clinician to review the plan" : "consider switching to BPG"),
+		    below + "a clinician to review the plan");
 		// What was recorded at this visit is shown done, even when no rule asked for it.
 		for (String key : TITLES.keySet()) {
 			if (savedThisVisit.contains(key) && !steps.containsKey(key) && !"bpg".equals(key)) {
@@ -400,8 +399,8 @@ public class NextSteps {
 		String answer = property(GP_ANAPHYLAXIS);
 		String prescription = property(GP_PRESCRIPTION);
 		Set<String> injections = pairs(GP_INJECTION_INTERVALS).keySet();
-		for (List<Obs> recorded : obsByEncounter.values()) {
-			for (Obs obs : recorded) {
+		for (Encounter encounter : encounters) {
+			for (Obs obs : obsOf(encounter)) {
 				if (obs.getValueCoded() == null || !obs.getValueCoded().getUuid().equals(answer)
 				        || obs.getObsGroup() == null) {
 					continue;
