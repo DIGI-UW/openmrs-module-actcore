@@ -60,6 +60,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private Concept nextInrDate;
 	
+	private Concept reasonStopped;
+	
 	private Flag notPrescribed;
 	
 	private Flag followUp;
@@ -86,6 +88,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		tolerance = concept("Injection tolerance", "Coded");
 		anaphylaxis = concept("Anaphylaxis", "N/A");
 		nextInrDate = concept("Next INR date", "Datetime");
+		reasonStopped = concept("Reason stopped", "Coded");
 		property(NextSteps.GP_ECHO_DATE, echoDate.getUuid());
 		property(NextSteps.GP_ANAPHYLAXIS, anaphylaxis.getUuid());
 		property(NextSteps.GP_NEXT_INR_DATE, nextInrDate.getUuid());
@@ -757,6 +760,121 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
+	@Test
+	public void of_shouldNotSuggestBpgForALowEstimateAfterAnAnaphylaxisOnBpg() {
+		answered(encounterOf(bpg, 90), tolerance, anaphylaxis);
+		encounterOf(consult, 80);
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotSuggestBpgForALowEstimateAfterAConsultationStoppedBpgForAnaphylaxis() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, q28, 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenTheRegimenStoppedForAnaphylaxisWasOral() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, concept("Oral erythromycin", "N/A"), 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAnaphylaxisIsAnsweredOutsideAPrescription() {
+		Encounter consultation = encounterOf(consult, 60);
+		answered(consultation, reasonStopped, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenOnlyAVoidedConsultationStoppedBpgForAnaphylaxis() {
+		Encounter stopping = encounterOf(consult, 70);
+		stoppedFor(stopping, q28, 120, 70, anaphylaxis);
+		prescribe(encounterOf(consult, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		// Raw SQL rather than voidEncounter, so the obs stay unvoided as in migrated data.
+		Context.flushSession();
+		Context.getAdministrationService()
+		        .executeSQL("update encounter set voided = true where encounter_id = " + stopping.getEncounterId(), false);
+		Context.clearSession();
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAnInjectionRegimenIsAnotherMemberOfAGroupStoppedForAnaphylaxis() {
+		Encounter consultation = encounterOf(consult, 60);
+		Obs group = prescriptionGroup(consultation, concept("Oral erythromycin", "N/A"), 120, 60);
+		Obs why = obs(consultation, reasonStopped);
+		why.setValueCoded(anaphylaxis);
+		group.addGroupMember(why);
+		Obs previous = obs(consultation, concept("Previous regimen", "Coded"));
+		previous.setValueCoded(q28);
+		group.addGroupMember(previous);
+		Context.getObsService().saveObs(group, null);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAMigratedRegimenStoppedForAnaphylaxisHasNoAnswer() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, q28, 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update obs set value_coded = null where value_coded = "
+		        + q28.getConceptId() + " and encounter_id = " + consultation.getEncounterId(),
+		    false);
+		Context.clearSession();
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
 	}
@@ -820,6 +938,14 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		Obs date = obs(encounter, echoDate);
 		date.setValueDatetime(when);
 		Context.getObsService().saveObs(date, null);
+	}
+	
+	private void stoppedFor(Encounter encounter, Concept regimen, int startedDaysAgo, int stoppedDaysAgo, Concept reason) {
+		Obs group = prescriptionGroup(encounter, regimen, startedDaysAgo, stoppedDaysAgo);
+		Obs why = obs(encounter, reasonStopped);
+		why.setValueCoded(reason);
+		group.addGroupMember(why);
+		Context.getObsService().saveObs(group, null);
 	}
 	
 	private void answered(Encounter encounter, Concept question, Concept answer) {

@@ -92,7 +92,7 @@
     <property>actcore.adherence.prescriptionConcept</property>
     <defaultValue>668e0221-8b41-5669-9ad8-78e193d42494</defaultValue>
     <description>
-      The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest consultation that has any, by its date.
+      The obs group, and its member holding the regimen, that records a prophylaxis prescription. The adherence refresh takes the groups of the latest consultation that has any, by its date. Next steps reads the groups of every form, for an injection regimen recording anaphylaxis.
     </description>
   </globalProperty>
 
@@ -235,7 +235,7 @@
     <property>actcore.nextSteps.anaphylaxisAnswer</property>
     <defaultValue>148888AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
     <description>
-      The answer that reports anaphylaxis on a BPG form, on any of its questions. The latest BPG form reporting it makes a consultation a new next step and puts the next BPG on hold until a consultation after it.
+      The answer that reports anaphylaxis, on any question of a BPG form or of an injection regimen's prescription, such as its Reason Stopped. The latest BPG form reporting it makes a consultation a new next step and puts the next BPG on hold until a consultation after it. Either way, it also keeps the low oral adherence step from suggesting BPG.
     </description>
   </globalProperty>
 
