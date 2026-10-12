@@ -802,6 +802,19 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
 	}
 	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenAnaphylaxisIsAnsweredOutsideAPrescription() {
+		Encounter consultation = encounterOf(consult, 60);
+		answered(consultation, reasonStopped, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
 	}
