@@ -824,9 +824,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		estimate(encounterOf(oral, 10), 50);
 		echoed(at(30));
 		// Voided behind the API, as migrated data can be, so its obs stay live.
-		Context.getAdministrationService()
-		        .executeSQL("update encounter set voided = 1 where encounter_id = " + stopping.getEncounterId(), false);
 		Context.flushSession();
+		Context.getAdministrationService()
+		        .executeSQL("update encounter set voided = true where encounter_id = " + stopping.getEncounterId(), false);
 		Context.clearSession();
 		
 		List<NextStep> steps = steps();
