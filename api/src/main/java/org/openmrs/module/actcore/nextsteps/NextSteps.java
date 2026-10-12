@@ -302,7 +302,7 @@ public class NextSteps {
 		String injectionDate = property(GP_INJECTION_DATE);
 		for (Encounter encounter : thisVisit) {
 			if (types.containsKey("bpg") && types.get("bpg").equals(encounter.getEncounterType())) {
-				// An earlier dose recorded today, such as from a paper record, does not give today's.
+				// An earlier dose recorded today, such as from a paper record, is not today's dose.
 				for (Obs obs : obsOf(encounter)) {
 					if (obs.getConcept().getUuid().equals(injectionDate) && obs.getValueDatetime() != null
 					        && day(obs.getValueDatetime()).equals(today)) {

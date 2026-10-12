@@ -90,8 +90,8 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 - **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
   privilege, as the frontend's forms list decides. A user who may not record the consultation gets
   Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation
-  rules; their held BPG step says a clinician must review, not to complete the consultation. The flag
-  rules need View Patient Flags.
+  rules; their held BPG step says a clinician must review before the next dose, rather than to complete
+  the consultation. The flag rules need View Patient Flags.
 - **Order.** Steps to do come first, new ones first among them.
 
 ### Gap look-up
