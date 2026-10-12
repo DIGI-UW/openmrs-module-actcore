@@ -259,7 +259,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("refer|bpg", keys(steps));
 		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", steps.get(0).getReason());
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
 	}
 	
 	@Test
@@ -312,6 +312,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertNull(refer.getForm());
 		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", refer.getReason());
 		assertEquals(true, refer.isNew());
+		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
 	}
 	
 	@Test
@@ -690,6 +691,72 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(current.getUuid(), steps().get(0).getForm());
 	}
 	
+	@Test
+	public void of_shouldNotCountADoseGivenOnAnEarlierDayOfAVisitLeftOpen() {
+		echoed(at(30));
+		startVisit(28);
+		Encounter dose = inVisit(bpg, 28);
+		prescribe(dose, q28, 28, null);
+		given(dose, 28);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg", keys(steps));
+		assertEquals("Due today", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldNotCountAnEarlierInjectionRecordedToday() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		given(inVisit(bpg, 0), 36);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg", keys(steps));
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldLeaveOutAnaphylaxisAConsultationOnAnEarlierDayOfAVisitLeftOpenReviewed() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit(25);
+		answered(inVisit(bpg, 25), tolerance, anaphylaxis);
+		inVisit(consult, 20);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg", keys(steps));
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotAskForAReviewOfAnEchoSavedOnAnEarlierDayOfAVisitLeftOpen() {
+		startVisit(3);
+		inVisit(echo, 3);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldAskForAnEchoWhenTheLastWasSavedOnAnEarlierDayOfAVisitLeftOpen() {
+		startVisit(400);
+		Encounter scan = inVisit(echo, 400);
+		Obs date = obs(scan, echoDate);
+		date.setValueDatetime(at(400));
+		Context.getObsService().saveObs(date, null);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("echo", keys(steps));
+		assertEquals("Last echo was over 12 months ago (25-Aug-2025)", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
 	}
@@ -737,7 +804,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	private void startVisit() {
-		visit = new Visit(patient, Context.getVisitService().getVisitType(1), at(0));
+		startVisit(0);
+	}
+	
+	private void startVisit(int daysAgo) {
+		visit = new Visit(patient, Context.getVisitService().getVisitType(1), at(daysAgo));
 		Context.getVisitService().saveVisit(visit);
 	}
 	
