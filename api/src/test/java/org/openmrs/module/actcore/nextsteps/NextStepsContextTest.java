@@ -60,6 +60,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private Concept nextInrDate;
 	
+	private Concept reasonStopped;
+	
 	private Flag notPrescribed;
 	
 	private Flag followUp;
@@ -86,6 +88,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		tolerance = concept("Injection tolerance", "Coded");
 		anaphylaxis = concept("Anaphylaxis", "N/A");
 		nextInrDate = concept("Next INR date", "Datetime");
+		reasonStopped = concept("Reason stopped", "Coded");
 		property(NextSteps.GP_ECHO_DATE, echoDate.getUuid());
 		property(NextSteps.GP_ANAPHYLAXIS, anaphylaxis.getUuid());
 		property(NextSteps.GP_NEXT_INR_DATE, nextInrDate.getUuid());
@@ -757,6 +760,48 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
+	@Test
+	public void of_shouldNotSuggestBpgForALowEstimateAfterAnAnaphylaxisOnBpg() {
+		answered(encounterOf(bpg, 90), tolerance, anaphylaxis);
+		encounterOf(consult, 80);
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotSuggestBpgForALowEstimateAfterAConsultationStoppedBpgForAnaphylaxis() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, q28, 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillSuggestBpgForALowEstimateWhenTheRegimenStoppedForAnaphylaxisWasOral() {
+		Encounter consultation = encounterOf(consult, 60);
+		stoppedFor(consultation, concept("Oral erythromycin", "N/A"), 120, 60, anaphylaxis);
+		prescribe(consultation, oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps).replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
 	}
@@ -820,6 +865,24 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		Obs date = obs(encounter, echoDate);
 		date.setValueDatetime(when);
 		Context.getObsService().saveObs(date, null);
+	}
+	
+	/** A prescription group, as the consultation saves one, stopped for ``reason``. */
+	private void stoppedFor(Encounter encounter, Concept regimen, int startedDaysAgo, int stoppedDaysAgo, Concept reason) {
+		Obs group = obs(encounter, prescription);
+		Obs chosen = obs(encounter, prescription);
+		chosen.setValueCoded(regimen);
+		group.addGroupMember(chosen);
+		Obs start = obs(encounter, started);
+		start.setValueDatetime(at(startedDaysAgo));
+		group.addGroupMember(start);
+		Obs stop = obs(encounter, stopped);
+		stop.setValueDatetime(at(stoppedDaysAgo));
+		group.addGroupMember(stop);
+		Obs why = obs(encounter, reasonStopped);
+		why.setValueCoded(reason);
+		group.addGroupMember(why);
+		Context.getObsService().saveObs(group, null);
 	}
 	
 	private void answered(Encounter encounter, Concept question, Concept answer) {
