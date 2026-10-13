@@ -9,16 +9,19 @@
  */
 package org.openmrs.module.actcore.web;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.Location;
 import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.registry.EnrolOnRegistration;
+import org.openmrs.module.actcore.registry.FacilityRollup;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
@@ -55,5 +58,32 @@ public class RegistryController extends BaseRestController {
 			}
 		}
 		return new SimpleObject().add("count", patients.size());
+	}
+	
+	@RequestMapping(value = "/registry/by-facility", method = RequestMethod.GET)
+	@ResponseBody
+	public SimpleObject getByFacility() {
+		if (!Context.hasPrivilege(PrivilegeConstants.GET_PATIENT_PROGRAMS)) {
+			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_PATIENT_PROGRAMS);
+		}
+		if (!Context.hasPrivilege(PrivilegeConstants.GET_LOCATIONS)) {
+			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_LOCATIONS);
+		}
+		String uuid = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
+		if (StringUtils.isBlank(uuid)) {
+			return new SimpleObject().add("results", new ArrayList<SimpleObject>());
+		}
+		Program registry = Context.getProgramWorkflowService().getProgramByUuid(uuid.trim());
+		if (registry == null) {
+			return new SimpleObject().add("results", new ArrayList<SimpleObject>());
+		}
+		List<SimpleObject> results = new ArrayList<SimpleObject>();
+		for (FacilityRollup.Row row : FacilityRollup.of(registry)) {
+			Location facility = row.getFacility();
+			results.add(new SimpleObject().add("facility", facility == null ? null : facility.getName())
+			        .add("facilityUuid", facility == null ? null : facility.getUuid()).add("patients", row.getPatients())
+			        .add("adherence", row.getAdherence()));
+		}
+		return new SimpleObject().add("results", results);
 	}
 }
