@@ -224,6 +224,14 @@
   </globalProperty>
 
   <globalProperty>
+    <property>actcore.nextSteps.doseAfterEarlierSteps</property>
+    <defaultValue>true</defaultValue>
+    <description>
+      Whether the dose step waits for the earlier steps: while the patient's Patient Information step, consultation or Refer to clinician is to do, whoever is signed in, a dose not recorded this visit is left out of the next steps. Set to false to list it anyway.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
     <property>actcore.nextSteps.echoDateConcept</property>
     <defaultValue>911be530-9457-54be-8515-4bbcdb832ccb</defaultValue>
     <description>

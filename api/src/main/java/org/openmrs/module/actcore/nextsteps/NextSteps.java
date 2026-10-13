@@ -58,6 +58,8 @@ public class NextSteps {
 	
 	static final String GP_ADHERENCE_BELOW = "actcore.nextSteps.adherenceBelow";
 	
+	static final String GP_DOSE_AFTER_EARLIER_STEPS = "actcore.nextSteps.doseAfterEarlierSteps";
+	
 	static final String GP_ECHO_DATE = "actcore.nextSteps.echoDateConcept";
 	
 	static final String GP_ANAPHYLAXIS = "actcore.nextSteps.anaphylaxisAnswer";
@@ -258,6 +260,20 @@ public class NextSteps {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
 		}
+		// Read whatever this user may record, so a data clerk gets no dose ahead of a clinician's consultation.
+		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))
+		        && (toDo("patientInfo") || toDo("consult") || toDo("refer"))) {
+			for (String dose : Arrays.asList("bpg", "oral")) {
+				if (toDo(dose)) {
+					steps.remove(dose);
+				}
+			}
+		}
+	}
+	
+	private boolean toDo(String key) {
+		Step step = steps.get(key);
+		return step != null && !step.done;
 	}
 	
 	/**

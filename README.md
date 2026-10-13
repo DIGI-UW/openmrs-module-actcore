@@ -93,6 +93,10 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
   Refer to clinician for the not prescribed, anaphylaxis and adherence rules, and nothing for a new
   echo; their held BPG step says a clinician must review before the next dose, rather than to complete
   the consultation. The flag rules need View Patient Flags.
+- **The dose waits.** While the patient's Patient Information step, consultation or Refer to clinician
+  is to do, whoever is signed in, the dose step is left out; a dose recorded this visit is still listed
+  done. The held BPG step therefore shows only with `actcore.nextSteps.doseAfterEarlierSteps` set to
+  false, which lists the dose anyway.
 - **Order.** Steps to do come first, new ones first among them.
 
 ### Gap look-up

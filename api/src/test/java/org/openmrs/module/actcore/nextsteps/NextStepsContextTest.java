@@ -141,6 +141,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldHoldAWithheldBpgUntilTheConsultation() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		startVisit();
@@ -182,6 +183,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldHoldBpgWhenThisVisitsConsultationCameBeforeTheAnaphylaxis() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		startVisit();
@@ -213,6 +215,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldKeepAnUnreviewedAnaphylaxisAfterALaterBpgFormWithoutIt() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
@@ -228,6 +231,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldHoldTheNextBpgWhenAnInjectionWasGivenAfterAnUnreviewedAnaphylaxis() {
+		listTheDoseAnyway();
 		answered(encounterOf(bpg, 40), tolerance, anaphylaxis);
 		lastGiven(36);
 		echoed(at(30));
@@ -257,6 +261,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldReferAnUnreviewedAnaphylaxisAfterALaterBpgFormWithoutIt() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
@@ -285,6 +290,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldRaiseANewerAnaphylaxisAfterAConsultationReviewedAnEarlierOne() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		answered(encounterOf(bpg, 20), tolerance, anaphylaxis);
@@ -307,6 +313,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldReferAUserWhoMayNotRecordTheConsultation() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
@@ -365,6 +372,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldGiveTheUnreviewedEchosReasonWhenThisVisitsConsultationReviewedTheAnaphylaxis() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		startVisit();
@@ -382,6 +390,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldGiveTheUnreviewedAnaphylaxisReasonWhenThisVisitsConsultationReviewedTheEcho() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(30));
 		startVisit();
@@ -563,6 +572,91 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldLeaveTheDoseOutWhilePatientInformationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		assertEquals("patientInfo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldLeaveTheOralDoseOutWhilePatientInformationIsToDo() {
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 90);
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		assertEquals("patientInfo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldLeaveTheDoseOutWhileTheConsultationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		
+		assertEquals("consult", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldLeaveTheDoseOutWhileTheReferralIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		assertEquals("refer", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldLeaveTheDoseOutWhileAConsultationTheUserMayNotRecordIsToDo() {
+		lastGiven(36);
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		assertEquals("echo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListTheDoseWhileOnlyAnEchoProceduresOrInrIsToDo() {
+		lastGiven(36);
+		echoed(at(400));
+		flagged(followUp);
+		flagged(inrDue);
+		
+		assertEquals("bpg|echo|procedures|inr", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListTheDoseRecordedThisVisitDoneWhileTheConsultationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		startVisit();
+		given(inVisit(bpg, 0), 0);
+		
+		assertEquals("consult|bpg", keys(steps()));
+		assertEquals(true, steps().get(1).isDone());
+	}
+	
+	@Test
+	public void of_shouldListTheDoseWhileTheConsultationIsToDoWhenTheRuleIsOff() {
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		
+		assertEquals("bpg|consult", keys(steps()));
+	}
+	
+	@Test
 	public void of_shouldGiveProceduresForAPatientWithTheThirtyDayFollowUpDue() {
 		echoed(at(30));
 		flagged(followUp);
@@ -728,6 +822,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldPutNewStepsFirstAndDoneStepsLast() {
+		listTheDoseAnyway();
 		lastGiven(36);
 		echoed(at(400));
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
@@ -949,6 +1044,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldAskForPatientInformationAfterTheDose() {
+		listTheDoseAnyway();
 		lastGiven(28);
 		echoed(at(30));
 		flagged(notPrescribed);
@@ -1081,6 +1177,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		flag.setEnabled(Boolean.TRUE);
 		Context.getService(FlagService.class).saveFlag(flag);
 		return flag;
+	}
+	
+	private void listTheDoseAnyway() {
+		property(NextSteps.GP_DOSE_AFTER_EARLIER_STEPS, "false");
 	}
 	
 	private void flagged(Flag flag) {
