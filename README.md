@@ -63,7 +63,8 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 | Step | When |
 | --- | --- |
 | Give BPG injection, or Record oral prophylaxis visit (by the regimen in force) | the dose is overdue, due today or due within 2 days |
-| Consultation visit | the patient has the RHD prophylaxis not prescribed flag |
+| Patient Information | the patient has no Patient Information form, so no diagnosis is recorded |
+| Consultation visit, or Refer to clinician | the patient has the RHD prophylaxis not prescribed flag; done once a consultation is saved this visit |
 | Echocardiogram | the latest echo before this visit is over 12 months old, or there is none; an echo is dated by its Date of Echocardiogram, else by its encounter |
 | Procedures and outcomes | the patient has the RHD 30-day follow-up due flag |
 | INR review | the patient has the RHD INR review due flag; the reason gives the latest Next INR Date |
@@ -89,9 +90,13 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
   listed done as "Entered this visit". A done step is not new.
 - **Who sees what.** A step is offered only to a user with Add Encounters and its encounter type's edit
   privilege, as the frontend's forms list decides. A user who may not record the consultation gets
-  Refer to clinician for the anaphylaxis and adherence rules, and nothing for the other consultation
-  rules; their held BPG step says a clinician must review before the next dose, rather than to complete
+  Refer to clinician for the not prescribed, anaphylaxis and adherence rules, and nothing for a new
+  echo; their held BPG step says a clinician must review before the next dose, rather than to complete
   the consultation. The flag rules need View Patient Flags.
+- **The dose waits.** While the patient's Patient Information step, consultation or Refer to clinician
+  is to do, whoever is signed in, the dose step is left out; a dose recorded this visit is still listed
+  done. The held BPG step therefore shows only with `actcore.nextSteps.doseAfterEarlierSteps` set to
+  false, which lists the dose anyway.
 - **Order.** Steps to do come first, new ones first among them.
 
 ### Gap look-up
@@ -247,7 +252,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
-| `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml` |
+| `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml`. If you changed `actcore.nextSteps.encounterTypes`, add `patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0` to it for the Patient Information step |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security

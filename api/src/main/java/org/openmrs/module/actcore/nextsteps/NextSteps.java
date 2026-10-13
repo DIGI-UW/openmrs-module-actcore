@@ -58,6 +58,8 @@ public class NextSteps {
 	
 	static final String GP_ADHERENCE_BELOW = "actcore.nextSteps.adherenceBelow";
 	
+	static final String GP_DOSE_AFTER_EARLIER_STEPS = "actcore.nextSteps.doseAfterEarlierSteps";
+	
 	static final String GP_ECHO_DATE = "actcore.nextSteps.echoDateConcept";
 	
 	static final String GP_ANAPHYLAXIS = "actcore.nextSteps.anaphylaxisAnswer";
@@ -82,6 +84,7 @@ public class NextSteps {
 		TITLES.put("echo", "Echocardiogram");
 		TITLES.put("procedures", "Procedures and outcomes");
 		TITLES.put("inr", "INR review");
+		TITLES.put("patientInfo", "Patient Information");
 	}
 	
 	private static final List<String> READS = Arrays.asList(PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_VISITS,
@@ -219,8 +222,16 @@ public class NextSteps {
 		Map<String, String> flagKeys = pairs(GP_FLAGS);
 		
 		dose();
+		if (latest("patientInfo") == null) {
+			put("patientInfo", "No diagnosis recorded", false);
+		}
 		if (flags.contains(flagKeys.get("notPrescribed"))) {
-			put("consult", "No prophylaxis prescribed", false);
+			if (mayConsult) {
+				put("consult", "No prophylaxis prescribed", false);
+			} else if (types.containsKey("consult")) {
+				steps.put("refer", new Step("refer", "No prophylaxis prescribed: a clinician to prescribe", false,
+				        savedThisVisit.contains("consult")));
+			}
 		}
 		echo();
 		if (flags.contains(flagKeys.get("followUp"))) {
@@ -249,6 +260,20 @@ public class NextSteps {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
 		}
+		// Read whatever this user may record, so a data clerk gets no dose ahead of a clinician's consultation.
+		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))
+		        && (toDo("patientInfo") || toDo("consult") || toDo("refer"))) {
+			for (String dose : Arrays.asList("bpg", "oral")) {
+				if (toDo(dose)) {
+					steps.remove(dose);
+				}
+			}
+		}
+	}
+	
+	private boolean toDo(String key) {
+		Step step = steps.get(key);
+		return step != null && !step.done;
 	}
 	
 	/**
@@ -273,6 +298,7 @@ public class NextSteps {
 				steps.put(key, new Step(key, referral, true, true));
 			} else {
 				step.reason = referral;
+				step.isNew = true;
 			}
 			step = steps.get(key);
 		}
