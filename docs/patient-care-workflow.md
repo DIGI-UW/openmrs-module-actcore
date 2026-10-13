@@ -21,6 +21,7 @@ Steps 6 and 7 repeat. Steps 3 to 5 can happen on the same day or across several 
 
 ## Contents
 
+- [Who sees what, by role](#who-sees-what-by-role)
 - [1. Sign in at a clinic](#1-sign-in-at-a-clinic)
 - [2. Register the patient](#2-register-the-patient)
 - [3. Record Patient Information](#3-record-patient-information)
@@ -32,6 +33,72 @@ Steps 6 and 7 repeat. Steps 3 to 5 can happen on the same day or across several 
 - [Forms by role](#forms-by-role)
 - [Worklists](#worklists)
 - [Where the rules come from](#where-the-rules-come-from)
+
+## Who sees what, by role
+
+Three roles record patient data, and they usually work in different places: the **community
+clinician** and the **data clerk** at a primary care clinic, such as a health centre III, and the
+**clinician** at the cardiac clinic. Each starts on a different home page, and the Next steps card for
+the same patient shows each of them only the forms they may record.
+
+| Role | Usually works at | Home page and menu | Records |
+| --- | --- | --- | --- |
+| Community clinician | Primary care clinic | ACT home: Record BPG, Record oral, Register patient, Find a patient, then Due for prophylaxis, worklists and the care cascade. Menu: ACT home, Registry, Worklists, Reports. | Registers patients; BPG Delivery, Oral Adherence |
+| Data clerk | Primary care clinic | Home: the same quick actions plus Facility report, then Due for prophylaxis. Menu: Home, Due for prophylaxis, Facility reports. | Registers patients; BPG Delivery, Oral Adherence, Patient Information |
+| Clinician | Cardiac clinic | ACT home: Register patient, Enter prophylaxis, Find a patient, worklists, overdue consultations and the care cascade. Menu: ACT home, Registry, Worklists, Reports. | Every RHD form |
+
+![The data clerk's Home](images/workflow/home-clerk.jpg)
+
+*The data clerk's Home. The community clinician's is under [Forms by role](#forms-by-role), and the
+clinician's under [stage 1](#1-sign-in-at-a-clinic).*
+
+### A patient's first weeks, by who sees them
+
+1. **Registration**, usually by the data clerk or the community clinician at the primary care clinic;
+   the clinician can register too.
+2. **Patient Information**, by the data clerk or the clinician. No step on the Next steps card asks for
+   it, so whoever registers the patient opens it from All forms.
+3. **The first consultation and echo**, by the clinician at the cardiac clinic. Only the clinician's
+   Next steps card asks for them.
+4. **Prophylaxis**, back at the primary care clinic. Every role's card shows the due dose; only the
+   clinician's also shows an echo that is due.
+5. **A review** when the data calls for one: the clinician is asked for a consultation, and the other
+   two roles are told to refer the patient.
+
+### The same patients' Next steps, as each role
+
+Each row is one demo patient, opened by each role on the same day.
+
+**Newly diagnosed, nothing prescribed yet.** The community clinician and data clerk see "Nothing due
+for this patient today". The clinician sees the consultation that will prescribe prophylaxis, and the
+missing echo.
+
+| Community clinician, Acimi HCIII | Data clerk, Acimi HCIII | Clinician, Uganda Heart Institute |
+| --- | --- | --- |
+| ![As the community clinician](images/workflow/ns-samuel-community.jpg) | ![As the data clerk](images/workflow/ns-samuel-clerk.jpg) | ![As the clinician](images/workflow/ns-samuel-clinician.jpg) |
+
+**On BPG, dose overdue.** Everyone is asked to give the injection; only the clinician is also asked
+for the echo.
+
+| Community clinician | Data clerk | Clinician |
+| --- | --- | --- |
+| ![As the community clinician](images/workflow/ns-abebe-community.jpg) | ![As the data clerk](images/workflow/ns-abebe-clerk.jpg) | ![As the clinician](images/workflow/ns-abebe-clinician.jpg) |
+
+**On oral prophylaxis, adherence at 50%.** The community clinician and data clerk see a new Refer to
+clinician step; the clinician sees a new Consultation visit suggesting a switch to BPG.
+
+| Community clinician | Data clerk | Clinician |
+| --- | --- | --- |
+| ![As the community clinician](images/workflow/ns-sarah-community.jpg) | ![As the data clerk](images/workflow/ns-sarah-clerk.jpg) | ![As the clinician](images/workflow/ns-sarah-clinician.jpg) |
+
+### Two gaps to know about
+
+- **No step asks for Patient Information** after registration, so a patient can be registered with no
+  diagnosis and nothing reminds anyone.
+- **A newly diagnosed patient with no prescription shows nothing** to the community clinician or the
+  data clerk. Refer to clinician covers only anaphylaxis and low adherence. Until that changes, these
+  patients are found from the clinician's side, for example with the registry's RHD flag filter set
+  to RHD prophylaxis not prescribed.
 
 ## 1. Sign in at a clinic
 
