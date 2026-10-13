@@ -52,6 +52,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private EncounterType inr;
 	
+	private EncounterType patientInfo;
+	
+	private Encounter registered;
+	
 	private Concept echoDate;
 	
 	private Concept tolerance;
@@ -81,9 +85,12 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		echo = type("Echocardiogram");
 		procedures = type("Interventions and Outcomes");
 		inr = type("INR Monitoring");
+		patientInfo = type("Patient Information");
 		property(NextSteps.GP_ENCOUNTER_TYPES,
 		    "bpg:" + bpg.getUuid() + ",oral:" + oral.getUuid() + ",consult:" + consult.getUuid() + ",echo:" + echo.getUuid()
-		            + ",procedures:" + procedures.getUuid() + ",inr:" + inr.getUuid());
+		            + ",procedures:" + procedures.getUuid() + ",inr:" + inr.getUuid() + ",patientInfo:"
+		            + patientInfo.getUuid());
+		registered = encounterOf(patientInfo, 400);
 		echoDate = concept("Date of echocardiogram", "Datetime");
 		tolerance = concept("Injection tolerance", "Coded");
 		anaphylaxis = concept("Anaphylaxis", "N/A");
@@ -873,6 +880,76 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldAskForPatientInformationWhenNoneIsRecorded() {
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("patientInfo", keys(steps));
+		assertEquals("Patient Information", steps.get(0).getTitle());
+		assertEquals("No diagnosis recorded", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isNew());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldAskForPatientInformationAfterTheDose() {
+		lastGiven(28);
+		echoed(at(30));
+		flagged(notPrescribed);
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		assertEquals("bpg|patientInfo|consult", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldAskForPatientInformationOnlyAUserWhoMayRecordIt() {
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
+		Context.getEncounterService().saveEncounterType(patientInfo);
+		authenticateWith("Add Encounters", "Task: test.patientInfo");
+		
+		assertEquals("patientInfo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldNotAskForPatientInformationAUserWhoMayNotRecordIt() {
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
+		Context.getEncounterService().saveEncounterType(patientInfo);
+		authenticateWith("Add Encounters");
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListPatientInformationSavedThisVisitAsEntered() {
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		startVisit();
+		inVisit(patientInfo, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("patientInfo", keys(steps));
+		assertEquals("Entered this visit", steps.get(0).getReason());
+		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldNotAskForPatientInformationRecordedOnAnEarlierDayOfAVisitLeftOpen() {
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		startVisit(3);
+		inVisit(patientInfo, 3);
+		
+		assertEquals("", keys(steps()));
 	}
 	
 	private List<NextStep> steps() {

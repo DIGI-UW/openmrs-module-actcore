@@ -82,6 +82,7 @@ public class NextSteps {
 		TITLES.put("echo", "Echocardiogram");
 		TITLES.put("procedures", "Procedures and outcomes");
 		TITLES.put("inr", "INR review");
+		TITLES.put("patientInfo", "Patient Information");
 	}
 	
 	private static final List<String> READS = Arrays.asList(PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_VISITS,
@@ -219,6 +220,9 @@ public class NextSteps {
 		Map<String, String> flagKeys = pairs(GP_FLAGS);
 		
 		dose();
+		if (latest("patientInfo") == null) {
+			put("patientInfo", "No diagnosis recorded", false);
+		}
 		if (flags.contains(flagKeys.get("notPrescribed"))) {
 			put("consult", "No prophylaxis prescribed", false);
 		}

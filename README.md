@@ -63,6 +63,7 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
 | Step | When |
 | --- | --- |
 | Give BPG injection, or Record oral prophylaxis visit (by the regimen in force) | the dose is overdue, due today or due within 2 days |
+| Patient Information | the patient has no Patient Information form, so no diagnosis is recorded |
 | Consultation visit | the patient has the RHD prophylaxis not prescribed flag |
 | Echocardiogram | the latest echo before this visit is over 12 months old, or there is none; an echo is dated by its Date of Echocardiogram, else by its encounter |
 | Procedures and outcomes | the patient has the RHD 30-day follow-up due flag |
@@ -247,7 +248,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
-| `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml` |
+| `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml`. An upgrade adds Patient Information's type to `actcore.nextSteps.encounterTypes` only where it still holds the earlier default |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
