@@ -136,7 +136,8 @@ location, and every ACT page shows it at the top, beside today's date.
 Patient Information holds the **diagnosis**: its category (such as RHD or acute rheumatic fever), its
 priority, when it started, and how the case was detected. A patient found by screening also gets
 **Screen +**. Yes asks for the screening site and the follow-up status, and lists the patient on
-**Confirmatory echo due** until a confirmatory echo is recorded.
+**Confirmatory echo due** until Diagnosis Details is recorded on the diagnosis; saving an echo
+alone does not take them off.
 
 The diagnosis is what makes the patient need secondary prophylaxis. Once it is saved without a
 prescription, the patient gets the **RHD prophylaxis not prescribed** flag, and Next steps asks for a
@@ -238,8 +239,8 @@ The chart handles one patient. These pages find the patients who need you:
 
 - **Worklists:** one tile per list with its count, and the patients on the chosen one, each with a
   button to record what is due.
-- **Confirmatory echo due:** screen-positive patients still waiting for an echo, with their screening
-  site and follow-up status.
+- **Confirmatory echo due:** screen-positive patients whose diagnosis has no Diagnosis Details yet,
+  with their screening site and follow-up status.
 - **Registry:** every patient, filtered by status, clinic and diagnosis category, with BPG status,
   adherence and flags.
 - **Reports:** the month's or quarter's active patients, doses due and overdue, and the on-time rate,
@@ -283,7 +284,7 @@ procedural waiting list are computed from the patients' records.
 | Worklist | Who is on it |
 | --- | --- |
 | Due for prophylaxis | a BPG or oral dose is due soon, due today or overdue |
-| Confirmatory echo due | screen positive, with no confirmatory echo yet |
+| Confirmatory echo due | screen positive, and no Diagnosis Details on the diagnosis yet |
 | Cardiology follow-up due | the next review set at the last consultation is past or within 30 days |
 | Lost to follow-up | no consultation and no prophylaxis for 210 days, with a prescription |
 | RHD 30-day post-procedural follow-up due | discharged over 30 days ago, with no follow-up recorded |
