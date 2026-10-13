@@ -12,6 +12,9 @@ reportdescriptorloader module too. The flag code has nothing RHD-specific in it:
 themselves are configuration in the distribution. The adherence calculation is ACT 2.0's secondary
 prophylaxis rule; the concepts it reads are global properties, defaulting to the ACT forms'.
 
+For how a patient moves through ACT, from registration to prophylaxis at every due date, and who
+records each form, see [Patient care workflow](docs/patient-care-workflow.md).
+
 ## Why it exists
 
 patientflags evaluates a flag when the flag is saved and when a patient's clinical data is saved.
