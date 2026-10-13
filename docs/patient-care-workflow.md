@@ -94,11 +94,11 @@ clinician step; the clinician sees a new Consultation visit suggesting a switch 
 ### Two gaps to know about
 
 - **No step asks for Patient Information** after registration, so a patient can be registered with no
-  diagnosis and nothing reminds anyone.
+  diagnosis and nothing reminds anyone ([#81](https://github.com/DIGI-UW/openmrs-module-actcore/issues/81)).
 - **A newly diagnosed patient with no prescription shows nothing** to the community clinician or the
   data clerk. Refer to clinician covers only anaphylaxis and low adherence. Until that changes, these
   patients are found from the clinician's side, for example with the registry's RHD flag filter set
-  to RHD prophylaxis not prescribed.
+  to RHD prophylaxis not prescribed ([#82](https://github.com/DIGI-UW/openmrs-module-actcore/issues/82)).
 
 ## 1. Sign in at a clinic
 
