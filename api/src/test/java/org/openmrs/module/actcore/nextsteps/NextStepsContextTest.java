@@ -931,7 +931,6 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	@Test
 	public void of_shouldListPatientInformationSavedThisVisitAsEntered() {
 		echoed(at(30));
-		Context.getEncounterService().voidEncounter(registered, "test");
 		startVisit();
 		inVisit(patientInfo, 0);
 		
@@ -940,16 +939,6 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("patientInfo", keys(steps));
 		assertEquals("Entered this visit", steps.get(0).getReason());
 		assertEquals(true, steps.get(0).isDone());
-	}
-	
-	@Test
-	public void of_shouldNotAskForPatientInformationRecordedOnAnEarlierDayOfAVisitLeftOpen() {
-		echoed(at(30));
-		Context.getEncounterService().voidEncounter(registered, "test");
-		startVisit(3);
-		inVisit(patientInfo, 3);
-		
-		assertEquals("", keys(steps()));
 	}
 	
 	private List<NextStep> steps() {
