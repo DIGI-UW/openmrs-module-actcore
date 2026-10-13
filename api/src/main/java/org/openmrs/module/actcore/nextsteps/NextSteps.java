@@ -224,7 +224,12 @@ public class NextSteps {
 			put("patientInfo", "No diagnosis recorded", false);
 		}
 		if (flags.contains(flagKeys.get("notPrescribed"))) {
-			put("consult", "No prophylaxis prescribed", false);
+			if (mayConsult) {
+				put("consult", "No prophylaxis prescribed", false);
+			} else if (types.containsKey("consult")) {
+				steps.put("refer", new Step("refer", "No prophylaxis prescribed: a clinician to prescribe", false,
+				        savedThisVisit.contains("consult")));
+			}
 		}
 		echo();
 		if (flags.contains(flagKeys.get("followUp"))) {
@@ -277,6 +282,7 @@ public class NextSteps {
 				steps.put(key, new Step(key, referral, true, true));
 			} else {
 				step.reason = referral;
+				step.isNew = true;
 			}
 			step = steps.get(key);
 		}

@@ -512,6 +512,57 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldReferAPatientFlaggedAsNotPrescribedForAUserWhoMayNotRecordTheConsultation() {
+		echoed(at(30));
+		flagged(notPrescribed);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer", keys(steps));
+		assertEquals("Refer to clinician", steps.get(0).getTitle());
+		assertNull(steps.get(0).getForm());
+		assertEquals("No prophylaxis prescribed: a clinician to prescribe", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isNew());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldMarkTheNotPrescribedReferralDoneWhenAConsultationIsSavedThisVisit() {
+		echoed(at(30));
+		flagged(notPrescribed);
+		startVisit();
+		inVisit(consult, 0);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer", keys(steps));
+		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldGiveTheLowEstimatesReasonOverTheNotPrescribedReferral() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		flagged(notPrescribed);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer", keys(steps).replace("|oral", "").replace("oral|", ""));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
+		assertEquals(true, steps.get(0).isNew());
+	}
+	
+	@Test
 	public void of_shouldGiveProceduresForAPatientWithTheThirtyDayFollowUpDue() {
 		echoed(at(30));
 		flagged(followUp);
