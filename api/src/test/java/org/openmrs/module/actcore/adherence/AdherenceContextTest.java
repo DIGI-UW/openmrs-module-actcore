@@ -117,12 +117,16 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	protected Encounter encounter(int patientId, int daysAgo) {
+		return Context.getEncounterService().saveEncounter(unsaved(patientId, daysAgo));
+	}
+	
+	protected static Encounter unsaved(int patientId, int daysAgo) {
 		Encounter encounter = new Encounter();
 		encounter.setPatient(Context.getPatientService().getPatient(patientId));
 		encounter.setEncounterType(Context.getEncounterService().getEncounterType(1));
 		encounter.setLocation(Context.getLocationService().getLocation(1));
 		encounter.setEncounterDatetime(at(daysAgo));
-		return Context.getEncounterService().saveEncounter(encounter);
+		return encounter;
 	}
 	
 	protected void prescribe(Encounter encounter, Concept regimen, int startedDaysAgo, Integer stoppedDaysAgo) {

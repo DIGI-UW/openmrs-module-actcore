@@ -129,6 +129,46 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void refreshPatient_shouldReplaceThatPatientsRowsAndLeaveTheOthers() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		Encounter bpg = encounter(2, 100);
+		prescribe(bpg, q21, 100, null);
+		given(bpg, 100);
+		refresh.refreshAll(TODAY);
+		List<Object> before = row(2);
+		int timingsBefore = timings(2);
+		
+		estimate(encounter(7, 15), 70.0);
+		// Saved after the full refresh, so patient 2's rows show it only if they are refreshed.
+		given(encounter(2, 79), 79);
+		Context.flushSession();
+		refresh.refreshPatient(7, TODAY);
+		
+		assertEquals(0.7, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+		assertEquals(before, row(2));
+		assertEquals(timingsBefore, timings(2));
+	}
+	
+	@Test
+	public void refreshPatient_shouldRemoveTheRowOfAPatientWhosePrescriptionStopped() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		refresh.refreshAll(TODAY);
+		
+		prescribe(encounter(7, 5), oralPenicillin, 60, 5);
+		Context.flushSession();
+		refresh.refreshPatient(7, TODAY);
+		
+		assertTrue(rows().isEmpty());
+	}
+	
+	private static int timings(int patientId) {
+		return Context.getAdministrationService()
+		        .executeSQL(
+		            "select injection_date from " + AdherenceRefresh.TIMING_TABLE + " where patient_id = " + patientId, true)
+		        .size();
+	}
+	
+	@Test
 	public void refreshAll_shouldIgnoreVoidedEncountersAndReplaceEarlierRows() {
 		prescribe(encounter(7, 27), q21, 27, null);
 		prescribe(encounter(2, 27), q28, 27, null);
