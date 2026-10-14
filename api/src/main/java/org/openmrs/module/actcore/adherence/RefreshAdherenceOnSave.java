@@ -63,7 +63,6 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		Object[] args = invocation.getArguments();
 		boolean watched = METHODS.contains(invocation.getMethod().getName()) && args.length > 0
 		        && args[0] instanceof Encounter;
-		// Read before proceeding, as a purge leaves no encounter to read it from.
 		Integer patientId = watched && ((Encounter) args[0]).getPatient() != null
 		        ? ((Encounter) args[0]).getPatient().getPatientId()
 		        : null;

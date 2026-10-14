@@ -112,6 +112,19 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void purgeEncounter_shouldRemoveTheRowOfAPrescriptionItCarried() {
+		Encounter consultation = encounter(7, 27);
+		prescribe(consultation, q21, 27, null);
+		refresh.refreshAll(TODAY);
+		assertNotNull(row(7));
+		
+		encounters().purgeEncounter(consultation, true);
+		commit();
+		
+		assertTrue(rows().isEmpty());
+	}
+	
+	@Test
 	public void saveEncounter_shouldKeepTheSaveWhenTheRefreshFails() {
 		Encounter saved = encounters(new IntConsumer() {
 			
