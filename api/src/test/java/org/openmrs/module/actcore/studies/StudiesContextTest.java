@@ -71,7 +71,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		Program study = studies.create("  ARC  ");
 		
 		assertEquals("ARC", study.getName());
-		assertEquals("ARC", study.getConcept().getName().getName());
+		assertEquals("ARC (research study)", study.getConcept().getName().getName());
 		assertEquals(1, study.getWorkflows().size());
 		ProgramWorkflow workflow = study.getWorkflows().iterator().next();
 		assertEquals(statusWorkflow, workflow.getConcept());
@@ -104,15 +104,16 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studies.rename(study, "Stage Study One");
 		
 		assertEquals("Stage Study One", study.getName());
-		assertEquals("Stage Study One", study.getConcept().getName().getName());
+		assertEquals("Stage Study One (research study)", study.getConcept().getName().getName());
 		assertEquals("Stage Study 1", studies.create("Stage Study 1").getName());
 	}
 	
 	@Test
-	public void create_shouldRefuseANameAStudyOrConceptAlreadyHas() {
+	public void create_shouldRefuseANameAStudyAlreadyHasButNotOneAnotherConceptHas() {
 		studies.create("ARC");
+		concept("Miller");
 		
-		for (String name : new String[] { "arc", "Research Study Status", " " }) {
+		for (String name : new String[] { "arc", " " }) {
 			try {
 				studies.create(name);
 				fail("created a study named " + name);
@@ -120,6 +121,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 			catch (ValidationException expected) {}
 		}
 		assertEquals(1, studies.getStudies().size());
+		assertEquals("Miller", studies.create("Miller").getName());
 	}
 	
 	@Test

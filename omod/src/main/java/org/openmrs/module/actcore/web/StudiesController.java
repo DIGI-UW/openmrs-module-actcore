@@ -14,6 +14,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import org.openmrs.Concept;
+import org.openmrs.ConceptName;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
@@ -86,14 +88,19 @@ public class StudiesController extends BaseRestController {
 			}
 			List<ProgramWorkflowState> sorted = new ArrayList<>(workflow.getStates(false));
 			sorted.sort(Comparator.comparing((ProgramWorkflowState state) -> !state.getInitial())
-			        .thenComparing(state -> state.getConcept().getName().getName()));
+			        .thenComparing(state -> label(state.getConcept())));
 			for (ProgramWorkflowState state : sorted) {
-				states.add(
-				    new SimpleObject().add("uuid", state.getUuid()).add("name", state.getConcept().getName().getName())
-				            .add("initial", state.getInitial()).add("terminal", state.getTerminal()));
+				states.add(new SimpleObject().add("uuid", state.getUuid()).add("name", label(state.getConcept()))
+				        .add("initial", state.getInitial()).add("terminal", state.getTerminal()));
 			}
 		}
 		return new SimpleObject().add("uuid", study.getUuid()).add("name", study.getName()).add("states", states);
+	}
+	
+	/** The short name where there is one, as "Active" for Active (study status). */
+	private static String label(Concept concept) {
+		ConceptName shortName = concept.getShortNameInLocale(Context.getLocale());
+		return shortName != null ? shortName.getName() : concept.getName().getName();
 	}
 	
 	private static void requirePrivilege(String privilege) {

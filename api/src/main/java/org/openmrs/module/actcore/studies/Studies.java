@@ -75,7 +75,7 @@ public class Studies {
 			refuseTakenName(trimmed, null);
 			Concept templateConcept = template.getConcept();
 			Concept concept = new Concept();
-			concept.setFullySpecifiedName(new ConceptName(trimmed, locale()));
+			concept.setFullySpecifiedName(new ConceptName(conceptName(trimmed), locale()));
 			concept.setConceptClass(templateConcept.getConceptClass());
 			concept.setDatatype(templateConcept.getDatatype());
 			Context.getConceptService().saveConcept(concept);
@@ -113,8 +113,8 @@ public class Studies {
 			refuseTakenName(trimmed, study);
 			Concept concept = study.getConcept();
 			ConceptName old = concept.getFullySpecifiedName(locale());
-			if (old == null || !old.getName().equals(trimmed)) {
-				concept.setFullySpecifiedName(new ConceptName(trimmed, locale()));
+			if (old == null || !old.getName().equals(conceptName(trimmed))) {
+				concept.setFullySpecifiedName(new ConceptName(conceptName(trimmed), locale()));
 				// The old name would keep it from being given to a new study.
 				if (old != null) {
 					concept.removeName(old);
@@ -163,10 +163,18 @@ public class Studies {
 				throw refusal("A program is already named " + name);
 			}
 		}
-		Concept named = Context.getConceptService().getConceptByName(name);
+		Concept named = Context.getConceptService().getConceptByName(conceptName(name));
 		if (named != null && (renaming == null || !named.equals(renaming.getConcept()))) {
-			throw refusal("A concept is already named " + name + ", so a study cannot take that name");
+			throw refusal("A concept is already named " + conceptName(name) + ", so a study cannot take that name");
 		}
+	}
+	
+	/**
+	 * Kept apart from other concepts' names, such as the old form's study answers, which a study's name
+	 * may share.
+	 */
+	private static String conceptName(String name) {
+		return name + " (research study)";
 	}
 	
 	private static String requireName(String name) {
