@@ -18,8 +18,7 @@ import org.openmrs.ProgramWorkflowState;
 
 /**
  * Advice on ProgramWorkflowService that starts a study enrolment saved without a status in its
- * study's initial one, from the enrolment date: the chart's Programs page leaves the status
- * optional.
+ * study's initial one, from the enrolment date, as the chart's Programs page leaves it optional.
  */
 public class StudyEnrolmentStatus implements MethodInterceptor {
 	

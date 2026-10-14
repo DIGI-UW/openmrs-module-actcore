@@ -20,14 +20,14 @@ import org.openmrs.PersonAttributeType;
 import org.openmrs.ProgramAttributeType;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Advice on ProgramWorkflowService that refuses a new study enrolment unless the patient is alive,
- * gave registry consent, would like to be considered for research, and has a Study ID in the study,
- * whichever page enrols them.
+ * Advice on ProgramWorkflowService that refuses a new study enrolment without registry consent, a
+ * Yes to research or a Study ID, and an open one for a patient who has died.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
 	
@@ -53,15 +53,18 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	private static void refuseUnlessAllowed(PatientProgram enrolment) {
+		// A merge copies each enrolment to the preferred patient as a new one, without its Study ID.
 		if (enrolment.getPatientProgramId() != null || Boolean.TRUE.equals(enrolment.getVoided())
-		        || enrolment.getPatient() == null || !new Studies().isStudy(enrolment.getProgram())) {
+		        || enrolment.getPatient() == null || OneOpenRegistryEnrolment.isSuspended()
+		        || !new Studies().isStudy(enrolment.getProgram())) {
 			return;
 		}
 		for (String privilege : PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			if (Boolean.TRUE.equals(enrolment.getPatient().getDead())) {
+			// A completed enrolment is history, such as ACT 2.0's, which a later death does not undo.
+			if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {
 				throw refusal(enrolment, "The patient has died, so they cannot be enrolled in a study");
 			}
 			Concept yes = conceptByProperty(YES_PROPERTY);

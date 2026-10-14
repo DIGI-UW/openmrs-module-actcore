@@ -48,6 +48,16 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Next steps.** `GET /ws/rest/v1/actcore/nextsteps?patient=<uuid>` lists what to do for a patient
   at this visit: each step's `key`, `form`, `title`, `reason`, `isNew` and `done`, from the rules
   below. The ACT frontend app shows them on the patient summary.
+- **Research studies.** `GET /ws/rest/v1/actcore/studies` lists the studies with their Study status
+  states. A study is a program with a workflow on the same concept as the template program's
+  (`actcore.studyTemplateProgram`). `POST` with a `name` of at most 50 characters creates one with a
+  copy of that workflow, and `POST /ws/rest/v1/actcore/studies/<uuid>` renames it and its concept.
+- **Study enrolments.** Whichever page enrols, a new study enrolment is refused unless the patient gave
+  registry consent, would like to be considered for research and has a Study ID, and an open one is
+  refused for a patient who has died. One saved without a status starts in the study's initial one.
+  Saving a patient as dead ends their open study enrolments in Inactive - Death on their death date. As
+  for the RHD Registry, an enrolment may not overlap another in the same study while either is open,
+  and merging two patients folds such a pair into one.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
@@ -253,6 +263,8 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
 | `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml`. If you changed `actcore.nextSteps.encounterTypes`, add `patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0` to it for the Patient Information step |
+| `actcore.studyTemplateProgram` | ACT's retired study template program | The program each new study copies its workflows from; a program with a workflow on the same concept as one of its own is a study |
+| `actcore.studies.*` | the ACT attribute types and concepts | The registry consent and research opt-in person attribute types, their Yes answer, the Study ID program attribute type, and the status open enrolments end in at death. Empty one to drop its rule, for example while migrating ACT 2.0 data; the rule on an open enrolment for a patient who has died has no property |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 
 ## Security
@@ -260,6 +272,11 @@ stopped, this module will not start on the next boot either; start Initializer f
 The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
+
+Listing the research studies needs Get Programs. Creating and renaming them needs
+`Task: act.manageStudies`, which the distribution creates; the module then saves the study's concept and
+program with Manage Concepts and Manage Programs on the caller's behalf, so grant it only to roles you
+would let add concepts and programs.
 
 Calling the next steps needs Get Observations; the module reads the patient's records on the caller's
 behalf, and offers only the steps the caller may record.

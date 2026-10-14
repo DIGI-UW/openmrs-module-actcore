@@ -122,7 +122,7 @@
     <property>actcore.studies.deathStateConcept</property>
     <defaultValue>4358f696-7a3d-5da4-949f-c8919974cccc</defaultValue>
     <description>
-      The concept of the study status a patient's open study enrolments move to, on their death date, when they are saved as dead. Enrolments already in an Inactive status keep it. Leave empty to leave enrolments open.
+      The concept of the study status a patient's open study enrolments move to, on their death date, when they are saved as dead. Enrolments already completed keep their status. Leave empty to leave enrolments open.
     </description>
   </globalProperty>
   <globalProperty>

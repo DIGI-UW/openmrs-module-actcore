@@ -22,14 +22,14 @@ import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Advice on PersonService and PatientService that ends a patient's open study enrolments in the
- * Inactive - Death status, on their death date, when they are saved as dead: ACT 2.0 left them
- * Active.
+ * Inactive - Death status, on their death date, when they are saved as dead.
  */
 public class CloseStudiesOnDeath implements MethodInterceptor {
 	
@@ -80,7 +80,8 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 				Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
 				enrolment.transitionToState(death, date);
 				enrolment.setDateCompleted(date);
-				programs.savePatientProgram(enrolment);
+				// Ending each one leaves no overlap, but ending the first of two overlapping ones would be refused.
+				OneOpenRegistryEnrolment.withoutRefusing(() -> programs.savePatientProgram(enrolment));
 			}
 		}
 		finally {

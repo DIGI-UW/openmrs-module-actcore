@@ -12,6 +12,8 @@ package org.openmrs.module.actcore.studies;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -21,6 +23,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Concept;
@@ -37,6 +41,7 @@ import org.openmrs.Program;
 import org.openmrs.ProgramAttributeType;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
+import org.openmrs.api.PatientService;
 import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
@@ -49,6 +54,14 @@ import org.springframework.aop.framework.ProxyFactory;
 public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private final Studies studies = new Studies();
+	
+	private final OneOpenRegistryEnrolment guard = new OneOpenRegistryEnrolment();
+	
+	private final StudyEnrolmentStatus status = new StudyEnrolmentStatus();
+	
+	private final StudyEnrolmentRules rules = new StudyEnrolmentRules();
+	
+	private final CloseStudiesOnDeath closeOnDeath = new CloseStudiesOnDeath();
 	
 	private Program template;
 	
@@ -288,6 +301,137 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(died.getTime(), current(open).getStartDate().getTime());
 		assertEquals(enrolled.getTime(), withdrawn.getDateCompleted().getTime());
 		assertEquals("Inactive - Voluntary withdrawal", current(withdrawn).getState().getConcept().getName().getName());
+	}
+	
+	@Test
+	public void create_shouldRefuseANameLongerThanTheProgramTableHoldsBeforeSavingItsConcept() {
+		String longest = StringUtils.repeat("A", 50);
+		
+		try {
+			studies.create(longest + "B");
+			fail("created a study whose name the program table cannot hold");
+		}
+		catch (ValidationException expected) {}
+		assertNull(Context.getConceptService().getConceptByName(longest + "B (research study)"));
+		assertEquals(longest, studies.create(longest).getName());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldAcceptACompletedStudyEnrolmentForAPatientWhoDied() {
+		Program study = studies.create("ARC");
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		patient.setDead(true);
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		PatientProgram history = enrolment(patient, study);
+		history.setDateEnrolled(new Date(System.currentTimeMillis() - 400 * 86400000L));
+		history.setDateCompleted(new Date(System.currentTimeMillis() - 300 * 86400000L));
+		
+		Context.getProgramWorkflowService().savePatientProgram(history);
+		
+		assertRefused(Context.getProgramWorkflowService(), enrolment(patient, study), "has died");
+	}
+	
+	@Test
+	public void mergePatients_shouldFoldTheDuplicatesOpenEnrolmentsInAStudyIntoOne() throws Exception {
+		Program study = studies.create("ARC");
+		adviseAsTheModuleDoes();
+		Patient preferred = Context.getPatientService().getPatient(2);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment(preferred, study));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment(Context.getPatientService().getPatient(6), study));
+		
+		Context.getPatientService().mergePatients(preferred, Context.getPatientService().getPatient(6));
+		
+		List<PatientProgram> left = Context.getProgramWorkflowService().getPatientPrograms(preferred, study, null, null,
+		    null, null, false);
+		assertEquals(1, left.size());
+		assertNull(left.get(0).getDateCompleted());
+	}
+	
+	@Test
+	public void mergePatients_shouldCopyAStudyEnrolmentThoughTheCopyHasNoStudyId() throws Exception {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		adviseAsTheModuleDoes();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(6), study);
+		PatientProgramAttribute id = new PatientProgramAttribute();
+		id.setAttributeType(studyId);
+		id.setValue("ARC-7");
+		enrolment.addAttribute(id);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		Patient preferred = Context.getPatientService().getPatient(2);
+		
+		Context.getPatientService().mergePatients(preferred, Context.getPatientService().getPatient(6));
+		
+		assertEquals(1,
+		    Context.getProgramWorkflowService().getPatientPrograms(preferred, study, null, null, null, null, false).size());
+	}
+	
+	@Test
+	public void savePerson_shouldEndBothOfTwoOverlappingOpenEnrolmentsInAStudy() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		Patient patient = Context.getPatientService().getPatient(2);
+		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
+		PatientProgram first = enrolment(patient, study);
+		first.setDateEnrolled(enrolled);
+		Context.getProgramWorkflowService().savePatientProgram(first);
+		PatientProgram second = enrolment(patient, study);
+		second.setDateEnrolled(enrolled);
+		Context.getProgramWorkflowService().savePatientProgram(second);
+		adviseAsTheModuleDoes();
+		Person person = Context.getPersonService().getPerson(2);
+		person.setDead(true);
+		person.setDeathDate(new Date(enrolled.getTime() + 5 * 86400000L));
+		person.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		
+		Context.getPersonService().savePerson(person);
+		
+		assertNotNull(first.getDateCompleted());
+		assertNotNull(second.getDateCompleted());
+	}
+	
+	@Test
+	public void savePatient_shouldEndOpenStudyEnrolmentsOfAPatientWhoDied() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram open = enrolment(patient, study);
+		open.setDateEnrolled(new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L));
+		Context.getProgramWorkflowService().savePatientProgram(open);
+		Date died = new Date(open.getDateEnrolled().getTime() + 5 * 86400000L);
+		patient.setDead(true);
+		patient.setDeathDate(died);
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		
+		Context.getPatientService().savePatient(patient);
+		
+		assertEquals(died.getTime(), open.getDateCompleted().getTime());
+		assertEquals("Inactive - Death", current(open).getState().getConcept().getName().getName());
+	}
+	
+	private void adviseAsTheModuleDoes() {
+		Context.addAdvice(PatientService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, status);
+		Context.addAdvice(ProgramWorkflowService.class, rules);
+		Context.addAdvice(PersonService.class, closeOnDeath);
+		Context.addAdvice(PatientService.class, closeOnDeath);
+	}
+	
+	@After
+	public void removeModuleAdvice() {
+		Context.removeAdvice(PatientService.class, guard);
+		Context.removeAdvice(ProgramWorkflowService.class, guard);
+		Context.removeAdvice(ProgramWorkflowService.class, status);
+		Context.removeAdvice(ProgramWorkflowService.class, rules);
+		Context.removeAdvice(PersonService.class, closeOnDeath);
+		Context.removeAdvice(PatientService.class, closeOnDeath);
 	}
 	
 	private static void assertRefused(ProgramWorkflowService programs, PatientProgram enrolment, String reason) {

@@ -37,6 +37,8 @@ public class Studies {
 	
 	public static final String TEMPLATE_PROPERTY = "actcore.studyTemplateProgram";
 	
+	private static final int MAX_NAME_LENGTH = 50;
+	
 	private static final String[] PRIVILEGES = { PrivilegeConstants.GET_PROGRAMS, PrivilegeConstants.MANAGE_PROGRAMS,
 	        PrivilegeConstants.GET_CONCEPTS, PrivilegeConstants.MANAGE_CONCEPTS, PrivilegeConstants.GET_CONCEPT_CLASSES,
 	        PrivilegeConstants.GET_CONCEPT_DATATYPES, PrivilegeConstants.GET_CONCEPT_ATTRIBUTE_TYPES,
@@ -180,6 +182,10 @@ public class Studies {
 	private static String requireName(String name) {
 		if (StringUtils.isBlank(name)) {
 			throw refusal("A study needs a name");
+		}
+		// program.name is VARCHAR(50) though Hibernate allows 100; longer fails after the concept is saved.
+		if (name.trim().length() > MAX_NAME_LENGTH) {
+			throw refusal("A study's name can be at most " + MAX_NAME_LENGTH + " characters");
 		}
 		return name.trim();
 	}

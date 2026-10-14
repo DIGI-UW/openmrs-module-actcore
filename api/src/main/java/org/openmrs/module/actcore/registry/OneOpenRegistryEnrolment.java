@@ -11,13 +11,16 @@ package org.openmrs.module.actcore.registry;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
+import org.openmrs.Program;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
@@ -27,22 +30,22 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses an RHD Registry or research study enrolment overlapping another one in the same program
- * when either is open, which core allows, and folds such registry pairs into one when
- * PatientService merges two patients.
+ * Refuses an RHD Registry or research study enrolment overlapping another in its program while
+ * either is open, which core allows, and folds such pairs into one when two patients are merged.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
-	private static final ThreadLocal<Boolean> MERGING = ThreadLocal.withInitial(() -> false);
+	private static final ThreadLocal<Boolean> SUSPENDED = ThreadLocal.withInitial(() -> false);
 	
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
 		String method = invocation.getMethod().getName();
-		if ("mergePatients".equals(method) && args.length == 2 && args[0] instanceof Patient && !MERGING.get()) {
+		if ("mergePatients".equals(method) && args.length == 2 && args[0] instanceof Patient && !SUSPENDED.get()) {
 			return merge(invocation, (Patient) args[0]);
 		}
-		if ("savePatientProgram".equals(method) && args.length == 1 && args[0] instanceof PatientProgram && !MERGING.get()) {
+		if ("savePatientProgram".equals(method) && args.length == 1 && args[0] instanceof PatientProgram
+		        && !SUSPENDED.get()) {
 			refuseOverlappingEnrolment((PatientProgram) args[0]);
 		}
 		return invocation.proceed();
@@ -50,7 +53,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
 	private static Object merge(MethodInvocation invocation, Patient preferred) throws Throwable {
 		// Refusing mid-merge would fail core's merge, which moves or copies each enrolment in its own save.
-		MERGING.set(true);
+		SUSPENDED.set(true);
 		try {
 			Object merged = invocation.proceed();
 			// Runs outside core's merge transaction: a failed fold leaves the merge committed, not undone.
@@ -58,15 +61,32 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 			return merged;
 		}
 		finally {
-			MERGING.remove();
+			SUSPENDED.remove();
+		}
+	}
+	
+	/**
+	 * Whether a merge, or work run by {@link #withoutRefusing}, is saving enrolments on this thread.
+	 */
+	public static boolean isSuspended() {
+		return SUSPENDED.get();
+	}
+	
+	/** Runs the work without refusing overlaps, for saves that end every open enrolment they touch. */
+	public static void withoutRefusing(Runnable work) {
+		boolean outer = SUSPENDED.get();
+		SUSPENDED.set(true);
+		try {
+			work.run();
+		}
+		finally {
+			if (!outer) {
+				SUSPENDED.remove();
+			}
 		}
 	}
 	
 	private static void foldOverlappingEnrolments(Patient patient) {
-		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
-		if (StringUtils.isBlank(registry)) {
-			return;
-		}
 		// The merging user needs Edit Patients, not Delete Patient Programs, to void the duplicate.
 		String[] privileges = { PrivilegeConstants.GET_PATIENT_PROGRAMS, PrivilegeConstants.EDIT_PATIENT_PROGRAMS,
 		        PrivilegeConstants.DELETE_PATIENT_PROGRAMS };
@@ -75,23 +95,26 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		}
 		try {
 			ProgramWorkflowService programs = Context.getProgramWorkflowService();
-			List<PatientProgram> enrolments = new ArrayList<>();
+			Map<String, List<PatientProgram>> byProgram = new LinkedHashMap<>();
 			for (PatientProgram pp : programs.getPatientPrograms(patient, null, null, null, null, null, false)) {
-				if (pp.getProgram() != null && registry.trim().equals(pp.getProgram().getUuid())) {
-					enrolments.add(pp);
+				if (isGuarded(pp.getProgram())) {
+					byProgram.computeIfAbsent(pp.getProgram().getUuid(), uuid -> new ArrayList<>()).add(pp);
 				}
 			}
-			PatientProgram[] pair;
-			while ((pair = firstOverlap(enrolments)) != null) {
-				boolean firstOpen = pair[0].getDateCompleted() == null;
-				PatientProgram keep = firstOpen ? pair[0] : pair[1];
-				PatientProgram drop = firstOpen ? pair[1] : pair[0];
-				if (start(drop) < start(keep)) {
-					keep.setDateEnrolled(drop.getDateEnrolled());
+			for (List<PatientProgram> enrolments : byProgram.values()) {
+				PatientProgram[] pair;
+				while ((pair = firstOverlap(enrolments)) != null) {
+					boolean firstOpen = pair[0].getDateCompleted() == null;
+					PatientProgram keep = firstOpen ? pair[0] : pair[1];
+					PatientProgram drop = firstOpen ? pair[1] : pair[0];
+					if (start(drop) < start(keep)) {
+						keep.setDateEnrolled(drop.getDateEnrolled());
+					}
+					programs.voidPatientProgram(drop,
+					    "Merged into " + keep.getProgram().getName() + " enrolment " + keep.getUuid());
+					programs.savePatientProgram(keep);
+					enrolments.remove(drop);
 				}
-				programs.voidPatientProgram(drop, "Merged into RHD Registry enrolment " + keep.getUuid());
-				programs.savePatientProgram(keep);
-				enrolments.remove(drop);
 			}
 		}
 		finally {
@@ -117,13 +140,17 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		return eitherOpen && start(a) < end(b) && start(b) < end(a);
 	}
 	
-	private static void refuseOverlappingEnrolment(PatientProgram enrolment) {
-		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
-		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getProgram() == null) {
-			return;
+	private static boolean isGuarded(Program program) {
+		if (program == null) {
+			return false;
 		}
-		boolean inRegistry = StringUtils.isNotBlank(registry) && registry.trim().equals(enrolment.getProgram().getUuid());
-		if (!inRegistry && !new Studies().isStudy(enrolment.getProgram())) {
+		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
+		return StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid())
+		        || new Studies().isStudy(program);
+	}
+	
+	private static void refuseOverlappingEnrolment(PatientProgram enrolment) {
+		if (Boolean.TRUE.equals(enrolment.getVoided()) || !isGuarded(enrolment.getProgram())) {
 			return;
 		}
 		Context.addProxyPrivilege(PrivilegeConstants.GET_PATIENT_PROGRAMS);
