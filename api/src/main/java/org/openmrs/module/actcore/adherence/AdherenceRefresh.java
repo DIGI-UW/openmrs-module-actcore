@@ -94,6 +94,24 @@ public class AdherenceRefresh {
 		}
 	}
 	
+	/**
+	 * Recomputes one patient's rows, so the registry shows a saved form at once rather than after the
+	 * next full refresh.
+	 */
+	public void refreshPatient(int patientId, LocalDate today) {
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+			AdministrationService admin = Context.getAdministrationService();
+			List<String> rows = new ArrayList<String>();
+			List<String> timings = new ArrayList<String>();
+			compute(read(admin, patientId), today, rows, timings);
+			rewrite(admin, " where patient_id = " + patientId, rows, timings);
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		}
+	}
+	
 	/** One patient's history, read now through the same queries the nightly refresh runs. */
 	AdherenceReplay.History historyOf(int patientId) {
 		try {
@@ -107,11 +125,17 @@ public class AdherenceRefresh {
 	}
 	
 	private int refresh(AdministrationService admin, LocalDate today) {
-		Map<Integer, AdherenceReplay.History> histories = read(admin, null);
-		
-		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		List<String> rows = new ArrayList<String>();
 		List<String> timings = new ArrayList<String>();
+		compute(read(admin, null), today, rows, timings);
+		rewrite(admin, "", rows, timings);
+		return rows.size();
+	}
+	
+	/** Each history's row and injection timings, as SQL value lists. */
+	private void compute(Map<Integer, AdherenceReplay.History> histories, LocalDate today, List<String> rows,
+	        List<String> timings) {
+		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
 			if (entry.getValue().prescriptions.isEmpty()) {
 				continue;
@@ -130,9 +154,6 @@ public class AdherenceRefresh {
 				        + sqlValue(computedAt) + ")");
 			}
 		}
-		
-		rewrite(admin, rows, timings);
-		return rows.size();
 	}
 	
 	/** Every patient's history, or only that of the patient given. */
@@ -151,23 +172,25 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Replaces every row of both tables in one transaction, so no run leaves them empty or part filled.
+	 * Replaces the rows of both tables that the where clause selects, every row when it is empty, in
+	 * one transaction, so no run leaves them empty or part filled.
 	 */
-	private void rewrite(final AdministrationService admin, final List<String> rows, final List<String> timings) {
+	private void rewrite(final AdministrationService admin, final String where, final List<String> rows,
+	        final List<String> timings) {
 		PlatformTransactionManager transactions = Context.getRegisteredComponent("transactionManager",
 		    PlatformTransactionManager.class);
 		new TransactionTemplate(transactions).execute(new TransactionCallbackWithoutResult() {
 			
 			@Override
 			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				admin.executeSQL("delete from " + TABLE, false);
+				admin.executeSQL("delete from " + TABLE + where, false);
 				for (int i = 0; i < rows.size(); i += rowsPerInsert) {
 					admin.executeSQL("insert into " + TABLE + " (patient_id, regimen_concept_id, injection_interval_days,"
 					        + " adherence, last_given, next_due, date_computed) values "
 					        + StringUtils.join(rows.subList(i, Math.min(rows.size(), i + rowsPerInsert)), ", "),
 					    false);
 				}
-				admin.executeSQL("delete from " + TIMING_TABLE, false);
+				admin.executeSQL("delete from " + TIMING_TABLE + where, false);
 				for (int i = 0; i < timings.size(); i += rowsPerInsert) {
 					admin.executeSQL(
 					    "insert into " + TIMING_TABLE + " (patient_id, injection_date, on_time) values "
