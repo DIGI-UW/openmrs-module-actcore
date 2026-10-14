@@ -142,13 +142,14 @@ counts days:
   Consultation Visit (else its encounter's date), leaving out prescriptions with a date stopped, then
   every injection date and every oral adherence form.
 - Injection adherence is the days covered by prescribed treatment over the days of prescribed
-  treatment, over at most the last 365 days. An injection covers its day and the interval's
-  (Q14, Q21, Q28) days after it, so with Q28 an injection on day 0 covers days 0 to 27 and a next
-  dose on day 31 leaves 3 days late. Counting starts at the first injection, and an injection
-  before the 365 days still covers the days after it. A change of injection regimen carries the
-  last injection's cover on, judging the next dose by the new interval; after an oral regimen,
-  counting starts again at the first injection. A dose due today is not yet late. With no
-  injection there is no adherence.
+  treatment, over at most the last 365 days. An injection covers the interval's (Q14, Q21, Q28)
+  days starting on its own, so with Q28 an injection on day 0 covers days 0 to 27 and a next
+  dose on day 31 leaves 3 days late. Counting starts at the regimen's start, which covers as an
+  injection would, so a first injection is due one interval after it, as the chart times it. An
+  injection before the 365 days still covers the days after it. A change of injection regimen
+  carries the last injection's cover on, judging the next dose by the new interval; after an oral
+  regimen, counting starts again at the injection regimen's start. A dose due today is not yet
+  late.
 - An oral regimen instead takes the clinician's latest estimate in its window.
 - The next due date runs from the latest injection by the latest regimen's interval, or on an oral
   regimen from the latest estimate by its prescription duration.
@@ -221,7 +222,7 @@ the consultations that record them.
 | A failing flag message does not stop the flag clearing (#9) | One bad flag should not leave stale rows for everyone. |
 | Logging goes through core's `log4j2.xml` | No second logging system; one summary line per run at the default level. |
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
-| Adherence is ported from ACT 2.0 but for counting injection adherence as days covered | ACT 3.0 had no definition of "adherent" of its own, so the rest keeps ACT 2.0's. Injection adherence follows the definition the program asked for: days covered over days prescribed, from the first injection. ACT 2.0 counted from the regimen's start as though a dose were given then, and restarted at each change of regimen and at the 365-day cutoff, so a late dose just after either went uncounted. |
+| Adherence is ported from ACT 2.0 but for counting injection adherence as days covered | ACT 3.0 had no definition of "adherent" of its own, so the rest keeps ACT 2.0's. Injection adherence follows the definition the program asked for: days covered over days prescribed. Like ACT 2.0 it judges the first injection from the regimen's start, as the chart and `actcore_injection_timing` do. ACT 2.0 also restarted at each change of injection regimen and at the 365-day cutoff, so a late dose just after either went uncounted. |
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
 | Adherence is recomputed daily and on demand, replaying ACT 2.0's saves and nightly runs | A BPG delivery shows in the registry after the next run; run the task to see it at once. The replay needs no state of its own, so a run gives the same rows whatever ran before it. |
 | The latest consultation that records a prescription, not the latest consultation | ACT 2.0 read the latest consultation, by its date, and the first of a day. Here a consultation that leaves the prescriptions out does not drop the regimen the one before it recorded. |

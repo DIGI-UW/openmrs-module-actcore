@@ -10,7 +10,6 @@
 package org.openmrs.module.actcore.adherence;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 import java.time.LocalDate;
 import java.util.TreeMap;
@@ -48,12 +47,13 @@ public class AdherenceCalculationTest {
 	}
 	
 	@Test
-	public void calculate_shouldStartCountingAtTheFirstInjection() {
-		prescriptions.put(date("2026-09-01"), 28);
+	public void calculate_shouldJudgeTheFirstInjectionFromThePrescriptionsStart() {
+		// Due 29 Aug, given 13 Sep: 15 days late. Then due 11 Oct and given on time.
+		prescriptions.put(date("2026-08-01"), 28);
 		injections.add(date("2026-09-13"));
-		injections.add(date("2026-10-14"));
+		injections.add(date("2026-10-11"));
 		
-		assertEquals(29.0 / 32, calculate(TODAY).getAdherence(), 1e-12);
+		assertEquals(60.0 / 75, calculate(TODAY).getAdherence(), 1e-12);
 	}
 	
 	@Test
@@ -100,25 +100,26 @@ public class AdherenceCalculationTest {
 	}
 	
 	@Test
-	public void calculate_shouldCountAfreshFromTheFirstInjectionAfterAnOralPrescription() {
+	public void calculate_shouldCountAfreshFromTheInjectionPrescriptionAfterAnOralOne() {
 		// June: due 29 Jun, the oral course from 1 Jul leaves 2 late days. July and August are oral.
-		// From the 20 Sep injection, 25 days on time.
+		// From 1 Sep the injection is due 29 Sep, so the 20 Sep one leaves 44 days on time.
 		prescriptions.put(date("2026-06-01"), 28);
 		prescriptions.put(date("2026-07-01"), 0);
 		prescriptions.put(date("2026-09-01"), 28);
 		injections.add(date("2026-06-01"));
 		injections.add(date("2026-09-20"));
 		
-		assertEquals(53.0 / 55, calculate(TODAY).getAdherence(), 1e-12);
+		assertEquals(72.0 / 74, calculate(TODAY).getAdherence(), 1e-12);
 	}
 	
 	@Test
-	public void calculate_shouldGiveNoAdherenceBeforeTheFirstInjection() {
+	public void calculate_shouldCountTheDaysAfterAFirstInjectionNeverGivenWasDueAsLate() {
+		// Due 29 Sep: 29 Sep to 13 Oct are late.
 		prescriptions.put(date("2026-09-01"), 28);
 		
 		AdherenceCalculation.Result result = calculate(TODAY);
 		
-		assertNull(result.getAdherence());
+		assertEquals(29.0 / 44, result.getAdherence(), 1e-12);
 		assertEquals(date("2026-09-29"), result.getNextDue());
 	}
 	

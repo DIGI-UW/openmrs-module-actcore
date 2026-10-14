@@ -21,10 +21,10 @@ import java.util.SortedSet;
 /**
  * ACT 2.0's adherence calculation (is4r-rhd-cdk
  * adherence_utils.calculate_adherence_and_injection_date), with injection adherence as days covered
- * over days prescribed: an injection covers its interval's days, counting starts at the first
- * injection, a change of injection prescription carries the last injection's cover on, and a dose
- * due today is not yet late. The next due date is ACT 2.0's but counted from the latest injection
- * however old; AdherenceCalculationParityTest holds both.
+ * over days prescribed: an injection covers its interval's days, the prescription's start covers
+ * them as the first injection would, a change of injection prescription carries the last
+ * injection's cover on, and a dose due today is not yet late. The next due date is ACT 2.0's but
+ * counted from the latest injection however old; AdherenceCalculationParityTest holds both.
  */
 public final class AdherenceCalculation {
 	
@@ -116,26 +116,21 @@ public final class AdherenceCalculation {
 				continue;
 			}
 			
-			// Days count from the first injection; one before the window still covers the days after it.
+			// The days from the window's start are covered by the injection before it, or by the run's start.
 			LocalDate runStart = injectionRunStart(started, dates, i);
-			LocalDate first = runStart == null ? (injections.isEmpty() ? null : injections.first())
-			        : injections.ceiling(runStart);
-			if (first == null || !first.isBefore(windowEnd)) {
-				continue;
-			}
-			LocalDate countFrom = first.isAfter(windowStart) ? first : windowStart;
-			List<LocalDate> given = new ArrayList<LocalDate>(injections.subSet(countFrom, false, windowEnd, false));
+			LocalDate before = injections.floor(windowStart);
+			LocalDate previous = before != null && !before.isBefore(runStart) ? before : runStart;
+			List<LocalDate> given = new ArrayList<LocalDate>(injections.subSet(windowStart, false, windowEnd, false));
 			given.add(finalDue);
-			LocalDate previous = injections.floor(countFrom);
 			for (LocalDate injection : given) {
 				LocalDate due = previous.plusDays(intervalDays);
-				LocalDate lateFrom = due.isAfter(countFrom) ? due : countFrom;
+				LocalDate lateFrom = due.isAfter(windowStart) ? due : windowStart;
 				if (injection.isAfter(lateFrom)) {
 					missedDays += ChronoUnit.DAYS.between(lateFrom, injection);
 				}
 				previous = injection;
 			}
-			totalDays += ChronoUnit.DAYS.between(countFrom, windowEnd);
+			totalDays += ChronoUnit.DAYS.between(windowStart, windowEnd);
 		}
 		
 		// Unlike ACT 2.0, which takes it from the past year only, the latest injection however old.
@@ -146,16 +141,15 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
-	 * The start of the oral prescription's successor when an oral prescription came before prescription
-	 * i, since an injection given before that does not cover days after it; null when none did.
+	 * The start of the injection prescriptions that run unbroken by an oral one up to prescription i,
+	 * since an injection given before them does not cover days after it.
 	 */
 	private static LocalDate injectionRunStart(SortedMap<LocalDate, Integer> started, List<LocalDate> dates, int i) {
-		for (int j = i; j > 0; j--) {
-			if (started.get(dates.get(j - 1)) == 0) {
-				return dates.get(j);
-			}
+		int j = i;
+		while (j > 0 && started.get(dates.get(j - 1)) != 0) {
+			j--;
 		}
-		return null;
+		return dates.get(j);
 	}
 	
 	private static Double adherence(Double estimate, long missedDays, long totalDays) {

@@ -102,8 +102,9 @@ public class AdherenceCalculationParityTest {
 	
 	/**
 	 * Adherence day by day over the past year: the latest oral prescription's latest estimate, else the
-	 * share of days on an injection prescription, from its first injection, that the injection before
-	 * covered. An injection covers its day and the interval's days after; today is never late.
+	 * share of days on an injection prescription that the injection before, or failing one the start of
+	 * the injection prescriptions, covered. An injection covers the interval's days starting on its
+	 * own; today is never late.
 	 */
 	private static Double covered(TreeMap<LocalDate, Integer> prescriptions, TreeSet<LocalDate> injections,
 	        TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral, LocalDate today) {
@@ -127,22 +128,16 @@ public class AdherenceCalculationParityTest {
 			if (inForce == null || inForce.getValue() == 0) {
 				continue;
 			}
-			// After an oral prescription, injection prescriptions count afresh from their first injection.
-			LocalDate since = null;
-			for (Map.Entry<LocalDate, Integer> p = inForce; p != null; p = prescriptions.lowerEntry(p.getKey())) {
-				Map.Entry<LocalDate, Integer> before = prescriptions.lowerEntry(p.getKey());
-				if (before != null && before.getValue() == 0) {
-					since = p.getKey();
-					break;
-				}
-			}
-			LocalDate first = since == null ? (injections.isEmpty() ? null : injections.first()) : injections.ceiling(since);
-			if (first == null || day.isBefore(first)) {
-				continue;
+			// Injection prescriptions run unbroken by an oral one; the run's start covers as an injection.
+			LocalDate since = inForce.getKey();
+			for (Map.Entry<LocalDate, Integer> p = prescriptions.lowerEntry(since); p != null
+			        && p.getValue() != 0; p = prescriptions.lowerEntry(since)) {
+				since = p.getKey();
 			}
 			total++;
-			if (!day.equals(today) && !injections.contains(day)
-			        && !day.isBefore(injections.lower(day).plusDays(inForce.getValue()))) {
+			LocalDate injected = injections.lower(day);
+			LocalDate covering = injected != null && !injected.isBefore(since) ? injected : since;
+			if (!day.equals(today) && !injections.contains(day) && !day.isBefore(covering.plusDays(inForce.getValue()))) {
 				late++;
 			}
 		}
