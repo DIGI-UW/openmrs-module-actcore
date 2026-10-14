@@ -21,13 +21,15 @@ import org.openmrs.PatientProgram;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses an RHD Registry enrolment overlapping another one when either is open, which core allows,
- * and folds such pairs into one when PatientService merges two patients.
+ * Refuses an RHD Registry or research study enrolment overlapping another one in the same program
+ * when either is open, which core allows, and folds such registry pairs into one when
+ * PatientService merges two patients.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
@@ -117,8 +119,11 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
 	private static void refuseOverlappingEnrolment(PatientProgram enrolment) {
 		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
-		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getProgram() == null || StringUtils.isBlank(registry)
-		        || !registry.trim().equals(enrolment.getProgram().getUuid())) {
+		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getProgram() == null) {
+			return;
+		}
+		boolean inRegistry = StringUtils.isNotBlank(registry) && registry.trim().equals(enrolment.getProgram().getUuid());
+		if (!inRegistry && !new Studies().isStudy(enrolment.getProgram())) {
 			return;
 		}
 		Context.addProxyPrivilege(PrivilegeConstants.GET_PATIENT_PROGRAMS);

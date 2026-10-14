@@ -67,6 +67,14 @@
     </description>
   </globalProperty>
   <globalProperty>
+    <property>actcore.studyTemplateProgram</property>
+    <defaultValue>6b3c0479-95ee-516d-8d72-a66bf902978b</defaultValue>
+    <description>
+      The retired program each new research study copies its workflows from. A study is a program,
+      other than this one, with a workflow on the same concept as one of this one's.
+    </description>
+  </globalProperty>
+  <globalProperty>
     <property>actcore.listFlagTag</property>
     <defaultValue></defaultValue>
     <description>
