@@ -28,7 +28,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * The port against ACT 2.0 itself: adherence-parity.json holds what ACT 2.0's
  * calculate_adherence_and_injection_date returns, with today pinned, for every call in its
- * test_adherence.py and for random histories, recorded once from the ACT 2.0 source.
+ * test_adherence.py and for random histories, recorded once from the ACT 2.0 source. The next due
+ * date is held to it; injection adherence, which ACT Core counts as days covered over days
+ * prescribed, is held to that rule written out day by day.
  */
 public class AdherenceCalculationParityTest {
 	
@@ -53,6 +55,7 @@ public class AdherenceCalculationParityTest {
 		
 		int index = 0;
 		int deviations = 0;
+		int recounted = 0;
 		for (JsonNode c : fixture.get("cases")) {
 			TreeMap<LocalDate, Integer> prescriptions = new TreeMap<LocalDate, Integer>();
 			for (JsonNode p : c.get("prescriptions")) {
@@ -73,10 +76,15 @@ public class AdherenceCalculationParityTest {
 			AdherenceCalculation.Result result = AdherenceCalculation.calculate(prescriptions, injections, oral, today);
 			
 			String label = "case " + index++ + ": " + c;
-			if (c.get("adherence").isNull()) {
+			Double adherence = covered(prescriptions, injections, oral, today);
+			if (adherence == null) {
 				assertNull(label, result.getAdherence());
 			} else {
-				assertEquals(label, c.get("adherence").asDouble(), result.getAdherence(), 0.0);
+				assertEquals(label, adherence, result.getAdherence(), 1e-12);
+			}
+			if (adherence == null ? !c.get("adherence").isNull()
+			        : c.get("adherence").isNull() || Math.abs(adherence - c.get("adherence").asDouble()) > 1e-12) {
+				recounted++;
 			}
 			LocalDate deviation = dueFromInjectionBeforeTheYear(prescriptions, injections, today);
 			if (deviation != null) {
@@ -89,6 +97,51 @@ public class AdherenceCalculationParityTest {
 			}
 		}
 		assertTrue("the fixture has a case of the deviation", deviations > 0);
+		assertTrue("the fixture has a case ACT 2.0 counts otherwise", recounted > 0);
+	}
+	
+	/**
+	 * Adherence day by day over the past year: the latest oral prescription's latest estimate, else the
+	 * share of days on an injection prescription that the injection before, or failing one the start of
+	 * the injection prescriptions, covered. An injection covers the interval's days starting on its
+	 * own; today is never late.
+	 */
+	private static Double covered(TreeMap<LocalDate, Integer> prescriptions, TreeSet<LocalDate> injections,
+	        TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral, LocalDate today) {
+		Map.Entry<LocalDate, Integer> latest = prescriptions.floorEntry(today);
+		if (latest == null) {
+			return null;
+		}
+		LocalDate yearAgo = today.minusDays(365);
+		if (latest.getValue() == 0) {
+			LocalDate from = latest.getKey().isBefore(yearAgo) ? yearAgo : latest.getKey();
+			for (AdherenceCalculation.OralEntry entry : oral.subMap(from, true, today, true).descendingMap().values()) {
+				if (entry.estimate != null) {
+					return entry.estimate / 100;
+				}
+			}
+		}
+		int total = 0;
+		int late = 0;
+		for (LocalDate day = yearAgo; !day.isAfter(today); day = day.plusDays(1)) {
+			Map.Entry<LocalDate, Integer> inForce = prescriptions.floorEntry(day);
+			if (inForce == null || inForce.getValue() == 0) {
+				continue;
+			}
+			// Injection prescriptions run unbroken by an oral one; the run's start covers as an injection.
+			LocalDate since = inForce.getKey();
+			for (Map.Entry<LocalDate, Integer> p = prescriptions.lowerEntry(since); p != null
+			        && p.getValue() != 0; p = prescriptions.lowerEntry(since)) {
+				since = p.getKey();
+			}
+			total++;
+			LocalDate injected = injections.lower(day);
+			LocalDate covering = injected != null && !injected.isBefore(since) ? injected : since;
+			if (!day.equals(today) && !injections.contains(day) && !day.isBefore(covering.plusDays(inForce.getValue()))) {
+				late++;
+			}
+		}
+		return total == 0 ? null : 1 - ((double) late / total);
 	}
 	
 	/**
