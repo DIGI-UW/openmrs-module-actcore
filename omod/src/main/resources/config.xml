@@ -52,6 +52,10 @@
     <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
   </advice>
   <advice>
+    <point>org.openmrs.api.ProgramWorkflowService</point>
+    <class>org.openmrs.module.actcore.studies.StudyEnrolmentStatus</class>
+  </advice>
+  <advice>
     <point>org.openmrs.api.EncounterService</point>
     <class>org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave</class>
   </advice>

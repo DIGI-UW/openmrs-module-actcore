@@ -27,6 +27,7 @@ import org.openmrs.ConceptName;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
+import org.openmrs.PatientState;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
@@ -150,6 +151,40 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled in ARC"));
 		}
 		programs.savePatientProgram(enrolment(patient, studies.create("Miller")));
+	}
+	
+	@Test
+	public void savePatientProgram_shouldStartAStudyEnrolmentWithoutAStatusInTheInitialOneFromItsEnrolmentDate() {
+		Program study = studies.create("ARC");
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentStatus());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(2), study);
+		// Whole seconds, as the database keeps them.
+		Date enrolled = new Date((enrolment.getDateEnrolled().getTime() / 1000 - 86400) * 1000);
+		enrolment.setDateEnrolled(enrolled);
+		
+		programs.savePatientProgram(enrolment);
+		
+		assertEquals(1, enrolment.getStates().size());
+		PatientState state = enrolment.getStates().iterator().next();
+		assertEquals("Active (study status)", state.getState().getConcept().getName().getName());
+		assertEquals(enrolled.getTime(), state.getStartDate().getTime());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldLeaveTheStatusOfAnEnrolmentOutsideStudiesAlone() {
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentStatus());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(2),
+		    Context.getProgramWorkflowService().getProgram(1));
+		
+		programs.savePatientProgram(enrolment);
+		
+		assertTrue(enrolment.getStates().isEmpty());
 	}
 	
 	private static PatientProgram enrolment(Patient patient, Program program) {
