@@ -17,21 +17,34 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
 
+import org.junit.After;
 import org.junit.Test;
 import org.openmrs.Encounter;
+import org.openmrs.Obs;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	
 	private final List<Integer> refreshed = new ArrayList<Integer>();
 	
+	private final RefreshAdherenceOnSave advice = new RefreshAdherenceOnSave();
+	
+	private final List<Encounter> committed = new ArrayList<Encounter>();
+	
 	/**
-	 * The encounter service as the module's advice wraps it at runtime, refreshing in the test's
-	 * transaction.
+	 * The encounter service with the advice outside its transaction, refreshing through the refresher
+	 * given.
 	 */
 	private EncounterService encounters(IntConsumer refresher) {
 		ProxyFactory proxy = new ProxyFactory(Context.getEncounterService());
@@ -111,5 +124,73 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		commit();
 		
 		assertNotNull(Context.getEncounterService().getEncounterByUuid(saved.getUuid()));
+	}
+	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void saveEncounter_shouldWriteThePatientsRowAfterARealCommitThroughTheAdvisedService() {
+		Context.addAdvice(EncounterService.class, advice);
+		prescribe(committed(encounter(7, 60)), oralPenicillin, 60, null);
+		Encounter report = unsaved(7, 0);
+		Obs value = obs(report, estimate);
+		value.setValueNumeric(65.0);
+		report.addObs(value);
+		Obs lasts = obs(report, duration);
+		lasts.setValueCoded(threeMonths);
+		report.addObs(lasts);
+		assertTrue(rows().isEmpty());
+		
+		committed(Context.getEncounterService().saveEncounter(report));
+		
+		assertEquals(0.65, ((Number) row(7).get(3)).doubleValue(), 1e-12);
+	}
+	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void saveEncounter_shouldRefreshOnTheCommitOfATransactionNestedInOneThatRollsBack() {
+		Context.addAdvice(EncounterService.class, advice);
+		final TransactionTemplate inner = transaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		transaction(TransactionDefinition.PROPAGATION_REQUIRED).execute(new TransactionCallbackWithoutResult() {
+			
+			@Override
+			protected void doInTransactionWithoutResult(TransactionStatus status) {
+				Context.getEncounterService().saveEncounter(unsaved(2, 0));
+				inner.execute(new TransactionCallbackWithoutResult() {
+					
+					@Override
+					protected void doInTransactionWithoutResult(TransactionStatus status) {
+						Encounter consultation = unsaved(7, 27);
+						consultation.addObs(prescriptionGroup(consultation, q21, 27, null));
+						committed(Context.getEncounterService().saveEncounter(consultation));
+					}
+				});
+				status.setRollbackOnly();
+			}
+		});
+		
+		assertNotNull(row(7));
+	}
+	
+	private static TransactionTemplate transaction(int propagation) {
+		TransactionTemplate template = new TransactionTemplate(
+		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
+		template.setPropagationBehavior(propagation);
+		return template;
+	}
+	
+	private Encounter committed(Encounter encounter) {
+		committed.add(encounter);
+		return encounter;
+	}
+	
+	// The NOT_SUPPORTED tests commit, so no rollback undoes their encounters and rows.
+	@After
+	public void removeAdviceAndCommittedRows() {
+		Context.removeAdvice(EncounterService.class, advice);
+		for (Encounter encounter : committed) {
+			Context.getEncounterService().purgeEncounter(encounter, true);
+		}
+		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
+		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
 	}
 }

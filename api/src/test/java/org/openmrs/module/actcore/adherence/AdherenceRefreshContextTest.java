@@ -139,7 +139,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		int timingsBefore = timings(2);
 		
 		estimate(encounter(7, 15), 70.0);
-		// A BPG injection saved for patient 2 after the full refresh stays out until that patient is refreshed.
+		// Saved after the full refresh, so patient 2's rows show it only if they are refreshed.
 		given(encounter(2, 79), 79);
 		Context.flushSession();
 		refresh.refreshPatient(7, TODAY);

@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -32,8 +33,7 @@ import org.springframework.transaction.TransactionStatus;
 
 /**
  * Advice on EncounterService that recomputes a patient's adherence rows once an encounter of theirs
- * is saved, voided or purged, so the registry's BPG status and adherence follow the form just
- * saved.
+ * is saved, voided or purged.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
@@ -83,13 +83,19 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			refresh(patientId);
 			return;
 		}
-		Pending pending = (Pending) TransactionSynchronizationManager.getResource(this);
-		if (pending == null) {
-			pending = new Pending();
-			TransactionSynchronizationManager.bindResource(this, pending);
-			TransactionSynchronizationManager.registerSynchronization(pending);
+		pending().patientIds.add(patientId);
+	}
+	
+	// Not a bound resource, which a REQUIRES_NEW suspend leaves bound to the outer transaction.
+	private Pending pending() {
+		for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+			if (synchronization instanceof Pending && ((Pending) synchronization).of(this)) {
+				return (Pending) synchronization;
+			}
 		}
-		pending.patientIds.add(patientId);
+		Pending pending = new Pending();
+		TransactionSynchronizationManager.registerSynchronization(pending);
+		return pending;
 	}
 	
 	private void refresh(int patientId) {
@@ -123,16 +129,15 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		
 		private final Set<Integer> patientIds = new LinkedHashSet<Integer>();
 		
+		private boolean of(RefreshAdherenceOnSave advice) {
+			return advice == RefreshAdherenceOnSave.this;
+		}
+		
 		@Override
 		public void afterCommit() {
 			for (Integer patientId : patientIds) {
 				refresh(patientId);
 			}
-		}
-		
-		@Override
-		public void afterCompletion(int status) {
-			TransactionSynchronizationManager.unbindResourceIfPossible(RefreshAdherenceOnSave.this);
 		}
 	}
 }
