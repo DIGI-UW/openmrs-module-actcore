@@ -45,6 +45,12 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   for an oral regimen whose supply end is unknown) and how many of the last six months' injections were
   on time. It replays the patient's saved forms when asked, as the nightly refresh does, so a dose
   saved today counts at once.
+- **Next cardiology visit.** `GET /ws/rest/v1/actcore/cardiology?patient=<uuid>` gives `nextDue`,
+  the date of the patient's next cardiology review: the latest RHD Consultation Visit's Next
+  Consultation Time Amount after its encounter's date, in the Time Period recorded on the same
+  encounter, as the registry report's `next_consultation_date` and the RHD cardiology follow-up due
+  flag read it. It is null for a patient not enrolled in the registry now or who has died, or with no
+  review date recorded. The ACT frontend app colours the patient banner's cardiology visit pill by it.
 - **Next steps.** `GET /ws/rest/v1/actcore/nextsteps?patient=<uuid>` lists what to do for a patient
   at this visit: each step's `key`, `form`, `title`, `reason`, `isNew` and `done`, from the rules
   below. The ACT frontend app shows them on the patient summary.
@@ -254,12 +260,15 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
 | `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml`. If you changed `actcore.nextSteps.encounterTypes`, add `patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0` to it for the Patient Information step |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
+| `actcore.consultation.*` | the RHD Consultation Visit's Next Consultation Time Amount and CIEL Time Period (1732) | The two questions the next cardiology visit reads; the period's answers must be CIEL days, weeks, months or years (1072, 1073, 1074, 1734); see `config.xml` |
 
 ## Security
 
 The refresh endpoint needs `Task: act.refreshFlags`, which the distribution creates; it then runs the
 refresh with the daemon user's privileges, so grant it only to roles you would let recompute every
 patient's flags.
+
+Calling the next cardiology visit needs Get Observations.
 
 Calling the next steps needs Get Observations; the module reads the patient's records on the caller's
 behalf, and offers only the steps the caller may record.

@@ -106,6 +106,20 @@ public class NextConsultationContextTest extends BaseModuleContextSensitiveTest 
 		assertNull(next(8));
 	}
 	
+	@Test
+	public void of_shouldBeNullForAPatientWhoHasDied() {
+		review(encounter(7, 400), 1.0, years);
+		assertEquals(TODAY.minusDays(400).plusYears(1), next(7));
+		
+		Patient patient = Context.getPatientService().getPatient(7);
+		patient.setDead(true);
+		patient.setDeathDate(at(1));
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		Context.getPatientService().savePatient(patient);
+		
+		assertNull(next(7));
+	}
+	
 	private LocalDate next(int patientId) {
 		return NextConsultation.of(Context.getPatientService().getPatient(patientId));
 	}

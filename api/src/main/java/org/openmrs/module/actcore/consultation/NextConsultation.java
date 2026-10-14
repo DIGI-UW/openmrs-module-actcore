@@ -54,8 +54,9 @@ public final class NextConsultation {
 	}
 	
 	/**
-	 * Null for a patient not enrolled in the registry now, whose last review date is no longer anyone's
-	 * to act on, or with no review date recorded. The caller must hold Get Observations.
+	 * Null for a patient not enrolled in the registry now or who has died, whose last review date is no
+	 * longer anyone's to act on, or with no review date recorded. The caller must hold Get
+	 * Observations.
 	 */
 	public static LocalDate of(Patient patient) {
 		Concept amount;
@@ -70,7 +71,8 @@ public final class NextConsultation {
 		finally {
 			proxyReads(false);
 		}
-		if (amount == null || period == null || !enrolled) {
+		// The RHD cardiology follow-up due flag leaves out the dead too (p.dead = 0).
+		if (amount == null || period == null || !enrolled || Boolean.TRUE.equals(patient.getDead())) {
 			return null;
 		}
 		
