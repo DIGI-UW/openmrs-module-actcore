@@ -242,6 +242,20 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void savePatientProgram_shouldRefuseANewStudyEnrolmentForAPatientWhoDied() {
+		Program study = studies.create("ARC");
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		Patient patient = Context.getPatientService().getPatient(2);
+		patient.setDead(true);
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		
+		assertRefused(programs, enrolment(patient, study), "has died");
+	}
+	
+	@Test
 	public void savePerson_shouldEndOpenStudyEnrolmentsOfAPatientWhoDiedInInactiveDeathOnTheirDeathDate() {
 		Program arc = studies.create("ARC");
 		Program miller = studies.create("Miller");

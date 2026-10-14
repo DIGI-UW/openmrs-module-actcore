@@ -25,8 +25,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Advice on ProgramWorkflowService that refuses a new study enrolment unless the patient gave
- * registry consent, would like to be considered for research, and has a Study ID in the study,
+ * Advice on ProgramWorkflowService that refuses a new study enrolment unless the patient is alive,
+ * gave registry consent, would like to be considered for research, and has a Study ID in the study,
  * whichever page enrols them.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
@@ -61,6 +61,9 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
+			if (Boolean.TRUE.equals(enrolment.getPatient().getDead())) {
+				throw refusal(enrolment, "The patient has died, so they cannot be enrolled in a study");
+			}
 			Concept yes = conceptByProperty(YES_PROPERTY);
 			if (!answeredYes(enrolment, CONSENT_PROPERTY, yes)) {
 				throw refusal(enrolment, "The patient has not given registry consent, so they cannot be enrolled in a study."
