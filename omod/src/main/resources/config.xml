@@ -258,4 +258,20 @@
       The next INR date, whose latest value dates the INR review step.
     </description>
   </globalProperty>
+
+  <globalProperty>
+    <property>actcore.consultation.nextAmountConcept</property>
+    <defaultValue>ba4b8a87-2ce8-559e-9a30-45504a9b6c1f</defaultValue>
+    <description>
+      The RHD Consultation Visit's Next Consultation Time Amount, whose latest value after its encounter's date, in the period below, dates the next cardiology visit on the patient banner.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.consultation.nextPeriodConcept</property>
+    <defaultValue>1732AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+    <description>
+      The Time Period of the next consultation, answered days, weeks, months or years on the same encounter as its amount.
+    </description>
+  </globalProperty>
 </module>
