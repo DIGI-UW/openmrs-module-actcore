@@ -56,6 +56,18 @@
     <class>org.openmrs.module.actcore.studies.StudyEnrolmentStatus</class>
   </advice>
   <advice>
+    <point>org.openmrs.api.ProgramWorkflowService</point>
+    <class>org.openmrs.module.actcore.studies.StudyEnrolmentRules</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.PersonService</point>
+    <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.PatientService</point>
+    <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
+  </advice>
+  <advice>
     <point>org.openmrs.api.EncounterService</point>
     <class>org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave</class>
   </advice>
@@ -76,6 +88,41 @@
     <description>
       The retired program each new research study copies its workflows from. A study is a program,
       other than this one, with a workflow on the same concept as one of this one's.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.studies.consentAttributeType</property>
+    <defaultValue>e15bf9b7-249e-5d75-907d-937b8d9b0c46</defaultValue>
+    <description>
+      The person attribute type recording registry consent. A patient is enrolled in a study only when it holds actcore.studies.yesConcept. Leave empty to drop the rule, for example while migrating ACT 2.0 data.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.studies.optInAttributeType</property>
+    <defaultValue>a78f6ae3-faec-5db8-9493-53877985ca7f</defaultValue>
+    <description>
+      The person attribute type recording whether the patient would like to be considered for research. A patient is enrolled in a study only when it holds actcore.studies.yesConcept. Leave empty to drop the rule.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.studies.yesConcept</property>
+    <defaultValue>1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+    <description>
+      The Yes answer to registry consent and the research opt-in. Leave empty to drop both rules.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.studies.participantIdAttributeType</property>
+    <defaultValue>7840ba5d-d927-52d6-907b-dd070bea6626</defaultValue>
+    <description>
+      The program attribute type holding a participant's Study ID. A new study enrolment without one is refused. Leave empty to drop the rule.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.studies.deathStateConcept</property>
+    <defaultValue>4358f696-7a3d-5da4-949f-c8919974cccc</defaultValue>
+    <description>
+      The concept of the study status a patient's open study enrolments move to, on their death date, when they are saved as dead. Enrolments already in an Inactive status keep it. Leave empty to leave enrolments open.
     </description>
   </globalProperty>
   <globalProperty>

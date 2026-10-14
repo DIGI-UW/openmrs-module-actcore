@@ -15,6 +15,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -27,14 +28,21 @@ import org.openmrs.ConceptName;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
+import org.openmrs.PatientProgramAttribute;
 import org.openmrs.PatientState;
+import org.openmrs.Person;
+import org.openmrs.PersonAttribute;
+import org.openmrs.PersonAttributeType;
 import org.openmrs.Program;
+import org.openmrs.ProgramAttributeType;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
+import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
+import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.springframework.aop.framework.ProxyFactory;
 
@@ -46,6 +54,8 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private Concept statusWorkflow;
 	
+	private Concept death;
+	
 	@Before
 	public void setUp() {
 		statusWorkflow = concept("Research Study Status");
@@ -56,7 +66,9 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		ProgramWorkflow workflow = new ProgramWorkflow();
 		workflow.setConcept(statusWorkflow);
 		workflow.addState(state(concept("Active (study status)"), true, false));
-		workflow.addState(state(concept("Inactive - Death"), false, true));
+		death = concept("Inactive - Death");
+		workflow.addState(state(death, false, true));
+		workflow.addState(state(concept("Inactive - Voluntary withdrawal"), false, true));
 		ProgramWorkflowState retired = state(concept("Inactive"), false, true);
 		retired.setRetired(true);
 		workflow.addState(retired);
@@ -79,7 +91,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		assertNotEquals(template.getWorkflows().iterator().next(), workflow);
 		Set<String> states = workflow.getStates(false).stream().map(s -> s.getConcept().getName().getName()
 		        + (s.getInitial() ? " initial" : "") + (s.getTerminal() ? " terminal" : "")).collect(Collectors.toSet());
-		assertEquals(2, states.size());
+		assertEquals(3, states.size());
 		assertTrue(states.contains("Active (study status) initial"));
 		assertTrue(states.contains("Inactive - Death terminal"));
 	}
@@ -185,6 +197,119 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		programs.savePatientProgram(enrolment);
 		
 		assertTrue(enrolment.getStates().isEmpty());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseANewStudyEnrolmentUntilConsentOptInAndStudyIdAreRecorded() {
+		Program study = studies.create("ARC");
+		Concept yes = concept("Agreed");
+		Concept no = concept("Declined");
+		PersonAttributeType consent = attributeType("Consent Given");
+		PersonAttributeType optIn = attributeType("Research Opt-In");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
+		property(StudyEnrolmentRules.CONSENT_PROPERTY, consent.getUuid());
+		property(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		
+		assertRefused(programs, enrolment, "registry consent");
+		patient.addAttribute(new PersonAttribute(consent, no.getConceptId().toString()));
+		assertRefused(programs, enrolment, "registry consent");
+		patient.addAttribute(new PersonAttribute(consent, yes.getConceptId().toString()));
+		assertRefused(programs, enrolment, "considered for research");
+		patient.addAttribute(new PersonAttribute(optIn, yes.getConceptId().toString()));
+		assertRefused(programs, enrolment, "Study ID");
+		PatientProgramAttribute id = new PatientProgramAttribute();
+		id.setAttributeType(studyId);
+		id.setValue("ARC-7");
+		enrolment.addAttribute(id);
+		
+		programs.savePatientProgram(enrolment);
+		
+		patient.addAttribute(new PersonAttribute(optIn, no.getConceptId().toString()));
+		enrolment.setDateCompleted(new Date());
+		programs.savePatientProgram(enrolment);
+		programs.savePatientProgram(enrolment(patient, Context.getProgramWorkflowService().getProgram(1)));
+	}
+	
+	@Test
+	public void savePerson_shouldEndOpenStudyEnrolmentsOfAPatientWhoDiedInInactiveDeathOnTheirDeathDate() {
+		Program arc = studies.create("ARC");
+		Program miller = studies.create("Miller");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		ProgramWorkflowService programs = Context.getProgramWorkflowService();
+		Patient patient = Context.getPatientService().getPatient(2);
+		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
+		Date died = new Date(enrolled.getTime() + 5 * 86400000L);
+		PatientProgram open = enrolment(patient, arc);
+		open.setDateEnrolled(enrolled);
+		open.transitionToState(state(arc, "Active (study status)"), enrolled);
+		programs.savePatientProgram(open);
+		PatientProgram withdrawn = enrolment(patient, miller);
+		withdrawn.setDateEnrolled(enrolled);
+		withdrawn.transitionToState(state(miller, "Inactive - Voluntary withdrawal"), enrolled);
+		programs.savePatientProgram(withdrawn);
+		ProxyFactory proxy = new ProxyFactory(Context.getPersonService());
+		proxy.addInterface(PersonService.class);
+		proxy.addAdvice(new CloseStudiesOnDeath());
+		PersonService people = (PersonService) proxy.getProxy();
+		Person person = Context.getPersonService().getPerson(2);
+		person.setDead(true);
+		person.setDeathDate(died);
+		person.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		
+		people.savePerson(person);
+		
+		assertEquals(died.getTime(), open.getDateCompleted().getTime());
+		assertEquals("Inactive - Death", current(open).getState().getConcept().getName().getName());
+		assertEquals(died.getTime(), current(open).getStartDate().getTime());
+		assertEquals(enrolled.getTime(), withdrawn.getDateCompleted().getTime());
+		assertEquals("Inactive - Voluntary withdrawal", current(withdrawn).getState().getConcept().getName().getName());
+	}
+	
+	private static void assertRefused(ProgramWorkflowService programs, PatientProgram enrolment, String reason) {
+		try {
+			programs.savePatientProgram(enrolment);
+			fail("enrolled without " + reason);
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains(reason));
+		}
+	}
+	
+	private static ProgramWorkflowState state(Program study, String name) {
+		for (ProgramWorkflowState state : study.getWorkflows().iterator().next().getStates(false)) {
+			if (name.equals(state.getConcept().getName().getName())) {
+				return state;
+			}
+		}
+		throw new AssertionError("no state " + name);
+	}
+	
+	/** The status that started last, as the participants report reads it: completing ends them all. */
+	private static PatientState current(PatientProgram enrolment) {
+		return enrolment.getStates().stream().filter(state -> !state.getVoided())
+		        .max(Comparator.comparing(PatientState::getStartDate)).orElseThrow(AssertionError::new);
+	}
+	
+	private static PersonAttributeType attributeType(String name) {
+		PersonAttributeType type = new PersonAttributeType();
+		type.setName(name);
+		type.setFormat(Concept.class.getName());
+		return Context.getPersonService().savePersonAttributeType(type);
+	}
+	
+	private static void property(String name, String value) {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(name, value));
 	}
 	
 	private static PatientProgram enrolment(Patient patient, Program program) {
