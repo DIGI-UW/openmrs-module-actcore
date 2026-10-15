@@ -465,12 +465,12 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private void adviseAsTheModuleDoes() {
+		Context.addAdvice(PatientService.class, closeOnDeath);
 		Context.addAdvice(PatientService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, status);
 		Context.addAdvice(ProgramWorkflowService.class, rules);
 		Context.addAdvice(PersonService.class, closeOnDeath);
-		Context.addAdvice(PatientService.class, closeOnDeath);
 	}
 	
 	@After
@@ -491,6 +491,59 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(reason));
 		}
+	}
+	
+	@Test
+	public void mergePatients_shouldFoldOverlappingStudyEnrolmentsIntoOneEndedOnThePreferredPatientsDeath()
+	        throws Exception {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
+		Date died = new Date(enrolled.getTime() + 5 * 86400000L);
+		Patient preferred = Context.getPatientService().getPatient(2);
+		PatientProgram preferreds = enrolment(preferred, study);
+		preferreds.setDateEnrolled(enrolled);
+		Context.getProgramWorkflowService().savePatientProgram(preferreds);
+		PatientProgram duplicates = enrolment(Context.getPatientService().getPatient(6), study);
+		duplicates.setDateEnrolled(new Date(enrolled.getTime() + 2 * 86400000L));
+		Context.getProgramWorkflowService().savePatientProgram(duplicates);
+		preferred.setDead(true);
+		preferred.setDeathDate(died);
+		preferred.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		Context.getPatientService().savePatient(preferred);
+		
+		Context.getPatientService().mergePatients(preferred, Context.getPatientService().getPatient(6));
+		
+		List<PatientProgram> left = Context.getProgramWorkflowService().getPatientPrograms(preferred, study, null, null,
+		    null, null, false);
+		assertEquals(1, left.size());
+		assertEquals(enrolled.getTime(), left.get(0).getDateEnrolled().getTime());
+		assertEquals(died.getTime(), left.get(0).getDateCompleted().getTime());
+		assertEquals("Inactive - Death", current(left.get(0)).getState().getConcept().getName().getName());
+	}
+	
+	@Test
+	public void savePatient_shouldEndOpenEnrolmentsInARetiredStudyOfAPatientWhoDied() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram open = enrolment(patient, study);
+		open.setDateEnrolled(new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L));
+		Context.getProgramWorkflowService().savePatientProgram(open);
+		// As the legacy Programs admin page and REST retire it, leaving its workflows unretired.
+		study.setRetired(true);
+		study.setRetireReason("Study ended");
+		Context.getProgramWorkflowService().saveProgram(study);
+		patient.setDead(true);
+		patient.setDeathDate(new Date(open.getDateEnrolled().getTime() + 5 * 86400000L));
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		
+		Context.getPatientService().savePatient(patient);
+		
+		assertNotNull(open.getDateCompleted());
+		assertEquals("Inactive - Death", current(open).getState().getConcept().getName().getName());
 	}
 	
 	private static ProgramWorkflowState state(Program study, String name) {

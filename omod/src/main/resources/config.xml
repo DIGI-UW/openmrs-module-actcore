@@ -43,6 +43,11 @@
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.registry.EnrolOnRegistration</class>
   </advice>
+  <!-- An earlier advice wraps a later one, so a merge folds study enrolments before ending them on death. -->
+  <advice>
+    <point>org.openmrs.api.PatientService</point>
+    <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
+  </advice>
   <advice>
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
@@ -61,10 +66,6 @@
   </advice>
   <advice>
     <point>org.openmrs.api.PersonService</point>
-    <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
-  </advice>
-  <advice>
-    <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
   </advice>
   <advice>

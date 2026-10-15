@@ -60,8 +60,8 @@ public class Studies {
 	}
 	
 	/**
-	 * Whether the program is a study: not the template, with a workflow on the template's. False for
-	 * every program when the template is missing, so enrolling keeps working without it.
+	 * Whether the program is a study, retired or not: not the template, with a workflow on the
+	 * template's. False for every program without a template, so enrolling keeps working.
 	 */
 	public boolean isStudy(Program program) {
 		return program != null && withPrivileges(() -> {
@@ -130,7 +130,7 @@ public class Studies {
 	}
 	
 	private static boolean isStudy(Program program, Program template) {
-		if (program == null || program.equals(template) || Boolean.TRUE.equals(program.getRetired())) {
+		if (program == null || program.equals(template)) {
 			return false;
 		}
 		for (ProgramWorkflow workflow : program.getWorkflows()) {

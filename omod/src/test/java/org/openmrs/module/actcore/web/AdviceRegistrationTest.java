@@ -10,10 +10,13 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,20 +51,36 @@ public class AdviceRegistrationTest {
 		assertEquals(points(PatientService.class, PersonService.class), pointsOf(CloseStudiesOnDeath.class));
 	}
 	
+	@Test
+	public void configRegistersCloseStudiesOnDeathOnPatientServiceBeforeTheGuardSoTheMergeFoldsFirst() throws Exception {
+		List<String> advice = adviceOn(PatientService.class);
+		int close = advice.indexOf(CloseStudiesOnDeath.class.getName());
+		int guard = advice.indexOf(OneOpenRegistryEnrolment.class.getName());
+		assertTrue(advice.toString(), close >= 0 && guard >= 0 && close < guard);
+	}
+	
 	private static Set<String> points(Class<?>... services) {
 		return Arrays.stream(services).map(Class::getName).collect(Collectors.toSet());
 	}
 	
 	private static Set<String> pointsOf(Class<?> advice) throws Exception {
+		return new HashSet<>(select("//advice[normalize-space(class)='" + advice.getName() + "']/point"));
+	}
+	
+	/** The advice classes on the service, in registration order, which is the order they wrap in. */
+	private static List<String> adviceOn(Class<?> service) throws Exception {
+		return select("//advice[normalize-space(point)='" + service.getName() + "']/class");
+	}
+	
+	private static List<String> select(String xpath) throws Exception {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-		NodeList nodes = (NodeList) XPathFactory.newInstance().newXPath().evaluate(
-		    "//advice[normalize-space(class)='" + advice.getName() + "']/point",
+		NodeList nodes = (NodeList) XPathFactory.newInstance().newXPath().evaluate(xpath,
 		    factory.newDocumentBuilder().parse(new File("target/classes/config.xml")), XPathConstants.NODESET);
-		Set<String> points = new HashSet<>();
+		List<String> values = new ArrayList<>();
 		for (int i = 0; i < nodes.getLength(); i++) {
-			points.add(nodes.item(i).getTextContent().trim());
+			values.add(nodes.item(i).getTextContent().trim());
 		}
-		return points;
+		return values;
 	}
 }
