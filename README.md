@@ -45,6 +45,12 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   for an oral regimen whose supply end is unknown) and how many of the last six months' injections were
   on time. It replays the patient's saved forms when asked, as the nightly refresh does, so a dose
   saved today counts at once.
+- **Next cardiology visit.** `GET /ws/rest/v1/actcore/cardiology?patient=<uuid>` gives `nextDue`,
+  the date of the patient's next cardiology review: the latest RHD Consultation Visit's Next
+  Consultation Time Amount after its encounter's date, in the Time Period recorded on the same
+  encounter, as the registry report's `next_consultation_date` and the RHD cardiology follow-up due
+  flag read it. It is null for a patient not enrolled in the registry now or who has died, or with no
+  review date recorded. The ACT frontend app colours the patient banner's cardiology visit pill by it.
 - **Next steps.** `GET /ws/rest/v1/actcore/nextsteps?patient=<uuid>` lists what to do for a patient
   at this visit: each step's `key`, `form`, `title`, `reason`, `isNew` and `done`, from the rules
   below. The ACT frontend app shows them on the patient summary.
@@ -145,14 +151,22 @@ logged as warnings that name the column and type, never the value. Days pending 
 ### Prophylaxis adherence
 
 A port of ACT 2.0's adherence (is4r-rhd-cdk `query_handlers/adherence_utils.py`). Its calculation,
-`calculate_adherence_and_injection_date`, is ported step for step:
+`calculate_adherence_and_injection_date`, is ported step for step but for how injection adherence
+counts days:
 
 - It reads the prophylaxis prescribed on the latest consultation that records any, by its Date of
   Consultation Visit (else its encounter's date), leaving out prescriptions with a date stopped, then
   every injection date and every oral adherence form.
-- Over at most the last 365 days, each injection regimen's window counts the days its injections
-  came later than the regimen's interval (Q14, Q21, Q28) allows. Adherence is 1 minus the days late
-  over the days prescribed.
+- Injection adherence is the days covered by prescribed treatment over the days of prescribed
+  treatment, as the program defines it in [AR-102](https://uwdigi.atlassian.net/browse/AR-102),
+  over at most the last 365 days. An injection covers the interval's (Q14, Q21, Q28)
+  days starting on its own, so with Q28 an injection on day 0 covers days 0 to 27 and a next
+  dose on day 31 leaves 3 days late. Counting starts at the regimen's start, which covers as an
+  injection would, so a first injection is due one interval after it, as the chart times it. An
+  injection before the 365 days still covers the days after it. A change of injection regimen
+  carries the last injection's cover on, judging the next dose by the new interval; after an oral
+  regimen, counting starts again at the injection regimen's start. A dose due today is not yet
+  late.
 - An oral regimen instead takes the clinician's latest estimate in its window.
 - The next due date runs from the latest injection by the latest regimen's interval, or on an oral
   regimen from the latest estimate by its prescription duration.
@@ -196,7 +210,8 @@ previous injection, or the course's start, plus the course's interval). Reports 
 over a period from it, so they agree with the chart. An injection given with no course in force is left
 out, as the chart leaves it untimed.
 
-`AdherenceCalculationParityTest` holds the port to ACT 2.0 itself. Its fixture,
+`AdherenceCalculationParityTest` holds the port to ACT 2.0 itself, the next due date to ACT 2.0's and
+injection adherence to the days covered rule written out day by day. Its fixture,
 `api/src/test/resources/adherence-parity.json`, is what ACT 2.0's own function returns, with today
 pinned, for every call in its `test_adherence.py`, for prescriptions either side of the 365-day
 cutoff, and for 400 random histories, recorded by running that function unchanged from the ACT 2.0
@@ -224,7 +239,7 @@ the consultations that record them.
 | A failing flag message does not stop the flag clearing (#9) | One bad flag should not leave stale rows for everyone. |
 | Logging goes through core's `log4j2.xml` | No second logging system; one summary line per run at the default level. |
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
-| Adherence is ported from ACT 2.0 unchanged | ACT 3.0 had no definition of "adherent" of its own; parity with ACT 2.0 keeps the registry's numbers comparable across the migration, quirks included. |
+| Adherence is ported from ACT 2.0 but for counting injection adherence as days covered | ACT 3.0 had no definition of "adherent" of its own, so the rest keeps ACT 2.0's. Injection adherence follows the definition the program asked for in [AR-102](https://uwdigi.atlassian.net/browse/AR-102): days covered over days prescribed. Like ACT 2.0 it judges the first injection from the regimen's start, as the chart and `actcore_injection_timing` do. ACT 2.0 also restarted at each change of injection regimen and at the 365-day cutoff, so a late dose just after either went uncounted. |
 | Adherence is kept in a table, not written as obs | It is computed, not recorded by a clinician, and goes stale between runs; as obs it would show in the chart as if someone had recorded it. The reports join the table. |
 | Adherence is recomputed daily and on demand, replaying ACT 2.0's saves and nightly runs | A BPG delivery shows in the registry after the next run; run the task to see it at once. The replay needs no state of its own, so a run gives the same rows whatever ran before it. |
 | The latest consultation that records a prescription, not the latest consultation | ACT 2.0 read the latest consultation, by its date, and the first of a day. Here a consultation that leaves the prescriptions out does not drop the regimen the one before it recorded. |
@@ -266,6 +281,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.studyTemplateProgram` | ACT's retired study template program | The program each new study copies its workflows from; a program with a workflow on the same concept as one of its own is a study |
 | `actcore.studies.*` | the ACT attribute types and concepts | The registry consent and research opt-in person attribute types, their Yes answer, the Study ID program attribute type, and the status open enrolments end in at death. Empty one to drop its rule, for example while migrating ACT 2.0 data; the rule on an open enrolment for a patient who has died has no property |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
+| `actcore.consultation.*` | the RHD Consultation Visit's Next Consultation Time Amount and CIEL Time Period (1732) | The two questions the next cardiology visit reads; the period's answers must be CIEL days, weeks, months or years (1072, 1073, 1074, 1734); see `config.xml` |
 
 ## Security
 
@@ -277,6 +293,8 @@ Listing the research studies needs Get Programs. Creating and renaming them need
 `Task: act.manageStudies`, which the distribution creates; the module then saves the study's concept and
 program with Manage Concepts and Manage Programs on the caller's behalf, so grant it only to roles you
 would let add concepts and programs.
+
+Calling the next cardiology visit needs Get Observations.
 
 Calling the next steps needs Get Observations; the module reads the patient's records on the caller's
 behalf, and offers only the steps the caller may record.

@@ -105,8 +105,8 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Every injection up to today, newest first, timed as AdherenceCalculation does: against the
-	 * previous injection, even an untimed one, or its course's start.
+	 * Every injection up to today, newest first, timed as ACT 2.0 timed them: against the previous
+	 * injection, even an untimed one, or its course's start.
 	 */
 	static List<Injection> timings(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
 	        SortedSet<LocalDate> injections, LocalDate today) {
