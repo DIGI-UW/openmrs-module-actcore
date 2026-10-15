@@ -18,12 +18,15 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Comparator;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,6 +65,8 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	private final StudyEnrolmentRules rules = new StudyEnrolmentRules();
 	
 	private final CloseStudiesOnDeath closeOnDeath = new CloseStudiesOnDeath();
+	
+	private static final long TODAY = System.currentTimeMillis() / 1000 * 1000;
 	
 	private Program template;
 	
@@ -438,6 +443,215 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		    open.getStates().stream().filter(
 		        state -> !state.getVoided() && "Inactive - Death".equals(state.getState().getConcept().getName().getName()))
 		            .count());
+	}
+	
+	@Test
+	public void savePatient_shouldRecordDeathOnTheWithdrawalOfAReopenedEnrolmentWhenItDiedBefore() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.transitionToState(state(study, "Inactive - Voluntary withdrawal"), daysAgo(4));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(4));
+	}
+	
+	@Test
+	public void savePatient_shouldRecordDeathOnTheEndOfAReopenedEnrolmentCompletedByDateWhenItDiedBefore() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.setDateCompleted(daysAgo(4));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(4));
+	}
+	
+	@Test
+	public void savePatient_shouldCompleteAReopenedEnrolmentAlreadyInDeathNoEarlierThanThatDeath() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		markDead(patient, daysAgo(5));
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(5));
+	}
+	
+	@Test
+	public void savePatient_shouldEndAStudyEnrolmentNoEarlierThanAnEndedStatusInAnotherWorkflow() {
+		Program study = studies.create("ARC");
+		ProgramWorkflowState control = addArmWorkflow(study);
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.transitionToState(control, daysAgo(9));
+		enrolment.getCurrentState(control.getProgramWorkflow()).setEndDate(daysAgo(3));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(3));
+	}
+	
+	@Test
+	public void savePatient_shouldRecordDeathOnTheDeathDateWhenItFollowsTheWithdrawalOfAReopenedEnrolment() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.transitionToState(state(study, "Inactive - Voluntary withdrawal"), daysAgo(4));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(2));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(2));
+	}
+	
+	@Test
+	public void savePatient_shouldDateTheDeathOfAPatientWhoDiedWithoutRegardToVoidedStatuses() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		PatientState voided = new PatientState();
+		voided.setPatientProgram(enrolment);
+		voided.setState(state(study, "Inactive - Voluntary withdrawal"));
+		voided.setStartDate(daysAgo(3));
+		voided.setEndDate(daysAgo(3));
+		voided.setVoided(true);
+		voided.setVoidReason("Entered in error");
+		enrolment.getStates().add(voided);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(7));
+	}
+	
+	@Test
+	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathStartsWithItsWithdrawal() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(daysAgo(10));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.transitionToState(state(study, "Inactive - Voluntary withdrawal"), daysAgo(4));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		markDead(patient, daysAgo(7));
+		enrolment.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		markDead(patient, daysAgo(7));
+		
+		assertEndedInDeathOn(enrolment, daysAgo(4));
+	}
+	
+	@Test
+	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathSharesADayWithAnotherStatusInEitherOrder() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		Date day = DateUtils.truncate(daysAgo(5), Calendar.DATE);
+		PatientProgram activeFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(2), study, day, false);
+		PatientProgram deathFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(6), study, day, true);
+		adviseAsTheModuleDoes();
+		
+		markDead(Context.getPatientService().getPatient(2), DateUtils.addHours(day, 10));
+		markDead(Context.getPatientService().getPatient(6), DateUtils.addHours(day, 10));
+		
+		for (PatientProgram enrolment : new PatientProgram[] { activeFirst, deathFirst }) {
+			assertNotNull(enrolment.getDateCompleted());
+			assertEquals(1, enrolment.getStates().stream().filter(
+			    state -> !state.getVoided() && "Inactive - Death".equals(state.getState().getConcept().getName().getName()))
+			        .count());
+		}
+	}
+	
+	/** As a reload leaves it: status dates are days, and the order the statuses iterate in is given. */
+	private static PatientProgram reopenedOnTheDayItDied(Patient patient, Program study, Date day, boolean deathFirst) {
+		PatientProgram enrolment = enrolment(patient, study);
+		enrolment.setDateEnrolled(day);
+		Set<PatientState> states = new LinkedHashSet<>();
+		for (String name : deathFirst ? new String[] { "Inactive - Death", "Active (study status)" }
+		        : new String[] { "Active (study status)", "Inactive - Death" }) {
+			PatientState state = new PatientState();
+			state.setPatientProgram(enrolment);
+			state.setState(state(study, name));
+			state.setStartDate(new Date(day.getTime()));
+			state.setEndDate(new Date(day.getTime()));
+			states.add(state);
+		}
+		enrolment.setStates(states);
+		return Context.getProgramWorkflowService().savePatientProgram(enrolment);
+	}
+	
+	private static ProgramWorkflowState addArmWorkflow(Program study) {
+		ProgramWorkflow arm = new ProgramWorkflow();
+		arm.setConcept(concept("Study arm"));
+		ProgramWorkflowState control = state(concept("Control arm"), false, false);
+		arm.addState(control);
+		study.addWorkflow(arm);
+		Context.getProgramWorkflowService().saveProgram(study);
+		return control;
+	}
+	
+	private static void assertEndedInDeathOn(PatientProgram enrolment, Date date) {
+		assertEquals(date.getTime(), enrolment.getDateCompleted().getTime());
+		List<PatientState> recorded = enrolment.getStates().stream().filter(state -> !state.getVoided())
+		        .collect(Collectors.toList());
+		assertEquals(1,
+		    recorded.stream().filter(state -> "Inactive - Death".equals(state.getState().getConcept().getName().getName())
+		            && state.getStartDate().getTime() == date.getTime()).count());
+		assertTrue(recorded.stream().noneMatch(state -> state.getStartDate().after(date)));
+	}
+	
+	private static Date daysAgo(int days) {
+		return new Date(TODAY - days * 86400000L);
+	}
+	
+	private static void markDead(Patient patient, Date died) {
+		patient.setDead(true);
+		patient.setDeathDate(died);
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		Context.getPatientService().savePatient(patient);
 	}
 	
 	@Test

@@ -14,6 +14,7 @@ import java.util.Date;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateUtils;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
 import org.openmrs.PatientState;
@@ -29,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Advice on PersonService and PatientService that ends a dead patient's open study enrolments in
- * Inactive - Death, on their death date, when they are saved or have a duplicate merged in.
+ * Inactive - Death, from their death date on, when they are saved or have a duplicate merged in.
  */
 public class CloseStudiesOnDeath implements MethodInterceptor {
 	
@@ -80,8 +81,8 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 					continue;
 				}
 				Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
-				// A reopened enrolment already ended in death; a second death state on that date is refused.
-				if (!death.equals(latestState(enrolment, death.getProgramWorkflow()))) {
+				// Status dates are stored as days, so a death state already on that day would be a duplicate.
+				if (!hasStateOnDay(enrolment, death, date)) {
 					enrolment.transitionToState(death, date);
 				}
 				enrolment.setDateCompleted(date);
@@ -110,30 +111,31 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 		return null;
 	}
 	
-	private static ProgramWorkflowState latestState(PatientProgram enrolment, ProgramWorkflow workflow) {
-		PatientState latest = null;
-		for (PatientState state : enrolment.getStates()) {
-			if (!Boolean.TRUE.equals(state.getVoided()) && workflow.equals(state.getState().getProgramWorkflow())
-			        && state.getStartDate() != null
-			        && (latest == null || state.getStartDate().after(latest.getStartDate()))) {
-				latest = state;
+	private static boolean hasStateOnDay(PatientProgram enrolment, ProgramWorkflowState state, Date day) {
+		for (PatientState recorded : enrolment.getStates()) {
+			if (!Boolean.TRUE.equals(recorded.getVoided()) && state.equals(recorded.getState())
+			        && recorded.getStartDate() != null && DateUtils.isSameDay(recorded.getStartDate(), day)) {
+				return true;
 			}
 		}
-		return latest == null ? null : latest.getState();
+		return false;
 	}
 	
 	/**
-	 * The death date, moved up to the enrolment's start or its current status's, which it cannot
-	 * precede.
+	 * The death date, moved up to the enrolment's latest recorded start or end, since a death state
+	 * cannot overlap the statuses recorded before it and close() does not rewrite them.
 	 */
 	private static Date notBefore(Date date, PatientProgram enrolment) {
-		Date earliest = enrolment.getDateEnrolled();
+		Date earliest = later(date, enrolment.getDateEnrolled());
 		for (PatientState state : enrolment.getStates()) {
-			if (!Boolean.TRUE.equals(state.getVoided()) && state.getEndDate() == null && state.getStartDate() != null
-			        && (earliest == null || state.getStartDate().after(earliest))) {
-				earliest = state.getStartDate();
+			if (!Boolean.TRUE.equals(state.getVoided())) {
+				earliest = later(later(earliest, state.getStartDate()), state.getEndDate());
 			}
 		}
-		return earliest != null && date.before(earliest) ? earliest : date;
+		return earliest;
+	}
+	
+	private static Date later(Date date, Date other) {
+		return other != null && other.after(date) ? other : date;
 	}
 }
