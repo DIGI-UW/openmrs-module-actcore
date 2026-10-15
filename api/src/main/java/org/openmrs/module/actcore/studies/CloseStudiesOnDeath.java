@@ -28,8 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice on PersonService and PatientService that ends a patient's open study enrolments in the
- * Inactive - Death status, on their death date, when they are saved as dead.
+ * Advice on PersonService and PatientService that ends a dead patient's open study enrolments in
+ * Inactive - Death, on their death date, when they are saved or have a duplicate merged in.
  */
 public class CloseStudiesOnDeath implements MethodInterceptor {
 	
@@ -47,8 +47,10 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 		String method = invocation.getMethod().getName();
 		Object[] args = invocation.getArguments();
 		Object saved = invocation.proceed();
-		if (("savePerson".equals(method) || "savePatient".equals(method)) && args.length == 1 && args[0] instanceof Person
-		        && Boolean.TRUE.equals(((Person) args[0]).getDead())) {
+		// Core's merge saves the preferred patient without passing through this advice.
+		boolean save = ("savePerson".equals(method) || "savePatient".equals(method)) && args.length == 1;
+		boolean merge = "mergePatients".equals(method) && args.length == 2;
+		if ((save || merge) && args[0] instanceof Person && Boolean.TRUE.equals(((Person) args[0]).getDead())) {
 			close((Person) args[0]);
 		}
 		return saved;
@@ -78,7 +80,10 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 					continue;
 				}
 				Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
-				enrolment.transitionToState(death, date);
+				// A reopened enrolment already ended in death; a second death state on that date is refused.
+				if (!death.equals(latestState(enrolment, death.getProgramWorkflow()))) {
+					enrolment.transitionToState(death, date);
+				}
 				enrolment.setDateCompleted(date);
 				// Ending each one leaves no overlap, but ending the first of two overlapping ones would be refused.
 				OneOpenRegistryEnrolment.withoutRefusing(() -> programs.savePatientProgram(enrolment));
@@ -103,6 +108,18 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 			}
 		}
 		return null;
+	}
+	
+	private static ProgramWorkflowState latestState(PatientProgram enrolment, ProgramWorkflow workflow) {
+		PatientState latest = null;
+		for (PatientState state : enrolment.getStates()) {
+			if (!Boolean.TRUE.equals(state.getVoided()) && workflow.equals(state.getState().getProgramWorkflow())
+			        && state.getStartDate() != null
+			        && (latest == null || state.getStartDate().after(latest.getStartDate()))) {
+				latest = state;
+			}
+		}
+		return latest == null ? null : latest.getState();
 	}
 	
 	/**

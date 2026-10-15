@@ -61,9 +61,9 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Study enrolments.** Whichever page enrols, a new study enrolment is refused unless the patient gave
   registry consent, would like to be considered for research and has a Study ID, and an open one is
   refused for a patient who has died. One saved without a status starts in the study's initial one.
-  Saving a patient as dead ends their open study enrolments in Inactive - Death on their death date. As
-  for the RHD Registry, an enrolment may not overlap another in the same study while either is open,
-  and merging two patients folds such a pair into one.
+  Saving a patient as dead, or merging another patient into them, ends their open study enrolments in
+  Inactive - Death on their death date. As for the RHD Registry, an enrolment may not overlap another
+  in the same study while either is open, and merging two patients folds such a pair into one.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting

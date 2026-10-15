@@ -415,6 +415,55 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Inactive - Death", current(open).getState().getConcept().getName().getName());
 	}
 	
+	@Test
+	public void savePatient_shouldEndAgainAReopenedStudyEnrolmentOfAPatientWhoDied() {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram open = enrolment(patient, study);
+		open.setDateEnrolled(new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L));
+		Context.getProgramWorkflowService().savePatientProgram(open);
+		patient.setDead(true);
+		patient.setDeathDate(new Date(open.getDateEnrolled().getTime() + 5 * 86400000L));
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		Context.getPatientService().savePatient(patient);
+		open.setDateCompleted(null);
+		Context.getProgramWorkflowService().savePatientProgram(open);
+		
+		Context.getPatientService().savePatient(patient);
+		
+		assertNotNull(open.getDateCompleted());
+		assertEquals(1,
+		    open.getStates().stream().filter(
+		        state -> !state.getVoided() && "Inactive - Death".equals(state.getState().getConcept().getName().getName()))
+		            .count());
+	}
+	
+	@Test
+	public void mergePatients_shouldEndTheStudyEnrolmentsAPatientWhoDiedGainsFromTheDuplicate() throws Exception {
+		Program study = studies.create("ARC");
+		property(CloseStudiesOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		adviseAsTheModuleDoes();
+		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
+		Patient preferred = Context.getPatientService().getPatient(2);
+		preferred.setDead(true);
+		preferred.setDeathDate(new Date(enrolled.getTime() + 5 * 86400000L));
+		preferred.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		Context.getPatientService().savePatient(preferred);
+		PatientProgram duplicates = enrolment(Context.getPatientService().getPatient(6), study);
+		duplicates.setDateEnrolled(enrolled);
+		Context.getProgramWorkflowService().savePatientProgram(duplicates);
+		
+		Context.getPatientService().mergePatients(preferred, Context.getPatientService().getPatient(6));
+		
+		List<PatientProgram> left = Context.getProgramWorkflowService().getPatientPrograms(preferred, study, null, null,
+		    null, null, false);
+		assertEquals(1, left.size());
+		assertNotNull(left.get(0).getDateCompleted());
+		assertEquals("Inactive - Death", current(left.get(0)).getState().getConcept().getName().getName());
+	}
+	
 	private void adviseAsTheModuleDoes() {
 		Context.addAdvice(PatientService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, guard);
