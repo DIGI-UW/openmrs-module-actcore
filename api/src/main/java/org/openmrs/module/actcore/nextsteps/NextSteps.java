@@ -149,10 +149,10 @@ public class NextSteps {
 		
 		proxyReads(true);
 		try {
-			evaluate(seesFlags, enterable.contains("consult"));
+			evaluate(seesFlags, enterable);
 			List<NextStep> result = new ArrayList<NextStep>();
 			for (Step step : steps.values()) {
-				if ("refer".equals(step.key) || enterable.contains(step.key)) {
+				if (shown(step.key, enterable)) {
 					result.add(step.toNextStep(form(step.key)));
 				}
 			}
@@ -217,7 +217,13 @@ public class NextSteps {
 		}
 	}
 	
-	private void evaluate(boolean seesFlags, boolean mayConsult) {
+	/** Whether the user is listed the step: a referral, or a form they may record. */
+	private static boolean shown(String key, Set<String> enterable) {
+		return "refer".equals(key) || enterable.contains(key);
+	}
+
+	private void evaluate(boolean seesFlags, Set<String> enterable) {
+		boolean mayConsult = enterable.contains("consult");
 		Set<String> flags = seesFlags ? activeFlags() : Collections.<String> emptySet();
 		Map<String, String> flagKeys = pairs(GP_FLAGS);
 		
@@ -260,9 +266,11 @@ public class NextSteps {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
 		}
-		// Read whatever this user may record, so a data clerk gets no dose ahead of a clinician's consultation.
+		// Only a step this user is listed holds the dose back: a data clerk still waits behind Refer to clinician, but a
+		// community clinician, who may not record Patient Information, is not left with nothing to do.
 		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))
-		        && (toDo("patientInfo") || toDo("consult") || toDo("refer"))) {
+		        && (holdsDose("patientInfo", enterable) || holdsDose("consult", enterable)
+		                || holdsDose("refer", enterable))) {
 			for (String dose : Arrays.asList("bpg", "oral")) {
 				if (toDo(dose)) {
 					steps.remove(dose);
@@ -274,6 +282,10 @@ public class NextSteps {
 	private boolean toDo(String key) {
 		Step step = steps.get(key);
 		return step != null && !step.done;
+	}
+
+	private boolean holdsDose(String key, Set<String> enterable) {
+		return toDo(key) && shown(key, enterable);
 	}
 	
 	/**

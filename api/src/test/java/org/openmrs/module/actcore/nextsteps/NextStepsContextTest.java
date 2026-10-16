@@ -581,6 +581,33 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldGiveTheDoseWhilePatientInformationTheUserMayNotRecordIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
+		Context.getEncounterService().saveEncounterType(patientInfo);
+		authenticateWith("Add Encounters");
+
+		List<NextStep> steps = steps();
+
+		assertEquals("bpg", keys(steps));
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+	}
+
+	@Test
+	public void of_shouldLeaveTheDoseOutWhilePatientInformationTheUserMayRecordIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		Context.getEncounterService().voidEncounter(registered, "test");
+		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
+		Context.getEncounterService().saveEncounterType(patientInfo);
+		authenticateWith("Add Encounters", "Task: test.patientInfo");
+
+		assertEquals("patientInfo", keys(steps()));
+	}
+
+	@Test
 	public void of_shouldLeaveTheOralDoseOutWhilePatientInformationIsToDo() {
 		prescribe(encounter(7, 120), oralPenicillin, 120, null);
 		estimate(encounterOf(oral, 100), 90);
@@ -612,7 +639,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldLeaveTheDoseOutWhileAConsultationTheUserMayNotRecordIsToDo() {
+	public void of_shouldGiveTheDoseWhileAConsultationTheUserMayNotRecordIsToDo() {
 		lastGiven(36);
 		echoed(at(400));
 		startVisit();
@@ -620,8 +647,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		consult.setEditPrivilege(privilege("Task: test.consult"));
 		Context.getEncounterService().saveEncounterType(consult);
 		authenticateWith("Add Encounters");
-		
-		assertEquals("echo", keys(steps()));
+
+		assertEquals("bpg|echo", keys(steps()));
 	}
 	
 	@Test
