@@ -266,7 +266,7 @@ public class NextSteps {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
 		}
-		// Only a step this user is listed holds the dose back, so one they may not record leaves the dose listed.
+		// Only a step this user is listed holds the dose back; one they may not record leaves it listed.
 		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))
 		        && (holdsDose("patientInfo", enterable) || holdsDose("consult", enterable)
 		                || holdsDose("refer", enterable))) {
