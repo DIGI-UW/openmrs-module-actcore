@@ -221,7 +221,7 @@ public class NextSteps {
 	private static boolean shown(String key, Set<String> enterable) {
 		return "refer".equals(key) || enterable.contains(key);
 	}
-
+	
 	private void evaluate(boolean seesFlags, Set<String> enterable) {
 		boolean mayConsult = enterable.contains("consult");
 		Set<String> flags = seesFlags ? activeFlags() : Collections.<String> emptySet();
@@ -283,7 +283,7 @@ public class NextSteps {
 		Step step = steps.get(key);
 		return step != null && !step.done;
 	}
-
+	
 	private boolean holdsDose(String key, Set<String> enterable) {
 		return toDo(key) && shown(key, enterable);
 	}

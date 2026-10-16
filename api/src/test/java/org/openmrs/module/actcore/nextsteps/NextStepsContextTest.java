@@ -588,13 +588,13 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
 		Context.getEncounterService().saveEncounterType(patientInfo);
 		authenticateWith("Add Encounters");
-
+		
 		List<NextStep> steps = steps();
-
+		
 		assertEquals("bpg", keys(steps));
 		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
 	}
-
+	
 	@Test
 	public void of_shouldLeaveTheDoseOutWhilePatientInformationTheUserMayRecordIsToDo() {
 		lastGiven(36);
@@ -603,10 +603,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		patientInfo.setEditPrivilege(privilege("Task: test.patientInfo"));
 		Context.getEncounterService().saveEncounterType(patientInfo);
 		authenticateWith("Add Encounters", "Task: test.patientInfo");
-
+		
 		assertEquals("patientInfo", keys(steps()));
 	}
-
+	
 	@Test
 	public void of_shouldLeaveTheOralDoseOutWhilePatientInformationIsToDo() {
 		prescribe(encounter(7, 120), oralPenicillin, 120, null);
@@ -647,7 +647,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		consult.setEditPrivilege(privilege("Task: test.consult"));
 		Context.getEncounterService().saveEncounterType(consult);
 		authenticateWith("Add Encounters");
-
+		
 		assertEquals("bpg|echo", keys(steps()));
 	}
 	
