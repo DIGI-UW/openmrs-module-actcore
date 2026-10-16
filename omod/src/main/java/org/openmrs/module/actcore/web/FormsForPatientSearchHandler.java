@@ -32,9 +32,8 @@ import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.springframework.stereotype.Component;
 
 /**
- * {@code GET /form?patient=<uuid>}: the forms the patient chart's forms list offers, without the
- * female-only forms for a patient whose gender isn't F. The forms list reads it through its
- * {@code customFormsUrl}.
+ * {@code GET /form?patient=<uuid>}, the patient chart forms list's {@code customFormsUrl}: its
+ * forms, without the female-only forms for a patient whose gender isn't F.
  */
 @Component
 public class FormsForPatientSearchHandler implements SearchHandler {
