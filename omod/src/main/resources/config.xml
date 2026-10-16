@@ -334,4 +334,12 @@
       The Time Period of the next consultation, answered days, weeks, months or years on the same encounter as its amount.
     </description>
   </globalProperty>
+
+  <globalProperty>
+    <property>actcore.forms.femaleOnly</property>
+    <defaultValue>a4f9103b-8396-3087-8cf4-e91610ec7c2d</defaultValue>
+    <description>
+      The forms, by uuid and comma-separated, that the patient chart's forms list offers only for a patient whose gender is F, through GET /form?patient=. The default is RHD Pregnancy.
+    </description>
+  </globalProperty>
 </module>
