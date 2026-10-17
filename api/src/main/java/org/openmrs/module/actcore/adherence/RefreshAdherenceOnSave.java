@@ -20,6 +20,7 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -33,7 +34,7 @@ import org.springframework.transaction.TransactionStatus;
 
 /**
  * Advice on EncounterService that recomputes a patient's adherence rows once an encounter of theirs
- * is saved, voided or purged.
+ * is saved, voided or purged, then their flags, which patientflags evaluated before the commit.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
@@ -44,18 +45,39 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	private final IntConsumer refresher;
 	
+	private final IntConsumer flagRefresher;
+	
 	public RefreshAdherenceOnSave() {
 		this(new IntConsumer() {
 			
 			@Override
-			public void accept(int patientId) {
-				refreshInNewTransaction(patientId);
+			public void accept(final int patientId) {
+				inNewTransaction(new Runnable() {
+					
+					@Override
+					public void run() {
+						new AdherenceRefresh().refreshPatient(patientId, LocalDate.now());
+					}
+				});
+			}
+		}, new IntConsumer() {
+			
+			@Override
+			public void accept(final int patientId) {
+				inNewTransaction(new Runnable() {
+					
+					@Override
+					public void run() {
+						PatientFlagRefreshTask.refreshPatient(patientId);
+					}
+				});
 			}
 		});
 	}
 	
-	RefreshAdherenceOnSave(IntConsumer refresher) {
+	RefreshAdherenceOnSave(IntConsumer refresher, IntConsumer flagRefresher) {
 		this.refresher = refresher;
+		this.flagRefresher = flagRefresher;
 	}
 	
 	@Override
@@ -105,13 +127,20 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			// The save stands; the next full refresh writes the row.
 			log.error("Could not refresh the prophylaxis adherence of patient {}", patientId, e);
 		}
+		// Even when the row failed: patientflags evaluated every flag before the commit, not only this one.
+		try {
+			flagRefresher.accept(patientId);
+		}
+		catch (RuntimeException e) {
+			log.error("Could not refresh the flags of patient {}", patientId, e);
+		}
 	}
 	
 	/**
 	 * After a commit the old transaction's resources are still bound, so the rows need a transaction of
 	 * their own.
 	 */
-	private static void refreshInNewTransaction(final int patientId) {
+	private static void inNewTransaction(final Runnable work) {
 		TransactionTemplate template = new TransactionTemplate(
 		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -119,7 +148,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			
 			@Override
 			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				new AdherenceRefresh().refreshPatient(patientId, LocalDate.now());
+				work.run();
 			}
 		});
 	}

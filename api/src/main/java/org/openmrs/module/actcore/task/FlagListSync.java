@@ -108,6 +108,50 @@ public class FlagListSync {
 		return result;
 	}
 	
+	/**
+	 * Puts one patient on, or takes them off, each flag's list as their flag rows now stand. Creating,
+	 * renaming and retiring the lists is left to {@link #syncAll()}.
+	 */
+	public void syncPatient(Patient patient) {
+		FlagService flagService = Context.getService(FlagService.class);
+		CohortService cohortService = Context.getService(CohortService.class);
+		CohortMemberService memberService = Context.getService(CohortMemberService.class);
+		String requiredTag = Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY);
+		
+		Map<String, CohortMember> activeByList = new HashMap<String, CohortMember>();
+		Collection<CohortMember> members = memberService.findCohortMembersByPatientUuid(patient.getUuid());
+		if (members != null) {
+			for (CohortMember member : members) {
+				if (!Boolean.TRUE.equals(member.getVoided()) && member.getEndDate() == null && member.getCohort() != null) {
+					activeByList.put(member.getCohort().getUuid(), member);
+				}
+			}
+		}
+		
+		for (Flag flag : flagService.getAllFlags()) {
+			try {
+				CohortM list = cohortService.getCohortMByUuid(flag.getUuid());
+				if (list == null) {
+					continue;
+				}
+				boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
+				        && carriesTag(flag, requiredTag) && PatientFlagRefreshTask
+				                .flaggedMessages(flag, patient.getPatientId()).containsKey(patient.getPatientId());
+				CohortMember member = activeByList.get(list.getUuid());
+				if (listed && member == null) {
+					addMember(memberService, list, patient);
+					log.info("List '{}': patient {} added", list.getName(), patient.getPatientId());
+				} else if (!listed && member != null) {
+					endMember(memberService, member);
+					log.info("List '{}': patient {} ended", list.getName(), patient.getPatientId());
+				}
+			}
+			catch (Exception e) {
+				log.error("Could not sync the list for flag '{}' for patient {}", flag.getName(), patient.getPatientId(), e);
+			}
+		}
+	}
+	
 	private boolean carriesTag(Flag flag, String requiredTag) {
 		if (requiredTag == null || requiredTag.trim().isEmpty()) {
 			return true;
@@ -186,22 +230,15 @@ public class FlagListSync {
 		int added = 0;
 		for (Integer patientId : flagged) {
 			if (!active.containsKey(patientId)) {
-				CohortMember member = new CohortMember();
-				member.setCohort(list);
-				member.setPatient(Context.getPatientService().getPatient(patientId));
-				member.setStartDate(new Date());
-				memberService.saveCohortMember(member);
+				addMember(memberService, list, Context.getPatientService().getPatient(patientId));
 				added++;
 			}
 		}
 		
-		// End-date rather than void: the cohort REST resource counts voided rows as duplicates.
 		int removed = 0;
 		for (Map.Entry<Integer, CohortMember> entry : active.entrySet()) {
 			if (!flagged.contains(entry.getKey())) {
-				CohortMember member = entry.getValue();
-				member.setEndDate(new Date());
-				memberService.saveCohortMember(member);
+				endMember(memberService, entry.getValue());
 				removed++;
 			}
 		}
@@ -211,6 +248,20 @@ public class FlagListSync {
 		if (added > 0 || removed > 0) {
 			log.info("List '{}': {} added, {} ended", list.getName(), added, removed);
 		}
+	}
+	
+	private static void addMember(CohortMemberService memberService, CohortM list, Patient patient) {
+		CohortMember member = new CohortMember();
+		member.setCohort(list);
+		member.setPatient(patient);
+		member.setStartDate(new Date());
+		memberService.saveCohortMember(member);
+	}
+	
+	// End-date rather than void: the cohort REST resource counts voided rows as duplicates.
+	private static void endMember(CohortMemberService memberService, CohortMember member) {
+		member.setEndDate(new Date());
+		memberService.saveCohortMember(member);
 	}
 	
 	private void mark(CohortService cohortService, CohortM list, Flag flag) {
