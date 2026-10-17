@@ -114,8 +114,10 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
   is to do and listed for the signed-in user, the dose step is left out; a dose recorded this visit is
   still listed done. A step the user is not listed does not hold the dose back, so a community
   clinician, who may not record Patient Information, still gets an overdue dose. A BPG step on hold
-  is not left out: it offers no dose, so it stays to say why. `actcore.nextSteps.doseAfterEarlierSteps`
-  set to false lists the dose anyway.
+  is not left out: it offers no dose, so it stays to say why. An oral supply waits only for Patient
+  Information, since a consultation or referral to do, such as a low adherence review, is no reason
+  to leave the patient without medicine. `actcore.nextSteps.doseAfterEarlierSteps` set to false lists
+  the dose anyway.
 - **On hold.** A BPG step on hold has `onHold` true and no form, so it offers nothing to record; the
   withheld injection can still be recorded from the forms list.
 - **Order.** Steps to do come first, new ones first among them.

@@ -281,10 +281,11 @@ public class NextSteps {
 	
 	/**
 	 * Whether the earlier steps to do leave the dose out. A BPG on hold offers no dose, so it stays
-	 * listed to say why.
+	 * listed to say why. An oral supply waits only for Patient Information: a consultation or referral
+	 * to do, such as a low adherence review, is no reason to leave the patient without medicine.
 	 */
 	private boolean heldBack(String dose, boolean patientInfoToDo, boolean reviewToDo) {
-		return !steps.get(dose).onHold && (patientInfoToDo || reviewToDo);
+		return !steps.get(dose).onHold && (patientInfoToDo || (reviewToDo && !"oral".equals(dose)));
 	}
 	
 	private boolean toDo(String key) {
