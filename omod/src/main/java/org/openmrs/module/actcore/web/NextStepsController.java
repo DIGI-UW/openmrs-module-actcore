@@ -53,7 +53,8 @@ public class NextStepsController extends BaseRestController {
 		List<SimpleObject> steps = new ArrayList<SimpleObject>();
 		for (NextStep step : NextSteps.of(patient, LocalDate.now())) {
 			steps.add(new SimpleObject().add("key", step.getKey()).add("form", step.getForm()).add("title", step.getTitle())
-			        .add("reason", step.getReason()).add("isNew", step.isNew()).add("done", step.isDone()));
+			        .add("reason", step.getReason()).add("isNew", step.isNew()).add("done", step.isDone())
+			        .add("onHold", step.isOnHold()));
 		}
 		return new SimpleObject().add("steps", steps);
 	}

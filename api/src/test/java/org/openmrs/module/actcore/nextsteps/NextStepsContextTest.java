@@ -155,6 +155,98 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldListAWithheldBpgOnHoldWithNoFormWhileTheConsultationIsToDo() {
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		NextStep held = steps.get(1);
+		assertEquals("Give BPG injection", held.getTitle());
+		assertEquals("On hold: complete the consultation before giving BPG", held.getReason());
+		assertEquals(true, held.isOnHold());
+		assertNull(held.getForm());
+		assertEquals(false, held.isDone());
+		assertEquals(false, held.isNew());
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgOfAnEarlierAnaphylaxisBesideTheReferral() {
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer|bpg", keys(steps));
+		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
+		assertEquals(true, steps.get(1).isOnHold());
+		assertNull(steps.get(1).getForm());
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgWhilePatientInformationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg|patientInfo", keys(steps));
+		assertEquals(true, steps.get(1).isOnHold());
+	}
+	
+	@Test
+	public void of_shouldNameTheFormOfABpgNoLongerOnHold() {
+		Form form = form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		
+		NextStep dose = steps().get(0);
+		
+		assertEquals("bpg", dose.getKey());
+		assertEquals(false, dose.isOnHold());
+		assertEquals(form.getUuid(), dose.getForm());
+	}
+	
+	@Test
+	public void of_shouldStillLeaveOutABpgNotOnHoldWhileAReviewIsToDo() {
+		lastGiven(36);
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		
+		assertEquals("consult|echo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgWithNoFormWhenTheRuleIsOff() {
+		listTheDoseAnyway();
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals(true, steps.get(1).isOnHold());
+		assertNull(steps.get(1).getForm());
+	}
+	
+	@Test
 	public void of_shouldMarkTheConsultationDoneWhenItIsSavedThisVisitAfterAnaphylaxis() {
 		lastGiven(36);
 		echoed(at(30));

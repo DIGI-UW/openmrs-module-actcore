@@ -291,7 +291,7 @@
     <property>actcore.nextSteps.doseAfterEarlierSteps</property>
     <defaultValue>true</defaultValue>
     <description>
-      Whether the dose step waits for the earlier steps: while the patient's Patient Information step, consultation or Refer to clinician is to do, whoever is signed in, a dose not recorded this visit is left out of the next steps. Set to false to list it anyway.
+      Whether the dose step waits for the earlier steps: while the patient's Patient Information step, consultation or Refer to clinician is to do, whoever is signed in, a dose not recorded this visit is left out of the next steps, unless it is a BPG on hold, which offers no dose and stays to say why. Set to false to list the dose anyway.
     </description>
   </globalProperty>
 
