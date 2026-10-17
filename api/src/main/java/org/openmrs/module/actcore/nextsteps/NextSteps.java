@@ -265,17 +265,27 @@ public class NextSteps {
 		if (anaphylaxis == Review.NONE && bpg != null && !bpg.done) {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
+			bpg.onHold = true;
 		}
 		// Only a step this user is listed holds the dose back; one they may not record leaves it listed.
-		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))
-		        && (holdsDose("patientInfo", enterable) || holdsDose("consult", enterable)
-		                || holdsDose("refer", enterable))) {
+		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))) {
+			boolean patientInfoToDo = holdsDose("patientInfo", enterable);
+			boolean reviewToDo = holdsDose("consult", enterable) || holdsDose("refer", enterable);
 			for (String dose : Arrays.asList("bpg", "oral")) {
-				if (toDo(dose)) {
+				if (toDo(dose) && heldBack(dose, patientInfoToDo, reviewToDo)) {
 					steps.remove(dose);
 				}
 			}
 		}
+	}
+	
+	/**
+	 * Whether the earlier steps to do leave the dose out. A BPG on hold offers no dose, so it stays
+	 * listed to say why. An oral supply waits only for Patient Information: a consultation or referral
+	 * to do, such as a low adherence review, is no reason to leave the patient without medicine.
+	 */
+	private boolean heldBack(String dose, boolean patientInfoToDo, boolean reviewToDo) {
+		return !steps.get(dose).onHold && (patientInfoToDo || (reviewToDo && !"oral".equals(dose)));
 	}
 	
 	private boolean toDo(String key) {
@@ -616,6 +626,8 @@ public class NextSteps {
 		
 		private boolean done;
 		
+		private boolean onHold;
+		
 		private Step(String key, String reason, boolean isNew, boolean done) {
 			this.key = key;
 			this.reason = reason;
@@ -624,8 +636,9 @@ public class NextSteps {
 		}
 		
 		private NextStep toNextStep(String form) {
-			return new NextStep(key, "refer".equals(key) ? null : form,
-			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !done, done);
+			// A step on hold names no form, so it offers nothing to record.
+			return new NextStep(key, "refer".equals(key) || onHold ? null : form,
+			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !done, done, onHold);
 		}
 	}
 }

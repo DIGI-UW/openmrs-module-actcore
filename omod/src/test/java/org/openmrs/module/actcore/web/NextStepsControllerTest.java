@@ -67,6 +67,7 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("Last echo was over 12 months ago (19-Aug-2008)", step.get("reason"));
 		assertEquals(false, step.get("isNew"));
 		assertEquals(false, step.get("done"));
+		assertEquals(false, step.get("onHold"));
 		assertTrue(step.containsKey("form"));
 	}
 	

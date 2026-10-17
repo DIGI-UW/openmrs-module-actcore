@@ -27,20 +27,25 @@ public class NextStep {
 	
 	private final boolean done;
 	
-	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done) {
+	private final boolean onHold;
+	
+	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold) {
 		this.key = key;
 		this.form = form;
 		this.title = title;
 		this.reason = reason;
 		this.isNew = isNew;
 		this.done = done;
+		this.onHold = onHold;
 	}
 	
 	public String getKey() {
 		return key;
 	}
 	
-	/** The form's uuid, or null for a step no form records, such as Refer to clinician. */
+	/**
+	 * The form's uuid, or null for a step no form records, such as Refer to clinician, or one on hold.
+	 */
 	public String getForm() {
 		return form;
 	}
@@ -63,5 +68,13 @@ public class NextStep {
 	
 	public boolean isDone() {
 		return done;
+	}
+	
+	/**
+	 * Whether the step is listed only to say why it waits, such as a BPG held until a consultation
+	 * reviews an anaphylaxis: it has no form to record.
+	 */
+	public boolean isOnHold() {
+		return onHold;
 	}
 }

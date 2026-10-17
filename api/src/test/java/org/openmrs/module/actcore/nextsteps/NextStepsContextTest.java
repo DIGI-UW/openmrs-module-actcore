@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.nextsteps;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -152,6 +153,98 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("consult|bpg", keys(steps));
 		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
 		assertEquals(false, steps.get(1).isDone());
+	}
+	
+	@Test
+	public void of_shouldListAWithheldBpgOnHoldWithNoFormWhileTheConsultationIsToDo() {
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		NextStep held = steps.get(1);
+		assertEquals("Give BPG injection", held.getTitle());
+		assertEquals("On hold: complete the consultation before giving BPG", held.getReason());
+		assertEquals(true, held.isOnHold());
+		assertNull(held.getForm());
+		assertEquals(false, held.isDone());
+		assertEquals(false, held.isNew());
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgOfAnEarlierAnaphylaxisBesideTheReferral() {
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer|bpg", keys(steps));
+		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
+		assertEquals(true, steps.get(1).isOnHold());
+		assertNull(steps.get(1).getForm());
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgWhilePatientInformationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg|patientInfo", keys(steps));
+		assertEquals(true, steps.get(1).isOnHold());
+	}
+	
+	@Test
+	public void of_shouldNameTheFormOfABpgNoLongerOnHold() {
+		Form form = form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		
+		NextStep dose = steps().get(0);
+		
+		assertEquals("bpg", dose.getKey());
+		assertEquals(false, dose.isOnHold());
+		assertEquals(form.getUuid(), dose.getForm());
+	}
+	
+	@Test
+	public void of_shouldStillLeaveOutABpgNotOnHoldWhileAReviewIsToDo() {
+		lastGiven(36);
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		
+		assertEquals("consult|echo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListTheHeldBpgWithNoFormWhenTheRuleIsOff() {
+		listTheDoseAnyway();
+		form(bpg);
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals(true, steps.get(1).isOnHold());
+		assertNull(steps.get(1).getForm());
 	}
 	
 	@Test
@@ -796,6 +889,91 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
 		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+	}
+	
+	@Test
+	public void of_shouldGiveAnOverdueOralSupplyBesideTheLowAdherenceConsultation() {
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 70);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|oral", keys(steps));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(0).getReason());
+		NextStep supply = steps.get(1);
+		assertEquals("Record oral prophylaxis visit", supply.getTitle());
+		assertTrue(supply.getReason().startsWith("Overdue: was due "));
+		assertEquals(false, supply.isOnHold());
+		assertEquals(false, supply.isDone());
+	}
+	
+	@Test
+	public void of_shouldGiveAnOverdueOralSupplyBesideTheLowAdherenceReferral() {
+		Form form = form(oral);
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 70);
+		echoed(at(30));
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer|oral", keys(steps));
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
+		assertEquals(form.getUuid(), steps.get(1).getForm());
+	}
+	
+	@Test
+	public void of_shouldNotGiveTheOralSupplyAUserWhoMayNotRecordIt() {
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 70);
+		echoed(at(30));
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		oral.setEditPrivilege(privilege("Task: test.oral"));
+		Context.getEncounterService().saveEncounterType(oral);
+		authenticateWith("Add Encounters");
+		
+		assertEquals("refer", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldGiveTheOralSupplyBesideTheReviewOfAnEchoSavedThisVisit() {
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 90);
+		echoed(at(400));
+		startVisit();
+		inVisit(echo, 0);
+		
+		assertEquals("consult|oral|echo", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldListTheOralSupplyBesideTheConsultationWhenTheRuleIsOff() {
+		listTheDoseAnyway();
+		prescribe(encounter(7, 120), oralPenicillin, 120, null);
+		estimate(encounterOf(oral, 100), 70);
+		echoed(at(30));
+		
+		assertEquals("consult|oral", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldReviewTheEstimatesOfAboutHalfAndFewButNotAllOrMost() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		echoed(at(30));
+		
+		estimate(encounterOf(oral, 40), 100);
+		assertEquals("", keys(steps()));
+		estimate(encounterOf(oral, 30), 90);
+		assertEquals("", keys(steps()));
+		estimate(encounterOf(oral, 20), 50);
+		assertEquals("consult", keys(steps()));
+		estimate(encounterOf(oral, 10), 20);
+		assertEquals("consult", keys(steps()));
+		assertEquals("Oral adherence below 80%: consider switching to BPG", steps().get(0).getReason());
 	}
 	
 	@Test
