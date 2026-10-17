@@ -213,20 +213,42 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
-	public void refreshingAPatientWaitsForTheFullRefreshWhileItRuns() {
-		final Flag flag = saveFlag("overdue", MATCHES_BOTH);
-		final List<Long> rowsWhileRunning = new ArrayList<Long>();
+	public void refreshingAPatientSavedDuringTheFullRefreshIsLeftToItsEnd() throws Exception {
+		saveFlag("overdue", MATCHES_BOTH);
+		final List<Integer> deferred = new ArrayList<Integer>();
+		final List<Integer> refreshedAtTheEnd = new ArrayList<Integer>();
 		
 		runScheduledWork(new PatientFlagRefreshTask() {
 			
+			// A save on another thread: this one, writing the rows, may also read them.
 			@Override
 			void refreshAdherence() {
-				refreshPatient(MATCHING_PATIENT);
-				rowsWhileRunning.add(liveRows(flag));
+				Thread save = new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						PatientFlagRefreshInTest.refreshPatient(MATCHING_PATIENT);
+					}
+				});
+				save.start();
+				try {
+					save.join(10000);
+				}
+				catch (InterruptedException e) {
+					throw new IllegalStateException(e);
+				}
+				deferred.add(save.isAlive() ? -1 : MATCHING_PATIENT);
+			}
+			
+			@Override
+			void refreshDeferred(int patientId) {
+				refreshedAtTheEnd.add(patientId);
+				PatientFlagRefreshInTest.refreshPatient(patientId);
 			}
 		});
 		
-		assertEquals(Arrays.asList(0L), rowsWhileRunning);
+		assertEquals(Arrays.asList(MATCHING_PATIENT), deferred);
+		assertEquals(Arrays.asList(MATCHING_PATIENT), refreshedAtTheEnd);
 		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
 	}
 	

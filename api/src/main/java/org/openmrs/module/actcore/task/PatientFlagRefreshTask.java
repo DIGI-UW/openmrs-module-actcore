@@ -17,13 +17,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -33,11 +36,6 @@ import org.openmrs.scheduler.tasks.AbstractTask;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Re-evaluates every enabled flag, writing only the rows that changed, then syncs the flag lists.
@@ -59,6 +57,15 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * the task alongside the scheduler's.
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
+	
+	/**
+	 * Held shared by each patient's refresh and alone by the full refresh, so the two never write a
+	 * flag's rows or a list's members at once.
+	 */
+	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
+	
+	// Patients saved while the full refresh held the rows, refreshed once it lets go.
+	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
 	
 	// What one patient's refresh needs from a user who saved an encounter, the lists included.
 	private static final String[] PATIENT_PRIVILEGES = { PatientFlagsConstants.PRIV_TEST_FLAGS,
@@ -100,11 +107,40 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			return null;
 		}
 		try {
-			return refresh();
+			// Waits for the patients' refreshes already going.
+			ROWS.writeLock().lock();
+			try {
+				return refresh();
+			}
+			finally {
+				ROWS.writeLock().unlock();
+				refreshDeferred();
+			}
 		}
 		finally {
 			RUNNING.unlock();
 		}
+	}
+	
+	/**
+	 * Refreshes each patient saved while this run held the rows: it may have passed their flags before
+	 * the save.
+	 */
+	private void refreshDeferred() {
+		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
+			if (DEFERRED.remove(patientId)) {
+				try {
+					refreshDeferred(patientId);
+				}
+				catch (RuntimeException e) {
+					log.error("Could not refresh the flags of patient {}, saved during the refresh", patientId, e);
+				}
+			}
+		}
+	}
+	
+	void refreshDeferred(int patientId) {
+		refreshPatient(patientId);
 	}
 	
 	public static boolean isRunning() {
@@ -115,14 +151,14 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * Re-evaluates every enabled flag for one patient, then puts them on or takes them off the lists.
 	 * patientflags evaluates a saved encounter's patient before the save commits, so a flag on what is
 	 * written after it, as the overdue flag reads the adherence row, stays as it was until this runs.
-	 * Skipped while the full refresh runs, which would race it to the same rows; that run catches up.
+	 * Left to the full refresh when it is writing the rows, which refreshes the patient as it finishes.
 	 */
 	public static void refreshPatient(int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {
 			
 			@Override
 			public void accept(Runnable work) {
-				inNewTransaction(work);
+				Transactions.inNewTransaction(work);
 			}
 		});
 	}
@@ -132,9 +168,18 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * it ran in rollback-only, which would take every other flag's change with it.
 	 */
 	static void refreshPatient(final int patientId, Consumer<Runnable> unit) {
-		if (isRunning()) {
-			log.info("Flags of patient {} not refreshed: the patient flag refresh is running", patientId);
-			return;
+		if (!ROWS.readLock().tryLock()) {
+			DEFERRED.add(patientId);
+			// The full refresh may have let go, and refreshed the ones it was left, since the first try.
+			if (!ROWS.readLock().tryLock()) {
+				log.info("Flags of patient {} left to the patient flag refresh running now", patientId);
+				return;
+			}
+			if (!DEFERRED.remove(patientId)) {
+				// That refresh took the patient.
+				ROWS.readLock().unlock();
+				return;
+			}
 		}
 		for (String privilege : PATIENT_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
@@ -183,24 +228,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			for (String privilege : PATIENT_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
+			ROWS.readLock().unlock();
 		}
-	}
-	
-	/**
-	 * Called after a commit, whose transaction's resources are still bound, so each unit needs a
-	 * transaction of its own.
-	 */
-	private static void inNewTransaction(final Runnable work) {
-		TransactionTemplate template = new TransactionTemplate(
-		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
-		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		template.execute(new TransactionCallbackWithoutResult() {
-			
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				work.run();
-			}
-		});
 	}
 	
 	/** As reconcile does for a flag's every patient, for one; a voided patient matches no flag. */

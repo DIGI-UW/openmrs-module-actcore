@@ -19,18 +19,13 @@ import java.util.function.IntConsumer;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
-import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.transaction.TransactionStatus;
 
 /**
  * Advice on EncounterService that recomputes a patient's adherence rows once an encounter of theirs
@@ -52,7 +47,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			
 			@Override
 			public void accept(final int patientId) {
-				inNewTransaction(new Runnable() {
+				Transactions.inNewTransaction(new Runnable() {
 					
 					@Override
 					public void run() {
@@ -129,23 +124,6 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		catch (RuntimeException e) {
 			log.error("Could not refresh the flags of patient {}", patientId, e);
 		}
-	}
-	
-	/**
-	 * After a commit the old transaction's resources are still bound, so the rows need a transaction of
-	 * their own.
-	 */
-	private static void inNewTransaction(final Runnable work) {
-		TransactionTemplate template = new TransactionTemplate(
-		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
-		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		template.execute(new TransactionCallbackWithoutResult() {
-			
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				work.run();
-			}
-		});
 	}
 	
 	private class Pending extends TransactionSynchronizationAdapter {
