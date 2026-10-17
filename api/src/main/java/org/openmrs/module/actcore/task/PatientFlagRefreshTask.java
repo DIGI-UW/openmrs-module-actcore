@@ -10,23 +10,30 @@
 package org.openmrs.module.actcore.task;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
+import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.scheduler.tasks.AbstractTask;
+import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +57,20 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * the task alongside the scheduler's.
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
+	
+	/**
+	 * Held shared by each patient's refresh and alone by the full refresh, so the two never write a
+	 * flag's rows or a list's members at once.
+	 */
+	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
+	
+	// Patients saved while the full refresh held the rows, refreshed once it lets go.
+	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
+	
+	// What one patient's refresh needs from a user who saved an encounter, the lists included.
+	private static final String[] PATIENT_PRIVILEGES = { PatientFlagsConstants.PRIV_TEST_FLAGS,
+	        PrivilegeConstants.SQL_LEVEL_ACCESS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_GLOBAL_PROPERTIES,
+	        "View Cohorts In Cohort Module", "Edit Cohorts in Cohort Module" };
 	
 	// Counted per row raised or cleared, not per flag, so a flag that fails partway still counts.
 	int raised;
@@ -86,15 +107,158 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			return null;
 		}
 		try {
-			return refresh();
+			// Waits for the patients' refreshes already going.
+			ROWS.writeLock().lock();
+			try {
+				return refresh();
+			}
+			finally {
+				ROWS.writeLock().unlock();
+				refreshDeferred();
+			}
 		}
 		finally {
 			RUNNING.unlock();
 		}
 	}
 	
+	/**
+	 * Refreshes each patient saved while this run held the rows: it may have passed their flags before
+	 * the save.
+	 */
+	private void refreshDeferred() {
+		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
+			if (DEFERRED.remove(patientId)) {
+				try {
+					refreshDeferred(patientId);
+				}
+				catch (RuntimeException e) {
+					log.error("Could not refresh the flags of patient {}, saved during the refresh", patientId, e);
+				}
+			}
+		}
+	}
+	
+	void refreshDeferred(int patientId) {
+		refreshPatient(patientId);
+	}
+	
 	public static boolean isRunning() {
 		return RUNNING.isLocked();
+	}
+	
+	/**
+	 * Re-evaluates every enabled flag for one patient, then puts them on or takes them off the lists.
+	 * patientflags evaluates a saved encounter's patient before the save commits, so a flag on what is
+	 * written after it, as the overdue flag reads the adherence row, stays as it was until this runs.
+	 * Left to the full refresh when it is writing the rows, which refreshes the patient as it finishes.
+	 */
+	public static void refreshPatient(int patientId) {
+		refreshPatient(patientId, new Consumer<Runnable>() {
+			
+			@Override
+			public void accept(Runnable work) {
+				Transactions.inNewTransaction(work);
+			}
+		});
+	}
+	
+	/**
+	 * Runs each flag, and each list, as a unit of its own: a criterion that fails marks the transaction
+	 * it ran in rollback-only, which would take every other flag's change with it.
+	 */
+	static void refreshPatient(final int patientId, Consumer<Runnable> unit) {
+		if (!ROWS.readLock().tryLock()) {
+			DEFERRED.add(patientId);
+			// The full refresh may have let go, and refreshed the ones it was left, since the first try.
+			if (!ROWS.readLock().tryLock()) {
+				log.info("Flags of patient {} left to the patient flag refresh running now", patientId);
+				return;
+			}
+			if (!DEFERRED.remove(patientId)) {
+				// That refresh took the patient.
+				ROWS.readLock().unlock();
+				return;
+			}
+		}
+		for (String privilege : PATIENT_PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
+			final List<Integer> flagIds = new ArrayList<Integer>();
+			unit.accept(new Runnable() {
+				
+				@Override
+				public void run() {
+					for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
+						flagIds.add(flag.getFlagId());
+					}
+				}
+			});
+			for (final Integer flagId : flagIds) {
+				try {
+					unit.accept(new Runnable() {
+						
+						@Override
+						public void run() {
+							reconcile(flagId, patientId);
+						}
+					});
+				}
+				catch (RuntimeException e) {
+					log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
+				}
+			}
+			for (final Integer flagId : flagIds) {
+				try {
+					unit.accept(new Runnable() {
+						
+						@Override
+						public void run() {
+							new FlagListSync().syncPatient(flagId, patientId);
+						}
+					});
+				}
+				catch (RuntimeException e) {
+					log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
+				}
+			}
+		}
+		finally {
+			for (String privilege : PATIENT_PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
+			ROWS.readLock().unlock();
+		}
+	}
+	
+	/** As reconcile does for a flag's every patient, for one; a voided patient matches no flag. */
+	private static void reconcile(int flagId, int patientId) {
+		FlagService flagService = Context.getService(FlagService.class);
+		Flag flag = flagService.getFlag(flagId);
+		Patient patient = Context.getPatientService().getPatient(patientId);
+		if (flag == null || patient == null || !Boolean.TRUE.equals(flag.getEnabled())
+		        || Boolean.TRUE.equals(flag.getRetired())) {
+			return;
+		}
+		Map<Object, Object> evaluationContext = new HashMap<Object, Object>();
+		boolean matches = !Boolean.TRUE.equals(patient.getVoided())
+		        && Boolean.TRUE.equals(flag.eval(patient, evaluationContext));
+		Map<Integer, String> alreadyFlagged = flaggedMessages(flag, patientId);
+		
+		if (!matches) {
+			if (alreadyFlagged.containsKey(patientId)) {
+				flagService.deletePatientFlagForPatient(patient, flag);
+			}
+			return;
+		}
+		String message = message(flag, patientId, evaluationContext);
+		if (!alreadyFlagged.containsKey(patientId)) {
+			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
+		} else if (!message.equals(alreadyFlagged.get(patientId))) {
+			flagService.deletePatientFlagForPatient(patient, flag);
+			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
+		}
 	}
 	
 	private Result refresh() {
@@ -230,10 +394,19 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * must not count, or the flag is never raised again for that patient.
 	 */
 	static Map<Integer, String> flaggedMessages(Flag flag) {
+		return flaggedMessages(flag, "");
+	}
+	
+	/** The flag's unvoided row for one patient, if it has one. */
+	static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
+		return flaggedMessages(flag, " and patient_id = " + patientId);
+	}
+	
+	private static Map<Integer, String> flaggedMessages(Flag flag, String andWhere) {
 		Map<Integer, String> messages = new HashMap<Integer, String>();
 		List<List<Object>> rows = Context.getAdministrationService()
 		        .executeSQL("select patient_id, message from patientflags_patient_flag where flag_id = " + flag.getFlagId()
-		                + " and voided = false",
+		                + " and voided = false" + andWhere,
 		            true);
 		if (rows != null) {
 			for (List<Object> row : rows) {
@@ -250,7 +423,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * patient; patientflags' PatientFlagTask writes a row for each message it is given.
 	 */
 	@SuppressWarnings("unchecked")
-	private String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {
+	private static String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {
 		Object supplied = evaluationContext.get(patientId);
 		if (supplied instanceof List) {
 			List<String> messages = (List<String>) supplied;

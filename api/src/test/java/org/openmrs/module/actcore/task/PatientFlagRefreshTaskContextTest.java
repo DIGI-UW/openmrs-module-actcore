@@ -38,6 +38,11 @@ import org.junit.Test;
 import org.openmrs.Cohort;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
+import org.openmrs.Person;
+import org.openmrs.PersonName;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.cohort.CohortM;
 import org.openmrs.module.cohort.CohortMember;
@@ -63,6 +68,12 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	private static final String MATCHES_ONE = "select patient_id from patient where patient_id = " + MATCHING_PATIENT;
 	
 	private static final String MATCHES_NOBODY = "select patient_id from patient where patient_id = -1";
+	
+	// Aliased, as patientflags evaluates one patient by appending a condition on the first *.patient_id.
+	private static final String MATCHES_BOTH = "select p.patient_id from patient p where p.patient_id in ("
+	        + MATCHING_PATIENT + ", " + OTHER_PATIENT + ")";
+	
+	private static final String MATCHES_NONE = "select p.patient_id from patient p where p.patient_id = -1";
 	
 	private FlagService flagService;
 	
@@ -145,6 +156,127 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		
 		assertEquals(1, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
 		        + " and patient_id = " + MATCHING_PATIENT + " and voided = false"));
+	}
+	
+	@Test
+	public void refreshingAPatientRaisesAndListsThemAloneOnAFlagTheyNowMatch() {
+		Flag flag = saveFlag("overdue", MATCHES_NONE);
+		runScheduledWork();
+		setCriteria(flag, MATCHES_BOTH);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(1, count("select count(*) from patientflags_patient_flag where voided = false and flag_id = "
+		        + flag.getFlagId() + " and patient_id = " + MATCHING_PATIENT));
+		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
+		assertEquals(1, liveRows(flag));
+		assertEquals(0, activeMembers("overdue", OTHER_PATIENT));
+	}
+	
+	@Test
+	public void refreshingAPatientClearsAndEndsTheirListingOnAFlagTheyNoLongerMatch() {
+		Flag flag = saveFlag("overdue", MATCHES_BOTH);
+		runScheduledWork();
+		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
+		setCriteria(flag, MATCHES_NONE);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(0, activeMembers("overdue", MATCHING_PATIENT));
+		assertEquals(0, count("select count(*) from patientflags_patient_flag where voided = false and flag_id = "
+		        + flag.getFlagId() + " and patient_id = " + MATCHING_PATIENT));
+		// Another patient waits for their own save or the next run.
+		assertEquals(1, activeMembers("overdue", OTHER_PATIENT));
+	}
+	
+	@Test
+	public void refreshingAPatientLeavesCreatingAFlagsListToTheRun() {
+		Flag flag = saveFlag("overdue", MATCHES_BOTH);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(1, liveRows(flag));
+		assertEquals(0, listsNamed("overdue"));
+	}
+	
+	@Test
+	public void refreshingAPatientRewritesAMessageThatHasChanged() {
+		Flag flag = saveFlag("overdue", MATCHES_BOTH);
+		refreshPatient(MATCHING_PATIENT);
+		Flag current = flagService.getFlag(flag.getFlagId());
+		current.setMessage("overdue again");
+		flagService.saveFlag(current);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals("overdue again", liveMessage(flag));
+	}
+	
+	@Test
+	public void refreshingAPatientSavedDuringTheFullRefreshIsLeftToItsEnd() throws Exception {
+		saveFlag("overdue", MATCHES_BOTH);
+		final List<Integer> deferred = new ArrayList<Integer>();
+		final List<Integer> refreshedAtTheEnd = new ArrayList<Integer>();
+		
+		runScheduledWork(new PatientFlagRefreshTask() {
+			
+			// A save on another thread: this one, writing the rows, may also read them.
+			@Override
+			void refreshAdherence() {
+				Thread save = new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						PatientFlagRefreshInTest.refreshPatient(MATCHING_PATIENT);
+					}
+				});
+				save.start();
+				try {
+					save.join(10000);
+				}
+				catch (InterruptedException e) {
+					throw new IllegalStateException(e);
+				}
+				deferred.add(save.isAlive() ? -1 : MATCHING_PATIENT);
+			}
+			
+			@Override
+			void refreshDeferred(int patientId) {
+				refreshedAtTheEnd.add(patientId);
+				PatientFlagRefreshInTest.refreshPatient(patientId);
+			}
+		});
+		
+		assertEquals(Arrays.asList(MATCHING_PATIENT), deferred);
+		assertEquals(Arrays.asList(MATCHING_PATIENT), refreshedAtTheEnd);
+		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
+	}
+	
+	@Test
+	public void refreshingAPatientNeedsNoPrivilegeOfTheUserWhoSavedTheEncounter() {
+		Flag flag = saveFlag("overdue", MATCHES_NONE);
+		runScheduledWork();
+		setCriteria(flag, MATCHES_BOTH);
+		authenticateWithoutPrivileges();
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		Context.logout();
+		Context.authenticate("admin", "test");
+		assertEquals(1, liveRows(flag));
+		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
+	}
+	
+	@Test
+	public void refreshingAPatientLeavesADisabledFlagAlone() {
+		Flag flag = saveFlag("overdue", MATCHES_BOTH);
+		Flag current = flagService.getFlag(flag.getFlagId());
+		current.setEnabled(Boolean.FALSE);
+		flagService.saveFlag(current);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(0, liveRows(flag));
 	}
 	
 	@Test
@@ -672,6 +804,27 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	private String summaryOfARun() {
 		return theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask())).getMessage()
 		        .getFormattedMessage();
+	}
+	
+	private void refreshPatient(int patientId) {
+		Context.flushSession();
+		PatientFlagRefreshInTest.refreshPatient(patientId);
+	}
+	
+	private void authenticateWithoutPrivileges() {
+		UserService users = Context.getUserService();
+		Role role = new Role("no privileges " + UUID.randomUUID());
+		users.saveRole(role);
+		Person person = new Person();
+		person.addName(new PersonName("Flag", null, "Saver"));
+		person.setGender("F");
+		User user = new User(person);
+		user.setUsername("flagsaver");
+		user.addRole(role);
+		users.createUser(user, "Flagsaver123");
+		Context.flushSession();
+		Context.logout();
+		Context.authenticate("flagsaver", "Flagsaver123");
 	}
 	
 	private void runScheduledWork() {
