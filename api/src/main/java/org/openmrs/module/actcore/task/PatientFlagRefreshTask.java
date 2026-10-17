@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.task;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
@@ -31,6 +33,11 @@ import org.openmrs.scheduler.tasks.AbstractTask;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Re-evaluates every enabled flag, writing only the rows that changed, then syncs the flag lists.
@@ -108,30 +115,69 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * Re-evaluates every enabled flag for one patient, then puts them on or takes them off the lists.
 	 * patientflags evaluates a saved encounter's patient before the save commits, so a flag on what is
 	 * written after it, as the overdue flag reads the adherence row, stays as it was until this runs.
+	 * Skipped while the full refresh runs, which would race it to the same rows; that run catches up.
 	 */
 	public static void refreshPatient(int patientId) {
+		refreshPatient(patientId, new Consumer<Runnable>() {
+			
+			@Override
+			public void accept(Runnable work) {
+				inNewTransaction(work);
+			}
+		});
+	}
+	
+	/**
+	 * Runs each flag, and each list, as a unit of its own: a criterion that fails marks the transaction
+	 * it ran in rollback-only, which would take every other flag's change with it.
+	 */
+	static void refreshPatient(final int patientId, Consumer<Runnable> unit) {
+		if (isRunning()) {
+			log.info("Flags of patient {} not refreshed: the patient flag refresh is running", patientId);
+			return;
+		}
 		for (String privilege : PATIENT_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			Patient patient = Context.getPatientService().getPatient(patientId);
-			if (patient == null) {
-				return;
-			}
-			FlagService flagService = Context.getService(FlagService.class);
-			for (Flag flag : flagService.getAllFlags()) {
-				if (!Boolean.TRUE.equals(flag.getEnabled()) || Boolean.TRUE.equals(flag.getRetired())) {
-					continue;
+			final List<Integer> flagIds = new ArrayList<Integer>();
+			unit.accept(new Runnable() {
+				
+				@Override
+				public void run() {
+					for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
+						flagIds.add(flag.getFlagId());
+					}
 				}
+			});
+			for (final Integer flagId : flagIds) {
 				try {
-					reconcile(flagService, flag, patient);
+					unit.accept(new Runnable() {
+						
+						@Override
+						public void run() {
+							reconcile(flagId, patientId);
+						}
+					});
 				}
-				catch (Exception e) {
-					log.error("Could not refresh flag '{}' for patient {}", flag.getName(), patientId, e);
+				catch (RuntimeException e) {
+					log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
 				}
 			}
-			Context.flushSession();
-			new FlagListSync().syncPatient(patient);
+			for (final Integer flagId : flagIds) {
+				try {
+					unit.accept(new Runnable() {
+						
+						@Override
+						public void run() {
+							new FlagListSync().syncPatient(flagId, patientId);
+						}
+					});
+				}
+				catch (RuntimeException e) {
+					log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
+				}
+			}
 		}
 		finally {
 			for (String privilege : PATIENT_PRIVILEGES) {
@@ -140,9 +186,32 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		}
 	}
 	
+	/**
+	 * Called after a commit, whose transaction's resources are still bound, so each unit needs a
+	 * transaction of its own.
+	 */
+	private static void inNewTransaction(final Runnable work) {
+		TransactionTemplate template = new TransactionTemplate(
+		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
+		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		template.execute(new TransactionCallbackWithoutResult() {
+			
+			@Override
+			protected void doInTransactionWithoutResult(TransactionStatus status) {
+				work.run();
+			}
+		});
+	}
+	
 	/** As reconcile does for a flag's every patient, for one; a voided patient matches no flag. */
-	private static void reconcile(FlagService flagService, Flag flag, Patient patient) {
-		Integer patientId = patient.getPatientId();
+	private static void reconcile(int flagId, int patientId) {
+		FlagService flagService = Context.getService(FlagService.class);
+		Flag flag = flagService.getFlag(flagId);
+		Patient patient = Context.getPatientService().getPatient(patientId);
+		if (flag == null || patient == null || !Boolean.TRUE.equals(flag.getEnabled())
+		        || Boolean.TRUE.equals(flag.getRetired())) {
+			return;
+		}
 		Map<Object, Object> evaluationContext = new HashMap<Object, Object>();
 		boolean matches = !Boolean.TRUE.equals(patient.getVoided())
 		        && Boolean.TRUE.equals(flag.eval(patient, evaluationContext));

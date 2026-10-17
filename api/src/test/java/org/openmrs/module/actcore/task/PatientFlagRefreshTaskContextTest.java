@@ -213,13 +213,21 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
-	public void refreshingAPatientRaisesTheFlagsBehindOneWhoseCriteriaFails() {
-		saveFlag("broken", "select x.patient_id from no_such_table x");
-		Flag flag = saveFlag("overdue", MATCHES_BOTH);
+	public void refreshingAPatientWaitsForTheFullRefreshWhileItRuns() {
+		final Flag flag = saveFlag("overdue", MATCHES_BOTH);
+		final List<Long> rowsWhileRunning = new ArrayList<Long>();
 		
-		refreshPatient(MATCHING_PATIENT);
+		runScheduledWork(new PatientFlagRefreshTask() {
+			
+			@Override
+			void refreshAdherence() {
+				refreshPatient(MATCHING_PATIENT);
+				rowsWhileRunning.add(liveRows(flag));
+			}
+		});
 		
-		assertEquals(1, liveRows(flag));
+		assertEquals(Arrays.asList(0L), rowsWhileRunning);
+		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
 	}
 	
 	@Test
@@ -778,7 +786,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	
 	private void refreshPatient(int patientId) {
 		Context.flushSession();
-		PatientFlagRefreshTask.refreshPatient(patientId);
+		PatientFlagRefreshInTest.refreshPatient(patientId);
 	}
 	
 	private void authenticateWithoutPrivileges() {

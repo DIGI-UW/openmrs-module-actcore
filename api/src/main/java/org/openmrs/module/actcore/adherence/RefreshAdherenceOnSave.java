@@ -62,15 +62,10 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			}
 		}, new IntConsumer() {
 			
+			// Not in one transaction: it runs each flag in its own, so one that fails loses no other.
 			@Override
-			public void accept(final int patientId) {
-				inNewTransaction(new Runnable() {
-					
-					@Override
-					public void run() {
-						PatientFlagRefreshTask.refreshPatient(patientId);
-					}
-				});
+			public void accept(int patientId) {
+				PatientFlagRefreshTask.refreshPatient(patientId);
 			}
 		});
 	}

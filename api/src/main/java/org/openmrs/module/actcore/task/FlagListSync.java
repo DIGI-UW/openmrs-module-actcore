@@ -109,46 +109,38 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * Puts one patient on, or takes them off, each flag's list as their flag rows now stand. Creating,
-	 * renaming and retiring the lists is left to {@link #syncAll()}.
+	 * Puts one patient on, or takes them off, the flag's list as their flag rows now stand. Creating,
+	 * renaming and retiring the list is left to {@link #syncAll()}.
 	 */
-	public void syncPatient(Patient patient) {
-		FlagService flagService = Context.getService(FlagService.class);
-		CohortService cohortService = Context.getService(CohortService.class);
-		CohortMemberService memberService = Context.getService(CohortMemberService.class);
-		String requiredTag = Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY);
+	public void syncPatient(int flagId, int patientId) {
+		Flag flag = Context.getService(FlagService.class).getFlag(flagId);
+		Patient patient = Context.getPatientService().getPatient(patientId);
+		CohortM list = flag == null ? null : Context.getService(CohortService.class).getCohortMByUuid(flag.getUuid());
+		if (list == null || patient == null) {
+			return;
+		}
+		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
+		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY))
+		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId);
 		
-		Map<String, CohortMember> activeByList = new HashMap<String, CohortMember>();
+		CohortMemberService memberService = Context.getService(CohortMemberService.class);
+		CohortMember member = null;
 		Collection<CohortMember> members = memberService.findCohortMembersByPatientUuid(patient.getUuid());
 		if (members != null) {
-			for (CohortMember member : members) {
-				if (!Boolean.TRUE.equals(member.getVoided()) && member.getEndDate() == null && member.getCohort() != null) {
-					activeByList.put(member.getCohort().getUuid(), member);
+			for (CohortMember candidate : members) {
+				if (!Boolean.TRUE.equals(candidate.getVoided()) && candidate.getEndDate() == null
+				        && candidate.getCohort() != null && list.getUuid().equals(candidate.getCohort().getUuid())) {
+					member = candidate;
 				}
 			}
 		}
 		
-		for (Flag flag : flagService.getAllFlags()) {
-			try {
-				CohortM list = cohortService.getCohortMByUuid(flag.getUuid());
-				if (list == null) {
-					continue;
-				}
-				boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
-				        && carriesTag(flag, requiredTag) && PatientFlagRefreshTask
-				                .flaggedMessages(flag, patient.getPatientId()).containsKey(patient.getPatientId());
-				CohortMember member = activeByList.get(list.getUuid());
-				if (listed && member == null) {
-					addMember(memberService, list, patient);
-					log.info("List '{}': patient {} added", list.getName(), patient.getPatientId());
-				} else if (!listed && member != null) {
-					endMember(memberService, member);
-					log.info("List '{}': patient {} ended", list.getName(), patient.getPatientId());
-				}
-			}
-			catch (Exception e) {
-				log.error("Could not sync the list for flag '{}' for patient {}", flag.getName(), patient.getPatientId(), e);
-			}
+		if (listed && member == null) {
+			addMember(memberService, list, patient);
+			log.info("List '{}': patient {} added", list.getName(), patientId);
+		} else if (!listed && member != null) {
+			endMember(memberService, member);
+			log.info("List '{}': patient {} ended", list.getName(), patientId);
 		}
 	}
 	

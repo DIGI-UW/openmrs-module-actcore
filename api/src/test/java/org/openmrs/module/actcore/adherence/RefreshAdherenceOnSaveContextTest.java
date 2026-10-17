@@ -24,7 +24,7 @@ import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -88,7 +88,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 			public void accept(int patientId) {
 				refreshes.add("flags");
 				Context.flushSession();
-				PatientFlagRefreshTask.refreshPatient(patientId);
+				PatientFlagRefreshInTest.refreshPatient(patientId);
 			}
 		};
 	}
@@ -159,7 +159,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		prescribe(encounter(7, 40), q28, 40, null);
 		Context.flushSession();
 		refresh.refreshPatient(7, TODAY);
-		PatientFlagRefreshTask.refreshPatient(7);
+		PatientFlagRefreshInTest.refreshPatient(7);
 		assertEquals(1, flagged(overdue, 7));
 		
 		Encounter dose = unsaved(7, 0);
