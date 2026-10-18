@@ -149,9 +149,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	/**
 	 * Re-evaluates every enabled flag for one patient, then puts them on or takes them off the lists.
-	 * patientflags evaluates a saved encounter's patient before the save commits, so a flag on what is
-	 * written after it, as the overdue flag reads the adherence row, stays as it was until this runs.
-	 * Left to the full refresh when it is writing the rows, which refreshes the patient as it finishes.
+	 * patientflags evaluates a saved encounter's patient on a thread it starts before the save commits,
+	 * so it can miss what is written after it, as the overdue flag reads the adherence row. Left to the
+	 * full refresh when it is writing the rows, which refreshes the patient as it finishes.
 	 */
 	public static void refreshPatient(int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {
@@ -411,7 +411,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		if (rows != null) {
 			for (List<Object> row : rows) {
 				if (row != null && !row.isEmpty() && row.get(0) != null) {
-					messages.put(((Number) row.get(0)).intValue(), (String) row.get(1));
+					Integer patientId = ((Number) row.get(0)).intValue();
+					// A second row, as patientflags' own thread can write beside a refresh, is rewritten as one.
+					messages.put(patientId, messages.containsKey(patientId) ? null : (String) row.get(1));
 				}
 			}
 		}

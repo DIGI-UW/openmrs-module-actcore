@@ -159,6 +159,26 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
+	public void rewritesTwoRowsOfAFlagForOnePatientAsOne() {
+		Flag flag = saveFlag("doubled", MATCHES_ONE);
+		doubledFlagFor(flag);
+		
+		runScheduledWork();
+		
+		assertEquals(1, liveRows(flag));
+	}
+	
+	@Test
+	public void refreshingAPatientRewritesTheirTwoRowsOfAFlagAsOne() {
+		Flag flag = saveFlag("doubled", MATCHES_BOTH);
+		doubledFlagFor(flag);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(1, liveRows(flag));
+	}
+	
+	@Test
 	public void refreshingAPatientRaisesAndListsThemAloneOnAFlagTheyNowMatch() {
 		Flag flag = saveFlag("overdue", MATCHES_NONE);
 		runScheduledWork();
@@ -950,6 +970,14 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		member.setPatient(Context.getPatientService().getPatient(patientId));
 		member.setStartDate(new Date());
 		Context.getService(CohortMemberService.class).saveCohortMember(member);
+	}
+	
+	// As patientflags' save-time thread and a refresh can both insert, each with the message the flag evaluates to.
+	private void doubledFlagFor(Flag flag) {
+		Patient patient = Context.getPatientService().getPatient(MATCHING_PATIENT);
+		flagService.savePatientFlag(new PatientFlag(patient, flag, flag.evalMessage(MATCHING_PATIENT)));
+		flagService.savePatientFlag(new PatientFlag(patient, flag, flag.evalMessage(MATCHING_PATIENT)));
+		assertEquals(2, liveRows(flag));
 	}
 	
 	private void voidedFlagFor(Flag flag) {

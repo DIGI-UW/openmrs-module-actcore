@@ -16,15 +16,18 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntConsumer;
 
 import org.junit.After;
 import org.junit.Test;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
+import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
+import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -52,6 +55,8 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	private final RefreshAdherenceOnSave advice = new RefreshAdherenceOnSave();
 	
 	private final List<Encounter> committed = new ArrayList<Encounter>();
+	
+	private final List<Flag> committedFlags = new ArrayList<Flag>();
 	
 	/**
 	 * The encounter service with the advice outside its transaction, refreshing through the refreshers
@@ -289,6 +294,60 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertNotNull(row(7));
 	}
 	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void saveEncounter_shouldClearTheOverdueFlagOfADoseSavedWhileTheFullRefreshRuns() {
+		Flag overdue = committed(overdueFlag());
+		// Prescribed Q28 40 days ago and never injected: due 12 days ago.
+		prescribe(committed(encounter(7, 40)), q28, 40, null);
+		refresh.refreshAll(TODAY);
+		PatientFlagRefreshTask.refreshPatient(7);
+		assertEquals(1, flagged(overdue, 7));
+		final List<Throwable> failed = new ArrayList<Throwable>();
+		
+		new AdherenceRefresh() {
+			
+			// The dose commits, and its save refreshes the patient, after this run has read every patient.
+			@Override
+			Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
+				Map<Integer, AdherenceReplay.History> histories = super.read(admin, patientId);
+				if (patientId == null) {
+					given(committed(encounter(7, 0)), 0);
+					Thread save = new Thread(new Runnable() {
+						
+						@Override
+						public void run() {
+							Context.openSession();
+							try {
+								Context.authenticate("admin", "test");
+								new AdherenceRefresh().refreshPatient(7, TODAY);
+								PatientFlagRefreshTask.refreshPatient(7);
+							}
+							catch (Throwable e) {
+								failed.add(e);
+							}
+							finally {
+								Context.closeSession();
+							}
+						}
+					});
+					save.start();
+					try {
+						save.join(10000);
+					}
+					catch (InterruptedException e) {
+						throw new IllegalStateException(e);
+					}
+				}
+				return histories;
+			}
+		}.refreshAll(TODAY);
+		
+		assertTrue(failed.toString(), failed.isEmpty());
+		assertEquals(TODAY.plusDays(28), date(row(7).get(5)));
+		assertEquals(0, flagged(overdue, 7));
+	}
+	
 	private static Flag overdueFlag() {
 		Flag flag = new Flag();
 		flag.setName("RHD prophylaxis overdue");
@@ -316,6 +375,11 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		return template;
 	}
 	
+	private Flag committed(Flag flag) {
+		committedFlags.add(flag);
+		return flag;
+	}
+	
 	private Encounter committed(Encounter encounter) {
 		committed.add(encounter);
 		return encounter;
@@ -330,5 +394,10 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		}
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
+		for (Flag flag : committedFlags) {
+			Context.getAdministrationService()
+			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);
+			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
+		}
 	}
 }
