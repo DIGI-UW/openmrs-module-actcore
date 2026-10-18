@@ -170,6 +170,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	
 	@Test
 	public void refreshingAPatientRewritesTheirTwoRowsOfAFlagAsOne() {
+		// Evaluating one patient needs an aliased patient_id column, which MATCHES_ONE lacks.
 		Flag flag = saveFlag("doubled", MATCHES_BOTH);
 		doubledFlagFor(flag);
 		

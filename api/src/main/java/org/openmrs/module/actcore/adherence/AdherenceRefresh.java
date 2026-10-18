@@ -79,11 +79,11 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Held shared by each patient's refresh and alone by the full refresh, which reads every patient
-	 * before it rewrites them all, so a patient written in between would be put back as they were.
+	 * before it rewrites them all, so a row written in between would be put back as it was.
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
-	// Patients saved while the full refresh held the rows, refreshed once it lets go.
+	// Patients saved while the full refresh held the rows, refreshed once it lets go: the handshake PatientFlagRefreshTask uses for flags.
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
@@ -99,7 +99,10 @@ public class AdherenceRefresh {
 		this.rowsPerInsert = rowsPerInsert;
 	}
 	
-	/** Recomputes every row and returns how many patients now have one. */
+	/**
+	 * Recomputes every row and returns how many patients now have one. Run it outside a transaction:
+	 * inside one the rows commit after the lock is let go, and the replay reads the run's own snapshot.
+	 */
 	public int refreshAll(LocalDate today) {
 		ROWS.writeLock().lock();
 		try {
@@ -133,8 +136,8 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Recomputes one patient's rows, so the registry shows a saved form at once rather than after the
-	 * next full refresh. Left to the full refresh when it is writing the rows, which refreshes the
-	 * patient, then their flags, as it finishes.
+	 * next full refresh. Left to the full refresh while it runs, which refreshes the patient, then
+	 * their flags, as it finishes.
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
 		if (!ROWS.readLock().tryLock()) {

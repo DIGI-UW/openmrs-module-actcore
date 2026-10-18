@@ -304,7 +304,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public void saveEncounter_shouldClearTheOverdueFlagOfADoseSavedWhileTheFullRefreshRuns() {
+	public void refreshAll_shouldKeepTheDoseAndClearTheOverdueFlagOfAPatientSavedWhileItRuns() {
 		Flag overdue = overdueDoseNotYetGiven();
 		List<Throwable> failed = new ArrayList<Throwable>();
 		
@@ -315,12 +315,14 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertEquals(0, flagged(overdue, 7));
 	}
 	
+	// Holding the flag rows, the replay re-enters them for the patient, which must neither block nor throw.
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public void saveEncounter_shouldClearTheOverdueFlagOfADoseSavedWhileThePatientFlagRefreshRuns() {
+	public void refreshAll_shouldKeepTheDoseAndClearTheOverdueFlagOfAPatientSavedWhileThePatientFlagRefreshRuns() {
 		Flag overdue = overdueDoseNotYetGiven();
 		final List<Throwable> failed = new ArrayList<Throwable>();
 		final AdherenceRefresh racing = racingADose(failed);
+		// No flag carries the tag, so the run creates no list to clean up.
 		property(FlagListSync.TAG_PROPERTY, "no flag carries this " + UUID.randomUUID());
 		
 		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
@@ -362,7 +364,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		}
 		
 		assertEquals(1, logged.size());
-		assertTrue(logged.get(0), logged.get(0).startsWith("Adherence and flags of patient 7 refreshed in "));
+		assertTrue(logged.get(0), logged.get(0).startsWith("Refreshing the adherence and flags of patient 7 took "));
 	}
 	
 	/**
@@ -413,6 +415,10 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 					}
 					catch (InterruptedException e) {
 						throw new IllegalStateException(e);
+					}
+					// A save that waited for the run, rather than leaving it the patient, would still be going.
+					if (save.isAlive()) {
+						failed.add(new IllegalStateException("the save did not return while the run held the rows"));
 					}
 				}
 				return histories;
