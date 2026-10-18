@@ -180,6 +180,26 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
+	public void leavesAPatientsOneRowOfAFlagInPlaceWhenItsMessageMatches() {
+		Flag flag = saveFlag("single", MATCHES_ONE);
+		int rowId = singleFlagFor(flag);
+		
+		runScheduledWork();
+		
+		assertEquals(rowId, liveRowId(flag));
+	}
+	
+	@Test
+	public void refreshingAPatientLeavesTheirOneRowOfAFlagInPlaceWhenItsMessageMatches() {
+		Flag flag = saveFlag("single", MATCHES_BOTH);
+		int rowId = singleFlagFor(flag);
+		
+		refreshPatient(MATCHING_PATIENT);
+		
+		assertEquals(rowId, liveRowId(flag));
+	}
+	
+	@Test
 	public void refreshingAPatientRaisesAndListsThemAloneOnAFlagTheyNowMatch() {
 		Flag flag = saveFlag("overdue", MATCHES_NONE);
 		runScheduledWork();
@@ -971,6 +991,21 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		member.setPatient(Context.getPatientService().getPatient(patientId));
 		member.setStartDate(new Date());
 		Context.getService(CohortMemberService.class).saveCohortMember(member);
+	}
+	
+	private int singleFlagFor(Flag flag) {
+		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(MATCHING_PATIENT), flag,
+		        flag.evalMessage(MATCHING_PATIENT)));
+		return liveRowId(flag);
+	}
+	
+	private int liveRowId(Flag flag) {
+		Context.flushSession();
+		List<List<Object>> rows = Context.getAdministrationService().executeSQL(
+		    "select patient_flag_id from patientflags_patient_flag where voided = false and flag_id = " + flag.getFlagId(),
+		    true);
+		assertEquals(1, rows.size());
+		return ((Number) rows.get(0).get(0)).intValue();
 	}
 	
 	// Both rows carry the evaluated message, so only their number can make the refresh rewrite them.

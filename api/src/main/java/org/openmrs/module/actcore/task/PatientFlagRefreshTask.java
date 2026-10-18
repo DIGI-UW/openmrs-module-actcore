@@ -395,10 +395,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		return flaggedMessages(flag, "");
 	}
 	
-	/**
-	 * The flag's unvoided rows for one patient; two map to a null message, so reconcile rewrites them
-	 * as one.
-	 */
+	/** The flag's unvoided row for one patient, if it has one. */
 	static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
 		return flaggedMessages(flag, " and patient_id = " + patientId);
 	}
