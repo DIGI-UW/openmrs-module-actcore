@@ -148,10 +148,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Re-evaluates every enabled flag for one patient, then puts them on or takes them off the lists.
-	 * patientflags evaluates a saved encounter's patient on a thread it starts before the save commits,
-	 * so it can miss what is written after it, as the overdue flag reads the adherence row. Left to the
-	 * full refresh when it is writing the rows, which refreshes the patient as it finishes.
+	 * Re-evaluates and lists one patient's flags, which patientflags' own pass may have read before the
+	 * save committed; while the full refresh writes the rows, it is left to that run's end.
 	 */
 	public static void refreshPatient(int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {

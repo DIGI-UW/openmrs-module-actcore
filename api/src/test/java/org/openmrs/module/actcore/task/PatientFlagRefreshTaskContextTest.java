@@ -973,7 +973,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		Context.getService(CohortMemberService.class).saveCohortMember(member);
 	}
 	
-	// As patientflags' save-time thread and a refresh can both insert, each with the message the flag evaluates to.
+	// Both rows carry the evaluated message, so only their number can make the refresh rewrite them.
 	private void doubledFlagFor(Flag flag) {
 		Patient patient = Context.getPatientService().getPatient(MATCHING_PATIENT);
 		flagService.savePatientFlag(new PatientFlag(patient, flag, flag.evalMessage(MATCHING_PATIENT)));
