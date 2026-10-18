@@ -315,7 +315,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertEquals(0, flagged(overdue, 7));
 	}
 	
-	// Holding the flag rows, the replay re-enters them for the patient, which must neither block nor throw.
+	// Holding the flag rows, the replay re-enters them for the patient, which must not block.
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void refreshAll_shouldKeepTheDoseAndClearTheOverdueFlagOfAPatientSavedWhileThePatientFlagRefreshRuns() {

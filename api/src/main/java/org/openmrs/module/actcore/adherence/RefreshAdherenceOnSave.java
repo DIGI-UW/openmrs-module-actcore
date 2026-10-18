@@ -126,7 +126,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		catch (RuntimeException e) {
 			log.error("Could not refresh the flags of patient {}", patientId, e);
 		}
-		// The save waits for this, on the request thread.
+		// The save waits for this.
 		log.debug("Refreshing the adherence and flags of patient {} took {} ms", patientId,
 		    System.currentTimeMillis() - startedAt);
 	}

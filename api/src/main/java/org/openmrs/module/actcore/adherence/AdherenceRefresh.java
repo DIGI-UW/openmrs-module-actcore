@@ -116,10 +116,7 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/**
-	 * Refreshes each patient saved while the full refresh held the rows, then their flags, which their
-	 * save evaluated against the row this run was replacing.
-	 */
+	/** Refreshes each patient saved while the full refresh held the rows, then their flags. */
 	private void refreshDeferred(LocalDate today) {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
 			if (DEFERRED.remove(patientId)) {
