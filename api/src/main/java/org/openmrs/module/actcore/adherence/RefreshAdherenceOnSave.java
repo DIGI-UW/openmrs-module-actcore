@@ -119,7 +119,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			// The save stands; the next full refresh writes the row.
 			log.error("Could not refresh the prophylaxis adherence of patient {}", patientId, e);
 		}
-		// Even when the row failed: patientflags evaluated every flag before the commit, not only this one.
+		// Even when the row failed: patientflags may have evaluated every flag before the commit, not only this one.
 		try {
 			flagRefresher.accept(patientId);
 		}
