@@ -17,8 +17,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.IntConsumer;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.After;
 import org.junit.Test;
 import org.openmrs.Encounter;
@@ -26,6 +33,7 @@ import org.openmrs.Obs;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.task.FlagListSync;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.patientflags.Flag;
@@ -297,17 +305,85 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void saveEncounter_shouldClearTheOverdueFlagOfADoseSavedWhileTheFullRefreshRuns() {
+		Flag overdue = overdueDoseNotYetGiven();
+		List<Throwable> failed = new ArrayList<Throwable>();
+		
+		racingADose(failed).refreshAll(TODAY);
+		
+		assertTrue(failed.toString(), failed.isEmpty());
+		assertEquals(TODAY.plusDays(28), date(row(7).get(5)));
+		assertEquals(0, flagged(overdue, 7));
+	}
+	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void saveEncounter_shouldClearTheOverdueFlagOfADoseSavedWhileThePatientFlagRefreshRuns() {
+		Flag overdue = overdueDoseNotYetGiven();
+		final List<Throwable> failed = new ArrayList<Throwable>();
+		final AdherenceRefresh racing = racingADose(failed);
+		property(FlagListSync.TAG_PROPERTY, "no flag carries this " + UUID.randomUUID());
+		
+		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
+			
+			@Override
+			public void run() {
+				racing.refreshAll(TODAY);
+			}
+		});
+		
+		assertTrue(failed.toString(), failed.isEmpty());
+		assertEquals(TODAY.plusDays(28), date(row(7).get(5)));
+		assertEquals(0, flagged(overdue, 7));
+	}
+	
+	@Test
+	public void saveEncounter_shouldLogHowLongTheRefreshTookAtDebug() {
+		final List<String> logged = new ArrayList<String>();
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				logged.add(event.getMessage().getFormattedMessage());
+			}
+		};
+		appender.start();
+		Logger logger = (Logger) LogManager.getLogger(RefreshAdherenceOnSave.class);
+		Level level = logger.getLevel();
+		logger.addAppender(appender);
+		// The test log4j2.xml turns every logger off.
+		logger.setLevel(Level.DEBUG);
+		try {
+			encounters().saveEncounter(encounter(7, 0));
+			commit();
+		}
+		finally {
+			logger.removeAppender(appender);
+			logger.setLevel(level);
+		}
+		
+		assertEquals(1, logged.size());
+		assertTrue(logged.get(0), logged.get(0).startsWith("Adherence and flags of patient 7 refreshed in "));
+	}
+	
+	/**
+	 * Patient 7, prescribed Q28 40 days ago and never injected, so due 12 days ago and flagged overdue.
+	 */
+	private Flag overdueDoseNotYetGiven() {
 		Flag overdue = committed(overdueFlag());
-		// Prescribed Q28 40 days ago and never injected: due 12 days ago.
 		prescribe(committed(encounter(7, 40)), q28, 40, null);
 		refresh.refreshAll(TODAY);
 		PatientFlagRefreshTask.refreshPatient(7);
 		assertEquals(1, flagged(overdue, 7));
-		final List<Throwable> failed = new ArrayList<Throwable>();
-		
-		new AdherenceRefresh() {
+		return overdue;
+	}
+	
+	/**
+	 * A full refresh in which a dose for patient 7 commits, and its save refreshes the patient as
+	 * RefreshAdherenceOnSave does, on another thread, after the refresh has read every patient.
+	 */
+	private AdherenceRefresh racingADose(final List<Throwable> failed) {
+		return new AdherenceRefresh() {
 			
-			// The dose commits, and its save refreshes the patient, after this run has read every patient.
 			@Override
 			Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
 				Map<Integer, AdherenceReplay.History> histories = super.read(admin, patientId);
@@ -341,11 +417,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 				}
 				return histories;
 			}
-		}.refreshAll(TODAY);
-		
-		assertTrue(failed.toString(), failed.isEmpty());
-		assertEquals(TODAY.plusDays(28), date(row(7).get(5)));
-		assertEquals(0, flagged(overdue, 7));
+		};
 	}
 	
 	private static Flag overdueFlag() {
@@ -394,6 +466,10 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		}
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
+		if (!committedFlags.isEmpty()) {
+			property(FlagListSync.TAG_PROPERTY, "");
+			property(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY, "");
+		}
 		for (Flag flag : committedFlags) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);

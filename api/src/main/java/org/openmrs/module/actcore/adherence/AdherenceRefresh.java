@@ -133,7 +133,8 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Recomputes one patient's rows, so the registry shows a saved form at once rather than after the
-	 * next full refresh.
+	 * next full refresh. Left to the full refresh when it is writing the rows, which refreshes the
+	 * patient, then their flags, as it finishes.
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
 		if (!ROWS.readLock().tryLock()) {
