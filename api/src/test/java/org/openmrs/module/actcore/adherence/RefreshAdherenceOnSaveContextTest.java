@@ -315,7 +315,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertEquals(0, flagged(overdue, 7));
 	}
 	
-	// Holding the flag rows, the replay re-enters them for the patient, which must not block.
+	// Holding the flag rows, the deferred patient's refresh re-enters them, which must not block.
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void refreshAll_shouldKeepTheDoseAndClearTheOverdueFlagOfAPatientSavedWhileThePatientFlagRefreshRuns() {
@@ -367,9 +367,6 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertTrue(logged.get(0), logged.get(0).startsWith("Refreshing the adherence and flags of patient 7 took "));
 	}
 	
-	/**
-	 * Patient 7, prescribed Q28 40 days ago and never injected, so due 12 days ago and flagged overdue.
-	 */
 	private Flag overdueDoseNotYetGiven() {
 		Flag overdue = committed(overdueFlag());
 		prescribe(committed(encounter(7, 40)), q28, 40, null);

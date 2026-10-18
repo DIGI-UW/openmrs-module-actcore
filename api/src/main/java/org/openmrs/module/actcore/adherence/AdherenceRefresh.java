@@ -101,7 +101,7 @@ public class AdherenceRefresh {
 	
 	/**
 	 * Recomputes every row and returns how many patients now have one. Run it outside a transaction:
-	 * inside one the rows commit after the lock is let go, and the replay reads the run's own snapshot.
+	 * one commits after the unlock, and the deferred patients are refreshed from its stale snapshot.
 	 */
 	public int refreshAll(LocalDate today) {
 		ROWS.writeLock().lock();
@@ -116,7 +116,6 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** Refreshes each patient saved while the full refresh held the rows, then their flags. */
 	private void refreshDeferred(LocalDate today) {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
 			if (DEFERRED.remove(patientId)) {
