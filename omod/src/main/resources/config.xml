@@ -72,6 +72,15 @@
     <point>org.openmrs.api.EncounterService</point>
     <class>org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave</class>
   </advice>
+  <!-- After the commit, so a death that closes studies above is in the row the flags read. -->
+  <advice>
+    <point>org.openmrs.api.PersonService</point>
+    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.PatientService</point>
+    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
+  </advice>
   <globalProperty>
     <property>actcore.registryProgram</property>
     <defaultValue>7d73e143-a550-5a9d-aecd-dd771add098d</defaultValue>

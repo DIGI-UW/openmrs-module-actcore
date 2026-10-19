@@ -9,11 +9,18 @@
  */
 package org.openmrs.module.actcore;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.function.IntConsumer;
+
 import org.openmrs.api.context.Context;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationAdapter;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 public final class Transactions {
@@ -36,5 +43,51 @@ public final class Transactions {
 				work.run();
 			}
 		});
+	}
+	
+	/**
+	 * Runs the work for the patient once the current transaction commits, so a failure in it cannot
+	 * roll the save back, and once per patient however many saves of theirs the transaction holds; at
+	 * once when no transaction is running. Each owner, such as an advice, keeps its own set.
+	 */
+	public static void afterCommit(Object owner, int patientId, IntConsumer work) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			work.accept(patientId);
+			return;
+		}
+		pending(owner, work).patientIds.add(patientId);
+	}
+	
+	// Not a bound resource, which a REQUIRES_NEW suspend leaves bound to the outer transaction.
+	private static Pending pending(Object owner, IntConsumer work) {
+		for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+			if (synchronization instanceof Pending && ((Pending) synchronization).owner == owner) {
+				return (Pending) synchronization;
+			}
+		}
+		Pending pending = new Pending(owner, work);
+		TransactionSynchronizationManager.registerSynchronization(pending);
+		return pending;
+	}
+	
+	private static final class Pending extends TransactionSynchronizationAdapter {
+		
+		private final Object owner;
+		
+		private final IntConsumer work;
+		
+		private final Set<Integer> patientIds = new LinkedHashSet<Integer>();
+		
+		private Pending(Object owner, IntConsumer work) {
+			this.owner = owner;
+			this.work = work;
+		}
+		
+		@Override
+		public void afterCommit() {
+			for (Integer patientId : patientIds) {
+				work.accept(patientId);
+			}
+		}
 	}
 }
