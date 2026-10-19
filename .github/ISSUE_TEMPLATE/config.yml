@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: ACT issues are tracked in the distribution repository
+    url: https://github.com/DIGI-UW/openmrs-distro-referenceapplication/issues
+    about: File bugs and features for ACT, including this repository, in DIGI-UW/openmrs-distro-referenceapplication.
