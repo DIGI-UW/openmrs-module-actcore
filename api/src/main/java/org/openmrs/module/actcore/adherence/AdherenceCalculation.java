@@ -185,13 +185,14 @@ public final class AdherenceCalculation {
 			        : latestPrescription;
 			return from.plusDays(intervalDays);
 		}
+		// Nothing recorded since the oral regimen started: its first oral visit is due, if a day is set. Before
+		// the estimate branch, since a visit under an earlier oral course would otherwise set the date.
+		if (oralFirstDueDays != null && estimated.tailMap(latestPrescription).isEmpty()) {
+			return latestPrescription.plusDays(oralFirstDueDays);
+		}
 		if (latestEstimateDate != null) {
 			Integer durationDays = estimated.get(latestEstimateDate).durationDays;
 			return durationDays == null ? null : latestEstimateDate.plusDays(durationDays);
-		}
-		// Nothing recorded since the oral regimen started: its first oral visit is due, if a day is set.
-		if (oralFirstDueDays != null && estimated.tailMap(latestPrescription).isEmpty()) {
-			return latestPrescription.plusDays(oralFirstDueDays);
 		}
 		return null;
 	}

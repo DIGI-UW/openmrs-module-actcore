@@ -316,6 +316,21 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.minusDays(20), date(row(7).get(5)));
 	}
 	
+	@Test
+	public void refreshAll_shouldMakeTheFirstVisitOfAnOralRegimenReprescribedOnOneConsultationDueAfterTheGrace() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "30");
+		// One consultation records an earlier oral course, with a visit under it, and a new oral course 10 days ago.
+		Encounter consultation = encounter(7, 10);
+		prescribe(consultation, oralPenicillin, 100, null);
+		prescribe(consultation, oralPenicillin, 10, null);
+		estimate(encounter(7, 50), 80.0, 50);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Due in 20 days, not 40 days ago from the earlier course's visit.
+		assertEquals(TODAY.plusDays(20), date(row(7).get(5)));
+	}
+	
 	@Test(expected = IllegalStateException.class)
 	public void refreshAll_shouldRefuseAFirstDueThatIsNotANumberOfDays() {
 		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "a week");
