@@ -47,6 +47,8 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	
 	protected Concept estimate;
 	
+	protected Concept estimateDate;
+	
 	protected Concept duration;
 	
 	protected Concept threeMonths;
@@ -84,6 +86,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		stopped = concept("Date stopped", "Datetime");
 		injectionDate = concept("Date of injection", "Datetime");
 		estimate = concept("Adherence estimate", "Numeric");
+		estimateDate = concept("Date of adherence estimate", "Datetime");
 		duration = concept("Prescription duration", "Coded");
 		threeMonths = concept("3 months", "N/A");
 		property(AdherenceRefresh.GP_PRESCRIPTION, prescription.getUuid());
@@ -92,6 +95,8 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		property(AdherenceRefresh.GP_DATE_STOPPED, stopped.getUuid());
 		property(AdherenceRefresh.GP_INJECTION_DATE, injectionDate.getUuid());
 		property(AdherenceRefresh.GP_ESTIMATE, estimate.getUuid());
+		property(AdherenceRefresh.GP_ESTIMATE_DATE, estimateDate.getUuid());
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "");
 		property(AdherenceRefresh.GP_DURATION, duration.getUuid());
 		property(AdherenceRefresh.GP_DURATIONS, threeMonths.getUuid() + ":90");
 		consultationDate = concept("Date of consultation", "Datetime");
@@ -158,6 +163,10 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		Context.getObsService().saveObs(injection, null);
 	}
 	
+	/**
+	 * An oral adherence form with no Date of Adherence Estimate, which counts from its encounter's
+	 * date.
+	 */
 	protected void estimate(Encounter encounter, double percent) {
 		Obs value = obs(encounter, estimate);
 		value.setValueNumeric(percent);
@@ -165,6 +174,14 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		Obs lasts = obs(encounter, duration);
 		lasts.setValueCoded(threeMonths);
 		Context.getObsService().saveObs(lasts, null);
+	}
+	
+	/** An oral adherence form whose Date of Adherence Estimate is ``datedDaysAgo``. */
+	protected void estimate(Encounter encounter, double percent, int datedDaysAgo) {
+		estimate(encounter, percent);
+		Obs date = obs(encounter, estimateDate);
+		date.setValueDatetime(at(datedDaysAgo));
+		Context.getObsService().saveObs(date, null);
 	}
 	
 	/** Q28 prescribed 200 days ago, every injection on time until the one ``lastDaysAgo`` ago. */

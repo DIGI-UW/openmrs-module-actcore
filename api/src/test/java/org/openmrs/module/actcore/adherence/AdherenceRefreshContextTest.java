@@ -213,6 +213,118 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void refreshAll_shouldDateAnOralVisitByItsDateOfAdherenceEstimate() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		// Last week's paper visit, entered today: it counts from the date on the form, not from the save.
+		estimate(encounter(7, 0), 70.0, 20);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<Object> row = row(7);
+		assertEquals(TODAY.minusDays(20), date(row.get(4)));
+		assertEquals(TODAY.minusDays(20).plusDays(90), date(row.get(5)));
+		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		assertEquals(TODAY.minusDays(20), summary.getLastGiven());
+		assertEquals(TODAY.minusDays(20).plusDays(90), summary.getNextDue());
+	}
+	
+	@Test
+	public void refreshAll_shouldDateAnOralVisitByItsEncounterWhenTheFormHasNoDate() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounter(7, 15), 70.0);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(TODAY.minusDays(15), date(row(7).get(4)));
+	}
+	
+	@Test
+	public void refreshAll_shouldDateEveryOralVisitByItsEncounterWhenNoDateConceptIsSet() {
+		property(AdherenceRefresh.GP_ESTIMATE_DATE, "");
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounter(7, 0), 70.0, 20);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(TODAY, date(row(7).get(4)));
+	}
+	
+	@Test
+	public void refreshAll_shouldTakeTheLatestDatedOralVisitHoweverTheFormsWereSaved() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		// Saved in the wrong order: the visit dated 10 days ago was entered before the one dated 40 days ago.
+		estimate(encounter(7, 2), 90.0, 10);
+		estimate(encounter(7, 1), 40.0, 40);
+		
+		refresh.refreshAll(TODAY);
+		
+		List<Object> row = row(7);
+		assertEquals(0.9, ((Number) row.get(3)).doubleValue(), 1e-12);
+		assertEquals(TODAY.minusDays(10), date(row.get(4)));
+	}
+	
+	@Test
+	public void refreshAll_shouldMakeAnOralRegimenNeverRecordedDueOnItsStartWhenTheFirstDueIsZeroDays() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		prescribe(encounter(7, 40), oralPenicillin, 40, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Overdue since the regimen started, so the due list and the oral overdue flag pick the patient up.
+		List<Object> row = row(7);
+		assertNull(row.get(3));
+		assertNull(row.get(4));
+		assertEquals(TODAY.minusDays(40), date(row.get(5)));
+		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		assertEquals(TODAY.minusDays(40), summary.getNextDue());
+		assertEquals("overdue", summary.getStatus());
+	}
+	
+	@Test
+	public void refreshAll_shouldMakeAnOralRegimenNeverRecordedDueAfterTheFirstDueGrace() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "30");
+		prescribe(encounter(7, 3), oralPenicillin, 3, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		// Due in 27 days: not yet on the due list, and the chart's status is ok rather than null.
+		assertEquals(TODAY.plusDays(27), date(row(7).get(5)));
+		assertEquals("ok", ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY).getStatus());
+	}
+	
+	@Test
+	public void refreshAll_shouldLetTheFirstOralVisitSetTheDueDateOnceItIsRecorded() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		prescribe(encounter(7, 40), oralPenicillin, 40, null);
+		estimate(encounter(7, 30), 80.0, 30);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(TODAY.minusDays(30).plusDays(90), date(row(7).get(5)));
+	}
+	
+	@Test
+	public void refreshAll_shouldNotCountAnOralVisitBeforeTheRegimenStartedAsItsFirst() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		// An oral visit under an earlier oral course, then a new oral course started 20 days ago with nothing since.
+		prescribe(encounter(7, 100), oralPenicillin, 100, 30);
+		estimate(encounter(7, 50), 80.0, 50);
+		prescribe(encounter(7, 20), oralPenicillin, 20, null);
+		
+		refresh.refreshAll(TODAY);
+		
+		assertEquals(TODAY.minusDays(20), date(row(7).get(5)));
+	}
+	
+	@Test(expected = IllegalStateException.class)
+	public void refreshAll_shouldRefuseAFirstDueThatIsNotANumberOfDays() {
+		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "a week");
+		prescribe(encounter(7, 40), oralPenicillin, 40, null);
+		
+		refresh.refreshAll(TODAY);
+	}
+	
+	@Test
 	public void refreshAll_shouldGiveNoAdherenceToAnOralRegimenWithNoEstimateRecorded() {
 		// Switched from BPG to oral on one consultation: the BPG window would otherwise count its late days.
 		Encounter consultation = encounter(7, 20);

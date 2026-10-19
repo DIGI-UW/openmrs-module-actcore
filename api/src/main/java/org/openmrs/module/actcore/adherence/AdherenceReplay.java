@@ -81,7 +81,10 @@ final class AdherenceReplay {
 		
 		final Double adherence;
 		
-		/** The calculation's, kept with no injection recorded: one interval after the regimen starts. */
+		/**
+		 * The calculation's, kept with no injection recorded: one interval after the regimen starts; and
+		 * with no oral entry recorded, the first oral visit's day when one is set.
+		 */
 		final LocalDate nextDue;
 		
 		Row(Integer regimen, Integer interval, LocalDate lastGiven, Double adherence, LocalDate nextDue) {
@@ -129,6 +132,15 @@ final class AdherenceReplay {
 	 * The row ACT 2.0 would hold today, or null when the patient has no prescription to hold one for.
 	 */
 	static Row replay(History h, LocalDate today) {
+		return replay(h, today, null);
+	}
+	
+	/**
+	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due while
+	 *            none is recorded; null gives it no due date, as ACT 2.0 did
+	 * @see #replay(History, LocalDate)
+	 */
+	static Row replay(History h, LocalDate today, Integer oralFirstDueDays) {
 		TreeSet<LocalDate> saves = new TreeSet<LocalDate>();
 		saves.addAll(h.prescriptions.keySet());
 		saves.addAll(h.injections);
@@ -157,7 +169,7 @@ final class AdherenceReplay {
 		        && (stored.interval > 0 ? h.injections.headSet(computed.plusDays(1)).isEmpty()
 		                : h.oral.headMap(computed.plusDays(1)).isEmpty());
 		AdherenceCalculation.Result result = AdherenceCalculation.calculate(stored.prescriptions.intervals, h.injections,
-		    h.oral, computed);
+		    h.oral, computed, oralFirstDueDays);
 		// ACT 2.0 computed no adherence for a regimen with no injection, or no estimate, recorded.
 		return new Row(regimen, stored.interval, stored.lastGiven, noRecord ? null : result.getAdherence(),
 		        result.getNextDue());

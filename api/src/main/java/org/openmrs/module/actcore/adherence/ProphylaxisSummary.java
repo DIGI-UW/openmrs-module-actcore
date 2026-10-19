@@ -62,7 +62,7 @@ public final class ProphylaxisSummary {
 	 */
 	public static ProphylaxisSummary of(Patient patient, LocalDate today) {
 		AdherenceReplay.History history = new AdherenceRefresh().historyOf(patient.getPatientId());
-		AdherenceReplay.Row row = AdherenceReplay.replay(history, today);
+		AdherenceReplay.Row row = AdherenceReplay.replay(history, today, AdherenceRefresh.oralFirstDueDays());
 		List<Injection> injections = timings(history.prescriptions, history.injections, today);
 		if (row == null || row.interval == null) {
 			return new ProphylaxisSummary(null, null, null, null, null, "none", null, injections);
@@ -87,7 +87,8 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Null for an oral regimen whose supply end is unknown, as nothing recorded says when it runs out.
+	 * Null for an oral regimen whose supply end is unknown: nothing recorded says when it runs out, and
+	 * no first visit day is set (actcore.adherence.oralFirstDueDays).
 	 */
 	private static String status(LocalDate nextDue, LocalDate today) {
 		if (nextDue == null) {
