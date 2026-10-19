@@ -21,12 +21,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.util.PrivilegeConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
@@ -74,6 +79,17 @@ public class AdherenceRefresh {
 	
 	static final String GP_NO_PROPHYLAXIS = "actcore.adherence.noProphylaxisAnswers";
 	
+	private static final Logger log = LoggerFactory.getLogger(AdherenceRefresh.class);
+	
+	/**
+	 * Held shared by each patient's refresh and alone by the full refresh, which reads every patient
+	 * before it rewrites them all, so a row written in between would be put back as it was.
+	 */
+	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
+	
+	// The handshake PatientFlagRefreshTask uses for flags: a fix to one belongs in both.
+	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
+	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
 	
@@ -87,22 +103,55 @@ public class AdherenceRefresh {
 		this.rowsPerInsert = rowsPerInsert;
 	}
 	
-	/** Recomputes every row and returns how many patients now have one. */
+	/**
+	 * Recomputes every row and returns how many patients now have one. Run it outside a transaction:
+	 * one commits after the unlock, and the deferred patients are refreshed from its stale snapshot.
+	 */
 	public int refreshAll(LocalDate today) {
+		ROWS.writeLock().lock();
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 			return refresh(Context.getAdministrationService(), today);
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+			ROWS.writeLock().unlock();
+			refreshDeferred(today);
+		}
+	}
+	
+	private void refreshDeferred(LocalDate today) {
+		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
+			if (DEFERRED.remove(patientId)) {
+				try {
+					refreshPatient(patientId, today);
+					PatientFlagRefreshTask.refreshPatient(patientId);
+				}
+				catch (RuntimeException e) {
+					log.error("Could not refresh patient {}, saved during the adherence refresh", patientId, e);
+				}
+			}
 		}
 	}
 	
 	/**
-	 * Recomputes one patient's rows, so the registry shows a saved form at once rather than after the
-	 * next full refresh.
+	 * Recomputes one patient's rows, so the registry shows a saved form at once; while a full refresh
+	 * runs, it is left to that run, which then refreshes the patient and their flags.
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
+		if (!ROWS.readLock().tryLock()) {
+			DEFERRED.add(patientId);
+			// The full refresh may have let go, and refreshed the ones it was left, since the first try.
+			if (!ROWS.readLock().tryLock()) {
+				log.info("Adherence of patient {} left to the adherence refresh running now", patientId);
+				return;
+			}
+			if (!DEFERRED.remove(patientId)) {
+				// That refresh took the patient.
+				ROWS.readLock().unlock();
+				return;
+			}
+		}
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 			AdministrationService admin = Context.getAdministrationService();
@@ -113,6 +162,7 @@ public class AdherenceRefresh {
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+			ROWS.readLock().unlock();
 		}
 	}
 	
@@ -162,7 +212,7 @@ public class AdherenceRefresh {
 	}
 	
 	/** Every patient's history, or only that of the patient given. */
-	private Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
+	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
 		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
 		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS),
 		    only("g.person_id", patientId), histories);

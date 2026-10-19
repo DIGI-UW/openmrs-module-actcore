@@ -22,6 +22,16 @@ public final class PatientFlagRefreshInTest {
 	private PatientFlagRefreshInTest() {
 	}
 	
+	public static PatientFlagRefreshTask.Result runWithAdherence(final Runnable adherence) {
+		return new PatientFlagRefreshTask() {
+			
+			@Override
+			void refreshAdherence() {
+				adherence.run();
+			}
+		}.runIfIdle();
+	}
+	
 	public static void refreshPatient(int patientId) {
 		PatientFlagRefreshTask.refreshPatient(patientId, new Consumer<Runnable>() {
 			

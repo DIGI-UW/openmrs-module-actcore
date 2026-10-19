@@ -28,8 +28,8 @@ import org.springframework.transaction.support.TransactionSynchronizationAdapter
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Advice on EncounterService that recomputes a patient's adherence rows once an encounter of theirs
- * is saved, voided or purged, then their flags, which patientflags evaluated before the commit.
+ * Advice on EncounterService that recomputes a patient's adherence rows, then their flags, once an
+ * encounter of theirs is saved, voided or purged; patientflags' own pass may precede the commit.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
@@ -110,6 +110,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	}
 	
 	private void refresh(int patientId) {
+		long startedAt = System.currentTimeMillis();
 		try {
 			refresher.accept(patientId);
 		}
@@ -117,13 +118,16 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			// The save stands; the next full refresh writes the row.
 			log.error("Could not refresh the prophylaxis adherence of patient {}", patientId, e);
 		}
-		// Even when the row failed: patientflags evaluated every flag before the commit, not only this one.
+		// Even when the row failed: patientflags may have evaluated every flag before the commit.
 		try {
 			flagRefresher.accept(patientId);
 		}
 		catch (RuntimeException e) {
 			log.error("Could not refresh the flags of patient {}", patientId, e);
 		}
+		// The save waits for this.
+		log.debug("Refreshing the adherence and flags of patient {} took {} ms", patientId,
+		    System.currentTimeMillis() - startedAt);
 	}
 	
 	private class Pending extends TransactionSynchronizationAdapter {

@@ -247,6 +247,8 @@ the consultations that record them.
 | A disabled or untagged flag keeps an empty list; a deleted flag's list is voided | The list is there if the flag comes back; a flag recreated under the same uuid, as Initializer does, gets its list back (#3). |
 | Gaps come from the flag's own criteria (#13, #14) | A second gap query per flag drifted from its flag twice. One query cannot disagree with itself. |
 | A refresh asked for during another is skipped (#9) | Two runs at once would race on the same rows and lists. |
+| A patient saved during a full adherence refresh is recomputed, then their flags, as it finishes (#94) | It reads every patient before it rewrites the table, so a row saved in between would be put back as it was. |
+| Two rows of one flag for a patient are rewritten as one (#94) | patientflags evaluates a saved patient on a thread of its own, which can insert beside a refresh. |
 | A failing flag message does not stop the flag clearing (#9) | One bad flag should not leave stale rows for everyone. |
 | Logging goes through core's `log4j2.xml` | No second logging system; one summary line per run at the default level. |
 | The distribution creates View Patient Flags | patientflags checks this privilege but does not create it; the look-up requires it too. |
