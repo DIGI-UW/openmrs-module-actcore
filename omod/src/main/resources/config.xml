@@ -204,7 +204,23 @@
     <property>actcore.adherence.estimateConcept</property>
     <defaultValue>8edff8dc-4af6-5d0f-bf1d-8e349c7a1b15</defaultValue>
     <description>
-      The clinician's oral adherence estimate, in percent. It counts from its encounter's date.
+      The clinician's oral adherence estimate, in percent. It counts from the form's Date of Adherence Estimate (the property below), else from its encounter's date.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.adherence.estimateDateConcept</property>
+    <defaultValue>99512ab5-208e-5c37-8f7b-8f72abe2a0db</defaultValue>
+    <description>
+      The oral adherence form's Date of Adherence Estimate: the day an oral visit counts from, as the injection date is for a BPG form, so a visit entered later from paper keeps its own date. A form without one counts from its encounter's date. Leave empty to count every form from its encounter's date.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.adherence.oralFirstDueDays</property>
+    <defaultValue></defaultValue>
+    <description>
+      Days after an oral regimen starts that its first oral visit is due, while no oral adherence form has been recorded since the start: 0 makes it due on the start date, so the patient is on the due list and flagged overdue until the first supply is recorded. Leave empty to give such a regimen no due date, as ACT 2.0 did. A BPG regimen's first injection is always due one interval after the start.
     </description>
   </globalProperty>
 

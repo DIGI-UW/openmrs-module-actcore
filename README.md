@@ -163,7 +163,8 @@ counts days:
 
 - It reads the prophylaxis prescribed on the latest consultation that records any, by its Date of
   Consultation Visit (else its encounter's date), leaving out prescriptions with a date stopped, then
-  every injection date and every oral adherence form.
+  every injection date and every oral adherence form, by its Date of Adherence Estimate (else its
+  encounter's date), so a visit entered later from paper keeps its own date.
 - Injection adherence is the days covered by prescribed treatment over the days of prescribed
   treatment, as the program defines it in [AR-102](https://uwdigi.atlassian.net/browse/AR-102),
   over at most the last 365 days. An injection covers the interval's (Q14, Q21, Q28)
@@ -192,7 +193,10 @@ from ACT 2.0, which left the previous regimen's values on the record: under the 
 they would be wrong. An injection regimen with no injection still gets a next due date, the first
 injection's, one interval after the regimen starts, as the chart shows it: the registry shows its
 status, and the due list lists the patient from that day. ACT 2.0 kept the previous regimen's due
-date, if there was one. An oral regimen with no estimate gets no due date.
+date, if there was one. An oral regimen with no oral adherence form since it started gets its first
+visit's due date, `actcore.adherence.oralFirstDueDays` after the start (0 is the start date itself),
+so a patient prescribed oral prophylaxis who never comes for a supply is due, then overdue, rather
+than invisible; left empty, as ACT 2.0 behaved, such a regimen gets no due date.
 
 Two rare forms also differ: an oral adherence form with neither an estimate nor a prescription
 duration is not read at all, and a prescription with a start date but no regimen is taken as oral.

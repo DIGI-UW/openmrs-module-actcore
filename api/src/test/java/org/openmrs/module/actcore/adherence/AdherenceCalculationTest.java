@@ -124,6 +124,65 @@ public class AdherenceCalculationTest {
 	}
 	
 	@Test
+	public void calculate_shouldGiveAnOralPrescriptionWithNoEntryNoDueDateByDefault() {
+		prescriptions.put(date("2026-09-01"), 0);
+		
+		assertEquals(null, calculate(TODAY).getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldMakeTheFirstOralVisitDueTheSetDaysAfterTheStart() {
+		prescriptions.put(date("2026-09-01"), 0);
+		
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(prescriptions, injections, oral, TODAY, 7);
+		
+		assertEquals(null, result.getAdherence());
+		assertEquals(date("2026-09-08"), result.getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldLetAnOralEntrySinceTheStartSetTheDueDateInsteadOfTheFirstVisit() {
+		prescriptions.put(date("2026-09-01"), 0);
+		oral.put(date("2026-09-10"), new AdherenceCalculation.OralEntry(80.0, 30));
+		
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(prescriptions, injections, oral, TODAY, 0);
+		
+		assertEquals(date("2026-10-10"), result.getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldNotLetAnOralEntryBeforeTheStartStandInForTheFirstVisit() {
+		oral.put(date("2026-05-01"), new AdherenceCalculation.OralEntry(80.0, 90));
+		prescriptions.put(date("2026-09-01"), 0);
+		
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(prescriptions, injections, oral, TODAY, 0);
+		
+		assertEquals(date("2026-09-01"), result.getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldMakeTheFirstVisitOfAReprescribedOralRegimenDueThoughAnEarlierOralCourseHadOne() {
+		// Oral course A with a visit, then a new oral prescription on the same consultation with nothing since.
+		prescriptions.put(date("2026-06-01"), 0);
+		oral.put(date("2026-07-01"), new AdherenceCalculation.OralEntry(80.0, 90));
+		prescriptions.put(date("2026-09-01"), 0);
+		
+		assertEquals(date("2026-10-01"),
+		    AdherenceCalculation.calculate(prescriptions, injections, oral, TODAY, 30).getNextDue());
+		// Blank keeps ACT 2.0's date, the earlier visit plus its duration.
+		assertEquals(date("2026-09-29"), calculate(TODAY).getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldNotApplyTheFirstOralVisitToAnInjectionRegimen() {
+		prescriptions.put(date("2026-09-01"), 28);
+		
+		AdherenceCalculation.Result result = AdherenceCalculation.calculate(prescriptions, injections, oral, TODAY, 0);
+		
+		assertEquals(date("2026-09-29"), result.getNextDue());
+	}
+	
+	@Test
 	public void calculate_shouldTakeAnOralPrescriptionsEstimate() {
 		prescriptions.put(date("2026-06-01"), 28);
 		injections.add(date("2026-06-01"));

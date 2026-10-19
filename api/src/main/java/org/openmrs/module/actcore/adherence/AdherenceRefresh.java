@@ -58,6 +58,10 @@ public class AdherenceRefresh {
 	
 	static final String GP_ESTIMATE = "actcore.adherence.estimateConcept";
 	
+	static final String GP_ESTIMATE_DATE = "actcore.adherence.estimateDateConcept";
+	
+	static final String GP_ORAL_FIRST_DUE = "actcore.adherence.oralFirstDueDays";
+	
 	static final String GP_DURATION = "actcore.adherence.prescriptionDurationConcept";
 	
 	static final String GP_DURATIONS = "actcore.adherence.prescriptionDurations";
@@ -136,6 +140,7 @@ public class AdherenceRefresh {
 	private void compute(Map<Integer, AdherenceReplay.History> histories, LocalDate today, List<String> rows,
 	        List<String> timings) {
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
+		Integer oralFirstDueDays = oralFirstDueDays();
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
 			if (entry.getValue().prescriptions.isEmpty()) {
 				continue;
@@ -147,7 +152,7 @@ public class AdherenceRefresh {
 					        + sqlValue(injection.getOnTime()) + ")");
 				}
 			}
-			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today);
+			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today, oralFirstDueDays);
 			if (row != null) {
 				rows.add("(" + entry.getKey() + ", " + sqlValue(row.regimen) + ", " + sqlValue(row.interval) + ", "
 				        + sqlValue(row.adherence) + ", " + sqlValue(row.lastGiven) + ", " + sqlValue(row.nextDue) + ", "
@@ -280,19 +285,25 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Each oral adherence form, by its encounter's date since the form has none of its own; one saved
-	 * without an estimate still counts, as ACT 2.0 counted it.
+	 * Each oral adherence form, by its Date of Adherence Estimate, else its encounter's date, as a BPG
+	 * form counts by its injection date; one saved without an estimate still counts, as ACT 2.0 counted
+	 * it.
 	 */
 	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL(
-		    "select e.patient_id, e.encounter_datetime, est.value_numeric, dc.uuid" + " from encounter e"
-		            + " left join obs est on est.encounter_id = e.encounter_id and est.voided = false and est.concept_id = "
-		            + concept(admin, GP_ESTIMATE)
-		            + " left join obs d on d.encounter_id = e.encounter_id and d.voided = false and d.concept_id = "
-		            + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
-		            + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)" + patientFilter
-		            + " order by e.patient_id, e.encounter_datetime, e.encounter_id, est.obs_id, d.obs_id",
+		// With no date concept set, every form counts from its encounter's date, as before the form had one.
+		boolean dated = StringUtils.isNotBlank(admin.getGlobalProperty(GP_ESTIMATE_DATE));
+		String dayColumn = dated ? "coalesce(dt.value_datetime, e.encounter_datetime)" : "e.encounter_datetime";
+		List<List<Object>> rows = admin.executeSQL("select e.patient_id, " + dayColumn + ", est.value_numeric, dc.uuid"
+		        + " from encounter e"
+		        + (dated ? " left join obs dt on dt.encounter_id = e.encounter_id and dt.voided = false and dt.concept_id = "
+		                + concept(admin, GP_ESTIMATE_DATE) : "")
+		        + " left join obs est on est.encounter_id = e.encounter_id and est.voided = false and est.concept_id = "
+		        + concept(admin, GP_ESTIMATE)
+		        + " left join obs d on d.encounter_id = e.encounter_id and d.voided = false and d.concept_id = "
+		        + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
+		        + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)" + patientFilter
+		        + " order by e.patient_id, " + dayColumn + ", e.encounter_id, est.obs_id, d.obs_id",
 		    true);
 		for (List<Object> row : rows) {
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral = history(histories, row.get(0)).oral;
@@ -345,6 +356,26 @@ public class AdherenceRefresh {
 			days.put(uuid(parts[0].trim(), property), Integer.valueOf(parts[1].trim()));
 		}
 		return days;
+	}
+	
+	/**
+	 * Days after an oral regimen starts that its first oral visit is due while none is recorded, or
+	 * null when the property is blank, which gives such a regimen no due date.
+	 */
+	static Integer oralFirstDueDays() {
+		return days(Context.getAdministrationService(), GP_ORAL_FIRST_DUE);
+	}
+	
+	/** A global property holding a number of days, or null when blank. */
+	private static Integer days(AdministrationService admin, String property) {
+		String value = StringUtils.trimToNull(admin.getGlobalProperty(property));
+		if (value == null) {
+			return null;
+		}
+		if (!StringUtils.isNumeric(value)) {
+			throw new IllegalStateException(property + " must be a number of days, or empty");
+		}
+		return Integer.valueOf(value);
 	}
 	
 	/** A global property of concept uuids, separated by commas; none when blank. */

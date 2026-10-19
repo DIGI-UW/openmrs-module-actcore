@@ -68,6 +68,9 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
+	 * ACT 2.0's calculation as it was: an oral regimen with no oral adherence entry since it started
+	 * gets no due date.
+	 *
 	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
 	 *            regimen that is not an injection
 	 * @param injections the dates injections were given
@@ -75,6 +78,20 @@ public final class AdherenceCalculation {
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
+		return calculate(prescriptions, injections, oral, today, null);
+	}
+	
+	/**
+	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
+	 *            regimen that is not an injection
+	 * @param injections the dates injections were given
+	 * @param oral the oral adherence entries by date
+	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due, while
+	 *            no oral adherence entry has been recorded since the start; null gives such a regimen
+	 *            no due date, as ACT 2.0 did
+	 */
+	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
+	        SortedMap<LocalDate, OralEntry> oral, LocalDate today, Integer oralFirstDueDays) {
 		// Future prescriptions and oral entries do not count.
 		SortedMap<LocalDate, Integer> started = prescriptions.headMap(today.plusDays(1));
 		SortedMap<LocalDate, OralEntry> estimated = oral.headMap(today.plusDays(1));
@@ -137,7 +154,7 @@ public final class AdherenceCalculation {
 		SortedSet<LocalDate> givenByToday = injections.headSet(today.plusDays(1));
 		LocalDate latestInjection = givenByToday.isEmpty() ? null : givenByToday.last();
 		return new Result(adherence(estimate, missedDays, totalDays),
-		        nextDue(started, latestInjection, latestEstimateDate, estimated));
+		        nextDue(started, latestInjection, latestEstimateDate, estimated, oralFirstDueDays));
 	}
 	
 	/**
@@ -160,13 +177,18 @@ public final class AdherenceCalculation {
 	}
 	
 	private static LocalDate nextDue(SortedMap<LocalDate, Integer> started, LocalDate latestInjection,
-	        LocalDate latestEstimateDate, SortedMap<LocalDate, OralEntry> estimated) {
+	        LocalDate latestEstimateDate, SortedMap<LocalDate, OralEntry> estimated, Integer oralFirstDueDays) {
 		LocalDate latestPrescription = started.lastKey();
 		int intervalDays = started.get(latestPrescription);
 		if (intervalDays != 0) {
 			LocalDate from = latestInjection != null && latestInjection.isAfter(latestPrescription) ? latestInjection
 			        : latestPrescription;
 			return from.plusDays(intervalDays);
+		}
+		// Nothing recorded since the oral regimen started: its first oral visit is due, if a day is set. Before
+		// the estimate branch, since a visit under an earlier oral course would otherwise set the date.
+		if (oralFirstDueDays != null && estimated.tailMap(latestPrescription).isEmpty()) {
+			return latestPrescription.plusDays(oralFirstDueDays);
 		}
 		if (latestEstimateDate != null) {
 			Integer durationDays = estimated.get(latestEstimateDate).durationDays;
