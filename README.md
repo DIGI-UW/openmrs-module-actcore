@@ -71,6 +71,22 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   Inactive - Death on their death date, or on the enrolment's latest status date when that is later.
   As for the RHD Registry, an enrolment may not overlap another in the same study while either is
   open, and merging two patients folds such a pair into one.
+- **Download.** ACT 2.0's Download page: `POST /ws/rest/v1/actcore/download` with a `form` uuid, its
+  `fields` (each a `concept` uuid and a `label`) and an optional `startDate` and `endDate`
+  (`yyyy-MM-dd`, both inclusive, by the encounter's date) answers `headers` and `rows`: one row per saved
+  form, with the ACT ID, sex, age at the form's date, its date and location, and each field's answers,
+  repeated answers joined by `; `. Only a user who may download identifiers also gets the given and
+  family names, birth date, identifying ID numbers, phones and the fields that identify the patient
+  (`actcore.download.identifyingConcepts`); for anyone else those fields are left out and their labels
+  listed in `withheld`. A research download, for a user who may download only research data, holds
+  only patients whose research opt-in (`actcore.studies.optInAttributeType`) is Yes, and never
+  identifiers; with the opt-in or its Yes unset, it holds no one. Every download is recorded in the
+  table `actcore_download_log` before its rows are sent, and fails if it cannot be: who, when, the form,
+  the fields given and withheld, the dates, the number of rows and whether it had identifiers or only
+  research participants. `GET /ws/rest/v1/actcore/download?limit=<n>` lists the latest, newest first:
+  100 by default, at most 500. The audit log module (auditlogweb) records the patients a user opens and
+  the forms they save, but has no way for another module to record an event of its own, so downloads
+  are kept here.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
@@ -301,6 +317,9 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.studies.*` | the ACT attribute types and concepts | The registry consent and research opt-in person attribute types, their Yes answer, the Study ID program attribute type, and the status open enrolments end in at death. Empty one to drop its rule, for example while migrating ACT 2.0 data; the rule on an open enrolment for a patient who has died has no property |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 | `actcore.consultation.*` | the RHD Consultation Visit's Next Consultation Time Amount and CIEL Time Period (1732) | The two questions the next cardiology visit reads; the period's answers must be CIEL days, weeks, months or years (1072, 1073, 1074, 1734); see `config.xml` |
+| `actcore.download.identifyingIdentifierTypes` | the National ID, External Patient ID and Alternate ID | The identifier types a download leaves out without identifiers, and gives as columns with them; the ACT ID is the preferred identifier of any other type |
+| `actcore.download.identifyingAttributeTypes` | the primary and secondary phones, their owners and the consent person | The person attribute types a download gives as columns only with identifiers |
+| `actcore.download.identifyingConcepts` | the RHD Patient Information form's Home Address, Village/Area of Residence, School Name, Additional information to help locate patient and Relocation Area | The questions a download gives only with identifiers, so never in a research download; without, it leaves them out and lists their labels in `withheld` |
 
 ## Security
 
@@ -312,6 +331,11 @@ Listing the research studies needs Get Programs. Creating and renaming them need
 `Task: act.manageStudies`, which the distribution creates; the module then saves the study's concept and
 program with Manage Concepts and Manage Programs on the caller's behalf, so grant it only to roles you
 would let add concepts and programs.
+
+A download needs `Task: act.downloadData`, or `Task: act.downloadResearchData` for a research download
+only, plus Get Forms, Get Concepts, Get Encounters, Get Observations and Get Patients. With
+`Task: act.downloadData`, `Task: act.downloadIdentifiers` keeps the identifiers. The distribution
+creates the three. Listing the downloads needs the audit log module's View Read Audit Logs.
 
 Calling the next cardiology visit needs Get Observations.
 

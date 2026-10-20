@@ -19,7 +19,7 @@
   <package>org.openmrs.module.actcore</package>
   <author>UW DIGI</author>
   <description>
-    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, and loading the report descriptors at startup.
+    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, a download of forms' fields, each recorded, and loading the report descriptors at startup.
   </description>
 
   <activator>org.openmrs.module.actcore.ActCoreActivator</activator>
@@ -360,6 +360,27 @@
     </description>
   </globalProperty>
 
+  <globalProperty>
+    <property>actcore.download.identifyingIdentifierTypes</property>
+    <defaultValue>fdd6f720-743b-57fc-915a-87c0f571097b,810bfaee-85de-5a81-b79c-954774076594,060a2595-da89-5509-8cf4-645a8e50ad8a</defaultValue>
+    <description>
+      The patient identifier types, by uuid and comma-separated, that a download leaves out for a user without Task: act.downloadIdentifiers, and gives as columns to one with it. The default is the National ID, External Patient ID and Alternate ID. The ACT ID column is the patient's preferred identifier of any other type.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.download.identifyingAttributeTypes</property>
+    <defaultValue>542c6fd2-05ca-53e3-a4f5-cd23bc1abd8f,ea3cb7ae-ffbe-5aee-8343-44977898f675,c6f4ebdf-4eca-5d21-97cb-f45231b5c104,168367b1-0a0e-5a5b-bd21-95a5ca1986d4,a8ff9d47-dcdc-579a-a9b3-1d883c4d344b</defaultValue>
+    <description>
+      The person attribute types, by uuid and comma-separated, that a download gives as columns only to a user with Task: act.downloadIdentifiers, besides the names and birth date. The default is the primary and secondary phones, their owners and the consent person.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.download.identifyingConcepts</property>
+    <defaultValue>1af5b942-8747-5dfb-aa40-805b5575f2e3,c5641213-1ec1-5378-b6de-9135ca25a56d,cfd8f77a-a2b5-5836-96c1-d3e5fdd48e02,2cebe220-2a9d-5c53-be68-f2257a4bfc9e,32f3e45d-c2a8-5c19-b4d1-9306251426f6</defaultValue>
+    <description>
+      The questions' concepts, by uuid and comma-separated, whose answers identify the patient: a download leaves them out, and names them in withheld, unless the user has Task: act.downloadIdentifiers and it is not a research download. The default is the RHD Patient Information form's Home Address, Village/Area of Residence, School Name, Additional information to help locate patient and Relocation Area.
+    </description>
+  </globalProperty>
   <globalProperty>
     <property>actcore.forms.femaleOnly</property>
     <defaultValue>a4f9103b-8396-3087-8cf4-e91610ec7c2d</defaultValue>
