@@ -260,6 +260,170 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void savePatientProgram_shouldRefuseAnOpenStudyEnrolmentEditedToHaveNoStudyIdButLetACompletedOneGo() {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(2), study);
+		PatientProgramAttribute id = new PatientProgramAttribute();
+		id.setAttributeType(studyId);
+		id.setValue("ARC-7");
+		enrolment.addAttribute(id);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		
+		// The attributes are editable over REST, so an edit can drop the Study ID of an open enrolment.
+		id.setVoided(true);
+		assertRefused(programs, enrolment, "Study ID");
+		
+		// A completed enrolment is history, and may be edited without one.
+		enrolment.setDateCompleted(new Date());
+		programs.savePatientProgram(enrolment);
+	}
+	
+	@Test
+	public void savePatientProgram_shouldLetAnEditKeepOpenAStudyEnrolmentStoredWithoutAStudyId() {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		// As core's merge saves its copy of the other patient's enrolment, without the Study ID.
+		PatientProgram copy = enrolment(Context.getPatientService().getPatient(2), study);
+		Context.getProgramWorkflowService().savePatientProgram(copy);
+		Context.flushSession();
+		
+		copy.setDateEnrolled(new Date(copy.getDateEnrolled().getTime() - 86400000L));
+		programs.savePatientProgram(copy);
+		Context.flushSession();
+		
+		assertNull(Context.getProgramWorkflowService().getPatientProgram(copy.getPatientProgramId()).getDateCompleted());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseReopeningACompletedStudyEnrolmentWithoutAStudyId() {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(2), study);
+		PatientProgramAttribute id = new PatientProgramAttribute();
+		id.setAttributeType(studyId);
+		id.setValue("ARC-7");
+		enrolment.addAttribute(id);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		enrolment.setDateCompleted(new Date());
+		id.setVoided(true);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		
+		enrolment.setDateCompleted(null);
+		assertRefused(programs, enrolment, "Study ID");
+		
+		// As ACT 2.0's history was stored: completed, and never given a Study ID.
+		PatientProgram history = enrolment(Context.getPatientService().getPatient(6), study);
+		history.setDateCompleted(new Date());
+		Context.getProgramWorkflowService().savePatientProgram(history);
+		Context.flushSession();
+		
+		history.setDateCompleted(null);
+		assertRefused(programs, history, "Study ID");
+	}
+	
+	@Test
+	public void savePatientProgram_shouldNotHoldAnEditToConsentTheOptInOrBeingAlive() {
+		Program study = studies.create("ARC");
+		Concept yes = concept("Agreed");
+		Concept no = concept("Declined");
+		PersonAttributeType consent = attributeType("Consent Given");
+		PersonAttributeType optIn = attributeType("Research Opt-In");
+		property(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
+		property(StudyEnrolmentRules.CONSENT_PROPERTY, consent.getUuid());
+		property(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		Patient patient = Context.getPatientService().getPatient(2);
+		patient.addAttribute(new PersonAttribute(consent, yes.getConceptId().toString()));
+		patient.addAttribute(new PersonAttribute(optIn, yes.getConceptId().toString()));
+		PatientProgram enrolment = enrolment(patient, study);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		
+		// Consent withdrawn and the patient dead: the enrolment can still be edited, here to end it.
+		patient.addAttribute(new PersonAttribute(consent, no.getConceptId().toString()));
+		patient.setDead(true);
+		patient.setCauseOfDeath(Context.getConceptService().getConcept(3));
+		enrolment.setDateCompleted(new Date());
+		programs.savePatientProgram(enrolment);
+		
+		assertNotNull(
+		    Context.getProgramWorkflowService().getPatientProgram(enrolment.getPatientProgramId()).getDateCompleted());
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseMovingAnEnrolmentIntoOrOutOfAStudy() {
+		Program study = studies.create("ARC");
+		Program other = studies.create("Miller");
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram inStudy = enrolment(patient, study);
+		programs.savePatientProgram(inStudy);
+		PatientProgram elsewhere = enrolment(patient, Context.getProgramWorkflowService().getProgram(1));
+		programs.savePatientProgram(elsewhere);
+		Context.flushSession();
+		
+		inStudy.setProgram(other);
+		assertRefused(programs, inStudy, "stays in its study");
+		inStudy.setProgram(Context.getProgramWorkflowService().getProgram(1));
+		assertRefused(programs, inStudy, "stays in its study");
+		elsewhere.setProgram(study);
+		assertRefused(programs, elsewhere, "stays in its study");
+		
+		// An edit that keeps the program is not a move.
+		inStudy.setProgram(study);
+		inStudy.setDateCompleted(new Date());
+		programs.savePatientProgram(inStudy);
+	}
+	
+	@Test
+	public void savePatientProgram_shouldRefuseMovingAnEnrolmentIntoAStudyThroughTheModulesAdviceChain() {
+		Program study = studies.create("ARC");
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram elsewhere = enrolment(patient, Context.getProgramWorkflowService().getProgram(1));
+		Context.getProgramWorkflowService().savePatientProgram(elsewhere);
+		Context.flushSession();
+		
+		// config.xml advises the rules before the overlap guard, whose query flushes the edit.
+		elsewhere.setProgram(study);
+		assertRefused(Context.getProgramWorkflowService(), elsewhere, "stays in its study");
+	}
+	
+	@Test
 	public void savePatientProgram_shouldRefuseANewStudyEnrolmentForAPatientWhoDied() {
 		Program study = studies.create("ARC");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
@@ -681,9 +845,9 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	private void adviseAsTheModuleDoes() {
 		Context.addAdvice(PatientService.class, closeOnDeath);
 		Context.addAdvice(PatientService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, rules);
 		Context.addAdvice(ProgramWorkflowService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, status);
-		Context.addAdvice(ProgramWorkflowService.class, rules);
 		Context.addAdvice(PersonService.class, closeOnDeath);
 	}
 	

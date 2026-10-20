@@ -26,10 +26,14 @@ import java.util.zip.ZipEntry;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.AdvicePoint;
 import org.openmrs.module.Module;
 import org.openmrs.module.ModuleFactory;
 import org.openmrs.module.ModuleFileParser;
+import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
+import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.util.CycleException;
 
 public class ModuleStartupOrderTest {
@@ -135,6 +139,21 @@ public class ModuleStartupOrderTest {
 		List<Module> order = ModuleFactory.getModulesInStartupOrder(loaded);
 		
 		assertTrue("startup order " + order, order.indexOf(reporting) < order.indexOf(actcore));
+	}
+	
+	/** The rules read an edited enrolment's stored program, which the guard's query flushes. */
+	@Test
+	public void advisesTheStudyEnrolmentRulesBeforeTheOverlapGuard() {
+		List<String> programAdvice = new ArrayList<String>();
+		for (AdvicePoint advice : actcore.getAdvicePoints()) {
+			if (ProgramWorkflowService.class.getName().equals(advice.getPoint())) {
+				programAdvice.add(advice.getClassName());
+			}
+		}
+		int rules = programAdvice.indexOf(StudyEnrolmentRules.class.getName());
+		int guard = programAdvice.indexOf(OneOpenRegistryEnrolment.class.getName());
+		
+		assertTrue("ProgramWorkflowService advice " + programAdvice, rules >= 0 && guard > rules);
 	}
 	
 	@Test

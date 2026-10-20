@@ -12,7 +12,6 @@ package org.openmrs.module.actcore.adherence;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.IntConsumer;
 
@@ -23,13 +22,10 @@ import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationAdapter;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Advice on EncounterService that recomputes a patient's adherence rows, then their flags, once an
- * encounter of theirs is saved, voided or purged; patientflags' own pass may precede the commit.
+ * Recomputes a patient's adherence rows, then their flags, once an encounter of theirs is saved,
+ * voided, unvoided or purged; patientflags' own pass may precede the commit.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
@@ -80,33 +76,15 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		        : null;
 		Object result = invocation.proceed();
 		if (patientId != null) {
-			afterCommit(patientId);
+			Transactions.afterCommit(RefreshAdherenceOnSave.class, patientId, new IntConsumer() {
+				
+				@Override
+				public void accept(int committed) {
+					refresh(committed);
+				}
+			});
 		}
 		return result;
-	}
-	
-	/**
-	 * Refreshes once the save commits, so a failed refresh cannot roll the save back, and once per
-	 * patient however many encounters the transaction saves.
-	 */
-	private void afterCommit(int patientId) {
-		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-			refresh(patientId);
-			return;
-		}
-		pending().patientIds.add(patientId);
-	}
-	
-	// Not a bound resource, which a REQUIRES_NEW suspend leaves bound to the outer transaction.
-	private Pending pending() {
-		for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
-			if (synchronization instanceof Pending && ((Pending) synchronization).of(this)) {
-				return (Pending) synchronization;
-			}
-		}
-		Pending pending = new Pending();
-		TransactionSynchronizationManager.registerSynchronization(pending);
-		return pending;
 	}
 	
 	private void refresh(int patientId) {
@@ -128,21 +106,5 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		// The save waits for this.
 		log.debug("Refreshing the adherence and flags of patient {} took {} ms", patientId,
 		    System.currentTimeMillis() - startedAt);
-	}
-	
-	private class Pending extends TransactionSynchronizationAdapter {
-		
-		private final Set<Integer> patientIds = new LinkedHashSet<Integer>();
-		
-		private boolean of(RefreshAdherenceOnSave advice) {
-			return advice == RefreshAdherenceOnSave.this;
-		}
-		
-		@Override
-		public void afterCommit() {
-			for (Integer patientId : patientIds) {
-				refresh(patientId);
-			}
-		}
 	}
 }

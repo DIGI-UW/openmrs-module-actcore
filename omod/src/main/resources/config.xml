@@ -52,6 +52,11 @@
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
   </advice>
+  <!-- The rules first: they read an edited enrolment's stored program before the overlap guard's query flushes the edit. -->
+  <advice>
+    <point>org.openmrs.api.ProgramWorkflowService</point>
+    <class>org.openmrs.module.actcore.studies.StudyEnrolmentRules</class>
+  </advice>
   <advice>
     <point>org.openmrs.api.ProgramWorkflowService</point>
     <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
@@ -61,16 +66,20 @@
     <class>org.openmrs.module.actcore.studies.StudyEnrolmentStatus</class>
   </advice>
   <advice>
-    <point>org.openmrs.api.ProgramWorkflowService</point>
-    <class>org.openmrs.module.actcore.studies.StudyEnrolmentRules</class>
-  </advice>
-  <advice>
     <point>org.openmrs.api.PersonService</point>
     <class>org.openmrs.module.actcore.studies.CloseStudiesOnDeath</class>
   </advice>
   <advice>
     <point>org.openmrs.api.EncounterService</point>
     <class>org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.PersonService</point>
+    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
+  </advice>
+  <advice>
+    <point>org.openmrs.api.PatientService</point>
+    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
   </advice>
   <globalProperty>
     <property>actcore.registryProgram</property>

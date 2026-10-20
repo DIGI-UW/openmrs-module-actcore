@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.actcore.studies;
 
+import java.util.List;
+
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.lang3.StringUtils;
@@ -17,6 +19,7 @@ import org.openmrs.PatientProgram;
 import org.openmrs.PatientProgramAttribute;
 import org.openmrs.PersonAttribute;
 import org.openmrs.PersonAttributeType;
+import org.openmrs.Program;
 import org.openmrs.ProgramAttributeType;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
@@ -26,8 +29,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Advice on ProgramWorkflowService that refuses a new study enrolment without registry consent, a
- * Yes to research or a Study ID, and an open one for a patient who has died.
+ * Refuses a new study enrolment without consent, the opt-in, a Study ID or a living patient, and an
+ * edit that changes a study enrolment's program or strips an open one of its Study ID.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
 	
@@ -54,30 +57,43 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	
 	private static void refuseUnlessAllowed(PatientProgram enrolment) {
 		// A merge copies each enrolment to the preferred patient as a new one, without its Study ID.
-		if (enrolment.getPatientProgramId() != null || Boolean.TRUE.equals(enrolment.getVoided())
-		        || enrolment.getPatient() == null || OneOpenRegistryEnrolment.isSuspended()
-		        || !new Studies().isStudy(enrolment.getProgram())) {
+		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getPatient() == null
+		        || OneOpenRegistryEnrolment.isSuspended()) {
+			return;
+		}
+		Studies studies = new Studies();
+		boolean existing = enrolment.getPatientProgramId() != null;
+		if (existing) {
+			refuseMoveAcrossStudies(enrolment, studies);
+		}
+		if (!studies.isStudy(enrolment.getProgram())) {
 			return;
 		}
 		for (String privilege : PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			// A completed enrolment is history, such as ACT 2.0's, which a later death does not undo.
-			if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {
-				throw refusal(enrolment, "The patient has died, so they cannot be enrolled in a study");
+			// Not on an edit, so a withdrawal after consent is revoked and CloseStudiesOnDeath still save.
+			if (!existing) {
+				// A completed enrolment is history, such as ACT 2.0's, which a later death does not undo.
+				if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {
+					throw refusal(enrolment, "The patient has died, so they cannot be enrolled in a study");
+				}
+				Concept yes = conceptByProperty(YES_PROPERTY);
+				if (!answeredYes(enrolment, CONSENT_PROPERTY, yes)) {
+					throw refusal(enrolment,
+					    "The patient has not given registry consent, so they cannot be enrolled in a study."
+					            + " Record Consent Obtained as Yes on their registration first");
+				}
+				if (!answeredYes(enrolment, OPT_IN_PROPERTY, yes)) {
+					throw refusal(enrolment,
+					    "The patient has not said they would like to be considered for research, so they cannot be"
+					            + " enrolled in a study. Record their answer on the Research participation page first");
+				}
 			}
-			Concept yes = conceptByProperty(YES_PROPERTY);
-			if (!answeredYes(enrolment, CONSENT_PROPERTY, yes)) {
-				throw refusal(enrolment, "The patient has not given registry consent, so they cannot be enrolled in a study."
-				        + " Record Consent Obtained as Yes on their registration first");
-			}
-			if (!answeredYes(enrolment, OPT_IN_PROPERTY, yes)) {
-				throw refusal(enrolment,
-				    "The patient has not said they would like to be considered for research, so they cannot be enrolled"
-				            + " in a study. Record their answer on the Research participation page first");
-			}
-			if (!hasStudyId(enrolment)) {
+			// Attributes can be edited, so an open enrolment keeps the Study ID it was saved with.
+			if (!hasStudyId(enrolment)
+			        && (!existing || enrolment.getDateCompleted() == null && !storedOpenWithoutStudyId(enrolment))) {
 				throw refusal(enrolment,
 				    "A study enrolment needs a Study ID. Enrol the patient from their Research participation page");
 			}
@@ -86,6 +102,44 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			for (String privilege : PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
+		}
+	}
+	
+	/**
+	 * An enrolment stays in the program it was saved in when that or the new one is a study: moving it
+	 * would skip the enrolment rules and carry the Study ID of one study into another.
+	 */
+	private static void refuseMoveAcrossStudies(PatientProgram enrolment, Studies studies) {
+		Integer stored = storedProgramId(enrolment.getPatientProgramId());
+		if (stored == null || enrolment.getProgram() == null || stored.equals(enrolment.getProgram().getProgramId())) {
+			return;
+		}
+		Context.addProxyPrivilege(PrivilegeConstants.GET_PROGRAMS);
+		try {
+			Program was = Context.getProgramWorkflowService().getProgram(stored);
+			if (studies.isStudy(enrolment.getProgram()) || (was != null && studies.isStudy(was))) {
+				throw refusal(enrolment, "A study enrolment stays in its study: end this enrolment and enrol the patient"
+				        + " in the other study from their Research participation page");
+			}
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_PROGRAMS);
+		}
+	}
+	
+	/**
+	 * The program the enrolment is saved in, read from the table as the session holds the edited one.
+	 */
+	private static Integer storedProgramId(int patientProgramId) {
+		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		try {
+			List<List<Object>> rows = Context.getAdministrationService().executeSQL(
+			    "select program_id from patient_program where patient_program_id = " + patientProgramId, true);
+			return rows == null || rows.isEmpty() || rows.get(0).get(0) == null ? null
+			        : ((Number) rows.get(0).get(0)).intValue();
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		}
 	}
 	
@@ -116,6 +170,29 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			}
 		}
 		return false;
+	}
+	
+	/**
+	 * Whether the stored row is open without a Study ID, as core's merge saves its copy. Reopening a
+	 * completed enrolment that has no Study ID is still refused.
+	 */
+	private static boolean storedOpenWithoutStudyId(PatientProgram enrolment) {
+		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		try {
+			List<List<Object>> rows = Context.getAdministrationService()
+			        .executeSQL("select p.date_completed, (select count(*) from patient_program_attribute a"
+			                + " join program_attribute_type t on t.program_attribute_type_id = a.attribute_type_id"
+			                + " where a.patient_program_id = p.patient_program_id and t.uuid = '"
+			                + property(STUDY_ID_PROPERTY).replace("'", "''")
+			                + "' and a.voided = false and trim(a.value_reference) <> '') from patient_program p"
+			                + " where p.patient_program_id = " + enrolment.getPatientProgramId(),
+			            true);
+			return rows != null && !rows.isEmpty() && rows.get(0).get(0) == null
+			        && ((Number) rows.get(0).get(1)).intValue() == 0;
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		}
 	}
 	
 	private static Concept conceptByProperty(String property) {
