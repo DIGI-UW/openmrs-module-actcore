@@ -76,9 +76,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		        : null;
 		Object result = invocation.proceed();
 		if (patientId != null) {
-			// Once the save commits, so a failed refresh cannot roll it back, and once per patient however
-			// many encounters the transaction saves.
-			Transactions.afterCommit(this, patientId, new IntConsumer() {
+			Transactions.afterCommit(RefreshAdherenceOnSave.class, patientId, new IntConsumer() {
 				
 				@Override
 				public void accept(int committed) {

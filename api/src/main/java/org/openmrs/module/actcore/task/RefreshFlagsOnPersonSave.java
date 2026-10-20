@@ -24,11 +24,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice on PersonService and PatientService that re-evaluates a patient's flags and flag lists
- * once a save, void or unvoid of them commits. Flags such as RHD death not recorded on patient and
- * RHD consent date missing read the person, not an encounter, so marking a patient deceased or
- * adding their Date of Consent otherwise left them flagged until the next refresh. The adherence
- * rows read encounters only, so they are left alone.
+ * Re-evaluates a patient's flags and flag lists once a save, void or unvoid of their person
+ * commits; the adherence rows read encounters only, so they are left alone.
  */
 public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 	
@@ -61,7 +58,7 @@ public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 		Object result = invocation.proceed();
 		// The id is read after the save, as a new person has none before it.
 		if (watched && ((Person) args[0]).getPersonId() != null) {
-			Transactions.afterCommit(this, ((Person) args[0]).getPersonId(), new IntConsumer() {
+			Transactions.afterCommit(RefreshFlagsOnPersonSave.class, ((Person) args[0]).getPersonId(), new IntConsumer() {
 				
 				@Override
 				public void accept(int personId) {

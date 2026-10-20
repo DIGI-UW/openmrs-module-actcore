@@ -29,11 +29,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Advice on ProgramWorkflowService that refuses a new study enrolment without registry consent, a
- * Yes to research or a Study ID, and an open one for a patient who has died; and refuses an edit
- * that moves an enrolment into or out of a study, or leaves an open study enrolment without its
- * Study ID. An edit is not held to consent, the opt-in or being alive: a patient who withdrew
- * consent is still withdrawn from the study, and a death still closes its enrolments.
+ * Refuses a new study enrolment without consent, the opt-in, a Study ID or a living patient, and an
+ * edit that changes a study enrolment's program or strips an open one of its Study ID.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
 	
@@ -76,6 +73,7 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
+			// Not on an edit, so a withdrawal after consent is revoked and CloseStudiesOnDeath still save.
 			if (!existing) {
 				// A completed enrolment is history, such as ACT 2.0's, which a later death does not undo.
 				if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {

@@ -349,6 +349,21 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void savePatientProgram_shouldRefuseMovingAnEnrolmentIntoAStudyThroughTheModulesAdviceChain() {
+		Program study = studies.create("ARC");
+		adviseAsTheModuleDoes();
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram elsewhere = enrolment(patient, Context.getProgramWorkflowService().getProgram(1));
+		Context.getProgramWorkflowService().savePatientProgram(elsewhere);
+		Context.flushSession();
+		
+		// The overlap guard's query flushes the edited program before the rules read the stored one, unless the
+		// rules are advised first, as config.xml orders them.
+		elsewhere.setProgram(study);
+		assertRefused(Context.getProgramWorkflowService(), elsewhere, "stays in its study");
+	}
+	
+	@Test
 	public void savePatientProgram_shouldRefuseANewStudyEnrolmentForAPatientWhoDied() {
 		Program study = studies.create("ARC");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
@@ -770,9 +785,9 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	private void adviseAsTheModuleDoes() {
 		Context.addAdvice(PatientService.class, closeOnDeath);
 		Context.addAdvice(PatientService.class, guard);
+		Context.addAdvice(ProgramWorkflowService.class, rules);
 		Context.addAdvice(ProgramWorkflowService.class, guard);
 		Context.addAdvice(ProgramWorkflowService.class, status);
-		Context.addAdvice(ProgramWorkflowService.class, rules);
 		Context.addAdvice(PersonService.class, closeOnDeath);
 	}
 	
