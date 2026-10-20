@@ -248,8 +248,10 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			if (alreadyFlagged.containsKey(patientId)) {
 				flagService.deletePatientFlagForPatient(patient, flag);
 			}
+			RaisedFlags.lower(flagId, patientId);
 			return;
 		}
+		RaisedFlags.raise(flagId, patientId);
 		String message = message(flag, patientId, evaluationContext);
 		if (!alreadyFlagged.containsKey(patientId)) {
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
@@ -281,6 +283,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		
 		for (Flag flag : flagService.getAllFlags()) {
 			if (!Boolean.TRUE.equals(flag.getEnabled()) || Boolean.TRUE.equals(flag.getRetired())) {
+				lowerAll(flag);
 				continue;
 			}
 			evaluated++;
@@ -302,6 +305,16 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
 		recordFinished();
 		return new Result(failed, lists.failures, adherenceFailed);
+	}
+	
+	/** A flag no longer evaluated, disabled or retired, has no raised date or dismissal to keep. */
+	private static void lowerAll(Flag flag) {
+		try {
+			RaisedFlags.lowerAll(flag.getFlagId());
+		}
+		catch (RuntimeException e) {
+			log.error("Could not clear when flag '{}' was raised", flag.getName(), e);
+		}
 	}
 	
 	void refreshAdherence() {
@@ -348,6 +361,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		int raisedBefore = raised;
 		int clearedBefore = cleared;
 		
+		trackRaised(flag, matching);
+		
 		// Clearing first, since evaluating a message can throw and end the flag's pass.
 		for (Integer patientId : alreadyFlagged.keySet()) {
 			if (!matching.contains(patientId)) {
@@ -369,6 +384,20 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		
 		if (raised > raisedBefore || cleared > clearedBefore) {
 			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), raised - raisedBefore, cleared - clearedBefore);
+		}
+	}
+	
+	void trackRaised(Flag flag, Set<Integer> matching) {
+		Set<Integer> alreadyRaised = RaisedFlags.raisedPatients(flag.getFlagId());
+		for (Integer patientId : alreadyRaised) {
+			if (!matching.contains(patientId)) {
+				RaisedFlags.lower(flag.getFlagId(), patientId);
+			}
+		}
+		for (Integer patientId : matching) {
+			if (!alreadyRaised.contains(patientId)) {
+				RaisedFlags.raise(flag.getFlagId(), patientId);
+			}
 		}
 	}
 	

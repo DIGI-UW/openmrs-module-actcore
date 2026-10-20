@@ -40,6 +40,10 @@
   </aware_of_modules>
 
   <advice>
+    <point>org.openmrs.module.patientflags.api.FlagService</point>
+    <class>org.openmrs.module.actcore.task.HideDismissedFlags</class>
+  </advice>
+  <advice>
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.registry.EnrolOnRegistration</class>
   </advice>
@@ -142,6 +146,17 @@
       Only flags carrying this tag are mirrored into a patient list. Leave empty to give every
       enabled flag a list. Useful where some flags are a clinical signal on the chart and are not
       worth a worklist of their own. A list whose flag loses the tag is kept, emptied.
+    </description>
+  </globalProperty>
+
+  <globalProperty>
+    <property>actcore.dismissFlagTag</property>
+    <defaultValue>Critical data</defaultValue>
+    <description>
+      Only flags carrying this tag can be dismissed, by a user with Task: act.dismissFlags. A dismissed
+      flag is left out of the patient's flags and its list until ACT Core finds that the patient no
+      longer matches it; if they match it again later, it shows again. Leave empty to let every flag
+      be dismissed.
     </description>
   </globalProperty>
 

@@ -79,6 +79,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	
 	@Before
 	public void setUp() {
+		RaisedFlagsTable.create();
 		flagService = Context.getService(FlagService.class);
 		saveCohortType("System List");
 	}

@@ -87,4 +87,45 @@
       <column name="date_created"/>
     </createIndex>
   </changeSet>
+  <changeSet id="actcore-2026-10-20-raised-flag" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_raised_flag"/></not>
+    </preConditions>
+    <comment>Each patient's flag that ACT Core's evaluation finds raised, since when, and who dismissed it</comment>
+    <createTable tableName="actcore_raised_flag">
+      <column name="patient_id" type="int">
+        <constraints primaryKey="true" nullable="false"
+            foreignKeyName="actcore_raised_flag_patient" references="patient(patient_id)"/>
+      </column>
+      <column name="flag_id" type="int">
+        <constraints primaryKey="true" nullable="false" deleteCascade="true"
+            foreignKeyName="actcore_raised_flag_flag" references="patientflags_flag(flag_id)"/>
+      </column>
+      <column name="raised_since" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+      <column name="dismissed_by" type="int">
+        <constraints foreignKeyName="actcore_raised_flag_dismissed_by" references="users(user_id)"/>
+      </column>
+      <column name="date_dismissed" type="datetime"/>
+    </createTable>
+    <createIndex tableName="actcore_raised_flag" indexName="actcore_raised_flag_flag">
+      <column name="flag_id"/>
+    </createIndex>
+  </changeSet>
+  <changeSet id="actcore-2026-10-20-raised-flag-seed" author="UW DIGI">
+    <comment>Dates each flag raised now from the patient's time on its list, else from its oldest row</comment>
+    <sql>
+      INSERT INTO actcore_raised_flag (patient_id, flag_id, raised_since)
+      SELECT pf.patient_id, pf.flag_id, COALESCE(
+          (SELECT MIN(cm.start_date) FROM cohort_member cm
+           JOIN cohort c ON c.cohort_id = cm.cohort_id AND c.voided = 0
+           JOIN patientflags_flag f ON f.uuid = c.uuid
+           WHERE f.flag_id = pf.flag_id AND cm.patient_id = pf.patient_id AND cm.voided = 0 AND cm.end_date IS NULL),
+          MIN(pf.date_created), CURRENT_TIMESTAMP)
+      FROM patientflags_patient_flag pf
+      WHERE pf.voided = 0
+      GROUP BY pf.patient_id, pf.flag_id
+    </sql>
+  </changeSet>
 </databaseChangeLog>

@@ -34,6 +34,8 @@ import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.module.actcore.studies.CloseStudiesOnDeath;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.actcore.studies.StudyEnrolmentStatus;
+import org.openmrs.module.actcore.task.HideDismissedFlags;
+import org.openmrs.module.patientflags.api.FlagService;
 import org.w3c.dom.NodeList;
 
 public class AdviceRegistrationTest {
@@ -41,6 +43,11 @@ public class AdviceRegistrationTest {
 	@Test
 	public void configRegistersTheAdherenceRefreshOnEncounterService() throws Exception {
 		assertEquals(points(EncounterService.class), pointsOf(RefreshAdherenceOnSave.class));
+	}
+	
+	@Test
+	public void configRegistersTheDismissedFlagFilterOnFlagService() throws Exception {
+		assertEquals(points(FlagService.class), pointsOf(HideDismissedFlags.class));
 	}
 	
 	@Test
