@@ -64,4 +64,27 @@
       <where>property = 'actcore.nextSteps.encounterTypes' AND property_value = 'bpg:04cf03db-3b8e-5020-84b0-50b06338767a,oral:55271793-ef37-58da-9d86-1d9092a5a809,consult:c2503561-c00d-5460-8157-43d594472b4a,echo:730f5ec2-7102-55d0-8602-2d792844f245,procedures:c9b87090-8768-50be-987e-8ca0a8983429,inr:b4bb88a3-9a04-5142-85bd-bb63c270f632'</where>
     </update>
   </changeSet>
+  <changeSet id="actcore-2026-10-20-download-log" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_download_log"/></not>
+    </preConditions>
+    <comment>Each download of forms' fields: who, when, the form and what it held</comment>
+    <createTable tableName="actcore_download_log">
+      <column name="download_id" type="int" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="user_id" type="int">
+        <constraints nullable="false" foreignKeyName="actcore_download_log_user" references="users(user_id)"/>
+      </column>
+      <!-- No foreign key to the form, so purging it keeps the downloads that name it. -->
+      <column name="form_id" type="int"/>
+      <column name="detail" type="text"/>
+      <column name="date_created" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="actcore_download_log" indexName="actcore_download_log_date">
+      <column name="date_created"/>
+    </createIndex>
+  </changeSet>
 </databaseChangeLog>

@@ -17,6 +17,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.PatientProgram;
 import org.openmrs.PatientProgramAttribute;
+import org.openmrs.Person;
 import org.openmrs.PersonAttribute;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.Program;
@@ -153,7 +154,12 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		if (type == null || yes == null) {
 			return true;
 		}
-		PersonAttribute answer = enrolment.getPatient().getAttribute(type);
+		return answeredYes(enrolment.getPatient(), type, yes);
+	}
+	
+	/** Whether it holds Yes's concept id; the research download reads its opt-in here too. */
+	public static boolean answeredYes(Person person, PersonAttributeType type, Concept yes) {
+		PersonAttribute answer = person.getAttribute(type);
 		return answer != null && yes.getConceptId().toString().equals(answer.getValue());
 	}
 	
