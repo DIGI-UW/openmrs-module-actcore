@@ -92,7 +92,8 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 				}
 			}
 			// Attributes can be edited, so an open enrolment keeps the Study ID it was saved with.
-			if (!hasStudyId(enrolment) && (!existing || enrolment.getDateCompleted() == null && hadStudyId(enrolment))) {
+			if (!hasStudyId(enrolment)
+			        && (!existing || enrolment.getDateCompleted() == null && !storedOpenWithoutStudyId(enrolment))) {
 				throw refusal(enrolment,
 				    "A study enrolment needs a Study ID. Enrol the patient from their Research participation page");
 			}
@@ -172,20 +173,22 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	/**
-	 * Whether the stored enrolment has a Study ID, read from the table as the session holds the edited
-	 * one. A merge's copy has none, so an edit that leaves it open is not refused.
+	 * Whether the stored row is open without a Study ID, as core's merge saves its copy. Reopening a
+	 * completed enrolment that has no Study ID is still refused.
 	 */
-	private static boolean hadStudyId(PatientProgram enrolment) {
+	private static boolean storedOpenWithoutStudyId(PatientProgram enrolment) {
 		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		try {
 			List<List<Object>> rows = Context.getAdministrationService()
-			        .executeSQL("select count(*) from patient_program_attribute a join program_attribute_type t"
-			                + " on t.program_attribute_type_id = a.attribute_type_id where a.patient_program_id = "
-			                + enrolment.getPatientProgramId() + " and t.uuid = '"
+			        .executeSQL("select p.date_completed, (select count(*) from patient_program_attribute a"
+			                + " join program_attribute_type t on t.program_attribute_type_id = a.attribute_type_id"
+			                + " where a.patient_program_id = p.patient_program_id and t.uuid = '"
 			                + property(STUDY_ID_PROPERTY).replace("'", "''")
-			                + "' and a.voided = false and trim(a.value_reference) <> ''",
+			                + "' and a.voided = false and trim(a.value_reference) <> '') from patient_program p"
+			                + " where p.patient_program_id = " + enrolment.getPatientProgramId(),
 			            true);
-			return ((Number) rows.get(0).get(0)).intValue() > 0;
+			return rows != null && !rows.isEmpty() && rows.get(0).get(0) == null
+			        && ((Number) rows.get(0).get(1)).intValue() == 0;
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);

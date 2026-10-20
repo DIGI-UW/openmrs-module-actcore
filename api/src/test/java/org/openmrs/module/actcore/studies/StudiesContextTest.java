@@ -313,6 +313,43 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void savePatientProgram_shouldRefuseReopeningACompletedStudyEnrolmentWithoutAStudyId() {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(2), study);
+		PatientProgramAttribute id = new PatientProgramAttribute();
+		id.setAttributeType(studyId);
+		id.setValue("ARC-7");
+		enrolment.addAttribute(id);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		enrolment.setDateCompleted(new Date());
+		id.setVoided(true);
+		programs.savePatientProgram(enrolment);
+		Context.flushSession();
+		
+		enrolment.setDateCompleted(null);
+		assertRefused(programs, enrolment, "Study ID");
+		
+		// As ACT 2.0's history was stored: completed, and never given a Study ID.
+		PatientProgram history = enrolment(Context.getPatientService().getPatient(6), study);
+		history.setDateCompleted(new Date());
+		Context.getProgramWorkflowService().savePatientProgram(history);
+		Context.flushSession();
+		
+		history.setDateCompleted(null);
+		assertRefused(programs, history, "Study ID");
+	}
+	
+	@Test
 	public void savePatientProgram_shouldNotHoldAnEditToConsentTheOptInOrBeingAlive() {
 		Program study = studies.create("ARC");
 		Concept yes = concept("Agreed");
