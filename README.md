@@ -26,11 +26,12 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Daily refresh.** The task **RHD Patient Flag Refresh** re-evaluates every enabled flag and
   writes only the rows that changed. It first recomputes the prophylaxis adherence below, as a flag
   may read it (the distribution's RHD prophylaxis overdue flag reads the next due date).
-- **Refresh on save.** Once an encounter of a patient's is saved, voided or purged, their adherence
-  row is rewritten and their flags and lists re-evaluated; once a patient or their person is saved,
-  voided or unvoided, their flags and lists are re-evaluated, as flags such as RHD death not recorded
-  on patient and RHD consent date missing read the person. Both run after the commit, so a failure
-  cannot roll the save back, and once per patient however many saves the transaction holds.
+- **Refresh on save.** Once an encounter of a patient's is saved, voided, unvoided or purged, their
+  adherence row is rewritten and their flags and lists re-evaluated; once a patient or their person
+  is saved, voided or unvoided, their flags and lists are re-evaluated, as flags such as RHD death
+  not recorded on patient and RHD consent date missing read the person. Both run after the commit,
+  so a failure cannot roll the save back, and once per patient however many saves the transaction
+  holds.
 - **Refresh on demand.** `POST /ws/rest/v1/actcore/refresh` runs that refresh now, as the scheduler's
   daemon user, and answers once it has finished with `flagsFailed`, `listsFailed` and
   `adherenceFailed`, or with `refreshed` false when another run was already going. `GET` says when

@@ -121,6 +121,24 @@ public class RefreshFlagsOnPersonSaveContextTest extends BaseModuleContextSensit
 	}
 	
 	@Test
+	public void voidPerson_shouldRefreshTheFlagsOfAPersonWhoIsAPatient() {
+		persons(recorder).voidPerson(Context.getPersonService().getPerson(2), "duplicate");
+		commit();
+		
+		assertEquals(Arrays.asList(2), refreshed);
+	}
+	
+	@Test
+	public void savePatient_shouldRefreshAPatientOnceWhenThePersonAndPatientAdviceBothSaveThem() {
+		// As core's mergePatients voids the patient and then their person, through both services.
+		patients(recorder).savePatient(Context.getPatientService().getPatient(2));
+		persons(recorder).savePerson(Context.getPersonService().getPerson(2));
+		commit();
+		
+		assertEquals(Arrays.asList(2), refreshed);
+	}
+	
+	@Test
 	public void savePatient_shouldKeepTheSaveWhenTheFlagRefreshFails() {
 		Patient patient = Context.getPatientService().getPatient(2);
 		patient.setDead(true);

@@ -24,8 +24,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice on EncounterService that recomputes a patient's adherence rows, then their flags, once an
- * encounter of theirs is saved, voided or purged; patientflags' own pass may precede the commit.
+ * Recomputes a patient's adherence rows, then their flags, once an encounter of theirs is saved,
+ * voided, unvoided or purged; patientflags' own pass may precede the commit.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	

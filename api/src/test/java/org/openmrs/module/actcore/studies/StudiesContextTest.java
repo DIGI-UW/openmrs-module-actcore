@@ -279,13 +279,37 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		programs.savePatientProgram(enrolment);
 		Context.flushSession();
 		
-		// The attributes are editable over REST, so the edit can drop the Study ID; the open enrolment keeps it.
+		// The attributes are editable over REST, so an edit can drop the Study ID of an open enrolment.
 		id.setVoided(true);
 		assertRefused(programs, enrolment, "Study ID");
 		
 		// A completed enrolment is history, and may be edited without one.
 		enrolment.setDateCompleted(new Date());
 		programs.savePatientProgram(enrolment);
+	}
+	
+	@Test
+	public void savePatientProgram_shouldLetAnEditKeepOpenAStudyEnrolmentStoredWithoutAStudyId() {
+		Program study = studies.create("ARC");
+		ProgramAttributeType studyId = new ProgramAttributeType();
+		studyId.setName("Study Participant ID");
+		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
+		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
+		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
+		proxy.addInterface(ProgramWorkflowService.class);
+		proxy.addAdvice(new StudyEnrolmentRules());
+		ProgramWorkflowService programs = (ProgramWorkflowService) proxy.getProxy();
+		// As core's merge saves its copy of the other patient's enrolment, without the Study ID.
+		PatientProgram copy = enrolment(Context.getPatientService().getPatient(2), study);
+		Context.getProgramWorkflowService().savePatientProgram(copy);
+		Context.flushSession();
+		
+		copy.setDateEnrolled(new Date(copy.getDateEnrolled().getTime() - 86400000L));
+		programs.savePatientProgram(copy);
+		Context.flushSession();
+		
+		assertNull(Context.getProgramWorkflowService().getPatientProgram(copy.getPatientProgramId()).getDateCompleted());
 	}
 	
 	@Test
@@ -357,8 +381,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		Context.getProgramWorkflowService().savePatientProgram(elsewhere);
 		Context.flushSession();
 		
-		// The overlap guard's query flushes the edited program before the rules read the stored one, unless the
-		// rules are advised first, as config.xml orders them.
+		// config.xml advises the rules before the overlap guard, whose query flushes the edit.
 		elsewhere.setProgram(study);
 		assertRefused(Context.getProgramWorkflowService(), elsewhere, "stays in its study");
 	}

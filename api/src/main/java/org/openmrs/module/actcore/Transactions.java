@@ -46,10 +46,8 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work for the patient once the current transaction commits, so a failure in it cannot
-	 * roll the save back, and once per patient however many saves of theirs the transaction holds; at
-	 * once when no transaction is running. Each owner, such as an advice's class, keeps its own set, so
-	 * two instances of one advice do not refresh a patient twice.
+	 * Runs the work for the patient once the current transaction commits, or at once outside one, so a
+	 * failure cannot roll the save back; an owner, such as an advice class, runs it once per patient.
 	 */
 	public static void afterCommit(Object owner, int patientId, IntConsumer work) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {

@@ -91,8 +91,8 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 					            + " enrolled in a study. Record their answer on the Research participation page first");
 				}
 			}
-			// Attributes can be edited, so an open enrolment keeps its Study ID; a completed one is history.
-			if ((!existing || enrolment.getDateCompleted() == null) && !hasStudyId(enrolment)) {
+			// Attributes can be edited, so an open enrolment keeps the Study ID it was saved with.
+			if (!hasStudyId(enrolment) && (!existing || enrolment.getDateCompleted() == null && hadStudyId(enrolment))) {
 				throw refusal(enrolment,
 				    "A study enrolment needs a Study ID. Enrol the patient from their Research participation page");
 			}
@@ -169,6 +169,27 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			}
 		}
 		return false;
+	}
+	
+	/**
+	 * Whether the stored enrolment has a Study ID, read from the table as the session holds the edited
+	 * one. A merge's copy has none, so an edit that leaves it open is not refused.
+	 */
+	private static boolean hadStudyId(PatientProgram enrolment) {
+		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		try {
+			List<List<Object>> rows = Context.getAdministrationService()
+			        .executeSQL("select count(*) from patient_program_attribute a join program_attribute_type t"
+			                + " on t.program_attribute_type_id = a.attribute_type_id where a.patient_program_id = "
+			                + enrolment.getPatientProgramId() + " and t.uuid = '"
+			                + property(STUDY_ID_PROPERTY).replace("'", "''")
+			                + "' and a.voided = false and trim(a.value_reference) <> ''",
+			            true);
+			return ((Number) rows.get(0).get(0)).intValue() > 0;
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		}
 	}
 	
 	private static Concept conceptByProperty(String property) {
