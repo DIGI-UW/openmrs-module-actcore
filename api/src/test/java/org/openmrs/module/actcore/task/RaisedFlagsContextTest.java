@@ -106,7 +106,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("2026-01-05",
 		    single("select cast(m.start_date as date) from cohort_member m join cohort c on c.cohort_id = m.cohort_id"
 		            + " where c.uuid = '" + flag.getUuid() + "' and m.patient_id = " + PATIENT + " and m.end_date is null")
-		                    .toString());
+		            .toString());
 	}
 	
 	@Test
@@ -318,7 +318,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		return ((Number) single(
 		    "select count(*) from cohort_member m join cohort c on c.cohort_id = m.cohort_id" + " where c.uuid = '"
 		            + flag.getUuid() + "' and m.patient_id = " + PATIENT + " and m.end_date is null and m.voided = false"))
-		                    .longValue();
+		        .longValue();
 	}
 	
 	private long rows() {
