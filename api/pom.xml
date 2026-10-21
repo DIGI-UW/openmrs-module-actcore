@@ -30,13 +30,14 @@
       <groupId>org.openmrs.module</groupId>
       <artifactId>reporting-api</artifactId>
     </dependency>
-    <!-- The modules reporting requires, so the test context can start with reporting's beans on the classpath -->
+    <!-- Reporting's EvaluationContext extends calculation's context; reporting requires the module, so it is there -->
     <dependency>
       <groupId>org.openmrs.module</groupId>
       <artifactId>calculation-api</artifactId>
       <version>2.0.0</version>
-      <scope>test</scope>
+      <scope>provided</scope>
     </dependency>
+    <!-- The other modules reporting requires, so the test context can start with reporting's beans on the classpath -->
     <dependency>
       <groupId>org.openmrs.module</groupId>
       <artifactId>htmlwidgets-api</artifactId>

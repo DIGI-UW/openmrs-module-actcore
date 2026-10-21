@@ -17,6 +17,7 @@ import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
+import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -24,16 +25,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads the report descriptors, then registers the flag and adherence refreshes with the scheduler
- * on first start. Initializer has no domain for scheduler_task_config, and the patientflags module
- * registers nothing of its own, so without this the task would have to be created by hand in the
- * admin UI on every environment.
+ * Loads the report descriptors, then registers the flag and adherence refreshes and the run chart
+ * snapshot with the scheduler on first start. Initializer has no domain for scheduler_task_config,
+ * and the patientflags module registers nothing of its own, so without this the task would have to
+ * be created by hand in the admin UI on every environment.
  */
 public class ActCoreActivator extends BaseModuleActivator implements DaemonTokenAware {
 	
 	public static final String REFRESH_TASK_NAME = "RHD Patient Flag Refresh";
 	
 	public static final String ADHERENCE_TASK_NAME = "RHD Prophylaxis Adherence Refresh";
+	
+	public static final String RUN_CHART_TASK_NAME = "RHD Run Chart Snapshot";
 	
 	/**
 	 * The scheduler owns the interval once the task exists, so this is only the value the task is first
@@ -74,6 +77,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
 		    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
 		            + " injections and oral adherence estimates.");
+		schedule(RUN_CHART_TASK_NAME, RunChartSnapshotTask.class.getName(),
+		    "Snapshots each clinic's run chart metrics for today from the report actcore.runCharts.report names.");
 		log.info("ACT Core module started");
 	}
 	
