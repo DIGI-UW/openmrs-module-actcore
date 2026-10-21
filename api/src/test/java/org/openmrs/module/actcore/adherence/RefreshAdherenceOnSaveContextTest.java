@@ -36,6 +36,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.task.FlagListSync;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -469,6 +470,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		}
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
+		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.TABLE, false);
 		if (!committedFlags.isEmpty()) {
 			property(FlagListSync.TAG_PROPERTY, "");
 			property(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY, "");

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
@@ -34,6 +35,11 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 	private static final int PATIENT = 7;
 	
 	private final List<Flag> saved = new ArrayList<Flag>();
+	
+	@Before
+	public void createRaisedFlagsTable() {
+		RaisedFlagsTable.create();
+	}
 	
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -70,6 +76,8 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 		for (Flag flag : saved) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);
+			Context.getAdministrationService()
+			        .executeSQL("delete from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
 		}
 	}

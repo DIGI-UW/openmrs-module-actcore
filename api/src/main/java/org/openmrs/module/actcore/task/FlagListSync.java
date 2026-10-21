@@ -10,7 +10,6 @@
 package org.openmrs.module.actcore.task;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -109,8 +108,8 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * Puts one patient on, or takes them off, the flag's list as their flag rows now stand. Creating,
-	 * renaming and retiring the list is left to {@link #syncAll()}.
+	 * Puts one patient on, or takes them off, the flag's list as their flag rows and dismissal now
+	 * stand. Creating, renaming and retiring the list is left to {@link #syncAll()}.
 	 */
 	public void syncPatient(int flagId, int patientId) {
 		Flag flag = Context.getService(FlagService.class).getFlag(flagId);
@@ -121,7 +120,8 @@ public class FlagListSync {
 		}
 		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
 		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY))
-		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId);
+		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId)
+		        && !RaisedFlags.isDismissed(flagId, patientId);
 		
 		CohortMemberService memberService = Context.getService(CohortMemberService.class);
 		CohortMember member = null;
@@ -136,7 +136,7 @@ public class FlagListSync {
 		}
 		
 		if (listed && member == null) {
-			addMember(memberService, list, patient);
+			addMember(memberService, list, patient, RaisedFlags.raisedSinceByFlag(patientId).get(flagId));
 			log.info("List '{}': patient {} added", list.getName(), patientId);
 		} else if (!listed && member != null) {
 			endMember(memberService, member);
@@ -211,18 +211,23 @@ public class FlagListSync {
 			mark(cohortService, list, flag);
 		}
 		
-		setMembers(list, listed ? PatientFlagRefreshTask.flaggedMessages(flag).keySet() : Collections.<Integer> emptySet(),
-		    result);
+		Set<Integer> flagged = new HashSet<Integer>();
+		if (listed) {
+			flagged.addAll(PatientFlagRefreshTask.flaggedMessages(flag).keySet());
+			flagged.removeAll(RaisedFlags.dismissedPatients(flag.getFlagId()));
+		}
+		setMembers(list, flagged, RaisedFlags.raisedSinceByPatient(flag.getFlagId()), result);
 	}
 	
-	private void setMembers(CohortM list, Set<Integer> flagged, Result result) {
+	private void setMembers(CohortM list, Set<Integer> flagged, Map<Integer, Date> raisedSince, Result result) {
 		CohortMemberService memberService = Context.getService(CohortMemberService.class);
 		Map<Integer, CohortMember> active = activeMembers(memberService, list);
 		
 		int added = 0;
 		for (Integer patientId : flagged) {
 			if (!active.containsKey(patientId)) {
-				addMember(memberService, list, Context.getPatientService().getPatient(patientId));
+				addMember(memberService, list, Context.getPatientService().getPatient(patientId),
+				    raisedSince.get(patientId));
 				added++;
 			}
 		}
@@ -242,11 +247,14 @@ public class FlagListSync {
 		}
 	}
 	
-	private static void addMember(CohortMemberService memberService, CohortM list, Patient patient) {
+	/**
+	 * Started when the flag was raised, so time on the list survives patientflags rewriting the rows.
+	 */
+	private static void addMember(CohortMemberService memberService, CohortM list, Patient patient, Date raisedSince) {
 		CohortMember member = new CohortMember();
 		member.setCohort(list);
 		member.setPatient(patient);
-		member.setStartDate(new Date());
+		member.setStartDate(raisedSince != null ? raisedSince : new Date());
 		memberService.saveCohortMember(member);
 	}
 	

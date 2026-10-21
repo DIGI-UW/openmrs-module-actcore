@@ -21,6 +21,7 @@ import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.task.RaisedFlagsTable;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTest {
@@ -76,6 +77,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		                + " primary key (patient_id, injection_date))",
 		            false);
 		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
+		RaisedFlagsTable.create();
 		prescription = concept("Prophylaxis", "Coded");
 		q21 = concept("Q21 day BPG", "N/A");
 		q28 = concept("Q28 day BPG", "N/A");

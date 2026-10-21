@@ -71,6 +71,10 @@ public class PatientFlagRefreshTaskTest {
 				}
 				return messages;
 			}
+			
+			@Override
+			void trackRaised(Flag flag, Set<Integer> matching) {
+			}
 		};
 	}
 	

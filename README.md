@@ -43,6 +43,14 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Gap look-up.** `GET /ws/rest/v1/actcore/gap?patient=<uuid>&flag=<uuid>` lists, for a flag that
   stands for missing data, each encounter and question still missing an answer. The ACT frontend
   app (`openmrs-esm-act-app`) shows these in its Missing data workspace, with Open form.
+- **Dismissing a flag.** `POST /ws/rest/v1/actcore/raisedflags/dismiss` with a `patient` and a `flag`
+  uuid dismisses a flag the patient matches now, as ACT 2.0's Critical Data Flags screen let a user
+  remove a row. The flag is left out of the patient's flags, so the chart's banner, and off its list,
+  until ACT Core finds that the patient no longer matches it; if they match it again later, it shows
+  again. While the patient flag refresh runs, a dismissal is answered 409 Conflict, to be sent again
+  once it has finished. `GET /ws/rest/v1/actcore/raisedflags?patient=<uuid>` lists the patient's
+  flags with `raisedSince`, the date ACT Core first found each raised, and whether the user may dismiss it. A
+  patient joins a flag's list on that date, so the worklists' time on the list counts from it too.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
@@ -262,7 +270,8 @@ the consultations that record them.
 | The module registers its own scheduled task | Initializer has no domain for scheduler tasks. The first run is five minutes after the module first starts, then daily; the scheduler owns the interval after that. |
 | The module starts after Initializer (`aware_of_module`) | On a fresh database the first run then finds the flags Initializer created (#7). |
 | Write only what changed | Rows and memberships are reconciled, not rebuilt, so a refresh does not churn the database. |
-| `date_created` is not used as "flag raised on" | patientflags deletes and re-inserts a patient's rows on every clinical save, so that date resets. Days pending come from the encounter date instead. |
+| `date_created` is not used as "flag raised on" | patientflags deletes and re-inserts a patient's rows on every clinical save, so that date resets. `actcore_raised_flag` keeps the date ACT Core's evaluation first found the flag raised, until it finds it cleared (#206). The gap look-up's days pending still come from the encounter date. |
+| A dismissal is kept by ACT Core and applied when flags are read, not by voiding the row (#206) | patientflags deletes the patient's live rows and writes new ones on its own thread on every encounter save, after or before ACT Core's pass. Advice on `FlagService.getPatientFlags` and `getFlagsForPatient` leaves dismissed flags out whatever rows that thread wrote, and the list sync leaves dismissed patients off. Only ACT Core's evaluation lifts a dismissal, once the patient no longer matches. |
 | Lists are built from live flag rows | The list shows exactly what the chart shows. Voided flag rows are ignored (#1). |
 | A list is tied to its flag by uuid, not by name | A cohort attribute (`Source patient flag`) holds the flag's uuid. A renamed flag renames its list, and a hand-made cohort with the same name is never touched. |
 | Leaving a list ends the membership, it does not void it | The cohort REST resource counts voided memberships when it rejects duplicates. |
@@ -312,6 +321,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | --- | --- | --- |
 | `actcore.listFlagTag` | empty | Only flags with this tag get a list; empty means every flag |
 | `actcore.listCohortType` | `System List` | Cohort type for the lists; created if missing |
+| `actcore.dismissFlagTag` | `Critical data` | Only flags with this tag can be dismissed; empty means every flag |
 | `actcore.nextSteps.*` | the ACT forms' encounter types, flags and concepts; 2 days, 12 months, 80% | Each next step's encounter type, the flags and concepts its rules read, and the thresholds; see `config.xml`. If you changed `actcore.nextSteps.encounterTypes`, add `patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0` to it for the Patient Information step |
 | `actcore.studyTemplateProgram` | ACT's retired study template program | The program each new study copies its workflows from; a program with a workflow on the same concept as one of its own is a study |
 | `actcore.studies.*` | the ACT attribute types and concepts | The registry consent and research opt-in person attribute types, their Yes answer, the Study ID program attribute type, and the status open enrolments end in at death. Empty one to drop its rule, for example while migrating ACT 2.0 data; the rule on an open enrolment for a patient who has died has no property |
@@ -341,6 +351,10 @@ Calling the next cardiology visit needs Get Observations.
 
 Calling the next steps needs Get Observations; the module reads the patient's records on the caller's
 behalf, and offers only the steps the caller may record.
+
+Listing a patient's raised flags needs View Patient Flags. Dismissing one also needs
+`Task: act.dismissFlags`, which the distribution creates; the module then evaluates the flag and updates
+its list on the caller's behalf.
 
 Calling the gap look-up needs View Patient Flags, plus Get Patients, Get Encounters and Get
 Concepts. The module runs a flag's criteria with SQL Level Access on the caller's behalf, as
