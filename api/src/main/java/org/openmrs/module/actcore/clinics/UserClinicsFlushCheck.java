@@ -17,13 +17,9 @@ import org.openmrs.User;
 import org.openmrs.api.context.Context;
 
 /**
- * Checks a change to a user's clinics or roles by an administrator limited to their clinics as
- * Hibernate writes it, when the database still holds the values before the change.
- * <p>
- * {@link ClinicScopedUserAdministration} checks the same rules when a user is saved, with clearer
- * messages, but by then a query run after the edit may already have flushed it, so the database
- * reads the new clinics as the stored ones. Hibernate calls this before it writes the user's
- * properties or roles, whichever flush that is.
+ * Checks a limited administrator's change to a user's clinics or roles as Hibernate writes it,
+ * while the database still holds the old values, so a flush before the save cannot get past the
+ * rules.
  */
 public class UserClinicsFlushCheck extends EmptyInterceptor {
 	

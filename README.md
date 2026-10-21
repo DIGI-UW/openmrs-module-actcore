@@ -98,10 +98,11 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Clinics on a user's account.** As in ACT 2.0, a user's clinics are the location uuids in their
   `actcore.clinics` user property, separated by commas. An administrator who may add or edit users but
   does not hold `Task: act.allClinics` (in ACT, the site administrator) is limited to them: user lists
-  and searches return only the users who share one of their clinics, and themselves; they may change
-  only those users, and only users whose roles are all in `actcore.users.siteAdministratorRoles`; a
-  user they save keeps at least one clinic, all of them theirs, and only those roles; and they may not
-  change their own clinics or roles. Paged searches are filtered before the page is cut, so pages stay
+  and searches return only the users who share one of their clinics, and themselves, and looking one up
+  by uuid or username finds no user of other clinics; they may change only those users, and only users
+  whose roles are all in `actcore.users.siteAdministratorRoles`; they may give or take away only their
+  own clinics, so a user's other clinics stay as stored, and a user they save keeps at least one of
+  theirs and only those roles; and they may not change their own clinics or roles. Paged searches are filtered before the page is cut, so pages stay
   full and the count matches. The rules are checked when a user is saved, and again as Hibernate writes
   a user's properties or roles, so a query that flushes the edit before the save cannot get past them.
 - **Report descriptors at startup.** The reporting module reads

@@ -28,12 +28,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * The clinics on a user's account, as ACT 2.0 gave each user, and whether the signed-in user is an
- * administrator limited to them.
- * <p>
- * A user's clinics are the location uuids in the {@value #PROPERTY} user property, separated by
- * commas. An administrator is limited to their clinics when they may add or edit users but do not
- * hold {@value #ALL_CLINICS_PRIVILEGE}: in ACT, the site administrator.
+ * The clinics on a user's account ({@value #PROPERTY}), and whether the signed-in user is an
+ * administrator limited to them; the README describes both.
  */
 public final class UserClinics {
 	
@@ -69,9 +65,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * Whether the user is an administrator limited to the clinics on their account: they may add or
-	 * edit users, and do not hold {@value #ALL_CLINICS_PRIVILEGE}. A super user holds every privilege,
-	 * so is never limited.
+	 * Whether the user may add or edit users without {@value #ALL_CLINICS_PRIVILEGE}; never a super
+	 * user.
 	 */
 	public static boolean isLimited(User user) {
 		if (user == null || user.isSuperUser()) {
@@ -92,11 +87,7 @@ public final class UserClinics {
 		return false;
 	}
 	
-	/**
-	 * The roles, by uuid, a limited administrator may give out, from
-	 * {@value #ASSIGNABLE_ROLES_PROPERTY}; empty when the property is blank, which leaves roles to
-	 * OpenMRS's own rule.
-	 */
+	/** The roles, by uuid, a limited administrator may give out; empty leaves roles to OpenMRS. */
 	public static Set<String> assignableRoles() {
 		List<String> values = column("select property_value from global_property where property = ?",
 		    ASSIGNABLE_ROLES_PROPERTY);
@@ -143,11 +134,7 @@ public final class UserClinics {
 		        column("select r.uuid from user_role ur join role r on r.role = ur.role where ur.user_id = ?", userId));
 	}
 	
-	/**
-	 * The first column of a query, run over JDBC on the current session's connection: it sees this
-	 * transaction's writes, and unlike a service call or HQL it never flushes the session, so it can
-	 * run while Hibernate flushes and reads what the database held before that flush.
-	 */
+	/** A query's first column over JDBC on the current session, which never flushes it. */
 	private static List<String> column(final String query, final Object... params) {
 		SessionFactory sessionFactory = Context.getRegisteredComponents(SessionFactory.class).get(0);
 		return sessionFactory.getCurrentSession().doReturningWork(new ReturningWork<List<String>>() {

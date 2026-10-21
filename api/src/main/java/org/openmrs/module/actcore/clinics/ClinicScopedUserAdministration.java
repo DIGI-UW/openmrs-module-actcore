@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.clinics;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,23 +26,18 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 
 /**
- * Advice on UserService that holds an administrator limited to their clinics (see
- * {@link UserClinics#isLimited}) to the users of those clinics, as ACT 2.0 held its site
- * administrator:
- * <ul>
- * <li>User lists and searches return only users who share one of their clinics, and
- * themselves.</li>
- * <li>They may change only those users, and only users whose roles are all ones they may give
- * out.</li>
- * <li>A user they save keeps at least one clinic, all of them theirs, and only roles they may give
- * out.</li>
- * <li>They may not change their own clinics or roles.</li>
- * </ul>
- * An administrator holding {@link UserClinics#ALL_CLINICS_PRIVILEGE} is not limited.
+ * Advice on UserService that holds an administrator limited to their clinics to those clinics'
+ * users, as ACT 2.0 held its site administrator; the README lists the rules.
  */
 public class ClinicScopedUserAdministration implements MethodInterceptor {
 	
 	private static final List<String> LISTS = Arrays.asList("getAllUsers", "getUsersByName", "getUsers");
+	
+	/**
+	 * Single-user lookups, which answer nothing for a user of other clinics, as ACT 2.0's get_user
+	 * refused.
+	 */
+	private static final List<String> LOOKUPS = Arrays.asList("getUserByUuid", "getUserByUsername");
 	
 	private static final List<String> CHANGES_TO_A_USER = Arrays.asList("saveUser", "createUser", "retireUser",
 	    "unretireUser", "purgeUser", "changePassword", "setUserProperty", "removeUserProperty");
@@ -88,6 +84,9 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 		if (LISTS.contains(method) && result instanceof List) {
 			return visible((List<?>) result, me);
 		}
+		if (LOOKUPS.contains(method) && result instanceof User) {
+			return visible(Collections.singletonList(result), me).isEmpty() ? null : result;
+		}
 		return result;
 	}
 	
@@ -124,11 +123,17 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 				    "This user has a role you cannot give out, so only an instance administrator can change" + " them");
 			}
 		}
-		if (after.isEmpty()) {
-			throw refusal("Give the user at least one of your clinics");
+		// As ACT 2.0 needed only an overlap: the clinics that are not theirs stay as stored, so a clinician at A and B
+		// is changed by A's site administrator without leaving B's lists.
+		Set<String> othersBefore = new HashSet<String>(UserClinics.stored(user.getUserId()));
+		othersBefore.removeAll(mine);
+		Set<String> othersAfter = new HashSet<String>(after);
+		othersAfter.removeAll(mine);
+		if (!othersAfter.equals(othersBefore)) {
+			throw refusal("You can give or take away only your own clinics");
 		}
-		if (!mine.containsAll(after)) {
-			throw refusal("You can give a user only your own clinics");
+		if (!UserClinics.share(after, mine)) {
+			throw refusal("Give the user at least one of your clinics");
 		}
 		if (!assignable.isEmpty() && !assignable.containsAll(UserClinics.roleUuids(user))) {
 			throw refusal("You can give a user only the clinician roles: " + roleNames(assignable));

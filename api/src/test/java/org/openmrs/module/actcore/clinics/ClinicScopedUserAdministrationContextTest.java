@@ -14,6 +14,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -134,7 +135,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	@Test
 	public void refusesToChangeAUserOfAnotherClinic() {
 		Context.becomeUser(siteAdminAtA.getSystemId());
-		User user = users.getUserByUuid(clinicianAtB.getUuid());
+		User user = users.getUser(clinicianAtB.getUserId());
 		
 		refused(() -> users.changePassword(user, "Changed123"), "not at one of your clinics");
 		refused(() -> users.retireUser(user, "No"), "not at one of your clinics");
@@ -145,7 +146,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	@Test
 	public void refusesToMoveAUserOfAnotherClinicIntoTheirsWhenQueriesRunBeforeTheSave() {
 		Context.becomeUser(siteAdminAtA.getSystemId());
-		User user = users.getUserByUuid(clinicianAtB.getUuid());
+		User user = users.getUser(clinicianAtB.getUserId());
 		
 		// As the REST layer sets the fields, then looks up each role and the person before it saves: the
 		// lookups flush the edit, and the refusal comes from whichever call writes it first.
@@ -161,10 +162,37 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	@Test
 	public void refusesAnEditToAnotherClinicsUserEvenWhenNoServiceSavesIt() {
 		Context.becomeUser(siteAdminAtA.getSystemId());
-		User user = users.getUserByUuid(clinicianAtB.getUuid());
+		User user = users.getUser(clinicianAtB.getUserId());
 		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
 		
 		refused(Context::flushSession, "not at one of your clinics");
+	}
+	
+	@Test
+	public void changesAUserWhoIsAlsoAtAnotherClinicWithoutTouchingThatClinic() {
+		Context.becomeUser(siteAdminAtA.getSystemId());
+		User user = users.getUserByUuid(clinicianAtAAndB.getUuid());
+		
+		users.changePassword(user, "Changed123");
+		user.getPerson().getPersonName().setGivenName("Renamed");
+		users.saveUser(user);
+		users.retireUser(user, "Left the clinic");
+		
+		User shared = users.getUserByUuid(clinicianAtAAndB.getUuid());
+		shared.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		refused(() -> users.saveUser(shared), "only your own clinics");
+		refused(() -> users.setUserProperty(shared, UserClinics.PROPERTY, CLINIC_B), "at least one of your clinics");
+	}
+	
+	@Test
+	public void findsNoSingleUserOfAnotherClinic() {
+		Context.becomeUser(siteAdminAtA.getSystemId());
+		
+		assertNull(users.getUserByUuid(clinicianAtB.getUuid()));
+		assertNull(users.getUserByUsername("clinicianB"));
+		assertEquals("clinicianAB", users.getUserByUuid(clinicianAtAAndB.getUuid()).getUsername());
+		assertEquals("clinicianA", users.getUserByUsername("clinicianA").getUsername());
+		assertEquals("siteadmin", users.getUserByUuid(siteAdminAtA.getUuid()).getUsername());
 	}
 	
 	@Test
@@ -235,7 +263,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		
 		assertFalse(UserClinics.isLimited(Context.getAuthenticatedUser()));
 		assertTrue(usernames(users.getAllUsers()).contains("clinicianB"));
-		User user = users.getUserByUuid(clinicianAtB.getUuid());
+		User user = users.getUser(clinicianAtB.getUserId());
 		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
 		users.saveUser(user);
 	}
