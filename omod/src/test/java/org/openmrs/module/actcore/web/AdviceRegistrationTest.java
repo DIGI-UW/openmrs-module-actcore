@@ -29,7 +29,9 @@ import org.openmrs.api.EncounterService;
 import org.openmrs.api.PatientService;
 import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
+import org.openmrs.api.UserService;
 import org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave;
+import org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.module.actcore.studies.CloseStudiesOnDeath;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
@@ -48,6 +50,11 @@ public class AdviceRegistrationTest {
 	@Test
 	public void configRegistersTheDismissedFlagFilterOnFlagService() throws Exception {
 		assertEquals(points(FlagService.class), pointsOf(HideDismissedFlags.class));
+	}
+	
+	@Test
+	public void configRegistersTheClinicLimitOnUserService() throws Exception {
+		assertEquals(points(UserService.class), pointsOf(ClinicScopedUserAdministration.class));
 	}
 	
 	@Test
