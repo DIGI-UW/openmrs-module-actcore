@@ -81,6 +81,11 @@
     <point>org.openmrs.api.PersonService</point>
     <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
   </advice>
+  <!-- A site administrator lists and changes only the users of its clinics, and gives only the clinician roles -->
+  <advice>
+    <point>org.openmrs.api.UserService</point>
+    <class>org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration</class>
+  </advice>
   <advice>
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
@@ -137,6 +142,13 @@
     <defaultValue>4358f696-7a3d-5da4-949f-c8919974cccc</defaultValue>
     <description>
       The concept of the study status a patient's open study enrolments move to, on their death date or the enrolment's latest status date if later, when they are saved as dead. Enrolments already completed keep their status. Leave empty to leave enrolments open.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.users.siteAdministratorRoles</property>
+    <defaultValue>b9ab4b76-e7b9-46a7-b4ec-5b7fdd8fa540,61e9bb28-11df-4df1-965d-11ef928d5239,60625a0c-3cea-4fe5-b6ca-615c743ad9d4</defaultValue>
+    <description>
+      The roles, by uuid and separated by commas, that an administrator limited to their clinics may give a user: one who may add or edit users but does not hold Task: act.allClinics, which in ACT is the site administrator. By default ACT's Community Clinician, Data Clerk and Clinician. Such an administrator also sees and changes only users who share one of the clinics on their account (the actcore.clinics user property). Leave empty to leave roles to OpenMRS's own rule.
     </description>
   </globalProperty>
   <globalProperty>

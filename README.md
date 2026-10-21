@@ -95,6 +95,15 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   100 by default, at most 500. The audit log module (auditlogweb) records the patients a user opens and
   the forms they save, but has no way for another module to record an event of its own, so downloads
   are kept here.
+- **Clinics on a user's account.** As in ACT 2.0, a user's clinics are the location uuids in their
+  `actcore.clinics` user property, separated by commas. An administrator who may add or edit users but
+  does not hold `Task: act.allClinics` (in ACT, the site administrator) is limited to them: user lists
+  and searches return only the users who share one of their clinics, and themselves; they may change
+  only those users, and only users whose roles are all in `actcore.users.siteAdministratorRoles`; a
+  user they save keeps at least one clinic, all of them theirs, and only those roles; and they may not
+  change their own clinics or roles. Paged searches are filtered before the page is cut, so pages stay
+  full and the count matches. The rules are checked when a user is saved, and again as Hibernate writes
+  a user's properties or roles, so a query that flushes the edit before the save cannot get past them.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
@@ -327,6 +336,7 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.studies.*` | the ACT attribute types and concepts | The registry consent and research opt-in person attribute types, their Yes answer, the Study ID program attribute type, and the status open enrolments end in at death. Empty one to drop its rule, for example while migrating ACT 2.0 data; the rule on an open enrolment for a patient who has died has no property |
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 | `actcore.consultation.*` | the RHD Consultation Visit's Next Consultation Time Amount and CIEL Time Period (1732) | The two questions the next cardiology visit reads; the period's answers must be CIEL days, weeks, months or years (1072, 1073, 1074, 1734); see `config.xml` |
+| `actcore.users.siteAdministratorRoles` | ACT's Community Clinician, Data Clerk and Clinician | The roles, by uuid, an administrator limited to their clinics may give a user; empty leaves roles to OpenMRS's own rule |
 | `actcore.download.identifyingIdentifierTypes` | the National ID, External Patient ID and Alternate ID | The identifier types a download leaves out without identifiers, and gives as columns with them; the ACT ID is the preferred identifier of any other type |
 | `actcore.download.identifyingAttributeTypes` | the primary and secondary phones, their owners and the consent person | The person attribute types a download gives as columns only with identifiers |
 | `actcore.download.identifyingConcepts` | the RHD Patient Information form's Home Address, Village/Area of Residence, School Name, Additional information to help locate patient and Relocation Area | The questions a download gives only with identifiers, so never in a research download; without, it leaves them out and lists their labels in `withheld` |
@@ -346,6 +356,10 @@ A download needs `Task: act.downloadData`, or `Task: act.downloadResearchData` f
 only, plus Get Forms, Get Concepts, Get Encounters, Get Observations and Get Patients. With
 `Task: act.downloadData`, `Task: act.downloadIdentifiers` keeps the identifiers. The distribution
 creates the three. Listing the downloads needs the audit log module's View Read Audit Logs.
+
+An administrator limited to their clinics needs nothing extra; the module reads the stored clinics and
+roles of the user being changed directly from the database. Grant `Task: act.allClinics`, which the
+distribution creates, to the roles that administer every clinic's users.
 
 Calling the next cardiology visit needs Get Observations.
 
