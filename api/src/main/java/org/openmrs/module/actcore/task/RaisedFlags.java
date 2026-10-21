@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.task;
 
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -30,10 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Each patient's flag that ACT Core's evaluation finds raised, since when, and whether it was
- * dismissed. patientflags recreates its own rows on every save, so neither its date_created nor a
- * voided row outlives the next save. A row goes once the flag stops matching, lifting the
- * dismissal.
+ * Each raised flag's date and dismissal, kept here as patientflags recreates its own rows on every
+ * save, so neither its date_created nor a voided row outlives the next save.
  */
 public class RaisedFlags {
 	
@@ -55,14 +54,15 @@ public class RaisedFlags {
 	public enum Dismissal {
 		DISMISSED,
 		NOT_RAISED,
-		NOT_DISMISSIBLE
+		NOT_DISMISSIBLE,
+		REFRESH_RUNNING
 	}
 	
 	/** Records the flag as raised from now, unless it already is. */
 	static void raise(int flagId, int patientId) {
-		execute("insert into " + TABLE + " (patient_id, flag_id, raised_since) select p.patient_id, " + flagId
-		        + ", current_timestamp from patient p where p.patient_id = " + patientId + " and not exists (select 1 from "
-		        + TABLE + " r where r.patient_id = " + patientId + " and r.flag_id = " + flagId + ")");
+		execute("insert into " + TABLE + " (patient_id, flag_id, raised_since) select p.patient_id, " + flagId + ", " + now()
+		        + " from patient p where p.patient_id = " + patientId + " and not exists (select 1 from " + TABLE
+		        + " r where r.patient_id = " + patientId + " and r.flag_id = " + flagId + ")");
 	}
 	
 	static void lower(int flagId, int patientId) {
@@ -112,7 +112,7 @@ public class RaisedFlags {
 	
 	/**
 	 * Hides the flag for the patient wherever ACT reads flags until ACT Core finds that it no longer
-	 * matches them. Only a flag that matches now can be dismissed.
+	 * matches them. Only a flag that matches now can be dismissed, and not during the full refresh.
 	 */
 	public static Dismissal dismiss(Patient patient, Flag flag) {
 		for (String privilege : new String[] { DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS }) {
@@ -122,6 +122,10 @@ public class RaisedFlags {
 		}
 		if (!carriesDismissTag(flag)) {
 			return Dismissal.NOT_DISMISSIBLE;
+		}
+		// Not waited on: the full refresh holds it for minutes, and would undo the dismissal.
+		if (!PatientFlagRefreshTask.ROWS.readLock().tryLock()) {
+			return Dismissal.REFRESH_RUNNING;
 		}
 		for (String privilege : DISMISS_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
@@ -134,7 +138,7 @@ public class RaisedFlags {
 			}
 			raise(flag.getFlagId(), patient.getPatientId());
 			execute("update " + TABLE + " set dismissed_by = " + Context.getAuthenticatedUser().getUserId()
-			        + ", date_dismissed = current_timestamp where flag_id = " + flag.getFlagId() + " and patient_id = "
+			        + ", date_dismissed = " + now() + " where flag_id = " + flag.getFlagId() + " and patient_id = "
 			        + patient.getPatientId() + " and date_dismissed is null");
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
 			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
@@ -145,6 +149,7 @@ public class RaisedFlags {
 			for (String privilege : DISMISS_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
+			PatientFlagRefreshTask.ROWS.readLock().unlock();
 		}
 	}
 	
@@ -161,6 +166,11 @@ public class RaisedFlags {
 			}
 		}
 		return false;
+	}
+	
+	// The JVM's clock, as for the lists' start dates; current_timestamp keeps the database's zone.
+	private static String now() {
+		return "'" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "'";
 	}
 	
 	private static void execute(String sql) {

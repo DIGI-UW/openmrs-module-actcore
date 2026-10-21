@@ -47,8 +47,9 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   uuid dismisses a flag the patient matches now, as ACT 2.0's Critical Data Flags screen let a user
   remove a row. The flag is left out of the patient's flags, so the chart's banner, and off its list,
   until ACT Core finds that the patient no longer matches it; if they match it again later, it shows
-  again. `GET /ws/rest/v1/actcore/raisedflags?patient=<uuid>` lists the patient's flags with
-  `raisedSince`, the date ACT Core first found each raised, and whether the user may dismiss it. A
+  again. While the patient flag refresh runs, a dismissal is answered 409 Conflict, to be sent again
+  once it has finished. `GET /ws/rest/v1/actcore/raisedflags?patient=<uuid>` lists the patient's
+  flags with `raisedSince`, the date ACT Core first found each raised, and whether the user may dismiss it. A
   patient joins a flag's list on that date, so the worklists' time on the list counts from it too.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
@@ -270,7 +271,7 @@ the consultations that record them.
 | The module starts after Initializer (`aware_of_module`) | On a fresh database the first run then finds the flags Initializer created (#7). |
 | Write only what changed | Rows and memberships are reconciled, not rebuilt, so a refresh does not churn the database. |
 | `date_created` is not used as "flag raised on" | patientflags deletes and re-inserts a patient's rows on every clinical save, so that date resets. `actcore_raised_flag` keeps the date ACT Core's evaluation first found the flag raised, until it finds it cleared (#206). The gap look-up's days pending still come from the encounter date. |
-| A dismissal is kept by ACT Core and applied when flags are read, not by voiding the row (#206) | patientflags deletes the patient's live rows and writes new ones on its own thread on every encounter save, after or before ACT Core's pass. Advice on `FlagService.getPatientFlags` leaves dismissed flags out whatever rows that thread wrote, and the list sync leaves dismissed patients off. Only ACT Core's evaluation lifts a dismissal, once the patient no longer matches. |
+| A dismissal is kept by ACT Core and applied when flags are read, not by voiding the row (#206) | patientflags deletes the patient's live rows and writes new ones on its own thread on every encounter save, after or before ACT Core's pass. Advice on `FlagService.getPatientFlags` and `getFlagsForPatient` leaves dismissed flags out whatever rows that thread wrote, and the list sync leaves dismissed patients off. Only ACT Core's evaluation lifts a dismissal, once the patient no longer matches. |
 | Lists are built from live flag rows | The list shows exactly what the chart shows. Voided flag rows are ignored (#1). |
 | A list is tied to its flag by uuid, not by name | A cohort attribute (`Source patient flag`) holds the flag's uuid. A renamed flag renames its list, and a hand-made cohort with the same name is never touched. |
 | Leaving a list ends the membership, it does not void it | The cohort REST resource counts voided memberships when it rejects duplicates. |

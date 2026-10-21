@@ -10,38 +10,41 @@
 package org.openmrs.module.actcore.task;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Patient;
+import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 
 /**
- * Advice on FlagService that leaves a patient's dismissed flags out of their flag rows, which the
- * patient flags REST search, and so the banner, reads. Filtering on read, rather than voiding the
- * rows, holds whenever patientflags' own thread rewrites them.
+ * Advice on FlagService that filters a patient's dismissed flags out on read, which holds whenever
+ * patientflags' own thread rewrites their rows, as voiding them would not.
  */
 public class HideDismissedFlags implements MethodInterceptor {
 	
+	// Not generateFlagsForPatient: patientflags' own thread writes the patient's rows from it.
+	private static final List<String> FILTERED = Arrays.asList("getPatientFlags", "getFlagsForPatient");
+	
 	@Override
-	@SuppressWarnings("unchecked")
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object result = invocation.proceed();
 		Object[] args = invocation.getArguments();
-		if (!"getPatientFlags".equals(invocation.getMethod().getName()) || !(result instanceof List)
-		        || ((List<?>) result).isEmpty() || args.length == 0 || !(args[0] instanceof Patient)
-		        || ((Patient) args[0]).getPatientId() == null) {
+		if (!FILTERED.contains(invocation.getMethod().getName()) || !(result instanceof List) || ((List<?>) result).isEmpty()
+		        || args.length == 0 || !(args[0] instanceof Patient) || ((Patient) args[0]).getPatientId() == null) {
 			return result;
 		}
 		Set<Integer> dismissed = RaisedFlags.dismissedFlags(((Patient) args[0]).getPatientId());
 		if (dismissed.isEmpty()) {
 			return result;
 		}
-		List<PatientFlag> shown = new ArrayList<PatientFlag>();
-		for (PatientFlag row : (List<PatientFlag>) result) {
-			if (row.getFlag() == null || !dismissed.contains(row.getFlag().getFlagId())) {
+		List<Object> shown = new ArrayList<Object>();
+		for (Object row : (List<?>) result) {
+			Flag flag = row instanceof PatientFlag ? ((PatientFlag) row).getFlag() : (Flag) row;
+			if (flag == null || !dismissed.contains(flag.getFlagId())) {
 				shown.add(row);
 			}
 		}

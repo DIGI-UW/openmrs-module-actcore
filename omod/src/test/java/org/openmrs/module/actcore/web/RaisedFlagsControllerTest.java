@@ -12,13 +12,23 @@ package org.openmrs.module.actcore.web;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import javax.servlet.http.HttpServletResponse;
 
 import org.junit.After;
 import org.junit.Before;
@@ -27,6 +37,7 @@ import org.openmrs.GlobalProperty;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.task.HideDismissedFlags;
+import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -38,6 +49,8 @@ import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
@@ -111,6 +124,48 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		Flag missing = saveFlag("missing data", "select p.patient_id from patient p where p.patient_id = -1", critical);
 		
 		controller.dismiss(body(PATIENT_7, missing.getUuid()));
+	}
+	
+	@Test
+	public void answersConflictWhileTheFullRefreshHoldsTheRows() throws Exception {
+		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
+		Field field = PatientFlagRefreshTask.class.getDeclaredField("ROWS");
+		field.setAccessible(true);
+		final ReentrantReadWriteLock rows = (ReentrantReadWriteLock) field.get(null);
+		ExecutorService refresh = Executors.newSingleThreadExecutor();
+		final CountDownLatch done = new CountDownLatch(1);
+		Future<?> held = refresh.submit(new Callable<Void>() {
+			
+			@Override
+			public Void call() throws InterruptedException {
+				rows.writeLock().lock();
+				try {
+					done.await();
+				}
+				finally {
+					rows.writeLock().unlock();
+				}
+				return null;
+			}
+		});
+		try {
+			while (!rows.isWriteLocked()) {
+				Thread.yield();
+			}
+			controller.dismiss(body(PATIENT_7, missing.getUuid()));
+			fail("expected the dismissal to be refused");
+		}
+		catch (RaisedFlagsController.RefreshRunning e) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			controller.handleException(e, new MockHttpServletRequest(), response);
+			assertEquals(HttpServletResponse.SC_CONFLICT, response.getStatus());
+		}
+		finally {
+			done.countDown();
+			held.get();
+			refresh.shutdown();
+		}
+		assertEquals(1, ((List<?>) controller.getRaisedFlags(PATIENT_7).get("results")).size());
 	}
 	
 	@Test(expected = IllegalRequestException.class)

@@ -59,10 +59,10 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
 	/**
-	 * Held shared by each patient's refresh and alone by the full refresh, so the two never write a
-	 * flag's rows or a list's members at once.
+	 * Held shared by each patient's refresh and each dismissal, and alone by the full refresh, so the
+	 * full refresh never writes a flag's rows or a list's members alongside either.
 	 */
-	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
+	static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
 	// Patients saved while the full refresh held the rows, refreshed once it lets go.
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();

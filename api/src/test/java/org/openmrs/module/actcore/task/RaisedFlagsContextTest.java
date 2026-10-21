@@ -15,9 +15,11 @@ import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.After;
 import org.junit.Before;
@@ -187,6 +189,63 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(1, shown.size());
 		assertEquals(other.getUuid(), shown.get(0).getFlag().getUuid());
+	}
+	
+	@Test
+	public void leavesADismissedFlagOutOfTheFlagsReadForThePatientButNotOfTheirEvaluation() {
+		matching(true);
+		Flag other = saveFlag("other", null);
+		runFullRefresh();
+		dismiss();
+		
+		List<Flag> read = flagService.getFlagsForPatient(patient());
+		List<Flag> evaluated = flagService.generateFlagsForPatient(patient(), new HashMap<Object, Object>());
+		
+		assertEquals(1, read.size());
+		assertEquals(other.getUuid(), read.get(0).getUuid());
+		assertEquals(2, evaluated.size());
+	}
+	
+	@Test
+	public void refusesADismissalWhileTheFullRefreshHoldsTheRows() throws InterruptedException {
+		matching(true);
+		runFullRefresh();
+		final CountDownLatch held = new CountDownLatch(1);
+		final CountDownLatch done = new CountDownLatch(1);
+		Thread refresh = new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				PatientFlagRefreshTask.ROWS.writeLock().lock();
+				held.countDown();
+				try {
+					done.await();
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+				finally {
+					PatientFlagRefreshTask.ROWS.writeLock().unlock();
+				}
+			}
+		});
+		refresh.start();
+		held.await();
+		RaisedFlags.Dismissal refused;
+		try {
+			refused = dismiss();
+		}
+		finally {
+			done.countDown();
+			refresh.join();
+		}
+		
+		assertEquals(RaisedFlags.Dismissal.REFRESH_RUNNING, refused);
+		assertEquals(0L, count("select count(*) from " + RaisedFlags.TABLE + " where date_dismissed is not null"));
+		assertEquals(1, shownFlags());
+		assertEquals(1, listMembers());
+		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismiss());
+		assertEquals(0, PatientFlagRefreshTask.ROWS.getReadLockCount());
 	}
 	
 	@Test

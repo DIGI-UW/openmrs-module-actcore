@@ -32,13 +32,16 @@ import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
+import org.openmrs.module.webservices.rest.web.response.ResponseException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * A patient's raised flags with the date each was raised and whether the user may dismiss it, and
@@ -89,8 +92,20 @@ public class RaisedFlagsController extends BaseRestController {
 				throw new IllegalRequestException("The flag '" + flag.getName() + "' cannot be dismissed");
 			case NOT_RAISED:
 				throw new IllegalRequestException("The flag '" + flag.getName() + "' is not raised for this patient");
+			case REFRESH_RUNNING:
+				throw new RefreshRunning();
 			default:
 				return new SimpleObject().add("dismissed", true);
+		}
+	}
+	
+	@ResponseStatus(HttpStatus.CONFLICT)
+	static class RefreshRunning extends ResponseException {
+		
+		private static final long serialVersionUID = 1L;
+		
+		RefreshRunning() {
+			super("The patient flag refresh is running; dismiss the flag again once it has finished");
 		}
 	}
 	
