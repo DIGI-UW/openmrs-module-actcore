@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -195,7 +196,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		String downloader = Context.getAuthenticatedUser().getUuid();
 		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
 		
-		List<?> results = (List<?>) controller.getDownloads(null).get("results");
+		List<?> results = (List<?>) controller.getDownloads(null, null, null, null, null, null, null).get("results");
 		
 		assertEquals(1, results.size());
 		SimpleObject entry = (SimpleObject) results.get(0);
@@ -226,12 +227,104 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	public void refusesTheDownloadsToAUserWhoMayNotReadTheReadAuditLog() throws Exception {
 		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
 		try {
-			controller.getDownloads(null);
+			controller.getDownloads(null, null, null, null, null, null, null);
 			fail("expected the downloads to be refused");
 		}
 		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(DownloadLog.VIEW_PRIVILEGE));
 		}
+	}
+	
+	@Test
+	public void recordsAListTheAppDownloadedItselfForTheReadAuditLogReaders() throws Exception {
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Arrays.asList("ACT ID", "Name", "Primary Phone"));
+		body.put("rows", 486);
+		body.put("identifiers", true);
+		body.put("filters", Collections.singletonMap("clinic", "Akunalaber HCIII"));
+		
+		assertEquals(Boolean.TRUE, controller.record(body).get("recorded"));
+		
+		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		SimpleObject page = controller.getDownloads(null, null, null, null, null, null, null);
+		assertEquals(Integer.valueOf(1), page.get("totalCount"));
+		SimpleObject entry = (SimpleObject) ((List<?>) page.get("results")).get(0);
+		assertNull(entry.get("form"));
+		assertEquals("Registry list", ((SimpleObject) entry.get("list")).get("name"));
+		assertEquals("registry", ((SimpleObject) entry.get("list")).get("kind"));
+		Map<?, ?> detail = (Map<?, ?>) entry.get("detail");
+		assertEquals(Arrays.asList("ACT ID", "Name", "Primary Phone"), detail.get("fields"));
+		assertEquals(486, detail.get("rows"));
+		assertEquals(Boolean.TRUE, detail.get("identifiers"));
+		assertEquals(Boolean.FALSE, detail.get("researchOnly"));
+		assertEquals(Collections.singletonMap("clinic", "Akunalaber HCIII"), detail.get("filters"));
+		assertEquals("Due for prophylaxis worklist", DownloadController.list("worklist:Due for prophylaxis").get("name"));
+		assertEquals("Logs: Activity", DownloadController.list("logs:activity").get("name"));
+	}
+	
+	@Test
+	public void refusesToRecordAListWithoutADownloadPrivilegeOrAList() throws Exception {
+		authenticateWith(READS);
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Collections.singletonList("ACT ID"));
+		try {
+			controller.record(body);
+			fail("expected the record to be refused");
+		}
+		catch (APIAuthenticationException expected) {}
+		signInAs("researcher", with(DownloadController.RESEARCH_PRIVILEGE));
+		try {
+			controller.record(Collections.<String, Object> singletonMap("columns", Collections.singletonList("ACT ID")));
+			fail("expected a record without a list to be refused");
+		}
+		catch (IllegalRequestException expected) {}
+		assertTrue(new DownloadLog().latest(10).isEmpty());
+	}
+	
+	@Test
+	public void filtersTheDownloadsByUserFormIdentifiersAndDates() throws Exception {
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		controller.download(body());
+		Map<String, Object> list = new HashMap<String, Object>();
+		list.put("list", "registry");
+		list.put("columns", Collections.singletonList("ACT ID"));
+		list.put("identifiers", true);
+		controller.record(list);
+		signInAs("researcher", with(DownloadController.RESEARCH_PRIVILEGE));
+		controller.download(body());
+		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		
+		assertEquals(Integer.valueOf(3),
+		    controller.getDownloads(null, null, null, null, null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(2),
+		    controller.getDownloads("downloadcaller", null, null, null, null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads("nobody", null, null, null, null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(2),
+		    controller.getDownloads(null, null, null, form.getUuid(), null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(1),
+		    controller.getDownloads(null, null, null, null, "research", null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(2),
+		    controller.getDownloads(null, null, null, null, "with", null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, null, "without", null, null).get("totalCount"));
+		String today = LocalDate.now().toString();
+		assertEquals(Integer.valueOf(3),
+		    controller.getDownloads(null, today, today, null, null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, LocalDate.now().minusDays(1).toString(), null, null, null, null)
+		            .get("totalCount"));
+		SimpleObject page = controller.getDownloads(null, null, null, null, null, 1, 1);
+		assertEquals(Integer.valueOf(3), page.get("totalCount"));
+		assertEquals(1, ((List<?>) page.get("results")).size());
+		try {
+			controller.getDownloads(null, null, null, null, "some", null, null);
+			fail("expected the identifiers filter to be refused");
+		}
+		catch (IllegalRequestException expected) {}
 	}
 	
 	@Test

@@ -245,7 +245,7 @@ public class FormDownload {
 		return types;
 	}
 	
-	private static List<String> uuids(String property) {
+	public static List<String> uuids(String property) {
 		String value = Context.getAdministrationService().getGlobalProperty(property);
 		List<String> uuids = new ArrayList<String>();
 		for (String uuid : StringUtils.split(StringUtils.defaultString(value), ',')) {
