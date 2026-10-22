@@ -219,7 +219,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
 		controller.download(body());
 		
-		String detail = new DownloadLog().latest(10).get(0).detail;
+		String detail = new DownloadLog().list(null, null, null, null).get(0).detail;
 		
 		assertTrue(detail, detail.startsWith("{\"fields\":[\"Mitral regurgitation\"],\"withheld\":[]"));
 	}
@@ -274,7 +274,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		controller.record(body);
 		
-		String detail = new DownloadLog().latest(10).get(0).detail;
+		String detail = new DownloadLog().list(null, null, null, null).get(0).detail;
 		assertTrue(detail, detail.contains("\"researchOnly\":false"));
 	}
 	
@@ -291,7 +291,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected the record to be refused");
 		}
 		catch (IllegalRequestException expected) {}
-		assertTrue(new DownloadLog().latest(10).isEmpty());
+		assertTrue(new DownloadLog().list(null, null, null, null).isEmpty());
 	}
 	
 	@Test
@@ -311,7 +311,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected a record without a list to be refused");
 		}
 		catch (IllegalRequestException expected) {}
-		assertTrue(new DownloadLog().latest(10).isEmpty());
+		assertTrue(new DownloadLog().list(null, null, null, null).isEmpty());
 	}
 	
 	@Test
@@ -331,8 +331,13 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		    controller.getDownloads(null, null, null, null, null, null, null).get("totalCount"));
 		assertEquals(Integer.valueOf(2),
 		    controller.getDownloads("downloadcaller", null, null, null, null, null, null).get("totalCount"));
-		assertEquals(Integer.valueOf(0),
-		    controller.getDownloads("nobody", null, null, null, null, null, null).get("totalCount"));
+		SimpleObject nobody = controller.getDownloads("nobody", null, null, null, null, null, null);
+		assertEquals(Integer.valueOf(0), nobody.get("totalCount"));
+		assertEquals(LocalDate.now().minusMonths(12).toString(), nobody.get("from"));
+		SimpleObject noForm = controller.getDownloads(null, null, "2026-10-21", "no-such-form", null, null, null);
+		assertEquals(Integer.valueOf(0), noForm.get("totalCount"));
+		assertEquals("2025-10-21", noForm.get("from"));
+		assertEquals("2026-10-21", noForm.get("to"));
 		assertEquals(Integer.valueOf(2),
 		    controller.getDownloads(null, null, null, form.getUuid(), null, null, null).get("totalCount"));
 		assertEquals(Integer.valueOf(1),
@@ -372,7 +377,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			}
 			catch (IllegalRequestException expected) {}
 		}
-		assertTrue(new DownloadLog().latest(10).isEmpty());
+		assertTrue(new DownloadLog().list(null, null, null, null).isEmpty());
 	}
 	
 	private Map<String, Object> body() {

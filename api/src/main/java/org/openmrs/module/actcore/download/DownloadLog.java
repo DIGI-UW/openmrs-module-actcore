@@ -67,11 +67,6 @@ public class DownloadLog {
 		        .setParameter("detail", detail).setParameter("date", new Date()).executeUpdate();
 	}
 	
-	/** The latest downloads, newest first. */
-	public List<Entry> latest(int limit) {
-		return select("", new LinkedHashMap<String, Object>(), limit);
-	}
-	
 	/** Every download matching the filters, newest first; each filter is left out when null. */
 	public List<Entry> list(Integer userId, LocalDate from, LocalDate to, Integer formId) {
 		StringBuilder where = new StringBuilder();
@@ -92,10 +87,10 @@ public class DownloadLog {
 			where.append(" and d.form_id = :form");
 			params.put("form", formId);
 		}
-		return select(where.toString(), params, null);
+		return select(where.toString(), params);
 	}
 	
-	private List<Entry> select(String where, Map<String, Object> params, Integer limit) {
+	private List<Entry> select(String where, Map<String, Object> params) {
 		SQLQuery query = sessionFactory().getCurrentSession()
 		        .createSQLQuery("select d.date_created, u.uuid user_uuid, u.username, f.uuid form_uuid, f.name form_name,"
 		                + " d.detail from " + TABLE
@@ -106,9 +101,6 @@ public class DownloadLog {
 		        .addScalar("form_name", StringType.INSTANCE).addScalar("detail", StringType.INSTANCE);
 		for (Map.Entry<String, Object> param : params.entrySet()) {
 			query.setParameter(param.getKey(), param.getValue());
-		}
-		if (limit != null) {
-			query.setMaxResults(limit);
 		}
 		List<Entry> entries = new ArrayList<Entry>();
 		for (Object row : query.list()) {

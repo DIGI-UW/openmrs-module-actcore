@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.web;
 
 import java.text.SimpleDateFormat;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,6 +41,9 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/activity")
 public class ActivityController extends BaseRestController {
 	
+	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
+	static final int KIND_DEFAULT_DAYS = 30;
+	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getActivity(@RequestParam(value = "username", required = false) String username,
@@ -53,12 +57,13 @@ public class ActivityController extends BaseRestController {
 		requireViewPrivilege();
 		ActivityLog.Filter filter = new ActivityLog.Filter();
 		filter.username = StringUtils.trimToNull(username);
-		filter.to = DownloadController.date(endDate);
-		filter.from = DownloadController.from(startDate, filter.to);
 		filter.kind = StringUtils.trimToNull(kind);
 		if (filter.kind != null && !ActivityLog.KINDS.contains(filter.kind)) {
 			throw new IllegalRequestException("Not a kind of activity: " + kind + "; one of " + ActivityLog.KINDS);
 		}
+		filter.to = DownloadController.date(endDate);
+		filter.from = filter.kind == null ? DownloadController.from(startDate, filter.to)
+		        : DownloadController.from(startDate, filter.to, Period.ofDays(KIND_DEFAULT_DAYS));
 		filter.formUuid = StringUtils.trimToNull(form);
 		filter.patientUuid = StringUtils.trimToNull(patient);
 		filter.startIndex = startIndex == null ? 0 : startIndex;

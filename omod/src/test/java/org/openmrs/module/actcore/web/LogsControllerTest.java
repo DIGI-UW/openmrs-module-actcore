@@ -180,6 +180,21 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void readsAKindFilterWithoutAStartDateOverTheLastThirtyDays() {
+		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) select 1000 + x, 0, 1, '"
+		        + Timestamp.valueOf(LocalDate.now().minusDays(40).atStartOfDay()) + "' from system_range(1, 10001)");
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, 7 from system_range(1, 10001)");
+		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		
+		SimpleObject page = activity.getActivity(null, null, null, "other", null, null, null, null);
+		
+		assertEquals(LocalDate.now().minusDays(30).toString(), page.get("from"));
+		assertEquals(Integer.valueOf(0), page.get("totalCount"));
+		assertEquals(LocalDate.now().minusMonths(12).toString(),
+		    activity.getActivity(null, null, null, null, null, null, null, null).get("from"));
+	}
+	
+	@Test
 	public void refusesReadsTooManyToFoldAsABadRequest() {
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '" + Timestamp.valueOf(LocalDate.now().atStartOfDay())

@@ -73,7 +73,7 @@ public class DownloadController extends BaseRestController {
 	/** MariaDB's TEXT, the log's detail column, which refuses a longer value. */
 	static final int MAX_DETAIL_BYTES = 65535;
 	
-	/** How far back a log reaches when the request gives no start date. */
+	/** How far back a log without its own default reaches when the request gives no start date. */
 	static final int DEFAULT_MONTHS = 12;
 	
 	private final DownloadLog downloadLog = new DownloadLog();
@@ -156,11 +156,15 @@ public class DownloadController extends BaseRestController {
 		if (!Context.hasPrivilege(DownloadLog.VIEW_PRIVILEGE)) {
 			throw new APIAuthenticationException("Privilege required: " + DownloadLog.VIEW_PRIVILEGE);
 		}
+		LocalDate to = date(endDate);
+		LocalDate from = from(startDate, to);
+		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
+		        .add("from", from.toString()).add("to", to == null ? null : to.toString());
 		Integer userId = null;
 		if (StringUtils.isNotBlank(username)) {
 			userId = Names.userId(username.trim());
 			if (userId == null) {
-				return new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0);
+				return none;
 			}
 		}
 		Integer formId = null;
@@ -168,12 +172,10 @@ public class DownloadController extends BaseRestController {
 			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
 			    () -> Context.getFormService().getFormByUuid(formUuid.trim()));
 			if (form == null) {
-				return new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0);
+				return none;
 			}
 			formId = form.getFormId();
 		}
-		LocalDate to = date(endDate);
-		LocalDate from = from(startDate, to);
 		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
