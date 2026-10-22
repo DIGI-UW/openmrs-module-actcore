@@ -267,10 +267,7 @@ public class NextSteps {
 			        : "On hold: a clinician must review before the next dose";
 			bpg.onHold = true;
 		}
-		// Only a consultation or referral this user is listed holds the BPG dose back; one they may not
-		// record leaves it listed. Patient Information never does: an overdue, already prescribed injection
-		// does not wait for paperwork (distro #148). An oral supply waits for nothing, as a low adherence
-		// review is no reason to leave the patient without medicine, and a BPG on hold stays to say why.
+		// Only a review this user is listed holds the BPG dose back; Patient Information never does.
 		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))) {
 			boolean reviewToDo = holdsDose("consult", enterable) || holdsDose("refer", enterable);
 			if (reviewToDo && toDo("bpg") && !steps.get("bpg").onHold) {
