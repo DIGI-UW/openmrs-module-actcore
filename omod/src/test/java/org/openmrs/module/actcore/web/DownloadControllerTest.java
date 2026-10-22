@@ -263,6 +263,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Collections.singletonMap("clinic", "Akunalaber HCIII"), detail.get("filters"));
 		assertEquals("Due for prophylaxis worklist", DownloadController.list("worklist:Due for prophylaxis").get("name"));
 		assertEquals("Logs: Activity", DownloadController.list("logs:activity").get("name"));
+		assertEquals("Logs: Patients opened", DownloadController.list("logs:reads").get("name"));
+		assertEquals("Logs: Sign-ins", DownloadController.list("logs:signIns").get("name"));
+		assertEquals("Logs: Later", DownloadController.list("logs:later").get("name"));
 	}
 	
 	@Test

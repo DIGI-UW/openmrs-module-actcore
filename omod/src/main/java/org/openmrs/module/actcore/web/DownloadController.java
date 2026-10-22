@@ -76,6 +76,16 @@ public class DownloadController extends BaseRestController {
 	/** How far back a log without its own default reaches when the request gives no start date. */
 	static final int DEFAULT_MONTHS = 12;
 	
+	/** The Logs page's tabs as it names them, by the key the app records a tab's CSV under. */
+	static final Map<String, String> LOG_TABS = new LinkedHashMap<String, String>();
+	
+	static {
+		LOG_TABS.put("activity", "Activity");
+		LOG_TABS.put("reads", "Patients opened");
+		LOG_TABS.put("downloads", "Downloads");
+		LOG_TABS.put("signIns", "Sign-ins");
+	}
+	
 	private final DownloadLog downloadLog = new DownloadLog();
 	
 	@RequestMapping(method = RequestMethod.POST)
@@ -270,7 +280,9 @@ public class DownloadController extends BaseRestController {
 			    "worklist");
 		}
 		if (list.startsWith("logs:")) {
-			return new SimpleObject().add("name", "Logs: " + StringUtils.capitalize(list.substring("logs:".length()).trim()))
+			String tab = list.substring("logs:".length()).trim();
+			return new SimpleObject()
+			        .add("name", "Logs: " + StringUtils.defaultString(LOG_TABS.get(tab), StringUtils.capitalize(tab)))
 			        .add("kind", "logs");
 		}
 		return new SimpleObject().add("name", list).add("kind", "other");
