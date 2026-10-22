@@ -150,14 +150,14 @@ The v2 prototype's rules, each over the patient's saved forms, ACT Core's dose s
   Refer to clinician for the not prescribed, anaphylaxis and adherence rules, and nothing for a new
   echo; their held BPG step says a clinician must review before the next dose, rather than to complete
   the consultation. The flag rules need View Patient Flags.
-- **The dose waits.** While the patient's Patient Information step, consultation or Refer to clinician
-  is to do and listed for the signed-in user, the dose step is left out; a dose recorded this visit is
-  still listed done. A step the user is not listed does not hold the dose back, so a community
-  clinician, who may not record Patient Information, still gets an overdue dose. A BPG step on hold
-  is not left out: it offers no dose, so it stays to say why. An oral supply waits only for Patient
-  Information, since a consultation or referral to do, such as a low adherence review, is no reason
-  to leave the patient without medicine. `actcore.nextSteps.doseAfterEarlierSteps` set to false lists
-  the dose anyway.
+- **The dose waits for a review.** While the patient's consultation or Refer to clinician is to do and
+  listed for the signed-in user, the BPG dose step is left out; a dose recorded this visit is still
+  listed done. A step the user is not listed does not hold the dose back. Patient Information never
+  does: an overdue, already prescribed injection is listed beside it for every role
+  ([distro #148](https://github.com/DIGI-UW/openmrs-distro-referenceapplication/issues/148)). An oral
+  supply never waits, since a review to do, such as a low adherence review, is no reason to leave the
+  patient without medicine. A BPG step on hold is not left out: it offers no dose, so it stays to say
+  why. `actcore.nextSteps.doseAfterEarlierSteps` set to false lists the dose anyway.
 - **On hold.** A BPG step on hold has `onHold` true and no form, so it offers nothing to record; the
   withheld injection can still be recorded from the forms list.
 - **Order.** Steps to do come first, new ones first among them.

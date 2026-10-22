@@ -343,7 +343,7 @@
     <property>actcore.nextSteps.doseAfterEarlierSteps</property>
     <defaultValue>true</defaultValue>
     <description>
-      Whether the dose step waits for the earlier steps: while the patient's Patient Information step, consultation or Refer to clinician is to do and listed for the signed-in user, a dose not recorded this visit is left out of the next steps. A BPG on hold stays, since it offers no dose, and an oral supply waits only for Patient Information. Set to false to list the dose anyway.
+      Whether the BPG dose step waits for a clinical review: while the patient's consultation or Refer to clinician is to do and listed for the signed-in user, a BPG dose not recorded this visit is left out of the next steps. Patient Information never holds the dose back, and an oral supply never waits. A BPG on hold stays, since it offers no dose. Set to false to list the dose anyway.
     </description>
   </globalProperty>
 

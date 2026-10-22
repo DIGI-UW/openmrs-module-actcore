@@ -665,12 +665,25 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldLeaveTheDoseOutWhilePatientInformationIsToDo() {
+	public void of_shouldListTheDoseBesidePatientInformationToDo() {
 		lastGiven(36);
 		echoed(at(30));
 		Context.getEncounterService().voidEncounter(registered, "test");
 		
-		assertEquals("patientInfo", keys(steps()));
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|patientInfo", keys(steps));
+		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+	}
+	
+	@Test
+	public void of_shouldStillLeaveTheDoseOutForAReviewWhilePatientInformationIsToDo() {
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		Context.getEncounterService().voidEncounter(registered, "test");
+		
+		assertEquals("patientInfo|consult", keys(steps()));
 	}
 	
 	@Test
@@ -689,7 +702,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void of_shouldLeaveTheDoseOutWhilePatientInformationTheUserMayRecordIsToDo() {
+	public void of_shouldListTheDoseBesidePatientInformationTheUserMayRecord() {
 		lastGiven(36);
 		echoed(at(30));
 		Context.getEncounterService().voidEncounter(registered, "test");
@@ -697,17 +710,17 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		Context.getEncounterService().saveEncounterType(patientInfo);
 		authenticateWith("Add Encounters", "Task: test.patientInfo");
 		
-		assertEquals("patientInfo", keys(steps()));
+		assertEquals("bpg|patientInfo", keys(steps()));
 	}
 	
 	@Test
-	public void of_shouldLeaveTheOralDoseOutWhilePatientInformationIsToDo() {
+	public void of_shouldListTheOralDoseBesidePatientInformationToDo() {
 		prescribe(encounter(7, 120), oralPenicillin, 120, null);
 		estimate(encounterOf(oral, 100), 90);
 		echoed(at(30));
 		Context.getEncounterService().voidEncounter(registered, "test");
 		
-		assertEquals("patientInfo", keys(steps()));
+		assertEquals("oral|patientInfo", keys(steps()));
 	}
 	
 	@Test

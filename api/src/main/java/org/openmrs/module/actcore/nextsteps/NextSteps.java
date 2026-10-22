@@ -267,25 +267,16 @@ public class NextSteps {
 			        : "On hold: a clinician must review before the next dose";
 			bpg.onHold = true;
 		}
-		// Only a step this user is listed holds the dose back; one they may not record leaves it listed.
+		// Only a consultation or referral this user is listed holds the BPG dose back; one they may not
+		// record leaves it listed. Patient Information never does: an overdue, already prescribed injection
+		// does not wait for paperwork (distro #148). An oral supply waits for nothing, as a low adherence
+		// review is no reason to leave the patient without medicine, and a BPG on hold stays to say why.
 		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))) {
-			boolean patientInfoToDo = holdsDose("patientInfo", enterable);
 			boolean reviewToDo = holdsDose("consult", enterable) || holdsDose("refer", enterable);
-			for (String dose : Arrays.asList("bpg", "oral")) {
-				if (toDo(dose) && heldBack(dose, patientInfoToDo, reviewToDo)) {
-					steps.remove(dose);
-				}
+			if (reviewToDo && toDo("bpg") && !steps.get("bpg").onHold) {
+				steps.remove("bpg");
 			}
 		}
-	}
-	
-	/**
-	 * Whether the earlier steps to do leave the dose out. A BPG on hold offers no dose, so it stays
-	 * listed to say why. An oral supply waits only for Patient Information: a consultation or referral
-	 * to do, such as a low adherence review, is no reason to leave the patient without medicine.
-	 */
-	private boolean heldBack(String dose, boolean patientInfoToDo, boolean reviewToDo) {
-		return !steps.get(dose).onHold && (patientInfoToDo || (reviewToDo && !"oral".equals(dose)));
 	}
 	
 	private boolean toDo(String key) {
