@@ -9,10 +9,15 @@
  */
 package org.openmrs.module.actcore.download;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.hibernate.SQLQuery;
 import org.hibernate.type.IntegerType;
 import org.hibernate.type.StringType;
 import org.hibernate.type.TimestampType;
@@ -62,18 +67,43 @@ public class DownloadLog {
 		        .setParameter("detail", detail).setParameter("date", new Date()).executeUpdate();
 	}
 	
-	/** The latest downloads, newest first. */
-	public List<Entry> latest(int limit) {
-		List<Entry> entries = new ArrayList<Entry>();
-		for (Object row : sessionFactory().getCurrentSession()
+	/** Every download matching the filters, newest first; each filter is left out when null. */
+	public List<Entry> list(Integer userId, LocalDate from, LocalDate to, Integer formId) {
+		StringBuilder where = new StringBuilder();
+		Map<String, Object> params = new LinkedHashMap<String, Object>();
+		if (userId != null) {
+			where.append(" and d.user_id = :user");
+			params.put("user", userId);
+		}
+		if (from != null) {
+			where.append(" and d.date_created >= :from");
+			params.put("from", Timestamp.valueOf(from.atStartOfDay()));
+		}
+		if (to != null) {
+			where.append(" and d.date_created < :to");
+			params.put("to", Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+		}
+		if (formId != null) {
+			where.append(" and d.form_id = :form");
+			params.put("form", formId);
+		}
+		return select(where.toString(), params);
+	}
+	
+	private List<Entry> select(String where, Map<String, Object> params) {
+		SQLQuery query = sessionFactory().getCurrentSession()
 		        .createSQLQuery("select d.date_created, u.uuid user_uuid, u.username, f.uuid form_uuid, f.name form_name,"
 		                + " d.detail from " + TABLE
-		                + " d join users u on u.user_id = d.user_id left join form f on f.form_id = d.form_id"
-		                + " order by d.date_created desc, d.download_id desc")
+		                + " d join users u on u.user_id = d.user_id left join form f on f.form_id = d.form_id where 1 = 1"
+		                + where + " order by d.date_created desc, d.download_id desc")
 		        .addScalar("date_created", TimestampType.INSTANCE).addScalar("user_uuid", StringType.INSTANCE)
 		        .addScalar("username", StringType.INSTANCE).addScalar("form_uuid", StringType.INSTANCE)
-		        .addScalar("form_name", StringType.INSTANCE).addScalar("detail", StringType.INSTANCE).setMaxResults(limit)
-		        .list()) {
+		        .addScalar("form_name", StringType.INSTANCE).addScalar("detail", StringType.INSTANCE);
+		for (Map.Entry<String, Object> param : params.entrySet()) {
+			query.setParameter(param.getKey(), param.getValue());
+		}
+		List<Entry> entries = new ArrayList<Entry>();
+		for (Object row : query.list()) {
 			Object[] columns = (Object[]) row;
 			Entry entry = new Entry();
 			entry.date = (Date) columns[0];

@@ -19,7 +19,7 @@
   <package>org.openmrs.module.actcore</package>
   <author>UW DIGI</author>
   <description>
-    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, a download of forms' fields, each recorded, and loading the report descriptors at startup.
+    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, a download of forms' fields, each recorded, the Logs page's activity, reads and downloads, and loading the report descriptors at startup.
   </description>
 
   <activator>org.openmrs.module.actcore.ActCoreActivator</activator>
@@ -30,6 +30,10 @@
     <require_module version="${cohortVersion}">org.openmrs.module.cohort</require_module>
     <require_module version="${webservicesRestVersion}">org.openmrs.module.webservices.rest</require_module>
     <require_module version="${reportingVersion}">org.openmrs.module.reporting</require_module>
+    <!-- The Logs page reads its read audit, and the Envers tables hibernate.integration.envers.enabled makes:
+         with Envers off there is no revision_entity table and the activity endpoint fails, so the distribution
+         turns it on. No version, as platform 2.8 reads 1.1.0-SNAPSHOT as below 1.1.0; the distribution pins it. -->
+    <require_module>org.openmrs.module.auditlogweb</require_module>
   </require_modules>
 
   <!-- Initializer creates the flags and applies the report descriptor properties while it starts, and
@@ -406,6 +410,13 @@
     <defaultValue>1af5b942-8747-5dfb-aa40-805b5575f2e3,c5641213-1ec1-5378-b6de-9135ca25a56d,cfd8f77a-a2b5-5836-96c1-d3e5fdd48e02,2cebe220-2a9d-5c53-be68-f2257a4bfc9e,32f3e45d-c2a8-5c19-b4d1-9306251426f6</defaultValue>
     <description>
       The questions' concepts, by uuid and comma-separated, whose answers identify the patient: a download leaves them out, and names them in withheld, unless the user has Task: act.downloadIdentifiers and it is not a research download. The default is the RHD Patient Information form's Home Address, Village/Area of Residence, School Name, Additional information to help locate patient and Relocation Area.
+    </description>
+  </globalProperty>
+  <globalProperty>
+    <property>actcore.logs.clinicAttributeTypes</property>
+    <defaultValue>695f2990-236f-5d7c-b8aa-ddbdb22400f4,fe261119-2911-5b36-be40-8f9827826987</defaultValue>
+    <description>
+      The person attribute types holding a patient's clinics, by uuid and comma-separated: the primary care clinic first, then the cardiac clinic. The Logs page names them with a registration and compares them with the clinics on the reader's account (the actcore.clinics user property) to say when a patient opened is at another clinic. The default is Primary Care Clinic and Assigned Cardiac Clinic.
     </description>
   </globalProperty>
   <globalProperty>

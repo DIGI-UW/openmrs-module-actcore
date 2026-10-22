@@ -34,6 +34,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;
@@ -266,6 +267,31 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		runFullRefresh();
 		
 		assertEquals(RaisedFlags.Dismissal.DISMISSED, RaisedFlags.dismiss(patient(), untagged));
+	}
+	
+	@Test
+	public void keepsEachDismissalInTheActivityLogAfterTheFlagLowers() {
+		matching(true);
+		runFullRefresh();
+		dismiss();
+		matching(false);
+		runFullRefresh();
+		matching(true);
+		refreshPatient();
+		dismiss();
+		Flag disabled = flagService.getFlag(flag.getFlagId());
+		disabled.setEnabled(false);
+		flagService.saveFlag(disabled);
+		runFullRefresh();
+		
+		ActivityLog.Filter filter = new ActivityLog.Filter();
+		filter.kind = "flag";
+		ActivityLog.Page page = new ActivityLog().list(filter);
+		
+		assertEquals(0, rows());
+		assertEquals(2, page.totalCount);
+		assertEquals("missing data", page.results.get(1).summary);
+		assertEquals("Dismissed flag", page.results.get(1).action);
 	}
 	
 	@Test

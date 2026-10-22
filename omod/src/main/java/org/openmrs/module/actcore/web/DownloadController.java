@@ -10,9 +10,12 @@
 package org.openmrs.module.actcore.web;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,12 +27,14 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
+import org.openmrs.module.actcore.logs.Names;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -62,6 +67,24 @@ public class DownloadController extends BaseRestController {
 	static final int DEFAULT_LIMIT = 100;
 	
 	static final int MAX_LIMIT = 500;
+	
+	static final int MAX_COLUMNS = 200;
+	
+	/** MariaDB's TEXT, the log's detail column, which refuses a longer value. */
+	static final int MAX_DETAIL_BYTES = 65535;
+	
+	/** How far back a log without its own default reaches when the request gives no start date. */
+	static final int DEFAULT_MONTHS = 12;
+	
+	/** The Logs page's tabs as it names them, by the key the app records a tab's CSV under. */
+	static final Map<String, String> LOG_TABS = new LinkedHashMap<String, String>();
+	
+	static {
+		LOG_TABS.put("activity", "Activity");
+		LOG_TABS.put("reads", "Patients opened");
+		LOG_TABS.put("downloads", "Downloads");
+		LOG_TABS.put("signIns", "Sign-ins");
+	}
 	
 	private final DownloadLog downloadLog = new DownloadLog();
 	
@@ -122,34 +145,169 @@ public class DownloadController extends BaseRestController {
 		detail.put("identifiers", identified);
 		detail.put("researchOnly", researchOnly);
 		// Recorded before the rows are returned, so no download goes unrecorded.
-		downloadLog.record(form.getFormId(), new ObjectMapper().writeValueAsString(detail));
+		log(form.getFormId(), detail);
 		
 		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", identified)
 		        .add("researchOnly", researchOnly).add("withheld", table.withheld);
 	}
 	
-	/** The latest downloads, newest first, for a user who may read the audit log's reads. */
+	/**
+	 * The downloads matching the filters, newest first, for a user who may read the audit log's reads.
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
-	public SimpleObject getDownloads(@RequestParam(value = "limit", required = false) Integer limit) throws IOException {
+	public SimpleObject getDownloads(@RequestParam(value = "username", required = false) String username,
+	        @RequestParam(value = "startDate", required = false) String startDate,
+	        @RequestParam(value = "endDate", required = false) String endDate,
+	        @RequestParam(value = "form", required = false) String formUuid,
+	        @RequestParam(value = "identifiers", required = false) String identifiers,
+	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
+	        @RequestParam(value = "limit", required = false) Integer limit) throws IOException {
 		if (!Context.hasPrivilege(DownloadLog.VIEW_PRIVILEGE)) {
 			throw new APIAuthenticationException("Privilege required: " + DownloadLog.VIEW_PRIVILEGE);
 		}
-		int size = limit == null || limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+		LocalDate to = date(endDate);
+		LocalDate from = from(startDate, to);
+		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
+		        .add("from", from.toString()).add("to", to == null ? null : to.toString());
+		Integer userId = null;
+		if (StringUtils.isNotBlank(username)) {
+			userId = Names.userId(username.trim());
+			if (userId == null) {
+				return none;
+			}
+		}
+		Integer formId = null;
+		if (StringUtils.isNotBlank(formUuid)) {
+			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
+			    () -> Context.getFormService().getFormByUuid(formUuid.trim()));
+			if (form == null) {
+				return none;
+			}
+			formId = form.getFormId();
+		}
+		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
+			throw new IllegalRequestException("identifiers must be with, without or research");
+		}
 		ObjectMapper json = new ObjectMapper();
-		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (DownloadLog.Entry entry : downloadLog.latest(size)) {
-			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
+		List<SimpleObject> matching = new ArrayList<SimpleObject>();
+		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to, formId)) {
+			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
+			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
+				continue;
+			}
+			Object list = detail == null ? null : detail.get("list");
+			matching.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
 			        .add("user", new SimpleObject().add("uuid", entry.userUuid).add("username", entry.username))
 			        .add("form",
 			            entry.formName == null ? null
 			                    : new SimpleObject().add("uuid", entry.formUuid).add("name", entry.formName))
-			        .add("detail", entry.detail == null ? null : json.readValue(entry.detail, Map.class)));
+			        .add("list", list == null ? null : list(list.toString())).add("detail", detail));
 		}
-		return new SimpleObject().add("results", results);
+		int start = Math.min(startIndex == null ? 0 : Math.max(startIndex, 0), matching.size());
+		int size = limit == null || limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+		return new SimpleObject().add("results", matching.subList(start, Math.min(start + size, matching.size())))
+		        .add("totalCount", matching.size()).add("from", from.toString())
+		        .add("to", to == null ? null : to.toString());
 	}
 	
-	private static LocalDate date(Object value) {
+	/**
+	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. Recorded before the
+	 * app writes the file, which it does not when this fails.
+	 */
+	@RequestMapping(value = "/record", method = RequestMethod.POST)
+	@ResponseBody
+	public SimpleObject record(@RequestBody Map<String, Object> body) throws JsonProcessingException {
+		boolean all = Context.hasPrivilege(DOWNLOAD_PRIVILEGE);
+		if (!all && !Context.hasPrivilege(RESEARCH_PRIVILEGE)) {
+			throw new APIAuthenticationException("Privilege required: " + DOWNLOAD_PRIVILEGE);
+		}
+		Object list = body == null ? null : body.get("list");
+		if (list == null || StringUtils.isBlank(list.toString())) {
+			throw new IllegalRequestException("The list is required: registry, worklist:<name> or logs:<tab>");
+		}
+		Object columns = body.get("columns");
+		if (!(columns instanceof List) || ((List<?>) columns).size() > MAX_COLUMNS) {
+			throw new IllegalRequestException("The columns are required, at most " + MAX_COLUMNS);
+		}
+		List<String> names = new ArrayList<String>();
+		for (Object column : (List<?>) columns) {
+			names.add(StringUtils.left(String.valueOf(column), MAX_LABEL));
+		}
+		Object rows = body.get("rows");
+		Map<String, Object> detail = new LinkedHashMap<String, Object>();
+		detail.put("list", StringUtils.left(list.toString().trim(), MAX_LABEL));
+		detail.put("fields", names);
+		detail.put("withheld", new ArrayList<String>());
+		detail.put("startDate", null);
+		detail.put("endDate", null);
+		detail.put("rows", rows instanceof Number ? ((Number) rows).intValue() : 0);
+		detail.put("identifiers", Boolean.TRUE.equals(body.get("identifiers")));
+		// The app's lists are not limited to opted-in patients, whoever downloads them.
+		detail.put("researchOnly", false);
+		detail.put("filters",
+		    body.get("filters") instanceof Map ? body.get("filters") : new LinkedHashMap<String, Object>());
+		log(null, detail);
+		return new SimpleObject().add("recorded", true);
+	}
+	
+	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
+		String json = new ObjectMapper().writeValueAsString(detail);
+		if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DETAIL_BYTES) {
+			throw new IllegalRequestException("Too many or too long columns and filters to record");
+		}
+		downloadLog.record(formId, json);
+	}
+	
+	/** with, without or research, as the identifiers filter names what a download held. */
+	private static String identifiersOf(Map<?, ?> detail) {
+		if (detail == null) {
+			return "without";
+		}
+		if (Boolean.TRUE.equals(detail.get("researchOnly"))) {
+			return "research";
+		}
+		return Boolean.TRUE.equals(detail.get("identifiers")) ? "with" : "without";
+	}
+	
+	/** The list a recorded CSV was of, named as the Logs page shows it. */
+	static SimpleObject list(String list) {
+		if (list.equals("registry")) {
+			return new SimpleObject().add("name", "Registry list").add("kind", "registry");
+		}
+		if (list.startsWith("worklist:")) {
+			return new SimpleObject().add("name", list.substring("worklist:".length()).trim() + " worklist").add("kind",
+			    "worklist");
+		}
+		if (list.startsWith("logs:")) {
+			String tab = list.substring("logs:".length()).trim();
+			return new SimpleObject()
+			        .add("name", "Logs: " + StringUtils.defaultString(LOG_TABS.get(tab), StringUtils.capitalize(tab)))
+			        .add("kind", "logs");
+		}
+		return new SimpleObject().add("name", list).add("kind", "other");
+	}
+	
+	static LocalDate from(String startDate, LocalDate to) {
+		return from(startDate, to, Period.ofMonths(DEFAULT_MONTHS));
+	}
+	
+	/**
+	 * The start date the log reads from: the one given, else {@code back} before the end date or today,
+	 * so a request without dates does not read the whole log.
+	 */
+	static LocalDate from(String startDate, LocalDate to, Period back) {
+		LocalDate from = date(startDate);
+		if (from == null) {
+			return (to == null ? LocalDate.now() : to).minus(back);
+		}
+		if (to != null && from.isAfter(to)) {
+			throw new IllegalRequestException("The start date is after the end date");
+		}
+		return from;
+	}
+	
+	static LocalDate date(Object value) {
 		if (value == null || StringUtils.isBlank(value.toString())) {
 			return null;
 		}

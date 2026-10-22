@@ -128,4 +128,37 @@
       GROUP BY pf.patient_id, pf.flag_id
     </sql>
   </changeSet>
+  <changeSet id="actcore-2026-10-22-flag-dismissal" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_flag_dismissal"/></not>
+    </preConditions>
+    <comment>Each dismissal of a patient's flag, kept once the flag lowers, from the dismissals recorded so far</comment>
+    <createTable tableName="actcore_flag_dismissal">
+      <column name="dismissal_id" type="int" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="patient_id" type="int">
+        <constraints nullable="false" foreignKeyName="actcore_flag_dismissal_patient" references="patient(patient_id)"/>
+      </column>
+      <!-- No foreign key to the flag, so deleting it keeps the dismissals that name it. -->
+      <column name="flag_id" type="int">
+        <constraints nullable="false"/>
+      </column>
+      <column name="dismissed_by" type="int">
+        <constraints foreignKeyName="actcore_flag_dismissal_dismissed_by" references="users(user_id)"/>
+      </column>
+      <column name="date_dismissed" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="actcore_flag_dismissal" indexName="actcore_flag_dismissal_date">
+      <column name="date_dismissed"/>
+    </createIndex>
+    <sql>
+      INSERT INTO actcore_flag_dismissal (patient_id, flag_id, dismissed_by, date_dismissed)
+      SELECT patient_id, flag_id, dismissed_by, date_dismissed FROM actcore_raised_flag
+      WHERE date_dismissed IS NOT NULL
+      ORDER BY date_dismissed
+    </sql>
+  </changeSet>
 </databaseChangeLog>

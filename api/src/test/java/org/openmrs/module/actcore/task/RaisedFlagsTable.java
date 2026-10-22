@@ -26,5 +26,11 @@ public final class RaisedFlagsTable {
 		        + " date_dismissed datetime, primary key (patient_id, flag_id))",
 		    false);
 		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.TABLE, false);
+		Context.getAdministrationService()
+		        .executeSQL("create table if not exists " + RaisedFlags.DISMISSAL_TABLE
+		                + " (dismissal_id int auto_increment primary key, patient_id int not null, flag_id int not null,"
+		                + " dismissed_by int, date_dismissed datetime not null)",
+		            false);
+		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.DISMISSAL_TABLE, false);
 	}
 }
