@@ -37,6 +37,7 @@ import org.openmrs.Visit;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -85,6 +86,7 @@ public class NextSteps {
 		TITLES.put("procedures", "Procedures and outcomes");
 		TITLES.put("inr", "INR review");
 		TITLES.put("patientInfo", "Patient Information");
+		TITLES.put("pregnancy", "Pregnancy");
 	}
 	
 	private static final List<String> READS = Arrays.asList(PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_VISITS,
@@ -239,6 +241,12 @@ public class NextSteps {
 				        savedThisVisit.contains("consult")));
 			}
 		}
+		if (mayConsult && !steps.containsKey("consult")) {
+			reviewOverdue();
+		}
+		if ("F".equals(patient.getGender()) && flags.contains(flagKeys.get("deliveryOverdue"))) {
+			put("pregnancy", "Delivery outcome overdue", false);
+		}
 		echo();
 		if (flags.contains(flagKeys.get("followUp"))) {
 			put("procedures", "30-day follow-up due", false);
@@ -282,7 +290,20 @@ public class NextSteps {
 	}
 	
 	private boolean holdsDose(String key, Set<String> enterable) {
-		return toDo(key) && shown(key, enterable);
+		return toDo(key) && !steps.get(key).routine && shown(key, enterable);
+	}
+	
+	/**
+	 * A routine review past its date, which does not hold the dose back as a review of a trigger does.
+	 */
+	private void reviewOverdue() {
+		LocalDate due = NextConsultation.of(patient);
+		if (due != null && due.isBefore(today)) {
+			put("consult", "Overdue: was due " + DAY.format(due), false);
+			if (steps.containsKey("consult")) {
+				steps.get("consult").routine = true;
+			}
+		}
 	}
 	
 	/**
@@ -507,6 +528,7 @@ public class NextSteps {
 		} else {
 			step.reason = reason;
 			step.isNew = isNew;
+			step.routine = false;
 		}
 	}
 	
@@ -615,6 +637,8 @@ public class NextSteps {
 		private boolean done;
 		
 		private boolean onHold;
+		
+		private boolean routine;
 		
 		private Step(String key, String reason, boolean isNew, boolean done) {
 			this.key = key;

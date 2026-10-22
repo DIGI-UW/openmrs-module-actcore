@@ -20,11 +20,13 @@ import java.util.UUID;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Concept;
+import org.openmrs.ConceptName;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
 import org.openmrs.Form;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
+import org.openmrs.PatientProgram;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -34,6 +36,8 @@ import org.openmrs.Visit;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.AdherenceContextTest;
+import org.openmrs.module.actcore.consultation.NextConsultation;
+import org.openmrs.module.actcore.registry.EnrolOnRegistration;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -55,6 +59,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private EncounterType patientInfo;
 	
+	private EncounterType pregnancy;
+	
 	private Encounter registered;
 	
 	private Concept echoDate;
@@ -73,6 +79,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private Flag inrDue;
 	
+	private Flag deliveryOverdue;
+	
 	private Visit visit;
 	
 	private Patient patient;
@@ -87,10 +95,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		procedures = type("Interventions and Outcomes");
 		inr = type("INR Monitoring");
 		patientInfo = type("Patient Information");
+		pregnancy = type("Pregnancy");
 		property(NextSteps.GP_ENCOUNTER_TYPES,
 		    "bpg:" + bpg.getUuid() + ",oral:" + oral.getUuid() + ",consult:" + consult.getUuid() + ",echo:" + echo.getUuid()
 		            + ",procedures:" + procedures.getUuid() + ",inr:" + inr.getUuid() + ",patientInfo:"
-		            + patientInfo.getUuid());
+		            + patientInfo.getUuid() + ",pregnancy:" + pregnancy.getUuid());
 		registered = encounterOf(patientInfo, 400);
 		echoDate = concept("Date of echocardiogram", "Datetime");
 		tolerance = concept("Injection tolerance", "Coded");
@@ -103,8 +112,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		notPrescribed = flag("RHD prophylaxis not prescribed");
 		followUp = flag("RHD 30-day follow-up due");
 		inrDue = flag("RHD INR review due");
-		property(NextSteps.GP_FLAGS,
-		    "notPrescribed:" + notPrescribed.getUuid() + ",followUp:" + followUp.getUuid() + ",inr:" + inrDue.getUuid());
+		deliveryOverdue = flag("RHD delivery outcome overdue");
+		property(NextSteps.GP_FLAGS, "notPrescribed:" + notPrescribed.getUuid() + ",followUp:" + followUp.getUuid() + ",inr:"
+		        + inrDue.getUuid() + ",deliveryOverdue:" + deliveryOverdue.getUuid());
+		patient.setGender("F");
+		Context.getPatientService().savePatient(patient);
 	}
 	
 	@Test
@@ -1304,6 +1316,179 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("patientInfo", keys(steps));
 		assertEquals("Entered this visit", steps.get(0).getReason());
 		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldLeaveTheDoseOutWhenANewEchoTurnsTheOverdueCardiologyReviewIntoAReview() {
+		lastGiven(36);
+		reviewDue(220, 6);
+		startVisit();
+		inVisit(echo, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals(false, keys(steps).contains("bpg"));
+	}
+	
+	@Test
+	public void of_shouldGiveTheConsultationForACardiologyReviewPastItsDate() {
+		echoed(at(30));
+		reviewDue(220, 6);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps));
+		assertEquals("Consultation visit", steps.get(0).getTitle());
+		assertEquals("Overdue: was due 21-Aug-2026", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isNew());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldNotGiveTheConsultationBeforeTheCardiologyReviewIsDue() {
+		echoed(at(30));
+		reviewDue(150, 6);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldMarkTheOverdueCardiologyReviewDoneWhenAConsultationIsSavedThisVisit() {
+		echoed(at(30));
+		reviewDue(220, 6);
+		startVisit();
+		inVisit(consult, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps));
+		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldGiveTheDoseBesideTheOverdueCardiologyReview() {
+		lastGiven(36);
+		echoed(at(30));
+		reviewDue(220, 6);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|consult", keys(steps));
+		assertEquals(false, steps.get(0).isOnHold());
+	}
+	
+	@Test
+	public void of_shouldKeepTheDoseOutForAnAnaphylaxisReviewBesideTheOverdueCardiologyReview() {
+		lastGiven(36);
+		echoed(at(30));
+		reviewDue(220, 6);
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals(true, steps.get(1).isOnHold());
+	}
+	
+	@Test
+	public void of_shouldKeepTheDoseOutForTheNotPrescribedConsultationBesideTheOverdueCardiologyReview() {
+		lastGiven(36);
+		echoed(at(30));
+		reviewDue(220, 6);
+		flagged(notPrescribed);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps));
+		assertEquals("No prophylaxis prescribed", steps.get(0).getReason());
+	}
+	
+	@Test
+	public void of_shouldNotGiveTheOverdueCardiologyReviewToAUserWhoMayNotRecordTheConsultation() {
+		echoed(at(30));
+		reviewDue(220, 6);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldGiveThePregnancyForAFemalePatientWithTheDeliveryOutcomeOverdue() {
+		echoed(at(30));
+		flagged(deliveryOverdue);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("pregnancy", keys(steps));
+		assertEquals("Pregnancy", steps.get(0).getTitle());
+		assertEquals("Delivery outcome overdue", steps.get(0).getReason());
+		assertEquals(false, steps.get(0).isDone());
+	}
+	
+	@Test
+	public void of_shouldNotGiveThePregnancyForAPatientWhoIsNotFemale() {
+		echoed(at(30));
+		flagged(deliveryOverdue);
+		patient.setGender("M");
+		Context.getPatientService().savePatient(patient);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldNotGiveThePregnancyToAUserWhoMayNotRecordIt() {
+		echoed(at(30));
+		flagged(deliveryOverdue);
+		pregnancy.setEditPrivilege(privilege("Task: test.pregnancy"));
+		Context.getEncounterService().saveEncounterType(pregnancy);
+		authenticateWith("Add Encounters", "View Patient Flags");
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldMarkThePregnancyDoneWhenItsFormIsSavedThisVisit() {
+		echoed(at(30));
+		flagged(deliveryOverdue);
+		startVisit();
+		inVisit(pregnancy, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("pregnancy", keys(steps));
+		assertEquals(true, steps.get(0).isDone());
+	}
+	
+	/**
+	 * A consultation ``daysAgo`` days ago with its next review in ``months`` months, in a patient on
+	 * the registry.
+	 */
+	private void reviewDue(int daysAgo, int months) {
+		Concept amount = concept("Next consultation time amount", "Numeric");
+		Concept period = concept("Time period", "Coded");
+		Concept inMonths = new Concept();
+		inMonths.setUuid("1074AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+		inMonths.addName(new ConceptName("Months " + System.nanoTime(), Context.getLocale()));
+		inMonths.setDatatype(Context.getConceptService().getConceptDatatypeByName("N/A"));
+		inMonths.setConceptClass(Context.getConceptService().getConceptClass(1));
+		Context.getConceptService().saveConcept(inMonths);
+		property(NextConsultation.GP_AMOUNT, amount.getUuid());
+		property(NextConsultation.GP_PERIOD, period.getUuid());
+		property(EnrolOnRegistration.PROGRAM_PROPERTY, Context.getProgramWorkflowService().getProgram(1).getUuid());
+		PatientProgram enrolment = new PatientProgram();
+		enrolment.setPatient(patient);
+		enrolment.setProgram(Context.getProgramWorkflowService().getProgram(1));
+		enrolment.setDateEnrolled(at(400));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		Encounter review = encounterOf(consult, daysAgo);
+		Obs next = obs(review, amount);
+		next.setValueNumeric((double) months);
+		Context.getObsService().saveObs(next, null);
+		answered(review, period, inMonths);
 	}
 	
 	private List<NextStep> steps() {
