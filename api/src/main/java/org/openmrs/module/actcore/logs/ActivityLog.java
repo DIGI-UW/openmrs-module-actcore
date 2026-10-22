@@ -983,6 +983,9 @@ public class ActivityLog {
 		}
 		List<Field> fields = new ArrayList<Field>();
 		for (Integer concept : order) {
+			if (sameValues(added.get(concept), removed.get(concept))) {
+				continue;
+			}
 			String current = added.containsKey(concept) ? StringUtils.join(added.get(concept), ", ") : null;
 			String previous = removed.containsKey(concept) ? StringUtils.join(removed.get(concept), ", ") : null;
 			if (current != null || previous != null) {
@@ -990,6 +993,21 @@ public class ActivityLog {
 			}
 		}
 		return fields;
+	}
+	
+	/**
+	 * Moving a form's visit date voids and re-adds every answer unchanged; compared unordered so a
+	 * multi-select re-added in another order is not reported as changed.
+	 */
+	private static boolean sameValues(List<String> added, List<String> removed) {
+		if (added == null || removed == null) {
+			return false;
+		}
+		List<String> now = new ArrayList<String>(added);
+		List<String> was = new ArrayList<String>(removed);
+		Collections.sort(now);
+		Collections.sort(was);
+		return now.equals(was);
 	}
 	
 	private static void put(Map<Integer, List<String>> values, Integer concept, String value) {

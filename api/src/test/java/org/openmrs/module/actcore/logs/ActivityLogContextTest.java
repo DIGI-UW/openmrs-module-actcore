@@ -64,6 +64,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final int DECEASED = 16;
 	
+	private static final int MOVED = 17;
+	
 	private final ActivityLog log = new ActivityLog();
 	
 	private User clinician;
@@ -180,6 +182,26 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("1.2", details.fields.get(0).previous);
 		assertEquals("0.6", details.fields.get(0).current);
 		assertNull(details.voidReason);
+	}
+	
+	@Test
+	public void leavesOutAnAnswerResavedUnchangedWhenOnlyTheVisitDateMoves() {
+		sql("delete from obs_AUD where REV = %d", VOIDED);
+		sql("delete from encounter_AUD where REV = %d", VOIDED);
+		obs(907, SAVED, 0, false, date, "value_datetime", "'2026-10-22 00:00:00'");
+		revision(MOVED, "2026-10-21 13:30:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, %d, 1, '%s', false, '2026-10-20 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), MOVED, encounter.getUuid(), form.getFormId(), PATIENT);
+		obs(903, MOVED, 1, true, date, "value_datetime", "'2026-10-21 00:00:00'");
+		obs(907, MOVED, 1, true, date, "value_datetime", "'2026-10-22 00:00:00'");
+		obs(908, MOVED, 0, false, date, "value_datetime", "'2026-10-22 00:00:00'");
+		obs(909, MOVED, 0, false, date, "value_datetime", "'2026-10-21 00:00:00'");
+		
+		assertEquals("1 field changed: Visit date", entry(log.list(new ActivityLog.Filter()), MOVED).summary);
+		List<ActivityLog.Field> fields = log.details(MOVED).fields;
+		assertEquals(1, fields.size());
+		assertEquals("Visit date", fields.get(0).name);
 	}
 	
 	@Test
