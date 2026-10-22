@@ -26,9 +26,8 @@ import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.download.FormDownload;
 
 /**
- * Who opened which patient's record, from the audit log module's read audit, with the patient named
- * and a user's reads of one patient within an hour of the first folded into one row, as a reader
- * scanning for reads that should not have happened wants them.
+ * Who opened which patient's record, from the audit log module's read audit, with a user's reads of
+ * one patient within an hour of the first folded into one row.
  */
 public class ReadLog {
 	
@@ -37,12 +36,14 @@ public class ReadLog {
 	
 	public static final long WINDOW_MILLIS = 60 * 60 * 1000L;
 	
-	private static final int PATIENT_MATCHES = 100;
+	static final int PATIENT_MATCHES = 100;
+	
+	/** The most reads one request folds, so a broad filter answers 400 rather than filling the heap. */
+	static final int MAX_READS = 50000;
 	
 	/**
-	 * The entities whose reads are a read of patients' data even when no patient was found, such as a
-	 * search; the module also records reads of metadata (encounter types, programs), which are left
-	 * out.
+	 * Entities whose reads are of patients' data even with no patient found, such as a search; the
+	 * query leaves out other reads of no patient, such as of encounter types.
 	 */
 	private static final Set<String> PATIENT_DATA = new HashSet<String>(Arrays.asList("Patient", "Person", "Encounter",
 	    "Obs", "Visit", "PatientProgram", "PatientState", "Condition", "Diagnosis", "Order", "DrugOrder", "TestOrder",
@@ -82,9 +83,7 @@ public class ReadLog {
 		public String description;
 	}
 	
-	/**
-	 * A user's reads of one patient within the window; a read of no single patient is a row of its own.
-	 */
+	/** A user's reads of one patient, or of one entity of no patient, within an hour of the first. */
 	public static class Row {
 		
 		public String id;
@@ -138,8 +137,10 @@ public class ReadLog {
 		        + " l.session_id, l.ip_address, l.user_agent, l.read_success, count(m.id) as targets,"
 		        + " count(distinct m.patient_uuid) as patients, min(m.patient_uuid) as patient_uuid,"
 		        + " min(m.patient_name) as patient_name from read_audit_log l"
-		        + " left join read_audit_entity_metadata m on m.read_audit_id = l.id where 1 = 1");
-		List<Object> params = new ArrayList<Object>();
+		        + " left join read_audit_entity_metadata m on m.read_audit_id = l.id where (l.entity_name in ("
+		        + Rows.placeholders(PATIENT_DATA) + ") or exists (select 1 from read_audit_entity_metadata p"
+		        + " where p.read_audit_id = l.id and p.patient_uuid is not null))");
+		List<Object> params = new ArrayList<Object>(PATIENT_DATA);
 		if (filter.username != null) {
 			sql.append(" and l.username = ?");
 			params.add(filter.username);
@@ -162,9 +163,13 @@ public class ReadLog {
 			params.addAll(uuids);
 		}
 		sql.append(" group by l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
-		        + " l.user_agent, l.read_success order by l.username, l.event_time, l.id");
+		        + " l.user_agent, l.read_success order by l.username, l.event_time, l.id limit " + (MAX_READS + 1));
 		
-		List<Row> rows = fold(Rows.select(sql.toString(), params.toArray()));
+		List<Map<String, Object>> reads = Rows.select(sql.toString(), params.toArray());
+		if (reads.size() > MAX_READS) {
+			throw new Rows.TooMany("More than " + MAX_READS + " reads match; narrow the dates, the user or the patient");
+		}
+		List<Row> rows = fold(reads);
 		rows.sort((a, b) -> b.from.compareTo(a.from));
 		page.totalCount = rows.size();
 		for (Row row : Rows.page(rows, filter.startIndex, filter.limit)) {
@@ -183,9 +188,6 @@ public class ReadLog {
 		Map<String, Row> open = new HashMap<String, Row>();
 		for (Map<String, Object> read : reads) {
 			int patients = Rows.integer(read, "patients");
-			if (patients == 0 && !PATIENT_DATA.contains(Rows.string(read, "entity_name"))) {
-				continue;
-			}
 			String username = StringUtils.defaultIfBlank(Rows.string(read, "username"), Rows.string(read, "user_uuid"));
 			String patientUuid = patients == 1 ? Rows.string(read, "patient_uuid") : null;
 			Date time = Rows.date(read, "event_time");
@@ -308,9 +310,8 @@ public class ReadLog {
 	}
 	
 	/**
-	 * The patient filter as uuids: the one given, else the patients whose identifier is the query or
-	 * whose name holds it. By SQL rather than the patient service, whose searches the audit log module
-	 * would record as the reader opening every patient found.
+	 * The given uuid, else the patients with the query as identifier or in a name; by SQL, as the audit
+	 * log module records a patient service search as reads of every patient found.
 	 */
 	private static List<String> patientUuids(String query) {
 		List<String> uuids = new ArrayList<String>();
@@ -318,18 +319,19 @@ public class ReadLog {
 			uuids.add(query);
 			return uuids;
 		}
-		String part = "%" + query.toLowerCase() + "%";
-		for (Map<String, Object> row : Rows.select("select distinct p.uuid from person p"
-		        + " join patient t on t.patient_id = p.person_id and t.voided = 0"
-		        + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = 0"
-		        + " left join person_name n on n.person_id = p.person_id and n.voided = 0"
-		        + " where p.voided = 0 and (i.identifier = ? or lower(n.given_name) like ? or lower(n.middle_name) like ?"
-		        + " or lower(n.family_name) like ?)",
-		    query, part, part, part)) {
-			if (uuids.size() == PATIENT_MATCHES) {
-				break;
-			}
+		String part = "%" + query.toLowerCase().replaceAll("[!%_]", "!$0") + "%";
+		for (Map<String, Object> row : Rows
+		        .select("select distinct p.uuid from person p join patient t on t.patient_id = p.person_id and t.voided = 0"
+		                + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = 0"
+		                + " left join person_name n on n.person_id = p.person_id and n.voided = 0"
+		                + " where p.voided = 0 and (i.identifier = ? or lower(n.given_name) like ? escape '!'"
+		                + " or lower(n.middle_name) like ? escape '!' or lower(n.family_name) like ? escape '!') limit "
+		                + (PATIENT_MATCHES + 1),
+		            query, part, part, part)) {
 			uuids.add(Rows.string(row, "uuid"));
+		}
+		if (uuids.size() > PATIENT_MATCHES) {
+			throw new Rows.TooMany("More than " + PATIENT_MATCHES + " patients match; narrow the patient search");
 		}
 		return uuids;
 	}

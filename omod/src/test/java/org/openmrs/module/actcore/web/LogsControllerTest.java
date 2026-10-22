@@ -16,6 +16,8 @@ import static org.junit.Assert.fail;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -70,7 +72,8 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
 		        + " values (3, 10, 0, 'enc', false, '2026-10-21 10:52:00', 1, 7)");
 		sql("insert into read_audit_log (id, entity_name, read_success, username, user_uuid, event_time, uuid)"
-		        + " values (1, 'Patient', true, 'admin', 'admin-uuid', '2026-10-21 07:41:20', '" + UUID.randomUUID() + "')");
+		        + " values (1, 'Patient', true, 'admin', 'admin-uuid', '" + Timestamp.valueOf(LocalDate.now().atTime(7, 41))
+		        + "', '" + UUID.randomUUID() + "')");
 	}
 	
 	@Test
@@ -152,11 +155,44 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		SimpleObject page = reads.getReads(null, null, null, null, null, null);
 		
 		assertEquals(Integer.valueOf(1), page.get("totalCount"));
+		assertEquals(LocalDate.now().minusDays(30).toString(), page.get("from"));
 		SimpleObject row = (SimpleObject) ((List<?>) page.get("results")).get(0);
 		assertEquals(Integer.valueOf(1), row.get("count"));
 		assertEquals("admin", ((SimpleObject) row.get("user")).get("username"));
 		assertNull(row.get("patient"));
 		assertEquals("no patient found", ((SimpleObject) ((List<?>) row.get("reads")).get(0)).get("description"));
+	}
+	
+	@Test
+	public void refusesAKindFilterOverTooManyChangesAsABadRequest() {
+		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) select 1000 + x, 0, 1, '"
+		        + Timestamp.valueOf(LocalDate.now().atStartOfDay()) + "' from system_range(1, 10001)");
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, 7 from system_range(1, 10001)");
+		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		
+		try {
+			activity.getActivity(null, null, null, "other", null, null, null, null);
+			fail("expected the kind filter to be refused");
+		}
+		catch (IllegalRequestException e) {
+			assertTrue(e.getMessage(), e.getMessage().startsWith("More than 10000 changes"));
+		}
+	}
+	
+	@Test
+	public void refusesReadsTooManyToFoldAsABadRequest() {
+		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
+		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '" + Timestamp.valueOf(LocalDate.now().atStartOfDay())
+		        + "', random_uuid() from system_range(1, 50000)");
+		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		
+		try {
+			reads.getReads(null, null, null, null, null, null);
+			fail("expected the reads to be refused");
+		}
+		catch (IllegalRequestException e) {
+			assertTrue(e.getMessage(), e.getMessage().startsWith("More than 50000 reads match"));
+		}
 	}
 	
 	private static void sql(String statement) {

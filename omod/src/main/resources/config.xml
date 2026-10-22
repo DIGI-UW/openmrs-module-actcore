@@ -30,8 +30,8 @@
     <require_module version="${cohortVersion}">org.openmrs.module.cohort</require_module>
     <require_module version="${webservicesRestVersion}">org.openmrs.module.webservices.rest</require_module>
     <require_module version="${reportingVersion}">org.openmrs.module.reporting</require_module>
-    <!-- Its read audit and the platform's Envers tables, which it enables, are what the Logs page reads.
-         No version: the platform reads 1.1.0-SNAPSHOT as below 1.1.0, and the distribution pins the module. -->
+    <!-- The Logs page reads its read audit, and the Envers tables hibernate.integration.envers.enabled makes.
+         No version, as platform 2.8 reads 1.1.0-SNAPSHOT as below 1.1.0; the distribution pins it. -->
     <require_module>org.openmrs.module.auditlogweb</require_module>
   </require_modules>
 

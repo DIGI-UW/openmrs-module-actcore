@@ -30,12 +30,8 @@ import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 
 /**
- * What ACT's users change, one entry per save, as ACT 2.0's log read: an encounter and its
- * observations are one entry named by form and patient, a registration is one entry, and so on.
- * Read from the Envers audit tables the platform writes with the audit log module installed, plus
- * ACT Core's own flag dismissals. Revisions that only touch the server's setup (concepts, forms,
- * settings, scheduler tasks) and the daemon's (Initializer's loads, scheduled tasks) are left out;
- * they stay in the audit module.
+ * What ACT's users change, one entry per save, from the Envers audit tables and ACT Core's flag
+ * dismissals; the daemon's saves and those touching only the server's setup are left out.
  */
 public class ActivityLog {
 	
@@ -73,14 +69,20 @@ public class ActivityLog {
 	
 	private static final int BATCH = 500;
 	
+	/**
+	 * The most revisions a kind filter classifies, so a broad one answers 400 rather than taking
+	 * minutes.
+	 */
+	static final int MAX_CLASSIFIED = 10000;
+	
 	static {
 		table("encounter_AUD", "patient_id", "saved", "edited", "voided");
 		table("obs_AUD", "person_id", "saved", "edited", "voided");
-		table("person_AUD", "person_id", "registered", "patientStatus", "edited", "user");
-		table("patient_AUD", "patient_id", "registered");
-		table("person_name_AUD", "person_id", "registered", "edited", "user");
-		table("person_address_AUD", "person_id", "registered", "edited", "user");
-		table("person_attribute_AUD", "person_id", "registered", "edited", "user");
+		table("person_AUD", "person_id", "registered", "patientStatus", "edited", "user", "other");
+		table("patient_AUD", "patient_id", "registered", "edited");
+		table("person_name_AUD", "person_id", "registered", "edited", "user", "other");
+		table("person_address_AUD", "person_id", "registered", "edited", "user", "other");
+		table("person_attribute_AUD", "person_id", "registered", "edited", "user", "other");
 		table("patient_identifier_AUD", "patient_id", "registered", "edited");
 		table("patient_program_AUD", "patient_id", "registered", "study", "patientStatus");
 		table("patient_state_AUD", "patient_program_id", "patientStatus", "study");
@@ -153,6 +155,8 @@ public class ActivityLog {
 		Integer encounterId;
 		
 		Integer targetUserId;
+		
+		Integer personId;
 		
 		String role;
 		
@@ -292,8 +296,12 @@ public class ActivityLog {
 			entry.userId = Rows.integer(row, "rev_user");
 			entries.add(entry);
 		}
-		// A revision found through one kind's tables may be another kind, so a kind filter classifies them all.
+		// A revision found through one kind's tables may be another, so a kind filter classifies all.
 		if (filter.kind != null) {
+			if (entries.size() > MAX_CLASSIFIED) {
+				throw new Rows.TooMany(
+				        "More than " + MAX_CLASSIFIED + " changes to sort by action; narrow the dates or the user");
+			}
 			entries = classified(entries);
 			entries.removeIf(entry -> !filter.kind.equals(entry.kind));
 		}
@@ -455,9 +463,8 @@ public class ActivityLog {
 	
 	private List<Entry> dismissals(Integer userId, LocalDate from, LocalDate to, Integer patientId) {
 		StringBuilder sql = new StringBuilder("select f.patient_id, f.dismissed_by, f.date_dismissed, g.name"
-		        + " from actcore_raised_flag f join patientflags_flag g on g.flag_id = f.flag_id"
-		        + " where f.date_dismissed is not null");
-		StringBuilder order = new StringBuilder(" order by f.date_dismissed desc, f.patient_id, f.flag_id");
+		        + " from actcore_flag_dismissal f left join patientflags_flag g on g.flag_id = f.flag_id where 1 = 1");
+		StringBuilder order = new StringBuilder(" order by f.date_dismissed desc, f.dismissal_id desc");
 		List<Object> params = new ArrayList<Object>();
 		if (userId != null) {
 			sql.append(" and f.dismissed_by = ?");
@@ -569,7 +576,9 @@ public class ActivityLog {
 		if (personId != null) {
 			List<Map<String, Object>> owners = Rows.select("select user_id from users where person_id = ?", personId);
 			if (owners.isEmpty()) {
-				return null;
+				entry.kind = "other";
+				entry.personId = personId;
+				return entry;
 			}
 			entry.kind = "user";
 			entry.targetUserId = Rows.integer(owners.get(0), "user_id");
@@ -690,6 +699,13 @@ public class ActivityLog {
 				return;
 			}
 			case "other": {
+				if (entry.personId != null) {
+					Names.Subject person = names.patient(entry.personId);
+					entry.target = person == null ? null : target("person", person.uuid, person.display);
+					entry.action = "Edited a person's details";
+					entry.summary = changed(fields(entry), "Details changed");
+					return;
+				}
 				Map<String, Object> row = revision.of("visit_AUD").get(0);
 				entry.target = patient(entry.patientId, revision);
 				entry.action = type(row) == ADD ? "Started a visit"
@@ -716,6 +732,12 @@ public class ActivityLog {
 			        : "Date of death " + Names.date(Rows.date(person, "death_date"));
 			return;
 		}
+		Map<String, Object> enrolled = revision.first("patient_program_AUD", ADD);
+		if (enrolled != null) {
+			entry.action = "Enrolled in " + program;
+			entry.summary = "From " + Names.date(Rows.date(enrolled, "date_enrolled"));
+			return;
+		}
 		if (!revision.of("patient_state_AUD").isEmpty()) {
 			Map<String, Object> state = revision.of("patient_state_AUD").get(0);
 			entry.action = (Rows.truthy(state, "voided") ? "Removed status " : "Set status ")
@@ -724,10 +746,7 @@ public class ActivityLog {
 			return;
 		}
 		Map<String, Object> enrolment = revision.of("patient_program_AUD").get(0);
-		if (type(enrolment) == ADD) {
-			entry.action = "Enrolled in " + program;
-			entry.summary = "From " + Names.date(Rows.date(enrolment, "date_enrolled"));
-		} else if (became(enrolment, "patient_program_AUD", "patient_program_id", "voided", revision.id)) {
+		if (became(enrolment, "patient_program_AUD", "patient_program_id", "voided", revision.id)) {
 			entry.action = "Removed enrolment in " + program;
 			entry.summary = Rows.string(enrolment, "void_reason");
 		} else if (gained(enrolment, "patient_program_AUD", "patient_program_id", "date_completed", revision.id)) {
@@ -783,7 +802,7 @@ public class ActivityLog {
 		if (!removed.isEmpty()) {
 			parts.add("Removed " + StringUtils.join(removed, ", "));
 		}
-		// User properties, such as the clinics the Users page assigns, are outside Envers, so a save of them has nothing to itemise.
+		// User properties, such as the Users page's clinics, are outside Envers: nothing to itemise.
 		entry.summary = parts.isEmpty() ? changed(fields(entry), "Account settings changed; not itemised")
 		        : StringUtils.join(parts, "; ");
 	}
@@ -923,6 +942,7 @@ public class ActivityLog {
 				for (Map<String, Object> visit : revision.of("visit_AUD")) {
 					fields.addAll(diff("visit_AUD", "visit_id", visit, revision.id));
 				}
+				fields.addAll(personFields(entry.personId, revision));
 				return fields;
 			default:
 				return fields;
@@ -1246,7 +1266,7 @@ public class ActivityLog {
 	
 	private static Integer personChanged(Revision revision) {
 		for (String table : new String[] { "person_AUD", "person_name_AUD", "person_address_AUD", "person_attribute_AUD",
-		        "patient_identifier_AUD" }) {
+		        "patient_identifier_AUD", "patient_AUD" }) {
 			for (Map<String, Object> row : revision.of(table)) {
 				Integer personId = Rows.integer(row, PATIENT_COLUMNS.get(table));
 				if (personId != null) {

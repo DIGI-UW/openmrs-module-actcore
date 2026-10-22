@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Concept;
@@ -262,6 +263,35 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Collections.singletonMap("clinic", "Akunalaber HCIII"), detail.get("filters"));
 		assertEquals("Due for prophylaxis worklist", DownloadController.list("worklist:Due for prophylaxis").get("name"));
 		assertEquals("Logs: Activity", DownloadController.list("logs:activity").get("name"));
+	}
+	
+	@Test
+	public void recordsAListAResearcherDownloadedAsNotResearchOnly() throws Exception {
+		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Collections.singletonList("ACT ID"));
+		
+		controller.record(body);
+		
+		String detail = new DownloadLog().latest(10).get(0).detail;
+		assertTrue(detail, detail.contains("\"researchOnly\":false"));
+	}
+	
+	@Test
+	public void refusesToRecordFiltersLongerThanTheLogHolds() throws Exception {
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Collections.singletonList("ACT ID"));
+		body.put("filters", Collections.singletonMap("name", StringUtils.repeat("x", DownloadController.MAX_DETAIL_BYTES)));
+		
+		try {
+			controller.record(body);
+			fail("expected the record to be refused");
+		}
+		catch (IllegalRequestException expected) {}
+		assertTrue(new DownloadLog().latest(10).isEmpty());
 	}
 	
 	@Test

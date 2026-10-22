@@ -10,7 +10,9 @@
 package org.openmrs.module.actcore.web;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,6 +69,9 @@ public class DownloadController extends BaseRestController {
 	static final int MAX_LIMIT = 500;
 	
 	static final int MAX_COLUMNS = 200;
+	
+	/** MariaDB's TEXT, the log's detail column, which refuses a longer value. */
+	static final int MAX_DETAIL_BYTES = 65535;
 	
 	/** How far back a log reaches when the request gives no start date. */
 	static final int DEFAULT_MONTHS = 12;
@@ -130,7 +135,7 @@ public class DownloadController extends BaseRestController {
 		detail.put("identifiers", identified);
 		detail.put("researchOnly", researchOnly);
 		// Recorded before the rows are returned, so no download goes unrecorded.
-		downloadLog.record(form.getFormId(), new ObjectMapper().writeValueAsString(detail));
+		log(form.getFormId(), detail);
 		
 		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", identified)
 		        .add("researchOnly", researchOnly).add("withheld", table.withheld);
@@ -195,9 +200,8 @@ public class DownloadController extends BaseRestController {
 	}
 	
 	/**
-	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. As ACT 2.0 recorded
-	 * every download, it is recorded before the app writes the file; the app downloads nothing when
-	 * this fails.
+	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. Recorded before the
+	 * app writes the file, which it does not when this fails.
 	 */
 	@RequestMapping(value = "/record", method = RequestMethod.POST)
 	@ResponseBody
@@ -227,11 +231,20 @@ public class DownloadController extends BaseRestController {
 		detail.put("endDate", null);
 		detail.put("rows", rows instanceof Number ? ((Number) rows).intValue() : 0);
 		detail.put("identifiers", Boolean.TRUE.equals(body.get("identifiers")));
-		detail.put("researchOnly", !all);
+		// The app's lists are not limited to opted-in patients, whoever downloads them.
+		detail.put("researchOnly", false);
 		detail.put("filters",
 		    body.get("filters") instanceof Map ? body.get("filters") : new LinkedHashMap<String, Object>());
-		downloadLog.record(null, new ObjectMapper().writeValueAsString(detail));
+		log(null, detail);
 		return new SimpleObject().add("recorded", true);
+	}
+	
+	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
+		String json = new ObjectMapper().writeValueAsString(detail);
+		if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DETAIL_BYTES) {
+			throw new IllegalRequestException("Too many or too long columns and filters to record");
+		}
+		downloadLog.record(formId, json);
 	}
 	
 	/** with, without or research, as the identifiers filter names what a download held. */
@@ -261,14 +274,18 @@ public class DownloadController extends BaseRestController {
 		return new SimpleObject().add("name", list).add("kind", "other");
 	}
 	
-	/**
-	 * The start date the log reads from: the one given, else {@value #DEFAULT_MONTHS} months before the
-	 * end date or today, so a request without dates does not read the whole log.
-	 */
 	static LocalDate from(String startDate, LocalDate to) {
+		return from(startDate, to, Period.ofMonths(DEFAULT_MONTHS));
+	}
+	
+	/**
+	 * The start date the log reads from: the one given, else {@code back} before the end date or today,
+	 * so a request without dates does not read the whole log.
+	 */
+	static LocalDate from(String startDate, LocalDate to, Period back) {
 		LocalDate from = date(startDate);
 		if (from == null) {
-			return (to == null ? LocalDate.now() : to).minusMonths(DEFAULT_MONTHS);
+			return (to == null ? LocalDate.now() : to).minus(back);
 		}
 		if (to != null && from.isAfter(to)) {
 			throw new IllegalRequestException("The start date is after the end date");

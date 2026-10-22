@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.logs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -197,6 +198,42 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, log.list(page).results.size());
 	}
 	
+	@Test
+	public void takesThePercentAndUnderscoreOfAPatientSearchLiterally() {
+		assertEquals(0, log.list(filter(null, "%", null, null)).totalCount);
+		assertEquals(0, log.list(filter(null, "_", null, null)).totalCount);
+	}
+	
+	@Test
+	public void refusesAPatientSearchMatchingMoreThanItCanList() {
+		for (int i = 0; i < ReadLog.PATIENT_MATCHES; i++) {
+			patientNamed("Grace");
+		}
+		assertEquals(0, log.list(filter(null, "grace", null, null)).totalCount);
+		patientNamed("Grace");
+		
+		try {
+			log.list(filter(null, "grace", null, null));
+			fail("expected the search to be refused");
+		}
+		catch (Rows.TooMany expected) {}
+	}
+	
+	@Test
+	public void refusesAFilterMatchingMoreReadsThanOneRequestFolds() {
+		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
+		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '2026-10-21 10:00:00', random_uuid()"
+		        + " from system_range(1, %d)",
+		    ReadLog.MAX_READS);
+		
+		try {
+			log.list(new ReadLog.Filter());
+			fail("expected the reads to be refused");
+		}
+		catch (Rows.TooMany expected) {}
+		assertEquals(4, log.list(filter("communityClinician", null, null, null)).totalCount);
+	}
+	
 	private static ReadLog.Filter filter(String username, String patient, LocalDate from, LocalDate to) {
 		ReadLog.Filter filter = new ReadLog.Filter();
 		filter.username = username;
@@ -204,6 +241,16 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		filter.from = from;
 		filter.to = to;
 		return filter;
+	}
+	
+	private static void patientNamed(String given) {
+		Person person = new Person();
+		person.addName(new PersonName(given, null, "Mukasa"));
+		person.setGender("F");
+		Context.getPersonService().savePerson(person);
+		Context.flushSession();
+		sql("insert into patient (patient_id, creator, date_created, voided) values (%d, 1, '2026-10-21', false)",
+		    person.getPersonId());
 	}
 	
 	private static void read(int id, String username, User user, String time, String entity, String session, Patient patient,

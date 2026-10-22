@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.web;
 
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,7 @@ import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
+import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +33,9 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/reads")
 public class ReadsController extends BaseRestController {
+	
+	/** Shorter than the other logs' default, as every chart opened writes reads. */
+	static final int DEFAULT_DAYS = 30;
 	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -47,11 +52,17 @@ public class ReadsController extends BaseRestController {
 		filter.username = StringUtils.trimToNull(username);
 		filter.patient = StringUtils.trimToNull(patient);
 		filter.to = DownloadController.date(endDate);
-		filter.from = DownloadController.from(startDate, filter.to);
+		filter.from = DownloadController.from(startDate, filter.to, Period.ofDays(DEFAULT_DAYS));
 		filter.startIndex = startIndex == null ? 0 : startIndex;
 		filter.limit = limit == null ? Rows.DEFAULT_LIMIT : limit;
 		
-		ReadLog.Page page = new ReadLog().list(filter);
+		ReadLog.Page page;
+		try {
+			page = new ReadLog().list(filter);
+		}
+		catch (Rows.TooMany e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (ReadLog.Row row : page.results) {
 			List<SimpleObject> reads = new ArrayList<SimpleObject>();

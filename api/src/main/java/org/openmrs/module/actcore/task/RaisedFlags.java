@@ -38,6 +38,9 @@ public class RaisedFlags {
 	
 	public static final String TABLE = "actcore_raised_flag";
 	
+	/** Each dismissal, never deleted, as the refresh deletes a TABLE row once its flag lowers. */
+	public static final String DISMISSAL_TABLE = "actcore_flag_dismissal";
+	
 	/**
 	 * The distribution creates it; a user without it, other than a superuser, cannot dismiss a flag.
 	 */
@@ -137,9 +140,13 @@ public class RaisedFlags {
 				return Dismissal.NOT_RAISED;
 			}
 			raise(flag.getFlagId(), patient.getPatientId());
-			execute("update " + TABLE + " set dismissed_by = " + Context.getAuthenticatedUser().getUserId()
-			        + ", date_dismissed = " + now() + " where flag_id = " + flag.getFlagId() + " and patient_id = "
-			        + patient.getPatientId() + " and date_dismissed is null");
+			Integer userId = Context.getAuthenticatedUser().getUserId();
+			String now = now();
+			String undismissed = " where flag_id = " + flag.getFlagId() + " and patient_id = " + patient.getPatientId()
+			        + " and date_dismissed is null";
+			execute("insert into " + DISMISSAL_TABLE + " (patient_id, flag_id, dismissed_by, date_dismissed)"
+			        + " select patient_id, flag_id, " + userId + ", " + now + " from " + TABLE + undismissed);
+			execute("update " + TABLE + " set dismissed_by = " + userId + ", date_dismissed = " + now + undismissed);
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
 			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
 			    Context.getAuthenticatedUser().getUserId());

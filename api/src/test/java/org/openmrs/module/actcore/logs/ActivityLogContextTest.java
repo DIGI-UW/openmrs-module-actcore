@@ -246,8 +246,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsAFlagDismissalFromActCoreOwnRecord() {
-		sql("insert into actcore_raised_flag (patient_id, flag_id, raised_since, dismissed_by, date_dismissed)"
-		        + " values (%d, %d, '2026-10-20 08:00:00', %d, '2026-10-21 08:30:00')",
+		sql("insert into actcore_flag_dismissal (patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values (%d, %d, %d, '2026-10-21 08:30:00')",
 		    PATIENT, flag.getFlagId(), clinician.getUserId());
 		
 		ActivityLog.Page page = log.list(new ActivityLog.Filter());
@@ -293,8 +293,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsOnlyDismissalsForTheFlagKind() {
-		sql("insert into actcore_raised_flag (patient_id, flag_id, raised_since, dismissed_by, date_dismissed)"
-		        + " values (%d, %d, '2026-10-20 08:00:00', %d, '2026-10-21 08:30:00')",
+		sql("insert into actcore_flag_dismissal (patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values (%d, %d, %d, '2026-10-21 08:30:00')",
 		    PATIENT, flag.getFlagId(), clinician.getUserId());
 		
 		ActivityLog.Entry entry = only(filter("flag", null, null, null, null, null));
@@ -344,6 +344,62 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Ended enrolment in study HIV PROGRAM", entry(page, 20).action);
 		assertEquals("Changed enrolment in study HIV PROGRAM", entry(page, 21).action);
 		assertEquals("1 field changed: Date enrolled", entry(page, 21).summary);
+	}
+	
+	@Test
+	public void namesAnEnrolmentSavedWithItsFirstStatusAsTheEnrolment() {
+		java.util.Map<String, Object> enrolment = Rows
+		        .select("select patient_program_id, patient_id from patient_program where program_id = 1").get(0);
+		revision(22, "2026-10-21 18:00:00", clinician.getUserId());
+		sql("insert into patient_program_AUD (patient_program_id, REV, REVTYPE, date_enrolled, voided, program_id, patient_id)"
+		        + " values (%d, 22, 0, '2026-10-21 00:00:00', false, 1, %d)",
+		    Rows.integer(enrolment, "patient_program_id"), Rows.integer(enrolment, "patient_id"));
+		sql("insert into patient_state_AUD (patient_state_id, REV, REVTYPE, voided, start_date, patient_program_id, state)"
+		        + " values (901, 22, 0, false, '2026-10-21 00:00:00', %d, 1)",
+		    Rows.integer(enrolment, "patient_program_id"));
+		
+		ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), 22);
+		
+		assertEquals("Enrolled in study HIV PROGRAM", entry.action);
+		assertEquals("From 21-Oct-2026", entry.summary);
+	}
+	
+	@Test
+	public void listsAnEditOfAPersonWhoIsNeitherPatientNorUserAsOther() {
+		Person person = new Person();
+		person.addName(new PersonName("Peter", null, "Okello"));
+		person.setGender("M");
+		Context.getPersonService().savePerson(person);
+		Context.flushSession();
+		revision(23, "2026-10-21 19:00:00", clinician.getUserId());
+		sql("insert into person_name_AUD (person_name_id, REV, REVTYPE, preferred, given_name, family_name, voided, person_id)"
+		        + " values (%d, 23, 1, true, 'Peter', 'Okello', false, %d)",
+		    person.getPersonName().getPersonNameId(), person.getPersonId());
+		
+		ActivityLog.Page page = log.list(new ActivityLog.Filter());
+		ActivityLog.Entry entry = entry(page, 23);
+		
+		assertEquals(4, page.totalCount);
+		assertEquals("other", entry.kind);
+		assertEquals("Edited a person's details", entry.action);
+		assertEquals("Peter Okello", entry.target.display);
+		assertEquals(Integer.valueOf(23), only(filter("other", null, null, null, null, null)).revisionId);
+	}
+	
+	@Test
+	public void refusesAKindFilterOverMoreRevisionsThanItClassifies() {
+		sql("insert into revision_entity (id, timestamp, changedBy, changedOn)"
+		        + " select 1000 + x, 0, %d, '2026-10-21 09:00:00' from system_range(1, %d)",
+		    clinician.getUserId(), ActivityLog.MAX_CLASSIFIED + 1);
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, %d from system_range(1, %d)",
+		    PATIENT, ActivityLog.MAX_CLASSIFIED + 1);
+		
+		try {
+			log.list(filter("other", null, null, null, null, null));
+			fail("expected the kind filter to be refused");
+		}
+		catch (Rows.TooMany expected) {}
+		assertEquals(ActivityLog.MAX_CLASSIFIED + 4, log.list(new ActivityLog.Filter()).totalCount);
 	}
 	
 	@Test

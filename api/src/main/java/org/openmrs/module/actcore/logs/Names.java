@@ -27,9 +27,8 @@ import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * How a log names what it lists, looked up once per request. Patients, encounters, programs and
- * attribute types are read by SQL rather than through their services, whose reads the audit log
- * module records: listing a log must not itself fill the read audit.
+ * How a log names what it lists, once per request, by SQL rather than the services whose reads the
+ * audit log module records, so listing a log does not itself fill the read audit.
  */
 public class Names {
 	

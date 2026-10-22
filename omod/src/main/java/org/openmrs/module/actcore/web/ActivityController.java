@@ -64,7 +64,13 @@ public class ActivityController extends BaseRestController {
 		filter.startIndex = startIndex == null ? 0 : startIndex;
 		filter.limit = limit == null ? Rows.DEFAULT_LIMIT : limit;
 		
-		ActivityLog.Page page = new ActivityLog().list(filter);
+		ActivityLog.Page page;
+		try {
+			page = new ActivityLog().list(filter);
+		}
+		catch (Rows.TooMany e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (ActivityLog.Entry entry : page.results) {
 			results.add(new SimpleObject().add("revisionId", entry.revisionId)

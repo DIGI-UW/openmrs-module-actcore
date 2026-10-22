@@ -35,6 +35,14 @@ public final class Rows {
 	private Rows() {
 	}
 	
+	/** A filter too broad for one request to read; the endpoints answer it with 400. */
+	public static class TooMany extends RuntimeException {
+		
+		public TooMany(String message) {
+			super(message);
+		}
+	}
+	
 	/** The slice of a list a page shows: startIndex from 0, limit within the bounds. */
 	static <T> List<T> page(List<T> all, int startIndex, int limit) {
 		int from = Math.min(Math.max(startIndex, 0), all.size());
