@@ -171,6 +171,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), REFERRED);
 		
 		assertEquals("Saved RHD Referral", entry.action);
+		assertNull(entry.summary);
 		assertNull(entry.encounter.formName);
 	}
 	

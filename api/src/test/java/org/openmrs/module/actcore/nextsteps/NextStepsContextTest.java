@@ -34,6 +34,7 @@ import org.openmrs.Visit;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.AdherenceContextTest;
+import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -444,6 +445,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("On hold: a clinician must review before the next dose", steps.get(0).getReason());
 		assertEquals(true, steps.get(1).isDone());
 		assertEquals(false, steps.get(1).isNew());
+		assertEquals("Referral sent: a clinician to review", steps.get(1).getReason());
 	}
 	
 	@Test
@@ -461,6 +463,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(referral.getUuid(), refer.getReferralType());
 		assertEquals(false, refer.isDone());
 		assertEquals(true, refer.isNew());
+		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", refer.getReason());
 	}
 	
 	@Test
@@ -473,7 +476,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
 		mayNotConsult("Add Encounters");
 		
-		assertEquals(false, steps().get(0).isDone());
+		assertEquals(false, referStep().isDone());
 	}
 	
 	@Test
@@ -504,7 +507,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		encounterOf(referral, 5);
 		mayNotConsult("Add Encounters");
 		
-		assertEquals(true, steps().get(0).isDone());
+		assertEquals(true, referStep().isDone());
 	}
 	
 	@Test
@@ -513,11 +516,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		lastGiven(36);
 		echoed(at(30));
 		flagged(notPrescribed);
-		encounterOf(consult, 10);
 		encounterOf(referral, 20);
+		encounterOf(consult, 10);
 		mayNotConsult("Add Encounters", "View Patient Flags");
 		
-		assertEquals(false, steps().get(0).isDone());
+		assertEquals(false, referStep().isDone());
 	}
 	
 	@Test
@@ -530,11 +533,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		encounterOf(referral, 5);
 		mayNotConsult("Add Encounters", "View Patient Flags");
 		
-		assertEquals(true, steps().get(0).isDone());
+		assertEquals(true, referStep().isDone());
 	}
 	
 	@Test
-	public void of_shouldCountAnyReferralForNoProphylaxisWhenThereIsNoConsultation() {
+	public void of_shouldCountAnyReferralForNoProphylaxisWhenTheFlagHasNoRaisedDate() {
 		mapReferral();
 		lastGiven(36);
 		echoed(at(30));
@@ -542,7 +545,127 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		encounterOf(referral, 40);
 		mayNotConsult("Add Encounters", "View Patient Flags");
 		
-		assertEquals(true, steps().get(0).isDone());
+		assertEquals(true, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldNotCountAReferralSavedBeforeTheNoProphylaxisFlagWasRaised() {
+		mapReferral();
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		raisedSince(notPrescribed, at(10));
+		referralSaved(40);
+		mayNotConsult("Add Encounters", "View Patient Flags");
+		
+		assertEquals(false, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldCountAReferralSavedAfterTheNoProphylaxisFlagWasRaised() {
+		mapReferral();
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		raisedSince(notPrescribed, at(10));
+		referralSaved(5);
+		mayNotConsult("Add Encounters", "View Patient Flags");
+		
+		assertEquals(true, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldNotCountAReferralSavedBeforeATriggerDatedBeforeIt() {
+		mapReferral();
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		encounterOf(referral, 5);
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		mayNotConsult("Add Encounters");
+		
+		assertEquals(false, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldCountAReferralSavedAfterATriggerDatedAfterIt() {
+		mapReferral();
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 5), tolerance, anaphylaxis);
+		encounterOf(referral, 10);
+		mayNotConsult("Add Encounters");
+		
+		assertEquals(true, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldCountAReferralSavedAtTheSameInstantAsTheTriggerByEncounterId() {
+		mapReferral();
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		java.util.Date saved = at(2);
+		Encounter trigger = unsaved(7, 5);
+		trigger.setEncounterType(bpg);
+		trigger.setDateCreated(saved);
+		answered(Context.getEncounterService().saveEncounter(trigger), tolerance, anaphylaxis);
+		Encounter sent = unsaved(7, 10);
+		sent.setEncounterType(referral);
+		sent.setDateCreated(saved);
+		Context.getEncounterService().saveEncounter(sent);
+		mayNotConsult("Add Encounters");
+		
+		assertEquals(true, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldIgnoreAVoidedReferral() {
+		mapReferral();
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		Context.getEncounterService().voidEncounter(encounterOf(referral, 5), "test");
+		mayNotConsult("Add Encounters");
+		
+		assertEquals(false, referStep().isDone());
+	}
+	
+	@Test
+	public void of_shouldNameNoReferralTypeWhenTheMappedTypeDoesNotExist() {
+		property(NextSteps.GP_ENCOUNTER_TYPES,
+		    Context.getAdministrationService().getGlobalProperty(NextSteps.GP_ENCOUNTER_TYPES) + ",refer:"
+		            + UUID.randomUUID());
+		listTheDoseAnyway();
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		mayNotConsult("Add Encounters");
+		
+		NextStep refer = steps().get(0);
+		
+		assertEquals("refer", refer.getKey());
+		assertNull(refer.getReferralType());
+		assertEquals(false, refer.isDone());
+	}
+	
+	@Test
+	public void of_shouldKeepTheNoProphylaxisReasonWhenAConsultationSavedThisVisitMarksTheReferralDone() {
+		mapReferral();
+		lastGiven(36);
+		echoed(at(30));
+		flagged(notPrescribed);
+		startVisit();
+		inVisit(consult, 0);
+		mayNotConsult("Add Encounters", "View Patient Flags");
+		
+		NextStep refer = steps().get(1);
+		
+		assertEquals("refer", refer.getKey());
+		assertEquals(true, refer.isDone());
+		assertEquals("No prophylaxis prescribed: a clinician to prescribe", refer.getReason());
 	}
 	
 	@Test
@@ -1469,8 +1592,33 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		authenticateWith(privileges);
 	}
 	
+	/** A referral saved ``daysAgo`` days ago, by when it was recorded as well as its date. */
+	private void referralSaved(int daysAgo) {
+		Encounter sent = unsaved(7, daysAgo);
+		sent.setEncounterType(referral);
+		sent.setDateCreated(at(daysAgo));
+		Context.getEncounterService().saveEncounter(sent);
+	}
+	
+	private void raisedSince(Flag flag, java.util.Date when) {
+		Context.getAdministrationService()
+		        .executeSQL("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values ("
+		                + patient.getPatientId() + ", " + flag.getFlagId() + ", '" + new java.sql.Timestamp(when.getTime())
+		                + "')",
+		            false);
+	}
+	
 	private List<NextStep> steps() {
 		return NextSteps.of(patient, TODAY);
+	}
+	
+	private NextStep referStep() {
+		for (NextStep step : steps()) {
+			if ("refer".equals(step.getKey())) {
+				return step;
+			}
+		}
+		throw new AssertionError("No Refer to clinician step");
 	}
 	
 	/**

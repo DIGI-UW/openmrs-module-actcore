@@ -37,6 +37,7 @@ import org.openmrs.Visit;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -109,6 +110,8 @@ public class NextSteps {
 	private Map<Encounter, List<Obs>> obsByEncounter;
 	
 	private List<Encounter> referTriggers;
+	
+	private Date referFlagSince;
 	
 	private ProphylaxisSummary summary;
 	
@@ -202,6 +205,7 @@ public class NextSteps {
 			}
 		}
 		referTriggers = new ArrayList<Encounter>();
+		referFlagSince = null;
 		thisVisit = new HashSet<Encounter>();
 		savedThisVisit = new HashSet<String>();
 		Visit visit = activeVisit();
@@ -243,6 +247,7 @@ public class NextSteps {
 				if (latest("consult") != null) {
 					referTriggers.add(latest("consult"));
 				}
+				referFlagSince = raisedSince(flagKeys.get("notPrescribed"));
 			}
 		}
 		echo();
@@ -285,7 +290,7 @@ public class NextSteps {
 		}
 		Step refer = steps.get("refer");
 		if (refer != null && !refer.done) {
-			refer.referred = referralSentAfter(referTriggers);
+			refer.referred = referralSentAfter(referTriggers, referFlagSince);
 		}
 	}
 	
@@ -296,24 +301,35 @@ public class NextSteps {
 		}
 	}
 	
+	/** Since when the patient has had the flag raised, or null when no date is kept for it. */
+	private Date raisedSince(String flagUuid) {
+		for (PatientFlag flag : Context.getService(FlagService.class).getPatientFlags(patient)) {
+			if (!flag.getVoided() && flag.getFlag() != null && flag.getFlag().getUuid().equals(flagUuid)) {
+				return RaisedFlags.raisedSinceByFlag(patient.getPatientId()).get(flag.getFlag().getFlagId());
+			}
+		}
+		return null;
+	}
+	
 	/**
-	 * Whether a referral followed the latest trigger of the referral step, or exists when none is
-	 * dated.
+	 * Whether a referral was saved after the latest trigger and after the flag was raised, by when each
+	 * was saved, as an encounter's own date can be set to any day.
 	 */
-	private boolean referralSentAfter(List<Encounter> triggers) {
+	private boolean referralSentAfter(List<Encounter> triggers, Date flagSince) {
 		EncounterType type = types.get("refer");
 		if (type == null) {
 			return false;
 		}
 		Encounter latestTrigger = null;
 		for (Encounter trigger : triggers) {
-			if (latestTrigger == null || BY_DATE.compare(trigger, latestTrigger) > 0) {
+			if (latestTrigger == null || BY_SAVED.compare(trigger, latestTrigger) > 0) {
 				latestTrigger = trigger;
 			}
 		}
 		for (Encounter encounter : encounters) {
 			if (type.equals(encounter.getEncounterType())
-			        && (latestTrigger == null || BY_DATE.compare(encounter, latestTrigger) > 0)) {
+			        && (latestTrigger == null || BY_SAVED.compare(encounter, latestTrigger) > 0)
+			        && (flagSince == null || encounter.getDateCreated().after(flagSince))) {
 				return true;
 			}
 		}
@@ -635,6 +651,15 @@ public class NextSteps {
 		}
 	};
 	
+	private static final Comparator<Encounter> BY_SAVED = new Comparator<Encounter>() {
+		
+		@Override
+		public int compare(Encounter a, Encounter b) {
+			int bySaved = a.getDateCreated().compareTo(b.getDateCreated());
+			return bySaved != 0 ? bySaved : a.getEncounterId().compareTo(b.getEncounterId());
+		}
+	};
+	
 	private static final Comparator<NextStep> ORDER = new Comparator<NextStep>() {
 		
 		@Override
@@ -681,7 +706,8 @@ public class NextSteps {
 			boolean shownDone = done || referred;
 			// A step on hold names no form, so it offers nothing to record.
 			return new NextStep(key, "refer".equals(key) || onHold ? null : form,
-			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !shownDone, shownDone,
+			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key),
+			        referred && !done ? "Referral sent: a clinician to review" : reason, isNew && !shownDone, shownDone,
 			        onHold, referralType);
 		}
 	}

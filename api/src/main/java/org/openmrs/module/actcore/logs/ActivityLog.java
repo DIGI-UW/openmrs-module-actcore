@@ -653,7 +653,8 @@ public class ActivityLog {
 				if (entry.kind.equals("saved")) {
 					entry.action = "Saved " + form;
 					int set = obsFields(entry).size();
-					entry.summary = set == 1 ? "1 field set" : set + " fields set";
+					entry.summary = set == 0 && entry.encounter.formName == null ? null
+					        : set == 1 ? "1 field set" : set + " fields set";
 				} else if (entry.kind.equals("voided")) {
 					entry.action = "Voided " + form;
 					entry.summary = StringUtils.isBlank(entry.voidReason) ? "No reason given"
