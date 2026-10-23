@@ -221,6 +221,11 @@ public class Names {
 		return row("form", "form_id", formId);
 	}
 	
+	public String encounterTypeName(Integer typeId) {
+		Map<String, Object> type = row("encounter_type", "encounter_type_id", typeId);
+		return type == null ? null : Rows.string(type, "name");
+	}
+	
 	public static <T> T proxied(String privilege, Supplier<T> lookup) {
 		Context.addProxyPrivilege(privilege);
 		try {
