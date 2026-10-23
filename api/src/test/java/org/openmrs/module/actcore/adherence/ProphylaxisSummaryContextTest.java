@@ -43,6 +43,8 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.minusDays(27), s.getLastGiven());
 		assertEquals(TODAY.minusDays(6), s.getNextDue());
 		assertEquals("overdue", s.getStatus());
+		// 28 days prescribed, the last 6 of them past the due date: 22 of 28 covered.
+		assertEquals(22.0 / 28, s.getAdherence(), 1e-9);
 	}
 	
 	@Test
@@ -76,6 +78,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertNull(s.getType());
 		assertNull(s.getNextDue());
 		assertNull(s.getOnTime());
+		assertNull(s.getAdherence());
 	}
 	
 	@Test
@@ -94,6 +97,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.plusDays(18), summary(7).getNextDue());
 		assertEquals("ok", summary(7).getStatus());
 		assertNull(summary(7).getLastGiven());
+		assertNull(summary(7).getAdherence());
 		assertEquals(TODAY.minusDays(12), summary(8).getNextDue());
 		assertEquals("overdue", summary(8).getStatus());
 	}
@@ -111,6 +115,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.plusDays(75), s.getNextDue());
 		assertEquals("ok", s.getStatus());
 		assertNull(s.getOnTime());
+		assertEquals(0.7, s.getAdherence(), 1e-9);
 	}
 	
 	@Test

@@ -58,7 +58,7 @@ public class ProphylaxisController extends BaseRestController {
 		            onTime == null ? null
 		                    : new SimpleObject().add("given", onTime.getGiven()).add("total", onTime.getTotal())
 		                            .add("months", onTime.getMonths()))
-		        .add("injections", injections(summary.getInjections()));
+		        .add("adherence", summary.getAdherence()).add("injections", injections(summary.getInjections()));
 	}
 	
 	private static List<SimpleObject> injections(List<ProphylaxisSummary.Injection> injections) {

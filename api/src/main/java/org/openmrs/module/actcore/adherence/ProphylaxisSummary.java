@@ -43,10 +43,12 @@ public final class ProphylaxisSummary {
 	
 	private final OnTime onTime;
 	
+	private final Double adherence;
+	
 	private final List<Injection> injections;
 	
 	private ProphylaxisSummary(String regimen, String type, Integer intervalDays, LocalDate lastGiven, LocalDate nextDue,
-	    String status, OnTime onTime, List<Injection> injections) {
+	    String status, OnTime onTime, Double adherence, List<Injection> injections) {
 		this.regimen = regimen;
 		this.type = type;
 		this.intervalDays = intervalDays;
@@ -54,6 +56,7 @@ public final class ProphylaxisSummary {
 		this.nextDue = nextDue;
 		this.status = status;
 		this.onTime = onTime;
+		this.adherence = adherence;
 		this.injections = injections;
 	}
 	
@@ -65,11 +68,11 @@ public final class ProphylaxisSummary {
 		AdherenceReplay.Row row = AdherenceReplay.replay(history, today, AdherenceRefresh.oralFirstDueDays());
 		List<Injection> injections = timings(history.prescriptions, history.injections, today);
 		if (row == null || row.interval == null) {
-			return new ProphylaxisSummary(null, null, null, null, null, "none", null, injections);
+			return new ProphylaxisSummary(null, null, null, null, null, "none", null, null, injections);
 		}
 		boolean injected = row.interval > 0;
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, row.nextDue,
-		        status(row.nextDue, today), injected ? onTime(injections, today) : null, injections);
+		        status(row.nextDue, today), injected ? onTime(injections, today) : null, row.adherence, injections);
 	}
 	
 	private static String name(Integer conceptId) {
@@ -199,6 +202,14 @@ public final class ProphylaxisSummary {
 	/** Null for an oral regimen, which records an adherence estimate rather than injections. */
 	public OnTime getOnTime() {
 		return onTime;
+	}
+	
+	/**
+	 * AdherenceCalculation's fraction, 12 months back for an injection regimen; null without a
+	 * prescription, or before the first injection or oral estimate is recorded.
+	 */
+	public Double getAdherence() {
+		return adherence;
 	}
 	
 	/** Every BPG injection recorded up to today, newest first, whatever the regimen in force now. */

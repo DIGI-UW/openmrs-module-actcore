@@ -65,11 +65,11 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		SimpleObject summary = controller.getSummary(PATIENT_7);
 		
 		assertEquals("none", summary.get("status"));
-		assertEquals(new HashSet<String>(
-		        Arrays.asList("regimen", "type", "intervalDays", "lastGiven", "nextDue", "status", "onTime", "injections")),
-		    summary.keySet());
+		assertEquals(new HashSet<String>(Arrays.asList("regimen", "type", "intervalDays", "lastGiven", "nextDue", "status",
+		    "onTime", "adherence", "injections")), summary.keySet());
 		assertNull(summary.get("regimen"));
 		assertNull(summary.get("onTime"));
+		assertNull(summary.get("adherence"));
 		assertEquals(Collections.emptyList(), summary.get("injections"));
 	}
 	
@@ -113,6 +113,7 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		assertEquals(Integer.valueOf(1), onTime.get("given"));
 		assertEquals(Integer.valueOf(1), onTime.get("total"));
 		assertEquals(Integer.valueOf(6), onTime.get("months"));
+		assertEquals(22.0 / 28, (Double) summary.get("adherence"), 1e-9);
 		assertEquals(
 		    Collections.singletonList(
 		        new SimpleObject().add("date", LocalDate.now().minusDays(27).toString()).add("onTime", true)),
