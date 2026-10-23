@@ -108,6 +108,8 @@ public class NextSteps {
 	
 	private Map<Encounter, List<Obs>> obsByEncounter;
 	
+	private List<Encounter> referTriggers;
+	
 	private ProphylaxisSummary summary;
 	
 	private NextSteps(Patient patient, LocalDate today) {
@@ -153,7 +155,7 @@ public class NextSteps {
 			List<NextStep> result = new ArrayList<NextStep>();
 			for (Step step : steps.values()) {
 				if (shown(step.key, enterable)) {
-					result.add(step.toNextStep(form(step.key)));
+					result.add(step.toNextStep(form(step.key), referralType(step.key)));
 				}
 			}
 			Collections.sort(result, ORDER);
@@ -199,6 +201,7 @@ public class NextSteps {
 				obsByEncounter.get(obs.getEncounter()).add(obs);
 			}
 		}
+		referTriggers = new ArrayList<Encounter>();
 		thisVisit = new HashSet<Encounter>();
 		savedThisVisit = new HashSet<String>();
 		Visit visit = activeVisit();
@@ -237,6 +240,9 @@ public class NextSteps {
 			} else if (types.containsKey("consult")) {
 				steps.put("refer", new Step("refer", "No prophylaxis prescribed: a clinician to prescribe", false,
 				        savedThisVisit.contains("consult")));
+				if (latest("consult") != null) {
+					referTriggers.add(latest("consult"));
+				}
 			}
 		}
 		echo();
@@ -248,13 +254,16 @@ public class NextSteps {
 		}
 		review(mayConsult, savedThisVisit.contains("echo") ? latest("echo") : null,
 		    "Review the new echo result and update the care plan", null);
-		Review anaphylaxis = review(mayConsult, anaphylaxis(), "Anaphylaxis reported after BPG: review before the next dose",
+		Encounter anaphylaxisTrigger = anaphylaxis();
+		Review anaphylaxis = review(mayConsult, anaphylaxisTrigger,
+		    "Anaphylaxis reported after BPG: review before the next dose",
 		    "Anaphylaxis reported: a clinician must review before the next dose");
+		addReferTrigger(mayConsult, anaphylaxisTrigger, anaphylaxis);
 		String below = "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: ";
 		Encounter lowEstimate = lowAdherence();
-		review(mayConsult, lowEstimate, below
+		addReferTrigger(mayConsult, lowEstimate, review(mayConsult, lowEstimate, below
 		        + (lowEstimate != null && bpgAnaphylaxis() ? "a clinician to review the plan" : "consider switching to BPG"),
-		    below + "a clinician to review the plan");
+		    below + "a clinician to review the plan"));
 		// What was recorded at this visit is shown done, even when no rule asked for it.
 		for (String key : TITLES.keySet()) {
 			if (savedThisVisit.contains(key) && !steps.containsKey(key) && !"bpg".equals(key)) {
@@ -274,6 +283,48 @@ public class NextSteps {
 				steps.remove("bpg");
 			}
 		}
+		Step refer = steps.get("refer");
+		if (refer != null && !refer.done) {
+			refer.referred = referralSentAfter(referTriggers);
+		}
+	}
+	
+	/** A trigger no consultation has reviewed, which a user who may not consult can only refer. */
+	private void addReferTrigger(boolean mayConsult, Encounter trigger, Review review) {
+		if (!mayConsult && trigger != null && review == Review.NONE) {
+			referTriggers.add(trigger);
+		}
+	}
+	
+	/**
+	 * Whether a referral followed the latest trigger of the referral step, or exists when none is
+	 * dated.
+	 */
+	private boolean referralSentAfter(List<Encounter> triggers) {
+		EncounterType type = types.get("refer");
+		if (type == null) {
+			return false;
+		}
+		Encounter latestTrigger = null;
+		for (Encounter trigger : triggers) {
+			if (latestTrigger == null || BY_DATE.compare(trigger, latestTrigger) > 0) {
+				latestTrigger = trigger;
+			}
+		}
+		for (Encounter encounter : encounters) {
+			if (type.equals(encounter.getEncounterType())
+			        && (latestTrigger == null || BY_DATE.compare(encounter, latestTrigger) > 0)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * The encounter type that records the referral, for the referral step; null when none is mapped.
+	 */
+	private String referralType(String key) {
+		return "refer".equals(key) && types.containsKey("refer") ? types.get("refer").getUuid() : null;
 	}
 	
 	private boolean toDo(String key) {
@@ -616,6 +667,8 @@ public class NextSteps {
 		
 		private boolean onHold;
 		
+		private boolean referred;
+		
 		private Step(String key, String reason, boolean isNew, boolean done) {
 			this.key = key;
 			this.reason = reason;
@@ -623,10 +676,13 @@ public class NextSteps {
 			this.done = done;
 		}
 		
-		private NextStep toNextStep(String form) {
+		private NextStep toNextStep(String form, String referralType) {
+			// A sent referral shows done, but the dose still waits for the consultation.
+			boolean shownDone = done || referred;
 			// A step on hold names no form, so it offers nothing to record.
 			return new NextStep(key, "refer".equals(key) || onHold ? null : form,
-			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !done, done, onHold);
+			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key), reason, isNew && !shownDone, shownDone,
+			        onHold, referralType);
 		}
 	}
 }

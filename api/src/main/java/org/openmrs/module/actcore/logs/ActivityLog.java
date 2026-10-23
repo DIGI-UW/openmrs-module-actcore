@@ -192,6 +192,8 @@ public class ActivityLog {
 		
 		public String formName;
 		
+		public String typeName;
+		
 		public Date visitDate;
 	}
 	
@@ -645,7 +647,9 @@ public class ActivityLog {
 					return;
 				}
 				entry.encounter = encounter(entry);
-				String form = entry.encounter.formName == null ? "a form" : entry.encounter.formName;
+				// An encounter no form recorded, such as a referral, is named by its type.
+				String form = entry.encounter.formName != null ? entry.encounter.formName
+				        : entry.encounter.typeName != null ? entry.encounter.typeName : "a form";
 				if (entry.kind.equals("saved")) {
 					entry.action = "Saved " + form;
 					int set = obsFields(entry).size();
@@ -1266,6 +1270,7 @@ public class ActivityLog {
 		}
 		ref.uuid = Rows.string(row, "uuid");
 		ref.visitDate = Rows.date(row, "encounter_datetime");
+		ref.typeName = names.encounterTypeName(Rows.integer(row, "encounter_type"));
 		Map<String, Object> form = names.form(Rows.integer(row, "form_id"));
 		if (form != null) {
 			ref.formUuid = Rows.string(form, "uuid");

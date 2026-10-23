@@ -27,6 +27,7 @@ import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
+import org.openmrs.EncounterType;
 import org.openmrs.Form;
 import org.openmrs.Person;
 import org.openmrs.PersonAttributeType;
@@ -65,6 +66,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	private static final int DECEASED = 16;
 	
 	private static final int MOVED = 17;
+	
+	private static final int REFERRED = 18;
 	
 	private final ActivityLog log = new ActivityLog();
 	
@@ -148,6 +151,27 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		obs(905, VOIDED, 1, true, dose, "value_numeric", 0.6);
 		
 		revision(SETUP_ONLY, "2026-10-21 12:30:00", 1);
+	}
+	
+	@Test
+	public void namesAnEncounterNoFormRecordedByItsEncounterType() {
+		EncounterType type = new EncounterType("RHD Referral", "A referral to a clinician");
+		Context.getEncounterService().saveEncounterType(type);
+		Encounter sent = new Encounter();
+		sent.setPatient(Context.getPatientService().getPatient(PATIENT));
+		sent.setEncounterType(type);
+		sent.setLocation(Context.getLocationService().getLocation(1));
+		sent.setEncounterDatetime(Timestamp.valueOf("2026-10-21 13:00:00"));
+		Context.getEncounterService().saveEncounter(sent);
+		revision(REFERRED, "2026-10-21 13:00:14", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, patient_id)"
+		        + " values (%d, %d, 0, '%s', false, '2026-10-21 13:00:00', %d)",
+		    sent.getEncounterId(), REFERRED, sent.getUuid(), PATIENT);
+		
+		ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), REFERRED);
+		
+		assertEquals("Saved RHD Referral", entry.action);
+		assertNull(entry.encounter.formName);
 	}
 	
 	@Test

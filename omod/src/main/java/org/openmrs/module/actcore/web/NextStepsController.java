@@ -54,7 +54,7 @@ public class NextStepsController extends BaseRestController {
 		for (NextStep step : NextSteps.of(patient, LocalDate.now())) {
 			steps.add(new SimpleObject().add("key", step.getKey()).add("form", step.getForm()).add("title", step.getTitle())
 			        .add("reason", step.getReason()).add("isNew", step.isNew()).add("done", step.isDone())
-			        .add("onHold", step.isOnHold()));
+			        .add("onHold", step.isOnHold()).add("referralType", step.getReferralType()));
 		}
 		return new SimpleObject().add("steps", steps);
 	}

@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -69,6 +70,8 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(false, step.get("done"));
 		assertEquals(false, step.get("onHold"));
 		assertTrue(step.containsKey("form"));
+		assertTrue(step.containsKey("referralType"));
+		assertNull(step.get("referralType"));
 	}
 	
 	@Test

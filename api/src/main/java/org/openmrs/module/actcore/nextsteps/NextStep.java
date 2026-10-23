@@ -29,7 +29,14 @@ public class NextStep {
 	
 	private final boolean onHold;
 	
+	private final String referralType;
+	
 	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold) {
+		this(key, form, title, reason, isNew, done, onHold, null);
+	}
+	
+	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold,
+	    String referralType) {
 		this.key = key;
 		this.form = form;
 		this.title = title;
@@ -37,6 +44,7 @@ public class NextStep {
 		this.isNew = isNew;
 		this.done = done;
 		this.onHold = onHold;
+		this.referralType = referralType;
 	}
 	
 	public String getKey() {
@@ -76,5 +84,13 @@ public class NextStep {
 	 */
 	public boolean isOnHold() {
 		return onHold;
+	}
+	
+	/**
+	 * The uuid of the encounter type that records the referral, for a Refer to clinician step; null for
+	 * any other step, or when no type is mapped to the referral.
+	 */
+	public String getReferralType() {
+		return referralType;
 	}
 }
