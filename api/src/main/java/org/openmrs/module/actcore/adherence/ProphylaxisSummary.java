@@ -205,9 +205,8 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * AdherenceCalculation's adherence as a fraction: for an injection regimen the days covered over
-	 * the days prescribed in the last 12 months, for an oral one the latest estimate; null when nothing
-	 * is prescribed or no day of an injection course has passed.
+	 * AdherenceCalculation's fraction, 12 months back for an injection regimen; null without a
+	 * prescription, or before the first injection or oral estimate is recorded.
 	 */
 	public Double getAdherence() {
 		return adherence;

@@ -56,9 +56,10 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   the registry and care cascade reports read.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null
-  for an oral regimen whose supply end is unknown) and how many of the last six months' injections were
-  on time. It replays the patient's saved forms when asked, as the nightly refresh does, so a dose
-  saved today counts at once.
+  for an oral regimen whose supply end is unknown), how many of the last six months' injections were
+  on time and their adherence as a fraction, AR-102's days covered over days prescribed in the last
+  12 months, or an oral regimen's latest estimate. It replays the patient's saved forms when asked, as
+  the nightly refresh does, so a dose saved today counts at once.
 - **Next cardiology visit.** `GET /ws/rest/v1/actcore/cardiology?patient=<uuid>` gives `nextDue`,
   the date of the patient's next cardiology review: the latest RHD Consultation Visit's Next
   Consultation Time Amount after its encounter's date, in the Time Period recorded on the same

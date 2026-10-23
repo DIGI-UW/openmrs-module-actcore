@@ -97,6 +97,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(TODAY.plusDays(18), summary(7).getNextDue());
 		assertEquals("ok", summary(7).getStatus());
 		assertNull(summary(7).getLastGiven());
+		assertNull(summary(7).getAdherence());
 		assertEquals(TODAY.minusDays(12), summary(8).getNextDue());
 		assertEquals("overdue", summary(8).getStatus());
 	}
