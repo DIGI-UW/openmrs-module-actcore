@@ -1656,6 +1656,33 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldNotGiveTheConsultationForACardiologyReviewDueWithinTheNext30Days() {
+		echoed(at(30));
+		reviewDue(175, 6);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldNotGiveTheConsultationOnTheDayTheCardiologyReviewIsDue() {
+		echoed(at(30));
+		reviewDue(184, 6);
+		
+		assertEquals("", keys(steps()));
+	}
+	
+	@Test
+	public void of_shouldGiveTheConsultationTheDayAfterTheCardiologyReviewWasDue() {
+		echoed(at(30));
+		reviewDue(185, 6);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult", keys(steps));
+		assertEquals("Overdue: was due 28-Sep-2026", steps.get(0).getReason());
+	}
+	
+	@Test
 	public void of_shouldMarkTheOverdueCardiologyReviewDoneWhenAConsultationIsSavedThisVisit() {
 		echoed(at(30));
 		reviewDue(220, 6);
