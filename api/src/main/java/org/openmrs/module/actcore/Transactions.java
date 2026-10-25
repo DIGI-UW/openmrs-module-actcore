@@ -33,8 +33,7 @@ public final class Transactions {
 	 * still bound, so writing then needs one.
 	 */
 	public static void inNewTransaction(final Runnable work) {
-		TransactionTemplate template = new TransactionTemplate(
-		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
+		TransactionTemplate template = new TransactionTemplate(transactionManager());
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		template.execute(new TransactionCallbackWithoutResult() {
 			
@@ -43,6 +42,50 @@ public final class Transactions {
 				work.run();
 			}
 		});
+	}
+	
+	/** Work run in a transaction that may throw anything, as an advice's proceed. */
+	public interface Work<T> {
+		
+		T run() throws Throwable;
+	}
+	
+	/**
+	 * Runs the work in the current transaction, or in one of its own outside one. Outside one, as a
+	 * REST request calls a service, each service call commits on its own and that commit flushes the
+	 * session, so a check would read an edit as already stored, and the edit would be saved even if the
+	 * check then refused it. Inside one nothing commits until the work returns, and an exception rolls
+	 * it all back.
+	 */
+	public static <T> T inTransaction(final Work<T> work) throws Throwable {
+		try {
+			return new TransactionTemplate(transactionManager()).execute(status -> {
+				try {
+					return work.run();
+				}
+				catch (RuntimeException | Error e) {
+					throw e;
+				}
+				catch (Throwable e) {
+					throw new Checked(e);
+				}
+			});
+		}
+		catch (Checked e) {
+			throw e.getCause();
+		}
+	}
+	
+	private static PlatformTransactionManager transactionManager() {
+		return Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class);
+	}
+	
+	// Carries a checked exception out of the template, which rolls back on unchecked ones only.
+	private static final class Checked extends RuntimeException {
+		
+		private Checked(Throwable cause) {
+			super(cause);
+		}
 	}
 	
 	/**
