@@ -24,6 +24,7 @@ import org.openmrs.Program;
 import org.openmrs.ProgramAttributeType;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.BindException;
@@ -51,7 +52,11 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		Object[] args = invocation.getArguments();
 		if ("savePatientProgram".equals(invocation.getMethod().getName()) && args.length == 1
 		        && args[0] instanceof PatientProgram) {
-			refuseUnlessAllowed((PatientProgram) args[0]);
+			// The rules read the stored row, which a commit of their own service calls would overwrite with the edit.
+			return Transactions.inTransaction(() -> {
+				refuseUnlessAllowed((PatientProgram) args[0]);
+				return invocation.proceed();
+			});
 		}
 		return invocation.proceed();
 	}

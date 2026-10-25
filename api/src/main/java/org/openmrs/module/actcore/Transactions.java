@@ -33,8 +33,7 @@ public final class Transactions {
 	 * still bound, so writing then needs one.
 	 */
 	public static void inNewTransaction(final Runnable work) {
-		TransactionTemplate template = new TransactionTemplate(
-		        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
+		TransactionTemplate template = new TransactionTemplate(transactionManager());
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		template.execute(new TransactionCallbackWithoutResult() {
 			
@@ -43,6 +42,47 @@ public final class Transactions {
 				work.run();
 			}
 		});
+	}
+	
+	/** Work run in a transaction that may throw anything, as an advice's proceed. */
+	public interface Work<T> {
+		
+		T run() throws Throwable;
+	}
+	
+	/**
+	 * Runs the work in the current transaction, or in one of its own outside one, so no service call it
+	 * makes commits (and flushes the session) before it returns; an exception rolls it all back.
+	 */
+	public static <T> T inTransaction(final Work<T> work) throws Throwable {
+		try {
+			return new TransactionTemplate(transactionManager()).execute(status -> {
+				try {
+					return work.run();
+				}
+				catch (RuntimeException | Error e) {
+					throw e;
+				}
+				catch (Throwable e) {
+					throw new Checked(e);
+				}
+			});
+		}
+		catch (Checked e) {
+			throw e.getCause();
+		}
+	}
+	
+	private static PlatformTransactionManager transactionManager() {
+		return Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class);
+	}
+	
+	// Carries a checked exception out of the callback, which cannot declare one.
+	private static final class Checked extends RuntimeException {
+		
+		private Checked(Throwable cause) {
+			super(cause);
+		}
 	}
 	
 	/**
