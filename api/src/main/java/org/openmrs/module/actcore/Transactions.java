@@ -51,11 +51,8 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in the current transaction, or in one of its own outside one. Outside one, as a
-	 * REST request calls a service, each service call commits on its own and that commit flushes the
-	 * session, so a check would read an edit as already stored, and the edit would be saved even if the
-	 * check then refused it. Inside one nothing commits until the work returns, and an exception rolls
-	 * it all back.
+	 * Runs the work in the current transaction, or in one of its own outside one, so no service call it
+	 * makes commits (and flushes the session) before it returns; an exception rolls it all back.
 	 */
 	public static <T> T inTransaction(final Work<T> work) throws Throwable {
 		try {
@@ -80,7 +77,7 @@ public final class Transactions {
 		return Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class);
 	}
 	
-	// Carries a checked exception out of the template, which rolls back on unchecked ones only.
+	// Carries a checked exception out of the callback, which cannot declare one.
 	private static final class Checked extends RuntimeException {
 		
 		private Checked(Throwable cause) {
