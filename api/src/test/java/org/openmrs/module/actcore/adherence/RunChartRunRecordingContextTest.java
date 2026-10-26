@@ -109,8 +109,10 @@ public class RunChartRunRecordingContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void runIfIdle_shouldRecordATakenRunWithItsRowsClinicsSourceAndDay() {
-		assertEquals(Integer.valueOf(2), new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL));
+		RunChartRuns.Run returned = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
 		
+		assertEquals(2, returned.rows);
+		assertEquals(1, returned.clinics);
 		RunChartRuns.Run run = runs.latest(7).get(0);
 		assertTrue(run.taken);
 		assertEquals(2, run.rows);
@@ -161,9 +163,38 @@ public class RunChartRunRecordingContextTest extends AdherenceContextTest {
 	public void runIfIdle_shouldKeepItsOutcomeWhenTheRunCannotBeRecorded() {
 		Context.getAdministrationService().executeSQL("drop table " + RunChartRuns.TABLE, false);
 		
-		assertEquals(Integer.valueOf(2), new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL));
+		RunChartRuns.Run returned = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
 		
+		assertEquals(2, returned.rows);
+		assertEquals(1, returned.clinics);
 		assertEquals(LocalDate.now(), new RunCharts().lastSnapshot());
+	}
+	
+	@Test
+	public void runIfIdle_shouldRecordATakenRunWithNoClinicsWhenCountingThemFails() {
+		RunChartSnapshotTask task = new RunChartSnapshotTask() {
+			
+			@Override
+			protected RunCharts runCharts() {
+				return new RunCharts() {
+					
+					@Override
+					public int clinicRows(LocalDate day) {
+						throw new APIException("the count failed");
+					}
+				};
+			}
+		};
+		
+		RunChartRuns.Run returned = task.runIfIdle(RunChartRuns.MANUAL);
+		
+		assertTrue(returned.taken);
+		assertEquals(2, returned.rows);
+		assertEquals(0, returned.clinics);
+		RunChartRuns.Run run = runs.latest(7).get(0);
+		assertTrue(run.taken);
+		assertEquals(2, run.rows);
+		assertNull(run.reason);
 	}
 	
 	@Test

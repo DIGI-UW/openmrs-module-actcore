@@ -61,7 +61,7 @@ public class RunChartRuns {
 		/** Rows written, 0 for a failed run. */
 		public int rows;
 		
-		/** Of them, the clinics' rows, the rest being the row of every clinic. */
+		/** Of rows, those with a location; the every-clinic row has none. */
 		public int clinics;
 		
 		/** Why a failed run failed. */
@@ -76,7 +76,7 @@ public class RunChartRuns {
 		try {
 			Transactions.inNewTransaction(() -> write(run));
 		}
-		catch (Throwable e) {
+		catch (Exception e) {
 			log.error("Could not record the run chart snapshot run of " + run.runDate, e);
 		}
 	}

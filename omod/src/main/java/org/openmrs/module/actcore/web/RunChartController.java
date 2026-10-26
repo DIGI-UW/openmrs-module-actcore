@@ -105,14 +105,14 @@ public class RunChartController extends BaseRestController {
 		if (token == null) {
 			throw new APIException("ACT Core has not started, so it cannot take the run chart snapshot");
 		}
-		final Integer[] rows = new Integer[1];
+		final RunChartRuns.Run[] ran = new RunChartRuns.Run[1];
 		final RuntimeException[] failure = new RuntimeException[1];
 		Daemon.runInDaemonThreadAndWait(new Runnable() {
 			
 			@Override
 			public void run() {
 				try {
-					rows[0] = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
+					ran[0] = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
 				}
 				catch (RuntimeException e) {
 					failure[0] = e;
@@ -122,9 +122,8 @@ public class RunChartController extends BaseRestController {
 		if (failure[0] != null) {
 			throw new APIException("The run chart snapshot failed", failure[0]);
 		}
-		RunChartRuns.Run last = rows[0] == null ? null : new RunChartRuns().lastTaken();
-		return new SimpleObject().add("snapshotTaken", rows[0] != null).add("rows", rows[0])
-		        .add("clinics", last == null ? null : last.clinics).add("lastSnapshot", lastSnapshot(new RunCharts()));
+		return new SimpleObject().add("snapshotTaken", ran[0] != null).add("rows", ran[0] == null ? null : ran[0].rows)
+		        .add("clinics", ran[0] == null ? null : ran[0].clinics).add("lastSnapshot", lastSnapshot(new RunCharts()));
 	}
 	
 	/**

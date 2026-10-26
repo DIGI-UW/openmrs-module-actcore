@@ -32,9 +32,9 @@ public class RunChartSnapshotTask extends AbstractTask {
 	@Override
 	public void execute() {
 		try {
-			Integer rows = runIfIdle(RunChartRuns.SCHEDULED);
-			if (rows != null) {
-				log.info("Run chart snapshot finished: {} rows", rows);
+			RunChartRuns.Run run = runIfIdle(RunChartRuns.SCHEDULED);
+			if (run != null) {
+				log.info("Run chart snapshot finished: {} rows", run.rows);
 			}
 		}
 		catch (RuntimeException e) {
@@ -42,16 +42,16 @@ public class RunChartSnapshotTask extends AbstractTask {
 		}
 	}
 	
-	/** Whether a run is in progress, as the run now endpoint and its page ask. */
+	/** Whether a run is in progress. */
 	public static boolean isRunning() {
 		return RUNNING.isLocked();
 	}
 	
 	/**
-	 * Takes today's snapshot and returns its rows, or null when another run is in progress. Each run is
+	 * Takes today's snapshot and returns the run, or null when another run is in progress. Each run is
 	 * recorded, taken or failed, and a failure is thrown on.
 	 */
-	public Integer runIfIdle(String source) {
+	public RunChartRuns.Run runIfIdle(String source) {
 		if (!RUNNING.tryLock()) {
 			log.info("Run chart snapshot skipped: another run is in progress");
 			return null;
@@ -64,11 +64,11 @@ public class RunChartSnapshotTask extends AbstractTask {
 		run.source = source;
 		try {
 			AdherenceRefreshTask.refreshBeforeFlags();
-			RunCharts runCharts = new RunCharts();
+			RunCharts runCharts = runCharts();
 			run.rows = runCharts.snapshot(day);
-			run.clinics = runCharts.clinicRows(day);
 			run.taken = true;
-			return run.rows;
+			run.clinics = clinicsOf(runCharts, day);
+			return run;
 		}
 		catch (Throwable e) {
 			run.reason = RunChartRuns.reasonOf(e);
@@ -83,6 +83,21 @@ public class RunChartSnapshotTask extends AbstractTask {
 			finally {
 				RUNNING.unlock();
 			}
+		}
+	}
+	
+	/** The run charts the snapshot is taken on. */
+	protected RunCharts runCharts() {
+		return new RunCharts();
+	}
+	
+	private static int clinicsOf(RunCharts runCharts, LocalDate day) {
+		try {
+			return runCharts.clinicRows(day);
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not count the clinics of the run chart snapshot of " + day, e);
+			return 0;
 		}
 	}
 }

@@ -88,7 +88,7 @@ public class RunChartSnapshotAdherenceContextTest extends AdherenceContextTest {
 		assertEquals(0,
 		    Context.getAdministrationService().executeSQL("select * from " + AdherenceRefresh.TABLE, true).size());
 		
-		assertEquals(Integer.valueOf(1), new RunChartSnapshotTask().runIfIdle("manual"));
+		assertEquals(1, new RunChartSnapshotTask().runIfIdle("manual").rows);
 		
 		assertEquals(1, snapshotRows().size());
 		assertEquals(1, ((Number) snapshotRows().get(0).get(0)).intValue());
