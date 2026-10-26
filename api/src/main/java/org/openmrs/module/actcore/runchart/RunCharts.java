@@ -111,14 +111,27 @@ public class RunCharts {
 	
 	public static class Point {
 		
+		/** The period's first day, which may precede the range's start. */
 		public final LocalDate date;
 		
 		/** The metric's total, or its percent rounded to one decimal; null for a percent of none. */
 		public final Double value;
 		
+		/** The numerator summed over the period's days; for a count, its value. */
+		public final Long count;
+		
+		/** The denominator summed over the period's days; null for a count. */
+		public final Long total;
+		
 		Point(LocalDate date, Double value) {
+			this(date, value, null, null);
+		}
+		
+		Point(LocalDate date, Double value, Long count, Long total) {
 			this.date = date;
 			this.value = value;
+			this.count = count;
+			this.total = total;
 		}
 	}
 	
@@ -131,6 +144,9 @@ public class RunCharts {
 		for (DataSetRow row : evaluate(day)) {
 			values.add(values(day, row));
 		}
+		if (values.isEmpty()) {
+			throw new APIException("The run chart report has no rows for " + day + ", so the day's snapshot is kept");
+		}
 		final String date = "'" + Date.valueOf(day) + "'";
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
@@ -142,12 +158,9 @@ public class RunCharts {
 				@Override
 				protected void doInTransactionWithoutResult(TransactionStatus status) {
 					admin.executeSQL("delete from " + TABLE + " where record_date = " + date, false);
-					if (!values.isEmpty()) {
-						admin.executeSQL(
-						    "insert into " + TABLE + " (record_date, location_id, " + StringUtils.join(COLUMNS, ", ")
-						            + ", date_created) values " + StringUtils.join(values, ", "),
-						    false);
-					}
+					admin.executeSQL("insert into " + TABLE + " (record_date, location_id, "
+					        + StringUtils.join(COLUMNS, ", ") + ", date_created) values " + StringUtils.join(values, ", "),
+					    false);
 				}
 			});
 		}
@@ -196,7 +209,10 @@ public class RunCharts {
 		values.add(locationId);
 		for (String column : COLUMNS) {
 			Object value = row.getColumnValue(column);
-			values.add(String.valueOf(value instanceof Number ? ((Number) value).longValue() : 0L));
+			if (!(value instanceof Number)) {
+				throw new APIException("The run chart report has no number in its column " + column);
+			}
+			values.add(String.valueOf(((Number) value).longValue()));
 		}
 		values.add("current_timestamp");
 		return "(" + StringUtils.join(values, ", ") + ")";
@@ -240,7 +256,8 @@ public class RunCharts {
 			double[] sums = entry.getValue();
 			Double value = denominator == null ? Double.valueOf(sums[0])
 			        : sums[1] == 0 ? null : Double.valueOf(Math.round(1000.0 * sums[0] / sums[1]) / 10.0);
-			points.add(new Point(entry.getKey(), value));
+			points.add(new Point(entry.getKey(), value, Long.valueOf(Math.round(sums[0])),
+			        denominator == null ? null : Long.valueOf(Math.round(sums[1]))));
 		}
 		return points;
 	}

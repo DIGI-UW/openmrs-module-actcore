@@ -54,7 +54,7 @@ public class RunChartControllerTest extends BaseModuleWebContextSensitiveTest {
 		Context.getAdministrationService()
 		        .executeSQL("create table if not exists " + RunCharts.TABLE
 		                + " (record_id int auto_increment primary key, record_date date not null, location_id int" + columns
-		                + ", date_created datetime not null)",
+		                + ", date_created datetime not null, unique (record_date, location_id))",
 		            false);
 		LocalDate today = LocalDate.now();
 		for (String row : new String[] { "'2024-03-04', 1, 4, 1", "'2024-03-06', 1, 6, 3", "'2024-03-08', 1, 8, 2",
@@ -101,6 +101,8 @@ public class RunChartControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("2024-03-04", points(response).get(0).get("date"));
 		// A count is its latest snapshot in the week.
 		assertEquals(8.0, (Double) points(response).get(0).get("value"), 0);
+		assertEquals(Long.valueOf(8), points(response).get(0).get("count"));
+		assertNull(points(response).get(0).get("total"));
 		assertEquals(8.0, (Double) response.get("median"), 0);
 	}
 	
@@ -111,6 +113,8 @@ public class RunChartControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		// 1 + 3 + 2 adherent over 4 + 6 + 8 active.
 		assertEquals(33.3, (Double) points(response).get(0).get("value"), 0);
+		assertEquals(Long.valueOf(6), points(response).get(0).get("count"));
+		assertEquals(Long.valueOf(18), points(response).get(0).get("total"));
 	}
 	
 	private String clinicUuid() {

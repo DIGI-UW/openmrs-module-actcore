@@ -80,7 +80,8 @@ public class RunChartController extends BaseRestController {
 		List<RunCharts.Point> series = runCharts.series(metric, location(clinic), start, end, period);
 		List<SimpleObject> values = new ArrayList<SimpleObject>();
 		for (RunCharts.Point point : series) {
-			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value));
+			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value)
+			        .add("count", point.count).add("total", point.total));
 		}
 		return new SimpleObject().add("metric", metric).add("startDate", start.toString()).add("endDate", end.toString())
 		        .add("period", period.name().toLowerCase()).add("points", values).add("median", RunCharts.median(series))

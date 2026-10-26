@@ -26,8 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads the report descriptors, then registers the flag, adherence and run chart tasks with the
- * scheduler on first start, as Initializer has no domain for scheduler_task_config.
+ * Loads the report descriptors, then registers the flag and adherence refreshes with the scheduler
+ * on first start. Initializer has no domain for scheduler_task_config, and the patientflags module
+ * registers nothing of its own, so without this the task would have to be created by hand in the
+ * admin UI on every environment.
  */
 public class ActCoreActivator extends BaseModuleActivator implements DaemonTokenAware {
 	

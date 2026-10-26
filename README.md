@@ -57,10 +57,13 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Run chart snapshot.** The task **RHD Run Chart Snapshot**, daily from 02:05, recomputes the
   adherence rows and then keeps each clinic's eight run chart metrics, and one row for every clinic,
   in `actcore_run_chart_record`, from the report `actcore.runCharts.report` names (the distribution's
-  RHD Run Chart Metrics). A second run on one day replaces the first, and a failure keeps the day's
+  RHD Run Chart Metrics), every 24 hours from the first run, so an hour off the wall clock after a
+  daylight saving change. A second run on one day replaces the first, and a failure keeps the day's
   earlier rows. `GET /ws/rest/v1/actcore/runchart?metric=<m>&clinic=<uuid>&startDate=&endDate=&points=week`
   (App: act.dashboard) answers `points`, their `median` and the `lastSnapshot`; `points` is `day`,
-  `week` (the default) or `month`. `POST` takes today's snapshot now, as the daemon user
+  `week` (the default) or `month`. A point has a `date`, which is its period's first day and may
+  precede `startDate`, a `value`, and a `count` and `total` (of a percent, its sums of numerator and
+  denominator; of a count, the value and null). `POST` takes today's snapshot now, as the daemon user
   (Task: act.refreshFlags). History starts the day the task first runs.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null

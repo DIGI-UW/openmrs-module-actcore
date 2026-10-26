@@ -39,13 +39,19 @@ public class RunChartSnapshotAdherenceContextTest extends AdherenceContextTest {
 		Context.getAdministrationService()
 		        .executeSQL("create table if not exists " + RunCharts.TABLE
 		                + " (record_id int auto_increment primary key, record_date date not null, location_id int" + columns
-		                + ", date_created datetime not null)",
+		                + ", date_created datetime not null, unique (record_date, location_id))",
 		            false);
 		SqlDataSetDefinition sql = new SqlDataSetDefinition();
 		sql.addParameter(new Parameter("endDate", "As of", java.util.Date.class));
 		// The adherent figure is how many adherence rows exist when the report reads them.
+		StringBuilder others = new StringBuilder();
+		for (String column : RunCharts.COLUMNS) {
+			if (!column.equals("active_registrants_adherent")) {
+				others.append(", 0 as ").append(column);
+			}
+		}
 		sql.setSqlQuery("select null as clinic_uuid, (select count(*) from " + AdherenceRefresh.TABLE
-		        + ") as active_registrants_adherent");
+		        + ") as active_registrants_adherent" + others);
 		ReportDefinition report = new ReportDefinition();
 		report.setUuid(REPORT_UUID);
 		report.setName("Run chart task test report");

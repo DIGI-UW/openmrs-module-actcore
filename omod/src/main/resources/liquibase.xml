@@ -207,6 +207,11 @@
         <constraints nullable="false"/>
       </column>
     </createTable>
+    <!-- MySQL treats the null location of the every-clinic row as distinct, so only the replace protects it. -->
+    <createIndex tableName="actcore_run_chart_record" indexName="actcore_run_chart_record_date_location" unique="true">
+      <column name="record_date"/>
+      <column name="location_id"/>
+    </createIndex>
     <createIndex tableName="actcore_run_chart_record" indexName="actcore_run_chart_record_date">
       <column name="record_date"/>
     </createIndex>

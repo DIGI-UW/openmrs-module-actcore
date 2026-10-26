@@ -52,7 +52,7 @@ public class RunChartsCommitContextTest extends BaseModuleContextSensitiveTest {
 		Context.getAdministrationService()
 		        .executeSQL("create table if not exists " + RunCharts.TABLE
 		                + " (record_id int auto_increment primary key, record_date date not null, location_id int" + columns
-		                + ", date_created datetime not null)",
+		                + ", date_created datetime not null, unique (record_date, location_id))",
 		            false);
 		Context.getAdministrationService().executeSQL("delete from " + RunCharts.TABLE, false);
 		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
@@ -76,8 +76,13 @@ public class RunChartsCommitContextTest extends BaseModuleContextSensitiveTest {
 	private void saveReport(String totalRegistrants) {
 		SqlDataSetDefinition sql = new SqlDataSetDefinition();
 		sql.addParameter(new Parameter("endDate", "As of", java.util.Date.class));
-		sql.setSqlQuery(
-		    "select null as clinic_uuid, " + totalRegistrants + " as total_registrants, 1 as active_registrants");
+		StringBuilder others = new StringBuilder();
+		for (String column : RunCharts.COLUMNS) {
+			if (!column.equals("total_registrants")) {
+				others.append(", 1 as ").append(column);
+			}
+		}
+		sql.setSqlQuery("select null as clinic_uuid, " + totalRegistrants + " as total_registrants" + others);
 		ReportDefinition report = Context.getService(ReportDefinitionService.class).getDefinitionByUuid(REPORT_UUID);
 		if (report == null) {
 			report = new ReportDefinition();

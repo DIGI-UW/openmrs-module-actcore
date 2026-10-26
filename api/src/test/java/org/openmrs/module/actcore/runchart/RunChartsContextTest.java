@@ -49,7 +49,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		Context.getAdministrationService()
 		        .executeSQL("create table if not exists " + RunCharts.TABLE
 		                + " (record_id int auto_increment primary key, record_date date not null, location_id int" + columns
-		                + ", date_created datetime not null)",
+		                + ", date_created datetime not null, unique (record_date, location_id))",
 		            false);
 		clinic = Context.getLocationService().getLocation(1);
 		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
@@ -127,6 +127,69 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			assertTrue(e.getMessage().contains("names no location"));
 		}
 		assertEquals(2, rows().size());
+	}
+	
+	private void useReportSelecting(String select) {
+		String uuid = "9c2e7d14-5a60-4f1b-8e3d-0b7a6c5d4e32";
+		SqlDataSetDefinition sql = new SqlDataSetDefinition();
+		sql.addParameter(new Parameter("endDate", "As of", java.util.Date.class));
+		sql.setSqlQuery(select);
+		ReportDefinition report = new ReportDefinition();
+		report.setUuid(uuid);
+		report.setName("Run chart test report");
+		report.addParameter(new Parameter("endDate", "As of", java.util.Date.class));
+		report.addDataSetDefinition("metrics", Mapped.mapStraightThrough(sql));
+		Context.getService(ReportDefinitionService.class).saveDefinition(report);
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, uuid));
+	}
+	
+	@Test
+	public void snapshot_shouldRefuseAReportWithNoRowsAndKeepTheDaysRows() {
+		saveReport(clinic.getUuid());
+		runCharts.snapshot(TODAY);
+		useReportSelecting("select null as clinic_uuid, 1 as total_registrants from person where 1 = 0");
+		
+		try {
+			runCharts.snapshot(TODAY);
+			fail("expected the snapshot to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage().contains("no rows"));
+		}
+		assertEquals(2, rows().size());
+	}
+	
+	@Test
+	public void snapshot_shouldRefuseAReportLackingAMetricColumnAndKeepTheDaysRows() {
+		saveReport(clinic.getUuid());
+		runCharts.snapshot(TODAY);
+		useReportSelecting("select null as clinic_uuid, 1 as total_registrants");
+		
+		try {
+			runCharts.snapshot(TODAY);
+			fail("expected the snapshot to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage().contains("active_registrants"));
+		}
+		assertEquals(2, rows().size());
+	}
+	
+	@Test
+	public void table_shouldRefuseASecondRowForAClinicAndDay() {
+		saveReport(clinic.getUuid());
+		runCharts.snapshot(TODAY);
+		
+		try {
+			Context.getAdministrationService()
+			        .executeSQL("insert into " + RunCharts.TABLE + " (record_date, location_id, date_created) values ('"
+			                + TODAY + "', " + clinic.getLocationId() + ", current_timestamp)",
+			            false);
+			fail("expected the duplicate to be refused");
+		}
+		catch (Exception e) {
+			assertEquals(2, rows().size());
+		}
 	}
 	
 	@Test
@@ -212,6 +275,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(2, points.size());
 		assertEquals(LocalDate.of(2026, 10, 19), points.get(0).date);
 		assertEquals(Double.valueOf(23), points.get(0).value);
+		assertEquals(Long.valueOf(23), points.get(0).count);
+		assertNull(points.get(0).total);
 		assertEquals(LocalDate.of(2026, 10, 26), points.get(1).date);
 		assertEquals(Double.valueOf(26), points.get(1).value);
 	}
@@ -225,6 +290,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		
 		// 5 seen on each of 3 days over 19 + 21 + 23 active; the mean of the daily percents would be 24.2.
 		assertEquals(Double.valueOf(23.8), points.get(0).value);
+		assertEquals(Long.valueOf(15), points.get(0).count);
+		assertEquals(Long.valueOf(63), points.get(0).total);
 		assertEquals(Double.valueOf(19.2), points.get(1).value);
 	}
 	
@@ -258,6 +325,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(1, points.size());
 		assertNull(points.get(0).value);
+		assertEquals(Long.valueOf(0), points.get(0).total);
 	}
 	
 	@Test
