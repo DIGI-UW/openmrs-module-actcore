@@ -32,6 +32,7 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.runchart.RunChartRuns;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -56,6 +57,13 @@ public class RunChartControllerTest extends BaseModuleWebContextSensitiveTest {
 		                + " (record_id int auto_increment primary key, record_date date not null, location_id int" + columns
 		                + ", date_created datetime not null, unique (record_date, location_id))",
 		            false);
+		// DDL commits, so it comes before any row is inserted.
+		Context.getAdministrationService().executeSQL(
+		    "create table if not exists " + RunChartRuns.TABLE
+		            + " (run_id int auto_increment primary key, run_date date not null, finished datetime not null,"
+		            + " duration_millis bigint not null default 0, source varchar(16) not null, status varchar(16) not null,"
+		            + " row_count int not null default 0, clinic_count int not null default 0, failure_reason varchar(500))",
+		    false);
 		LocalDate today = LocalDate.now();
 		for (String row : new String[] { "'2024-03-04', 1, 4, 1", "'2024-03-06', 1, 6, 3", "'2024-03-08', 1, 8, 2",
 		        "'" + today.minusDays(3) + "', 1, 8, 2", "'" + today + "', 1, 10, 5", "'" + today + "', null, 30, 15",
@@ -64,6 +72,65 @@ public class RunChartControllerTest extends BaseModuleWebContextSensitiveTest {
 			        + " (record_date, location_id, active_registrants, active_registrants_adherent, date_created) values ("
 			        + row + ", current_timestamp)",
 			    false);
+		}
+	}
+	
+	private void createTheRunTableWithTwoRuns() {
+		Context.getAdministrationService().executeSQL("delete from " + RunChartRuns.TABLE, false);
+		Context.getAdministrationService().executeSQL("insert into " + RunChartRuns.TABLE
+		        + " (run_date, finished, duration_millis, source, status, row_count, clinic_count, failure_reason) values"
+		        + " ('2026-10-20', '2026-10-20 02:05:38', 38000, 'scheduled', 'taken', 61, 60, null),"
+		        + " ('2026-10-21', '2026-10-21 02:05:02', 2000, 'scheduled', 'failed', 0, 0, 'APIException: no report')",
+		    false);
+	}
+	
+	@Test
+	public void givesTheLatestRunsNewestFirstWithTheReasonOfAFailedOneToAUserWhoMayTakeTheSnapshot() {
+		createTheRunTableWithTwoRuns();
+		authenticateWith(RunChartController.RUN_PRIVILEGE);
+		
+		SimpleObject response = controller.runs(null);
+		
+		@SuppressWarnings("unchecked")
+		List<SimpleObject> runs = (List<SimpleObject>) response.get("runs");
+		assertEquals(2, runs.size());
+		assertEquals("failed", runs.get(0).get("status"));
+		assertEquals("2026-10-21", runs.get(0).get("runDate"));
+		assertEquals("APIException: no report", runs.get(0).get("reason"));
+		assertEquals("taken", runs.get(1).get("status"));
+		assertEquals(61, ((Number) runs.get(1).get("rows")).intValue());
+		assertEquals(60, ((Number) runs.get(1).get("clinics")).intValue());
+		assertEquals(38000L, ((Number) runs.get(1).get("durationMillis")).longValue());
+		assertEquals("scheduled", runs.get(1).get("source"));
+		assertTrue(((String) runs.get(1).get("finished")).endsWith("Z"));
+		assertEquals(Boolean.FALSE, response.get("running"));
+		assertEquals("2026-10-20", ((SimpleObject) response.get("lastTaken")).get("runDate"));
+	}
+	
+	@Test
+	public void refusesTheRunsToAUserWhoMayNotTakeTheSnapshot() {
+		authenticateWith(RunChartController.READ_PRIVILEGE);
+		
+		try {
+			controller.runs(null);
+			fail("expected the request to be refused");
+		}
+		catch (APIAuthenticationException e) {
+			assertTrue(e.getMessage().contains(RunChartController.RUN_PRIVILEGE));
+		}
+	}
+	
+	@Test
+	public void asksForNoMoreRunsThanItWillGive() {
+		authenticateWith(RunChartController.RUN_PRIVILEGE);
+		for (Integer limit : new Integer[] { 0, 101 }) {
+			try {
+				controller.runs(limit);
+				fail("expected the request to be refused");
+			}
+			catch (IllegalRequestException e) {
+				// expected
+			}
 		}
 	}
 	

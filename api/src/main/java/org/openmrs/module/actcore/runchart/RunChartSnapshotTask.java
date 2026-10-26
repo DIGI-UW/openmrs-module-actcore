@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.runchart;
 
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
@@ -31,7 +32,7 @@ public class RunChartSnapshotTask extends AbstractTask {
 	@Override
 	public void execute() {
 		try {
-			Integer rows = runIfIdle();
+			Integer rows = runIfIdle(RunChartRuns.SCHEDULED);
 			if (rows != null) {
 				log.info("Run chart snapshot finished: {} rows", rows);
 			}
@@ -41,18 +42,47 @@ public class RunChartSnapshotTask extends AbstractTask {
 		}
 	}
 	
-	/** Takes today's snapshot and returns its rows, or null when another run is in progress. */
-	public Integer runIfIdle() {
+	/** Whether a run is in progress, as the run now endpoint and its page ask. */
+	public static boolean isRunning() {
+		return RUNNING.isLocked();
+	}
+	
+	/**
+	 * Takes today's snapshot and returns its rows, or null when another run is in progress. Each run is
+	 * recorded, taken or failed, and a failure is thrown on.
+	 */
+	public Integer runIfIdle(String source) {
 		if (!RUNNING.tryLock()) {
 			log.info("Run chart snapshot skipped: another run is in progress");
 			return null;
 		}
+		long started = System.currentTimeMillis();
+		// Once, so a run past midnight is kept for the day it snapshotted.
+		LocalDate day = LocalDate.now();
+		RunChartRuns.Run run = new RunChartRuns.Run();
+		run.runDate = day;
+		run.source = source;
 		try {
 			AdherenceRefreshTask.refreshBeforeFlags();
-			return new RunCharts().snapshot(LocalDate.now());
+			RunCharts runCharts = new RunCharts();
+			run.rows = runCharts.snapshot(day);
+			run.clinics = runCharts.clinicRows(day);
+			run.taken = true;
+			return run.rows;
+		}
+		catch (Throwable e) {
+			run.reason = RunChartRuns.reasonOf(e);
+			throw e;
 		}
 		finally {
-			RUNNING.unlock();
+			run.finished = new Date();
+			run.durationMillis = run.finished.getTime() - started;
+			try {
+				new RunChartRuns().record(run);
+			}
+			finally {
+				RUNNING.unlock();
+			}
 		}
 	}
 }

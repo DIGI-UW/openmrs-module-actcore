@@ -281,6 +281,20 @@ public class RunCharts {
 		return values.size() % 2 == 1 ? values.get(middle) : (values.get(middle - 1) + values.get(middle)) / 2;
 	}
 	
+	/** How many clinics' rows the day's snapshot holds, which leaves out the row of every clinic. */
+	public int clinicRows(LocalDate day) {
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+			List<List<Object>> rows = Context.getAdministrationService().executeSQL("select count(*) from " + TABLE
+			        + " where record_date = '" + Date.valueOf(day) + "' and location_id is not null",
+			    true);
+			return ((Number) rows.get(0).get(0)).intValue();
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		}
+	}
+	
 	/** The latest day with a snapshot, or null before the first. */
 	public LocalDate lastSnapshot() {
 		List<List<Object>> rows;

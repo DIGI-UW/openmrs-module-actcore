@@ -22,6 +22,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.runchart.RunChartRuns;
 import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -45,6 +46,10 @@ public class RunChartController extends BaseRestController {
 	
 	/** The Dashboard's own privilege in the distribution, which the run charts sit on. */
 	public static final String READ_PRIVILEGE = "App: act.dashboard";
+	
+	private static final int DEFAULT_RUNS = 30;
+	
+	private static final int MAX_RUNS = 100;
 	
 	/** Taking the snapshot now is the flag refresh's privilege, the instance administrator's. */
 	public static final String RUN_PRIVILEGE = RefreshController.PRIVILEGE;
@@ -107,7 +112,7 @@ public class RunChartController extends BaseRestController {
 			@Override
 			public void run() {
 				try {
-					rows[0] = new RunChartSnapshotTask().runIfIdle();
+					rows[0] = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
 				}
 				catch (RuntimeException e) {
 					failure[0] = e;
@@ -117,8 +122,38 @@ public class RunChartController extends BaseRestController {
 		if (failure[0] != null) {
 			throw new APIException("The run chart snapshot failed", failure[0]);
 		}
-		return new SimpleObject().add("snapshotTaken", rows[0] != null).add("rows", rows[0]).add("lastSnapshot",
-		    lastSnapshot(new RunCharts()));
+		RunChartRuns.Run last = rows[0] == null ? null : new RunChartRuns().lastTaken();
+		return new SimpleObject().add("snapshotTaken", rows[0] != null).add("rows", rows[0])
+		        .add("clinics", last == null ? null : last.clinics).add("lastSnapshot", lastSnapshot(new RunCharts()));
+	}
+	
+	/**
+	 * The latest runs of the snapshot, newest first, taken or failed with the reason, the latest that
+	 * took a snapshot, and whether one is running now.
+	 */
+	@RequestMapping(value = "/runchart/runs", method = RequestMethod.GET)
+	@ResponseBody
+	public SimpleObject runs(@RequestParam(value = "limit", required = false) Integer limit) {
+		requirePrivilege(RUN_PRIVILEGE);
+		int count = limit == null ? DEFAULT_RUNS : limit;
+		if (count < 1 || count > MAX_RUNS) {
+			throw new IllegalRequestException("limit must be from 1 to " + MAX_RUNS);
+		}
+		RunChartRuns runs = new RunChartRuns();
+		List<SimpleObject> latest = new ArrayList<SimpleObject>();
+		for (RunChartRuns.Run run : runs.latest(count)) {
+			latest.add(describe(run));
+		}
+		RunChartRuns.Run lastTaken = runs.lastTaken();
+		return new SimpleObject().add("running", RunChartSnapshotTask.isRunning()).add("runs", latest).add("lastTaken",
+		    lastTaken == null ? null : describe(lastTaken));
+	}
+	
+	private static SimpleObject describe(RunChartRuns.Run run) {
+		return new SimpleObject().add("runDate", run.runDate.toString()).add("finished", run.finished.toInstant().toString())
+		        .add("durationMillis", run.durationMillis).add("source", run.source)
+		        .add("status", run.taken ? "taken" : "failed").add("rows", run.rows).add("clinics", run.clinics)
+		        .add("reason", run.reason);
 	}
 	
 	private static String lastSnapshot(RunCharts runCharts) {
