@@ -161,4 +161,58 @@
       ORDER BY date_dismissed
     </sql>
   </changeSet>
+  <changeSet id="actcore-2026-10-26-run-chart-record" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_run_chart_record"/></not>
+    </preConditions>
+    <comment>Each day's run chart metrics per clinic, and with no location for every clinic, as ACT 2.0's runchart_record</comment>
+    <createTable tableName="actcore_run_chart_record">
+      <column name="record_id" type="int" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="record_date" type="date">
+        <constraints nullable="false"/>
+      </column>
+      <column name="location_id" type="int">
+        <constraints foreignKeyName="actcore_run_chart_record_location" references="location(location_id)" deleteCascade="true"/>
+      </column>
+      <column name="total_registrants" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="active_registrants" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="active_registrants_seen_last_7_months" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="active_registrants_prescribed_prophylaxis" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="active_registrants_adherent" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="consultation_visit_total" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="consultation_visits_with_echocardiogram_resulted" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="consultation_visits_with_intervention" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="interventions_completed" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="date_created" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="actcore_run_chart_record" indexName="actcore_run_chart_record_date">
+      <column name="record_date"/>
+    </createIndex>
+    <createIndex tableName="actcore_run_chart_record" indexName="actcore_run_chart_record_location_date">
+      <column name="location_id"/>
+      <column name="record_date"/>
+    </createIndex>
+  </changeSet>
 </databaseChangeLog>

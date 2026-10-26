@@ -54,6 +54,14 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
+- **Run chart snapshot.** The task **RHD Run Chart Snapshot**, daily from 02:05, recomputes the
+  adherence rows and then keeps each clinic's eight run chart metrics, and one row for every clinic,
+  in `actcore_run_chart_record`, from the report `actcore.runCharts.report` names (the distribution's
+  RHD Run Chart Metrics). A second run on one day replaces the first, and a failure keeps the day's
+  earlier rows. `GET /ws/rest/v1/actcore/runchart?metric=<m>&clinic=<uuid>&startDate=&endDate=&points=week`
+  (App: act.dashboard) answers `points`, their `median` and the `lastSnapshot`; `points` is `day`,
+  `week` (the default) or `month`. `POST` takes today's snapshot now, as the daemon user
+  (Task: act.refreshFlags). History starts the day the task first runs.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null
   for an oral regimen whose supply end is unknown), how many of the last six months' injections were
