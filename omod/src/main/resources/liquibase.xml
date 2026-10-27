@@ -256,4 +256,89 @@
       <column name="finished"/>
     </createIndex>
   </changeSet>
+  <changeSet id="actcore-2026-10-27-screening-count" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_screening_count"/></not>
+    </preConditions>
+    <comment>Each clinic's monthly screening counts for school, community and health facility, as ACT 2.0's screenings</comment>
+    <createTable tableName="actcore_screening_count">
+      <column name="screening_count_id" type="int" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="location_id" type="int">
+        <constraints nullable="false" foreignKeyName="actcore_screening_count_location" references="location(location_id)" deleteCascade="true"/>
+      </column>
+      <column name="month" type="date">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_screened" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_children" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_adolescents" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_adults" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_females" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="school_positive" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_screened" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_children" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_adolescents" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_adults" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_females" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="community_positive" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_screened" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_children" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_adolescents" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_adults" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_females" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="facility_positive" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="notes" type="varchar(1000)"/>
+      <column name="changed_by" type="int">
+        <constraints foreignKeyName="actcore_screening_count_changed_by" references="users(user_id)"/>
+      </column>
+      <column name="date_changed" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="actcore_screening_count" indexName="actcore_screening_count_location_month" unique="true">
+      <column name="location_id"/>
+      <column name="month"/>
+    </createIndex>
+    <createIndex tableName="actcore_screening_count" indexName="actcore_screening_count_month">
+      <column name="month"/>
+    </createIndex>
+  </changeSet>
 </databaseChangeLog>
