@@ -69,6 +69,17 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `GET /ws/rest/v1/actcore/runchart/runs?limit=` (Task: act.refreshFlags) gives the latest runs, the last one
   taken and whether one is running now. A run skipped because another was in progress, or one a killed JVM
   never finished, leaves no row.
+- **Monthly screening counts.** ACT 2.0's screening data: per clinic and month, for school, community
+  and health facility, the people screened, children 0-9, adolescents 10-19, adults 20+, females and
+  positives, with notes, in `actcore_screening_count`. `GET /ws/rest/v1/actcore/screeningcounts?clinic=<uuid>&month=YYYY-MM`
+  gives a month's `counts` by `<setting>_<metric>` column, its `notes` and whether it was `saved` (zeros
+  when not). `POST` with `{"counts": {...}, "notes": ""}` replaces the month; a column left out is 0, and
+  it is refused (400) when a setting's age groups do not add up to its screened, its females or positives
+  are more than its screened, a count is below 0, or the month is still to come.
+  `GET /ws/rest/v1/actcore/screeningcounts/summary?clinic=<uuid>&clinic=<uuid>&startMonth=&endMonth=`
+  sums the clinics given, or every clinic, over the months given, both included (by default the twelve
+  to this one): `screened`, `females`, `positive`, `negative`, `children`, `adolescents`, `adults`,
+  `settings` (screened per setting) and `months`, how many clinic months were saved.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null
   for an oral regimen whose supply end is unknown), how many of the last six months' injections were
@@ -377,6 +388,11 @@ creates the three. Listing the downloads needs the audit log module's View Read 
 An administrator limited to their clinics needs nothing extra; the module reads the stored clinics and
 roles of the user being changed directly from the database. Grant `Task: act.allClinics`, which the
 distribution creates, to the roles that administer every clinic's users.
+
+Reading the screening counts needs `App: act.screeningCounts`, `App: act.dashboard` or
+`Task: act.enterScreeningCounts`; saving them needs `Task: act.enterScreeningCounts`. The distribution
+creates the two. An administrator limited to their clinics reads and saves only the clinics on their
+account, and their sums count those clinics only, none when the account has none.
 
 Calling the next cardiology visit needs Get Observations.
 
