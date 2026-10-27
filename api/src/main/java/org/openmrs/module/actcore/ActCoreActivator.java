@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore;
 
+import java.util.Calendar;
 import java.util.Date;
 
 import org.openmrs.api.context.Context;
@@ -17,6 +18,7 @@ import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
+import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -35,6 +37,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	public static final String ADHERENCE_TASK_NAME = "RHD Prophylaxis Adherence Refresh";
 	
+	public static final String RUN_CHART_TASK_NAME = "RHD Run Chart Snapshot";
+	
 	/**
 	 * The scheduler owns the interval once the task exists, so this is only the value the task is first
 	 * registered with. Change it afterwards in Manage Scheduler.
@@ -47,6 +51,13 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	 * at the current instant leaves a fresh install with no flag lists until tomorrow.
 	 */
 	private static final long INITIAL_DELAY_MILLIS = 300000L;
+	
+	/**
+	 * The run chart snapshot's first run, then daily; the scheduler owns the time once the task exists.
+	 */
+	private static final int RUN_CHART_HOUR = 2;
+	
+	private static final int RUN_CHART_MINUTE = 5;
 	
 	private static final Logger log = LoggerFactory.getLogger(ActCoreActivator.class);
 	
@@ -65,19 +76,41 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return daemonToken;
 	}
 	
+	private static Date soon() {
+		return new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS);
+	}
+	
+	/** The next time the server's clock reads the hour and minute. */
+	static Date nextAt(int hour, int minute) {
+		Calendar next = Calendar.getInstance();
+		next.set(Calendar.HOUR_OF_DAY, hour);
+		next.set(Calendar.MINUTE, minute);
+		next.set(Calendar.SECOND, 0);
+		next.set(Calendar.MILLISECOND, 0);
+		if (!next.getTime().after(new Date())) {
+			next.add(Calendar.DAY_OF_MONTH, 1);
+		}
+		return next.getTime();
+	}
+	
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
-		            + " of the same name.");
+		            + " of the same name.",
+		    soon());
 		schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
 		    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
-		            + " injections and oral adherence estimates.");
+		            + " injections and oral adherence estimates.",
+		    soon());
+		schedule(RUN_CHART_TASK_NAME, RunChartSnapshotTask.class.getName(),
+		    "Snapshots each clinic's run chart metrics for today from the report actcore.runCharts.report names.",
+		    nextAt(RUN_CHART_HOUR, RUN_CHART_MINUTE));
 		log.info("ACT Core module started");
 	}
 	
-	private void schedule(String name, String taskClass, String description) {
+	private void schedule(String name, String taskClass, String description, Date firstRun) {
 		try {
 			SchedulerService schedulerService = Context.getSchedulerService();
 			TaskDefinition existing = schedulerService.getTaskByName(name);
@@ -104,7 +137,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 			task.setName(name);
 			task.setDescription(description);
 			task.setTaskClass(taskClass);
-			task.setStartTime(new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS));
+			task.setStartTime(firstRun);
 			task.setRepeatInterval(REFRESH_INTERVAL_SECONDS);
 			task.setStartOnStartup(Boolean.TRUE);
 			task.setStarted(Boolean.TRUE);

@@ -12,6 +12,7 @@ package org.openmrs.module.actcore;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -19,6 +20,7 @@ import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
+import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -85,6 +87,43 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		assertEquals(AdherenceRefreshTask.class.getName(), task.getTaskClass());
 		assertEquals(Long.valueOf(86400L), task.getRepeatInterval());
 		assertTrue(task.getStartOnStartup());
+	}
+	
+	@Test
+	public void registersTheRunChartSnapshotDailyAtFiveMinutesPastTwoAfterNow() {
+		Date before = new Date();
+		
+		new ActCoreActivator().started();
+		
+		TaskDefinition task = Context.getSchedulerService().getTaskByName(ActCoreActivator.RUN_CHART_TASK_NAME);
+		assertEquals(RunChartSnapshotTask.class.getName(), task.getTaskClass());
+		assertEquals(Long.valueOf(86400L), task.getRepeatInterval());
+		assertTrue(task.getStartOnStartup());
+		Calendar start = Calendar.getInstance();
+		start.setTime(task.getStartTime());
+		assertEquals(2, start.get(Calendar.HOUR_OF_DAY));
+		assertEquals(5, start.get(Calendar.MINUTE));
+		assertTrue("the first run is the next 02:05", task.getStartTime().after(before));
+		assertTrue("and no later than tomorrow's", task.getStartTime().getTime() - before.getTime() <= 25 * 3600 * 1000L);
+	}
+	
+	@Test
+	public void leavesTheStartTimeOfARunChartSnapshotAnAdministratorMovedAlone() {
+		TaskDefinition task = new TaskDefinition();
+		task.setName(ActCoreActivator.RUN_CHART_TASK_NAME);
+		task.setTaskClass(RunChartSnapshotTask.class.getName());
+		task.setRepeatInterval(43200L);
+		Date moved = new Date(1500000000000L);
+		task.setStartTime(moved);
+		task.setStartOnStartup(Boolean.TRUE);
+		task.setStarted(Boolean.FALSE);
+		Context.getSchedulerService().saveTaskDefinition(task);
+		
+		new ActCoreActivator().started();
+		
+		TaskDefinition kept = Context.getSchedulerService().getTaskByName(ActCoreActivator.RUN_CHART_TASK_NAME);
+		assertEquals(moved.getTime(), kept.getStartTime().getTime());
+		assertEquals(Long.valueOf(43200L), kept.getRepeatInterval());
 	}
 	
 }
