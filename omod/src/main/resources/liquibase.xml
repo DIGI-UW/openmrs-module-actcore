@@ -220,4 +220,40 @@
       <column name="record_date"/>
     </createIndex>
   </changeSet>
+  <changeSet id="actcore-2026-10-26-run-chart-run" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="actcore_run_chart_run"/></not>
+    </preConditions>
+    <comment>Each run of the run chart snapshot, taken or failed with its reason, so a failed night can be told from a missing one</comment>
+    <createTable tableName="actcore_run_chart_run">
+      <column name="run_id" type="int" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="run_date" type="date">
+        <constraints nullable="false"/>
+      </column>
+      <column name="finished" type="datetime">
+        <constraints nullable="false"/>
+      </column>
+      <column name="duration_millis" type="bigint" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="source" type="varchar(16)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="status" type="varchar(16)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="row_count" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="clinic_count" type="int" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+      <column name="failure_reason" type="varchar(500)"/>
+    </createTable>
+    <createIndex tableName="actcore_run_chart_run" indexName="actcore_run_chart_run_finished">
+      <column name="finished"/>
+    </createIndex>
+  </changeSet>
 </databaseChangeLog>

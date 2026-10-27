@@ -64,7 +64,11 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `week` (the default) or `month`. A point has a `date`, which is its period's first day and may
   precede `startDate`, a `value`, and a `count` and `total` (of a percent, its sums of numerator and
   denominator; of a count, the value and null). `POST` takes today's snapshot now, as the daemon user
-  (Task: act.refreshFlags). History starts the day the task first runs.
+  (Task: act.refreshFlags). History starts the day the task first runs. Each run, taken or failed with the
+  root cause's first line as its reason, is kept in `actcore_run_chart_run`, and
+  `GET /ws/rest/v1/actcore/runchart/runs?limit=` (Task: act.refreshFlags) gives the latest runs, the last one
+  taken and whether one is running now. A run skipped because another was in progress, or one a killed JVM
+  never finished, leaves no row.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null
   for an oral regimen whose supply end is unknown), how many of the last six months' injections were

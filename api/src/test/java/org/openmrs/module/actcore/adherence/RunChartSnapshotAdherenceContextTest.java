@@ -14,10 +14,13 @@ import static org.junit.Assert.assertEquals;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.runchart.RunChartRuns;
 import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
@@ -61,6 +64,18 @@ public class RunChartSnapshotAdherenceContextTest extends AdherenceContextTest {
 		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
 	}
 	
+	@After
+	public void removeTheRunItRecorded() {
+		Transactions.inNewTransaction(() -> {
+			Context.getAdministrationService().executeSQL("create table if not exists " + RunChartRuns.TABLE
+			        + " (run_id int auto_increment primary key, run_date date not null, finished datetime not null,"
+			        + " duration_millis bigint not null default 0, source varchar(16) not null, status varchar(16) not null,"
+			        + " row_count int not null default 0, clinic_count int not null default 0, failure_reason varchar(500))",
+			    false);
+			Context.getAdministrationService().executeSQL("delete from " + RunChartRuns.TABLE, false);
+		});
+	}
+	
 	private List<List<Object>> snapshotRows() {
 		return Context.getAdministrationService().executeSQL(
 		    "select active_registrants_adherent from " + RunCharts.TABLE + " where location_id is null", true);
@@ -73,7 +88,7 @@ public class RunChartSnapshotAdherenceContextTest extends AdherenceContextTest {
 		assertEquals(0,
 		    Context.getAdministrationService().executeSQL("select * from " + AdherenceRefresh.TABLE, true).size());
 		
-		assertEquals(Integer.valueOf(1), new RunChartSnapshotTask().runIfIdle());
+		assertEquals(1, new RunChartSnapshotTask().runIfIdle("manual").rows);
 		
 		assertEquals(1, snapshotRows().size());
 		assertEquals(1, ((Number) snapshotRows().get(0).get(0)).intValue());
