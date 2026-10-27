@@ -141,9 +141,8 @@ public class ScreeningCountController extends BaseRestController {
 	}
 	
 	/**
-	 * The location ids to sum: those given, or null for every clinic; for a site administrator only the
-	 * clinics on their account among them, which may leave none. A uuid given that names no location is
-	 * a bad request, unless it is on the site administrator's account.
+	 * Ids to sum: those given (a site administrator's own only, maybe none), or null for all. An
+	 * unknown uuid is a bad request unless it is on the site administrator's account.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();
