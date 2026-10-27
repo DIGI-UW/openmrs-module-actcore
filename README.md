@@ -75,11 +75,13 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   gives a month's `counts` by `<setting>_<metric>` column, its `notes` and whether it was `saved` (zeros
   when not). `POST` with `{"counts": {...}, "notes": ""}` replaces the month; a column left out is 0, and
   it is refused (400) when a setting's age groups do not add up to its screened, its females or positives
-  are more than its screened, a count is below 0, or the month is still to come.
+  are more than its screened, a count is below 0, the notes are over 1000 characters, or the month is
+  still to come.
   `GET /ws/rest/v1/actcore/screeningcounts/summary?clinic=<uuid>&clinic=<uuid>&startMonth=&endMonth=`
   sums the clinics given, or every clinic, over the months given, both included (by default the twelve
   to this one): `screened`, `females`, `positive`, `negative`, `children`, `adolescents`, `adults`,
-  `settings` (screened per setting) and `months`, how many clinic months were saved.
+  `settings` (screened per setting) and `months`, how many clinic months were saved. A clinic uuid that
+  names no location is refused (400), unless it is on a limited administrator's account.
 - **Prophylaxis summary.** `GET /ws/rest/v1/actcore/prophylaxis?patient=<uuid>` gives a patient's
   regimen, last dose, next due date, status (`overdue`, `dueToday`, `dueSoon`, `ok` or `none`, or null
   for an oral regimen whose supply end is unknown), how many of the last six months' injections were

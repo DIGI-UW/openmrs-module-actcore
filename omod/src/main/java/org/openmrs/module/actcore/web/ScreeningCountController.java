@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -141,7 +142,8 @@ public class ScreeningCountController extends BaseRestController {
 	
 	/**
 	 * The location ids to sum: those given, or null for every clinic; for a site administrator only the
-	 * clinics on their account among them, which may leave none.
+	 * clinics on their account among them, which may leave none. A uuid given that names no location is
+	 * a bad request, unless it is on the site administrator's account.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();
@@ -153,8 +155,14 @@ public class ScreeningCountController extends BaseRestController {
 			}
 		}
 		User user = Context.getAuthenticatedUser();
-		if (UserClinics.isLimited(user)) {
-			Set<String> own = UserClinics.of(user);
+		boolean limited = UserClinics.isLimited(user);
+		Set<String> own = limited ? UserClinics.of(user) : Collections.<String> emptySet();
+		for (String uuid : uuids) {
+			if (!own.contains(uuid) && location(uuid) == null) {
+				throw new IllegalRequestException("No location has the uuid " + uuid);
+			}
+		}
+		if (limited) {
 			if (uuids.isEmpty()) {
 				uuids.addAll(own);
 			} else {

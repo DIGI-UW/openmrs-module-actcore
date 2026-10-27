@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
@@ -155,6 +156,22 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 		counts.put("facility_adults", 2);
 		
 		refused(counts, "facility");
+	}
+	
+	@Test
+	public void save_shouldKeepNotesOfTheMostCharactersAndRefuseOneMore() {
+		String most = StringUtils.repeat("n", ScreeningCounts.NOTES_LENGTH);
+		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 8), september(138), " " + most + " ");
+		assertEquals(most, screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 8)).notes);
+		
+		try {
+			screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(138), most + "n");
+			fail("expected notes too long to be refused");
+		}
+		catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("Notes may be at most"));
+		}
+		assertFalse(screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
 	}
 	
 	@Test

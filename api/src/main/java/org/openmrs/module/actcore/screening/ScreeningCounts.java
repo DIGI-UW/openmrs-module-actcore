@@ -129,6 +129,9 @@ public class ScreeningCounts {
 		final User user = Context.getAuthenticatedUser();
 		try {
 			Transactions.inTransaction(() -> {
+				// Saves of one clinic take turns here rather than racing each other to the unique index.
+				session().createSQLQuery("select location_id from location where location_id = :clinic for update")
+				        .setParameter("clinic", clinicId).list();
 				session().createSQLQuery("delete from " + TABLE + " where location_id = :clinic and month = :month")
 				        .setParameter("clinic", clinicId).setParameter("month", day).executeUpdate();
 				SQLQuery insert = session().createSQLQuery("insert into " + TABLE + " (location_id, month, "

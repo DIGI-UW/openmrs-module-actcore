@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Privilege;
@@ -153,6 +154,28 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 		badRequest(() -> controller.save(CLINIC_A, "2026-08", body), "school_children is more than 2147483647");
 		badRequest(() -> controller.save(CLINIC_A, "2026-8", body(40, null)), "YYYY-MM");
 		badRequest(() -> controller.save("no-such-clinic", "2026-08", body(40, null)), "no-such-clinic");
+		badRequest(() -> controller.save(CLINIC_A, "2026-08", body(40, StringUtils.repeat("n", 1001))),
+		    "Notes may be at most 1000");
+	}
+	
+	@Test
+	public void answersASummaryOfAClinicNoLocationHasAsABadRequest() {
+		authenticateWith(null, ScreeningCountController.DASHBOARD_PRIVILEGE);
+		
+		badRequest(() -> controller.summary(new String[] { "no-such-clinic" }, "2026-01", "2026-12"), "no-such-clinic");
+		badRequest(() -> controller.summary(new String[] { CLINIC_A, "no-such-clinic" }, "2026-01", "2026-12"),
+		    "no-such-clinic");
+	}
+	
+	@Test
+	public void sumsASiteAdministratorsClinicsPastOneOnTheirAccountNoLocationHasNow() {
+		authenticateWith(CLINIC_A + ",gone-clinic", ScreeningCountController.READ_PRIVILEGE, PrivilegeConstants.EDIT_USERS);
+		
+		assertEquals(100, ((Number) controller.summary(null, "2026-01", "2026-12").get("screened")).intValue());
+		assertEquals(100,
+		    ((Number) controller.summary(new String[] { CLINIC_A, "gone-clinic" }, "2026-01", "2026-12").get("screened"))
+		            .intValue());
+		badRequest(() -> controller.summary(new String[] { "no-such-clinic" }, "2026-01", "2026-12"), "no-such-clinic");
 	}
 	
 	@Test
