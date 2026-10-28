@@ -366,6 +366,28 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void namesAUserWithNoUsernameByTheirSystemIdAndName() throws Exception {
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> list = new HashMap<String, Object>();
+		list.put("list", "dashboard:pdf");
+		list.put("columns", Collections.singletonList("Registrant status"));
+		controller.record(list);
+		// As OpenMRS's own super user signs in: by system ID, with no username.
+		Context.logout();
+		Context.authenticate("admin", "test");
+		Context.getAdministrationService().executeSQL(
+		    "update users set username = '', system_id = 'caller-system' where username = 'downloadcaller'", false);
+		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		
+		SimpleObject user = (SimpleObject) ((SimpleObject) ((List<?>) controller
+		        .getDownloads(null, null, null, null, null, null, null).get("results")).get(0)).get("user");
+		assertEquals("caller-system", user.get("username"));
+		assertEquals("Download Caller", user.get("display"));
+		assertEquals(Integer.valueOf(1),
+		    controller.getDownloads("caller-system", null, null, null, null, null, null).get("totalCount"));
+	}
+	
+	@Test
 	public void refusesAnUnknownConceptOrAStartAfterTheEnd() throws Exception {
 		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
 		Map<String, Object> unknown = body();

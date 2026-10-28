@@ -72,9 +72,15 @@ public class Names {
 		return uuid == null ? null : memo("user:" + uuid, key -> who("u.uuid = ?", uuid));
 	}
 	
-	/** The id of the user with this username, or null. */
+	/**
+	 * The id of the user with this username, or with this system ID and no username, as a log names
+	 * them; or null.
+	 */
 	public static Integer userId(String username) {
-		List<Map<String, Object>> rows = Rows.select("select user_id from users where username = ?", username);
+		List<Map<String, Object>> rows = Rows.select(
+		    "select user_id from users where username = ?"
+		            + " or ((username is null or username = '') and system_id = ?) order by username desc",
+		    username, username);
 		return rows.isEmpty() ? null : Rows.integer(rows.get(0), "user_id");
 	}
 	

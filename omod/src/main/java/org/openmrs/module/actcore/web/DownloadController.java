@@ -190,6 +190,7 @@ public class DownloadController extends BaseRestController {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
 		ObjectMapper json = new ObjectMapper();
+		Names names = new Names();
 		List<SimpleObject> matching = new ArrayList<SimpleObject>();
 		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to, formId)) {
 			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
@@ -198,7 +199,7 @@ public class DownloadController extends BaseRestController {
 			}
 			Object list = detail == null ? null : detail.get("list");
 			matching.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
-			        .add("user", new SimpleObject().add("uuid", entry.userUuid).add("username", entry.username))
+			        .add("user", ActivityController.who(names.user(entry.userUuid)))
 			        .add("form",
 			            entry.formName == null ? null
 			                    : new SimpleObject().add("uuid", entry.formUuid).add("name", entry.formName))

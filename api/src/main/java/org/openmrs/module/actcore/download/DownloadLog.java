@@ -43,8 +43,6 @@ public class DownloadLog {
 		
 		public String userUuid;
 		
-		public String username;
-		
 		public String formUuid;
 		
 		public String formName;
@@ -92,13 +90,13 @@ public class DownloadLog {
 	
 	private List<Entry> select(String where, Map<String, Object> params) {
 		SQLQuery query = sessionFactory().getCurrentSession()
-		        .createSQLQuery("select d.date_created, u.uuid user_uuid, u.username, f.uuid form_uuid, f.name form_name,"
+		        .createSQLQuery("select d.date_created, u.uuid user_uuid, f.uuid form_uuid, f.name form_name,"
 		                + " d.detail from " + TABLE
 		                + " d join users u on u.user_id = d.user_id left join form f on f.form_id = d.form_id where 1 = 1"
 		                + where + " order by d.date_created desc, d.download_id desc")
 		        .addScalar("date_created", TimestampType.INSTANCE).addScalar("user_uuid", StringType.INSTANCE)
-		        .addScalar("username", StringType.INSTANCE).addScalar("form_uuid", StringType.INSTANCE)
-		        .addScalar("form_name", StringType.INSTANCE).addScalar("detail", StringType.INSTANCE);
+		        .addScalar("form_uuid", StringType.INSTANCE).addScalar("form_name", StringType.INSTANCE)
+		        .addScalar("detail", StringType.INSTANCE);
 		for (Map.Entry<String, Object> param : params.entrySet()) {
 			query.setParameter(param.getKey(), param.getValue());
 		}
@@ -108,10 +106,9 @@ public class DownloadLog {
 			Entry entry = new Entry();
 			entry.date = (Date) columns[0];
 			entry.userUuid = (String) columns[1];
-			entry.username = (String) columns[2];
-			entry.formUuid = (String) columns[3];
-			entry.formName = (String) columns[4];
-			entry.detail = (String) columns[5];
+			entry.formUuid = (String) columns[2];
+			entry.formName = (String) columns[3];
+			entry.detail = (String) columns[4];
 			entries.add(entry);
 		}
 		return entries;
