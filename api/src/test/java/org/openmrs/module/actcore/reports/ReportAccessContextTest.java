@@ -448,12 +448,8 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		File named = new File(dir, "act_test_named.yml");
 		File unnamed = new File(dir, "act_test_unnamed.yml");
 		try {
-			Files.write(named.toPath(),
-			    ("key: actTestNamed\nuuid: \"aaaaaaaa-2222-4222-8222-000000000001\"\nname: \"Named\"\n"
-			            + "description: \"d\"\nconfig:\n  privilege: \"Task: act.report.named\"\n")
-			            .getBytes(StandardCharsets.UTF_8));
-			Files.write(unnamed.toPath(), ("key: actTestUnnamed\nuuid: \"aaaaaaaa-2222-4222-8222-000000000002\"\n"
-			        + "name: \"Unnamed\"\ndescription: \"d\"\n").getBytes(StandardCharsets.UTF_8));
+			write(named, descriptor("actTestNamed", "aaaaaaaa-2222-4222-8222-000000000001", "Task: act.report.named"));
+			write(unnamed, descriptor("actTestUnnamed", "aaaaaaaa-2222-4222-8222-000000000002", null));
 			
 			ReportPrivileges.load();
 			
@@ -658,11 +654,8 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		File good = new File(dir, "act_test_good.yml");
 		File bad = new File(dir, "act_test_bad.yml");
 		try {
-			Files.write(good.toPath(),
-			    ("key: actTestGood\nuuid: \"aaaaaaaa-2222-4222-8222-000000000003\"\nname: \"Good\"\n"
-			            + "description: \"d\"\nconfig:\n  privilege: \"Task: act.report.good\"\n")
-			            .getBytes(StandardCharsets.UTF_8));
-			Files.write(bad.toPath(), "key: [unclosed\n  : : :".getBytes(StandardCharsets.UTF_8));
+			write(good, descriptor("actTestGood", "aaaaaaaa-2222-4222-8222-000000000003", "Task: act.report.good"));
+			write(bad, "key: [unclosed\n  : : :");
 			
 			ReportPrivileges.load();
 			
@@ -681,6 +674,16 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 	private static ReportRequest request(Mapped<ReportDefinition> report) {
 		return new ReportRequest(report, null, new RenderingMode(new CsvReportRenderer(), "CSV", "csv", 100),
 		        ReportRequest.Priority.NORMAL, null);
+	}
+	
+	/** A report descriptor, naming a privilege under config unless it is null. */
+	private static String descriptor(String key, String uuid, String privilege) {
+		String text = "key: " + key + "\nuuid: \"" + uuid + "\"\nname: \"" + key + "\"\ndescription: \"d\"\n";
+		return privilege == null ? text : text + "config:\n  privilege: \"" + privilege + "\"\n";
+	}
+	
+	private static void write(File file, String text) throws Exception {
+		Files.write(file.toPath(), text.getBytes(StandardCharsets.UTF_8));
 	}
 	
 	/** Signs the superuser back in first, as core lets only a superuser become another user. */
