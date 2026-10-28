@@ -451,7 +451,7 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 			Files.write(named.toPath(),
 			    ("key: actTestNamed\nuuid: \"aaaaaaaa-2222-4222-8222-000000000001\"\nname: \"Named\"\n"
 			            + "description: \"d\"\nconfig:\n  privilege: \"Task: act.report.named\"\n")
-			                    .getBytes(StandardCharsets.UTF_8));
+			            .getBytes(StandardCharsets.UTF_8));
 			Files.write(unnamed.toPath(), ("key: actTestUnnamed\nuuid: \"aaaaaaaa-2222-4222-8222-000000000002\"\n"
 			        + "name: \"Unnamed\"\ndescription: \"d\"\n").getBytes(StandardCharsets.UTF_8));
 			
@@ -661,7 +661,7 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 			Files.write(good.toPath(),
 			    ("key: actTestGood\nuuid: \"aaaaaaaa-2222-4222-8222-000000000003\"\nname: \"Good\"\n"
 			            + "description: \"d\"\nconfig:\n  privilege: \"Task: act.report.good\"\n")
-			                    .getBytes(StandardCharsets.UTF_8));
+			            .getBytes(StandardCharsets.UTF_8));
 			Files.write(bad.toPath(), "key: [unclosed\n  : : :".getBytes(StandardCharsets.UTF_8));
 			
 			ReportPrivileges.load();
