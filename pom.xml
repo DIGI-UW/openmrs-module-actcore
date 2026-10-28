@@ -33,7 +33,7 @@
     <patientflagsVersion>3.0.10</patientflagsVersion>
     <cohortVersion>3.7.3</cohortVersion>
     <webservicesRestVersion>2.40.0</webservicesRestVersion>
-    <reportingVersion>2.1.0</reportingVersion>
+    <reportingVersion>2.2.0</reportingVersion>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
