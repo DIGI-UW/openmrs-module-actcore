@@ -9,20 +9,21 @@
  */
 package org.openmrs.module.actcore.reports;
 
-import java.util.List;
+import java.io.File;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.FileFilterUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.openmrs.module.reporting.config.ReportDescriptor;
 import org.openmrs.module.reporting.config.ReportLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * The privilege each ACT report needs, by the report's uuid. A descriptor names it under
- * {@code config:
- * privilege:}, which the reporting module's loader passes over.
- */
+/** The privilege each ACT report needs, by the report's uuid, as its descriptor names it. */
 public final class ReportPrivileges {
 	
 	/** The key under a descriptor's {@code config} holding its privilege. */
@@ -46,7 +47,9 @@ public final class ReportPrivileges {
 	}
 	
 	static void register(String reportUuid, String privilege) {
-		BY_UUID.put(reportUuid, privilege);
+		if (reportUuid != null && privilege != null) {
+			BY_UUID.put(reportUuid, privilege);
+		}
 	}
 	
 	static void clear() {
@@ -60,31 +63,53 @@ public final class ReportPrivileges {
 	}
 	
 	/**
-	 * Fills the map from the descriptors on disk, whatever
-	 * reporting.loadReportsFromConfigurationAtStartup says; a failure is logged and keeps what was
-	 * loaded.
-	 * 
+	 * Fills the map from the descriptor files, a file that cannot be read being logged and skipped,
+	 * whatever reporting.loadReportsFromConfigurationAtStartup says.
+	 *
 	 * @return how many ACT reports are known
 	 */
 	public static int load() {
+		int found = 0;
 		try {
-			List<ReportDescriptor> descriptors = ReportLoader.loadReportDescriptors();
-			for (ReportDescriptor descriptor : descriptors) {
-				String privilege = privilegeOf(descriptor);
-				if (UNASSIGNED.equals(privilege)) {
-					log.error("Report '{}' names no privilege under config.privilege, so only administrators may run it",
-					    descriptor.getName());
+			File dir = new File(ReportLoader.getReportingDescriptorsConfigurationDir());
+			Collection<File> files = dir.exists()
+			        ? FileUtils.listFiles(dir, FileFilterUtils.suffixFileFilter("yml"), TrueFileFilter.INSTANCE)
+			        : Collections.<File> emptyList();
+			for (File file : files) {
+				try {
+					registerDescriptor(ReportLoader.load(file));
+					found++;
 				}
-				register(descriptor.getUuid(), privilege);
-			}
-			if (descriptors.isEmpty()) {
-				log.error("No report descriptors were found, so no ACT report is protected by a per-report privilege");
+				catch (Exception e) {
+					log.error("Could not read the report descriptor {}, so its report has no per-report privilege", file, e);
+				}
 			}
 		}
 		catch (Exception e) {
-			log.error("Could not read the report descriptors, so ACT reports are not protected by a per-report privilege",
+			log.error("Could not list the report descriptors, so ACT reports are not protected by a per-report privilege",
 			    e);
 		}
+		if (found == 0) {
+			log.error("No report descriptors were found, so no ACT report is protected by a per-report privilege");
+		}
 		return BY_UUID.size();
+	}
+	
+	static void registerDescriptor(ReportDescriptor descriptor) {
+		try {
+			if (descriptor.getUuid() == null) {
+				log.error("Report '{}' has no uuid, so no privilege can be held for it", descriptor.getName());
+				return;
+			}
+			String privilege = privilegeOf(descriptor);
+			if (UNASSIGNED.equals(privilege)) {
+				log.error("Report '{}' names no privilege under config.privilege, so only administrators may run it",
+				    descriptor.getName());
+			}
+			register(descriptor.getUuid(), privilege);
+		}
+		catch (RuntimeException e) {
+			log.error("Could not read the privilege of report '{}'", descriptor.getName(), e);
+		}
 	}
 }

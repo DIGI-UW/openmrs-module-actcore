@@ -11,9 +11,11 @@ package org.openmrs.module.actcore.reports;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -22,8 +24,11 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.module.DaemonToken;
+import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.reporting.dataset.definition.service.DataSetDefinitionService;
+import org.openmrs.module.reporting.definition.DefinitionSummary;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameterizable;
@@ -38,8 +43,7 @@ import org.springframework.aop.framework.Advised;
 
 /**
  * Holds an ACT report to its own {@code Task: act.report.*} privilege, whatever View Reports and
- * Run Reports a user holds. It runs ahead of core's authorization, which lets a holder of the
- * privilege through.
+ * Run Reports a user holds. It runs ahead of core's authorization.
  */
 public class ReportAccess implements MethodInterceptor {
 	
@@ -48,22 +52,18 @@ public class ReportAccess implements MethodInterceptor {
 	
 	private static final String VIEW_REPORTS = "View Reports";
 	
-	private static final String RUN_REPORTS = "Run Reports";
-	
-	private static final String GET_PATIENTS = "Get Patients";
-	
-	/** A stored definition names its creator, which reporting resolves through the user service. */
-	private static final String GET_USERS = "Get Users";
-	
 	private static final String CLINICS = "clinics";
 	
 	private static final Logger log = LoggerFactory.getLogger(ReportAccess.class);
 	
-	/** Set while this advice looks a report up itself, which comes back through the advised service. */
-	private static final ThreadLocal<Boolean> LOOKING_UP = new ThreadLocal<Boolean>();
-	
 	private static final Class<?>[] SERVICES = { ReportDefinitionService.class, DataSetDefinitionService.class,
 	        ReportService.class };
+	
+	/** What the advice hands to the daemon thread, and what it hands back. */
+	private interface Work {
+		
+		Object run() throws Throwable;
+	}
 	
 	/**
 	 * Puts the advice in front of each reporting service the module guards, once. A rebuilt service has
@@ -127,7 +127,7 @@ public class ReportAccess implements MethodInterceptor {
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();
-		if (Boolean.TRUE.equals(LOOKING_UP.get()) || Daemon.isDaemonThread() || me == null || me.isSuperUser()) {
+		if (Daemon.isDaemonThread() || me == null || me.isSuperUser()) {
 			return invocation.proceed();
 		}
 		Object service = invocation.getThis();
@@ -148,35 +148,42 @@ public class ReportAccess implements MethodInterceptor {
 		Object[] args = invocation.getArguments();
 		if (("getDefinitionByUuid".equals(method) || "getDefinition".equals(method)) && args.length > 0) {
 			boolean mayView = Context.hasPrivilege(VIEW_REPORTS);
-			Object found = proceedAs(invocation, VIEW_REPORTS, GET_USERS);
+			Object found = asDaemon(invocation::proceed);
 			if (found instanceof ReportDefinition) {
 				requireAccess((ReportDefinition) found, mayView);
 			}
 			return found;
 		}
-		if (("getAllDefinitions".equals(method) || "getDefinitions".equals(method))) {
+		if ("getAllDefinitions".equals(method) || "getDefinitions".equals(method)
+		        || "getAllDefinitionSummaries".equals(method) || "getDefinitionsByTag".equals(method)) {
 			boolean mayView = Context.hasPrivilege(VIEW_REPORTS);
-			Object found = proceedAs(invocation, VIEW_REPORTS, GET_USERS);
+			Object found = asDaemon(invocation::proceed);
 			return found instanceof List ? visible((List<?>) found, mayView) : found;
 		}
 		if ("evaluate".equals(method) && args.length >= 2 && isReportDefinition(args[0])) {
-			return evaluate(invocation);
+			return evaluate(invocation, me);
 		}
 		return invocation.proceed();
 	}
 	
-	private Object evaluate(MethodInvocation invocation) throws Throwable {
+	private Object evaluate(MethodInvocation invocation, User me) throws Throwable {
 		Object[] args = invocation.getArguments();
-		ReportDefinition given = (ReportDefinition) definitionOf(args[0]);
-		String needed = ReportPrivileges.of(given.getUuid());
-		if (needed != null) {
-			if (!Context.hasPrivilege(needed)) {
-				throw refusal(needed);
-			}
-			args[0] = replaceDefinition(args[0], persisted(given.getUuid()));
+		String uuid = definitionOf(args[0]).getUuid();
+		String needed = ReportPrivileges.of(uuid);
+		if (needed == null) {
+			return invocation.proceed();
 		}
-		return needed == null ? invocation.proceed()
-		        : proceedAs(invocation, VIEW_REPORTS, RUN_REPORTS, GET_PATIENTS, GET_USERS);
+		if (!Context.hasPrivilege(needed)) {
+			throw refusal(needed);
+		}
+		if (UserClinics.isLimited(me)) {
+			limitToClinics(args, me);
+			args[0] = limited(args[0], me);
+		}
+		return asDaemon(() -> {
+			args[0] = replaceDefinition(args[0], persisted(uuid));
+			return invocation.proceed();
+		});
 	}
 	
 	private Object dataSets(MethodInvocation invocation, User me) throws Throwable {
@@ -189,65 +196,82 @@ public class ReportAccess implements MethodInterceptor {
 	private Object reportRequests(MethodInvocation invocation, User me) throws Throwable {
 		String method = invocation.getMethod().getName();
 		Object[] args = invocation.getArguments();
-		if (("queueReport".equals(method) || "saveReportRequest".equals(method) || "runReport".equals(method))
-		        && args.length == 1 && args[0] instanceof ReportRequest) {
+		if (args.length > 0 && args[0] instanceof ReportRequest) {
 			ReportRequest request = (ReportRequest) args[0];
-			Mapped<ReportDefinition> mapped = request.getReportDefinition();
-			if (mapped != null && mapped.getParameterizable() != null) {
-				String needed = ReportPrivileges.of(mapped.getParameterizable().getUuid());
-				if (needed != null && !Context.hasPrivilege(needed)) {
+			String needed = privilegeOf(request);
+			if (needed != null) {
+				if (!Context.hasPrivilege(needed)) {
 					throw refusal(needed);
 				}
-				if (UserClinics.isLimited(me)) {
-					request.setReportDefinition(new Mapped<ReportDefinition>(mapped.getParameterizable(),
-					        withClinics(mapped.getParameterMappings(), me)));
+				if ("queueReport".equals(method) || "saveReportRequest".equals(method) || "runReport".equals(method)) {
+					storeDefinition(request, me);
 				}
 			}
 		}
 		Object result = invocation.proceed();
-		if (("getReportRequestByUuid".equals(method) || "getReportRequest".equals(method))
-		        && result instanceof ReportRequest) {
-			Mapped<ReportDefinition> mapped = ((ReportRequest) result).getReportDefinition();
-			String needed = mapped == null || mapped.getParameterizable() == null ? null
-			        : ReportPrivileges.of(mapped.getParameterizable().getUuid());
+		if (result instanceof ReportRequest) {
+			String needed = privilegeOf((ReportRequest) result);
 			if (needed != null && !Context.hasPrivilege(needed)) {
 				throw refusal(needed);
 			}
 		}
+		if ("getReportRequests".equals(method) && result instanceof List) {
+			return visible((List<?>) result, true);
+		}
+		if ("getReportRequestsCount".equals(method)) {
+			return (long) Context.getService(ReportService.class).getReportRequests((ReportDefinition) args[0],
+			    (Date) args[1], (Date) args[2], (ReportRequest.Status[]) args[3]).size();
+		}
 		return result;
+	}
+	
+	/** Puts the stored report, and a limited user's clinics, in the request that is about to run. */
+	private static void storeDefinition(ReportRequest request, User me) throws Throwable {
+		Mapped<ReportDefinition> mapped = request.getReportDefinition();
+		Map<String, Object> mappings = mapped.getParameterMappings();
+		request.setReportDefinition(
+		    new Mapped<ReportDefinition>((ReportDefinition) asDaemon(() -> persisted(mapped.getParameterizable().getUuid())),
+		            UserClinics.isLimited(me) ? withClinics(mappings, me) : mappings));
+	}
+	
+	private static String privilegeOf(ReportRequest request) {
+		Mapped<ReportDefinition> mapped = request.getReportDefinition();
+		return mapped == null || mapped.getParameterizable() == null ? null
+		        : ReportPrivileges.of(mapped.getParameterizable().getUuid());
 	}
 	
 	/** The report as it is stored, which a posted copy carrying the same uuid must not stand in for. */
 	private static ReportDefinition persisted(String uuid) {
-		LOOKING_UP.set(Boolean.TRUE);
-		Context.addProxyPrivilege(VIEW_REPORTS);
-		Context.addProxyPrivilege(GET_USERS);
-		try {
-			ReportDefinition found = Context.getService(ReportDefinitionService.class).getDefinitionByUuid(uuid);
-			if (found == null) {
-				throw new APIAuthenticationException("No stored report has the uuid " + uuid);
-			}
-			return found;
+		ReportDefinition found = Context.getService(ReportDefinitionService.class).getDefinitionByUuid(uuid);
+		if (found == null) {
+			throw new APIAuthenticationException("No stored report has the uuid " + uuid);
 		}
-		finally {
-			Context.removeProxyPrivilege(GET_USERS);
-			Context.removeProxyPrivilege(VIEW_REPORTS);
-			LOOKING_UP.remove();
-		}
+		return found;
 	}
 	
-	private static Object proceedAs(MethodInvocation invocation, String... privileges) throws Throwable {
-		for (String privilege : privileges) {
-			Context.addProxyPrivilege(privilege);
+	/**
+	 * Runs the work as the daemon user, so the caller's session is given no privilege it lacks. The
+	 * caller has been checked against the report's own privilege before this.
+	 */
+	private static Object asDaemon(Work work) throws Throwable {
+		DaemonToken token = ActCoreActivator.getDaemonToken();
+		if (token == null) {
+			throw new APIAuthenticationException("The ACT Core module has not started, so it cannot run an ACT report");
 		}
-		try {
-			return invocation.proceed();
-		}
-		finally {
-			for (String privilege : privileges) {
-				Context.removeProxyPrivilege(privilege);
+		AtomicReference<Object> result = new AtomicReference<Object>();
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		Daemon.runInDaemonThreadAndWait(() -> {
+			try {
+				result.set(work.run());
 			}
+			catch (Throwable t) {
+				failure.set(t);
+			}
+		}, token);
+		if (failure.get() != null) {
+			throw failure.get();
 		}
+		return result.get();
 	}
 	
 	private static void requireAccess(ReportDefinition report, boolean mayView) {
@@ -257,13 +281,14 @@ public class ReportAccess implements MethodInterceptor {
 		}
 	}
 	
-	private static List<Object> visible(Collection<?> reports, boolean mayView) {
+	private static List<Object> visible(Collection<?> items, boolean mayView) {
 		List<Object> allowed = new ArrayList<Object>();
-		for (Object report : reports) {
-			String needed = report instanceof ReportDefinition ? ReportPrivileges.of(((ReportDefinition) report).getUuid())
-			        : null;
+		for (Object item : items) {
+			String needed = item instanceof ReportDefinition ? ReportPrivileges.of(((ReportDefinition) item).getUuid())
+			        : item instanceof DefinitionSummary ? ReportPrivileges.of(((DefinitionSummary) item).getUuid())
+			                : item instanceof ReportRequest ? privilegeOf((ReportRequest) item) : null;
 			if (needed == null ? mayView : Context.hasPrivilege(needed)) {
-				allowed.add(report);
+				allowed.add(item);
 			}
 		}
 		return allowed;
@@ -288,9 +313,19 @@ public class ReportAccess implements MethodInterceptor {
 		return stored;
 	}
 	
+	/** The report with its {@code clinics} mapping set to the user's, over any the caller mapped. */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private static Object limited(Object argument, User me) {
+		if (argument instanceof Mapped) {
+			Mapped<?> mapped = (Mapped<?>) argument;
+			return new Mapped(mapped.getParameterizable(), withClinics(mapped.getParameterMappings(), me));
+		}
+		return argument;
+	}
+	
 	/**
-	 * Sets a limited user's clinics on the context a dataset is evaluated with, over any the caller
-	 * supplied.
+	 * Sets a limited user's clinics on the context a report or dataset is evaluated with, over any the
+	 * caller supplied.
 	 */
 	private static void limitToClinics(Object[] args, User me) {
 		if (!UserClinics.isLimited(me)) {

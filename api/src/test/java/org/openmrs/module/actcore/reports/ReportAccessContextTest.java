@@ -11,8 +11,12 @@ package org.openmrs.module.actcore.reports;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -28,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,16 +45,20 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.api.context.ServiceContext;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.Module;
 import org.openmrs.module.ModuleFactory;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.reporting.config.ReportDescriptor;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.dataset.definition.DataSetDefinition;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.dataset.definition.service.DataSetDefinitionService;
+import org.openmrs.module.reporting.definition.DefinitionSummary;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
@@ -62,12 +71,15 @@ import org.openmrs.module.reporting.report.renderer.RenderingMode;
 import org.openmrs.module.reporting.report.service.ReportService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.aop.framework.Advised;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Runs the advice as the activator installs it, as users holding only the privileges named.
- * Reporting 2.2.0 guards its services as the distribution runs it, so a denial or a pass is the
- * real one.
+ * Runs the advice as the activator installs it, as users holding only the privileges named. Outside
+ * a test transaction, so the daemon thread the advice uses sees what the test created.
  */
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final String ACT_REPORT = "aaaaaaaa-1111-4111-8111-000000000001";
@@ -98,9 +110,20 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 	
 	private User limitedGenericAtA;
 	
+	private User limitedWithBlankClinics;
+	
+	private User limitedGenericWithoutPrivilege;
+	
+	private final List<Integer> createdUsers = new ArrayList<Integer>();
+	
+	private final List<String> createdRoles = new ArrayList<String>();
+	
+	private final List<String> createdPrivileges = new ArrayList<String>();
+	
 	@Before
 	public void setUp() throws Exception {
 		reports = Context.getService(ReportDefinitionService.class);
+		daemonToken();
 		saveReport(ACT_REPORT, "ACT test report", "persisted");
 		saveReport(OTHER_REPORT, "Another module's report", "other");
 		ReportPrivileges.register(ACT_REPORT, PRIVILEGE);
@@ -113,7 +136,9 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		unlimitedAtA = user("unlimitedA", CLINIC_A, PRIVILEGE);
 		limitedGenericAtA = user("limitedGenericA", CLINIC_A, PRIVILEGE, "View Reports", "Run Reports",
 		    PrivilegeConstants.EDIT_USERS);
-		Context.flushSession();
+		limitedWithBlankClinics = user("limitedBlank", " , ", PRIVILEGE, PrivilegeConstants.EDIT_USERS);
+		limitedGenericWithoutPrivilege = user("limitedNoPrivilege", CLINIC_A, "View Reports", "Run Reports",
+		    PrivilegeConstants.EDIT_USERS);
 		ReportAccess.install();
 	}
 	
@@ -123,6 +148,22 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		ReportPrivileges.clear();
 		Context.logout();
 		authenticate();
+		ReportService requests = Context.getService(ReportService.class);
+		for (ReportRequest request : requests.getReportRequests(null, null, null)) {
+			requests.purgeReportRequest(request);
+		}
+		reports.purgeDefinition(ACT_REPORT);
+		reports.purgeDefinition(OTHER_REPORT);
+		UserService users = Context.getUserService();
+		for (Integer id : createdUsers) {
+			users.purgeUser(users.getUser(id));
+		}
+		for (String name : createdRoles) {
+			users.purgeRole(users.getRole(name));
+		}
+		for (String name : createdPrivileges) {
+			Context.getAdministrationService().executeSQL("delete from privilege where privilege = '" + name + "'", false);
+		}
 	}
 	
 	@Test
@@ -300,6 +341,26 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void queueReport_shouldQueueTheStoredReportNotAPostedOneWithTheSameUuid() throws Exception {
+		become(both);
+		
+		ReportRequest queued = Context.getService(ReportService.class)
+		        .queueReport(request(definition(ACT_REPORT, "posted")));
+		
+		SqlDataSetDefinition queuedSql = (SqlDataSetDefinition) queued.getReportDefinition().getParameterizable()
+		        .getDataSetDefinitions().get("data").getParameterizable();
+		assertThat(queuedSql.getSqlQuery(), containsString("persisted"));
+	}
+	
+	@Test
+	public void register_shouldIgnoreAReportWithNoUuidOrNoPrivilege() throws Exception {
+		ReportPrivileges.register(null, "Task: act.report.x");
+		ReportPrivileges.register("aaaaaaaa-3333-4333-8333-000000000003", null);
+		
+		assertNull(ReportPrivileges.of("aaaaaaaa-3333-4333-8333-000000000003"));
+	}
+	
+	@Test
 	public void install_shouldPutTheAdviceInFrontOnceHoweverOftenItIsAsked() throws Exception {
 		ReportAccess.uninstall();
 		
@@ -405,6 +466,189 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 	
+	@Test
+	public void evaluate_shouldNeverGiveTheCallersSessionTheStandInPrivilegesWhileAnActReportRuns() throws Exception {
+		become(holder);
+		UserContext session = Context.getUserContext();
+		List<String> held = new ArrayList<String>();
+		AtomicReference<Boolean> ranInDaemon = new AtomicReference<Boolean>(false);
+		MethodInterceptor spy = invocation -> {
+			if ("evaluate".equals(invocation.getMethod().getName())) {
+				ranInDaemon.set(Daemon.isDaemonThread());
+				for (String privilege : new String[] { "View Reports", "Run Reports", "Get Patients", "Get Users" }) {
+					if (session.hasPrivilege(privilege)) {
+						held.add(privilege);
+					}
+				}
+			}
+			return invocation.proceed();
+		};
+		Advised advised = (Advised) reports;
+		advised.addAdvice(1, spy);
+		try {
+			assertEquals("persisted", answer(evaluate(reports.getDefinitionByUuid(ACT_REPORT), null)));
+		}
+		finally {
+			advised.removeAdvice(spy);
+		}
+		
+		assertTrue("the work should run on the daemon thread", ranInDaemon.get());
+		assertThat(held, empty());
+	}
+	
+	@Test
+	public void evaluate_shouldRefuseWhenTheModuleHasNoDaemonTokenYet() throws Exception {
+		become(holder);
+		DaemonToken token = ActCoreActivator.getDaemonToken();
+		new ActCoreActivator().setDaemonToken(null);
+		try {
+			refusedFor("has not started", () -> evaluate(definition(ACT_REPORT, "persisted"), null));
+		}
+		finally {
+			new ActCoreActivator().setDaemonToken(token);
+		}
+	}
+	
+	@Test
+	public void evaluate_shouldGiveALimitedUserWithBlankClinicsNothingRatherThanEveryClinic() throws Exception {
+		become(limitedWithBlankClinics);
+		
+		assertEquals(ReportAccess.NO_CLINIC, seen(evaluate(reports.getDefinitionByUuid(ACT_REPORT), CLINIC_B)));
+	}
+	
+	@Test
+	public void listing_shouldDropActReportsFromSummariesAndNameSearchesForAUserWhoMayNotRunThem() throws Exception {
+		become(holder);
+		assertThat(summaryUuids(reports.getAllDefinitionSummaries(false)), contains(ACT_REPORT));
+		assertThat(uuids(reports.getDefinitionsByTag("report")), contains(ACT_REPORT));
+		assertThat(uuids(reports.getDefinitions("report", false)), contains(ACT_REPORT));
+		
+		become(generic);
+		assertThat(summaryUuids(reports.getAllDefinitionSummaries(false)), contains(OTHER_REPORT));
+		assertThat(uuids(reports.getDefinitionsByTag("report")), contains(OTHER_REPORT));
+		assertThat(uuids(reports.getDefinitions("report", false)), contains(OTHER_REPORT));
+	}
+	
+	@Test
+	public void getReportRequests_shouldListAndCountOnlyTheRunsOfReportsTheUserMayRun() throws Exception {
+		become(both);
+		ReportRequest queued = Context.getService(ReportService.class)
+		        .queueReport(request(Mapped.mapStraightThrough(reports.getDefinitionByUuid(ACT_REPORT))));
+		ReportService requests = Context.getService(ReportService.class);
+		assertThat(requestUuids(requests.getReportRequests(null, null, null)), contains(queued.getUuid()));
+		assertEquals(1, requests.getReportRequestsCount(null, null, null));
+		
+		become(generic);
+		assertThat(requestUuids(requests.getReportRequests(null, null, null)), empty());
+		assertEquals(0, requests.getReportRequestsCount(null, null, null));
+	}
+	
+	@Test
+	public void queueReport_shouldLeaveTheRunOfAHolderOfOnlyThePerReportPrivilegeToCoresRunReports() throws Exception {
+		become(both);
+		ReportRequest queued = Context.getService(ReportService.class)
+		        .queueReport(request(Mapped.mapStraightThrough(reports.getDefinitionByUuid(ACT_REPORT))));
+		
+		become(holder);
+		ReportDefinition stored = reports.getDefinitionByUuid(ACT_REPORT);
+		
+		refusedFor("Run Reports", () -> Context.getService(ReportService.class).queueReport(request(stored)));
+		refusedFor("Run Reports", () -> Context.getService(ReportService.class).runReport(queued));
+		refusedFor("Run Reports", () -> Context.getService(ReportService.class).getReportRequestByUuid(queued.getUuid()));
+	}
+	
+	@Test
+	public void runReport_shouldRefuseAGenericHolderTheRunAndItsOutputOfAnActReport() throws Exception {
+		become(both);
+		ReportRequest queued = Context.getService(ReportService.class)
+		        .queueReport(request(Mapped.mapStraightThrough(reports.getDefinitionByUuid(ACT_REPORT))));
+		
+		become(limitedGenericWithoutPrivilege);
+		
+		refused(() -> Context.getService(ReportService.class).runReport(queued));
+		refused(() -> Context.getService(ReportService.class).loadRenderedOutput(queued));
+		refused(() -> Context.getService(ReportService.class).getReportRequestByUuid(queued.getUuid()));
+	}
+	
+	@Test
+	public void runReport_shouldRunAQueuedRequestWithTheLimitedUsersStoredClinicsAndTheStoredReport() throws Exception {
+		become(limitedGenericAtA);
+		Map<String, Object> asksForB = new HashMap<String, Object>();
+		asksForB.put("clinics", CLINIC_B);
+		ReportRequest queued = Context.getService(ReportService.class)
+		        .queueReport(request(new Mapped<ReportDefinition>(definition(ACT_REPORT, "posted"), asksForB)));
+		Context.clearSession();
+		
+		AtomicReference<String> ran = new AtomicReference<String>();
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		Daemon.runInDaemonThreadAndWait(() -> {
+			try {
+				ReportService service = Context.getService(ReportService.class);
+				ReportRequest request = service.getReportRequestByUuid(queued.getUuid());
+				service.runReport(request);
+				ran.set(new String(service.loadRenderedOutput(request), StandardCharsets.UTF_8));
+			}
+			catch (Throwable t) {
+				failure.set(t);
+			}
+		}, daemonToken());
+		
+		assertNull(String.valueOf(failure.get()), failure.get());
+		assertThat(ran.get(), containsString("persisted"));
+		assertThat(ran.get(), containsString(CLINIC_A));
+		assertThat(ran.get(), not(containsString("posted")));
+		assertThat(ran.get(), not(containsString(CLINIC_B)));
+	}
+	
+	@Test
+	public void load_shouldGoOnPastADescriptorItCannotReadAndOneWithNoUuid() throws Exception {
+		ReportDescriptor noUuid = new ReportDescriptor();
+		noUuid.setName("No uuid");
+		ReportDescriptor broken = new ReportDescriptor() {
+			
+			@Override
+			public Map<String, Object> getConfig() {
+				throw new IllegalStateException("unreadable");
+			}
+		};
+		broken.setUuid("aaaaaaaa-3333-4333-8333-000000000001");
+		ReportDescriptor fine = new ReportDescriptor();
+		fine.setUuid("aaaaaaaa-3333-4333-8333-000000000002");
+		Map<String, Object> config = new HashMap<String, Object>();
+		config.put(ReportPrivileges.CONFIG_KEY, "Task: act.report.fine");
+		fine.setConfig(config);
+		
+		ReportPrivileges.registerDescriptor(noUuid);
+		ReportPrivileges.registerDescriptor(broken);
+		ReportPrivileges.registerDescriptor(fine);
+		
+		assertNull(ReportPrivileges.of("aaaaaaaa-3333-4333-8333-000000000001"));
+		assertEquals("Task: act.report.fine", ReportPrivileges.of("aaaaaaaa-3333-4333-8333-000000000002"));
+	}
+	
+	@Test
+	public void load_shouldKeepWhatItHasWhenOneDescriptorFileIsMalformed() throws Exception {
+		File dir = new File(org.openmrs.module.reporting.config.ReportLoader.getReportingDescriptorsConfigurationDir());
+		dir.mkdirs();
+		File good = new File(dir, "act_test_good.yml");
+		File bad = new File(dir, "act_test_bad.yml");
+		try {
+			Files.write(good.toPath(),
+			    ("key: actTestGood\nuuid: \"aaaaaaaa-2222-4222-8222-000000000003\"\nname: \"Good\"\n"
+			            + "description: \"d\"\nconfig:\n  privilege: \"Task: act.report.good\"\n")
+			                    .getBytes(StandardCharsets.UTF_8));
+			Files.write(bad.toPath(), "key: [unclosed\n  : : :".getBytes(StandardCharsets.UTF_8));
+			
+			ReportPrivileges.load();
+			
+			assertEquals("Task: act.report.good", ReportPrivileges.of("aaaaaaaa-2222-4222-8222-000000000003"));
+		}
+		finally {
+			good.delete();
+			bad.delete();
+		}
+	}
+	
 	private static ReportRequest request(ReportDefinition report) {
 		return request(Mapped.mapStraightThrough(report));
 	}
@@ -490,6 +734,34 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		return uuids;
 	}
 	
+	private static List<String> summaryUuids(List<DefinitionSummary> summaries) {
+		List<String> uuids = new ArrayList<String>();
+		for (DefinitionSummary summary : summaries) {
+			if (ACT_REPORT.equals(summary.getUuid()) || OTHER_REPORT.equals(summary.getUuid())) {
+				uuids.add(summary.getUuid());
+			}
+		}
+		return uuids;
+	}
+	
+	private static List<String> requestUuids(List<ReportRequest> requests) {
+		List<String> uuids = new ArrayList<String>();
+		for (ReportRequest request : requests) {
+			uuids.add(request.getUuid());
+		}
+		return uuids;
+	}
+	
+	private static void refusedFor(String privilege, Call call) throws Exception {
+		try {
+			call.run();
+			fail("expected a refusal");
+		}
+		catch (APIAuthenticationException expected) {
+			assertTrue(expected.getMessage(), expected.getMessage().contains(privilege));
+		}
+	}
+	
 	private interface Call {
 		
 		void run() throws Exception;
@@ -513,10 +785,12 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 			Privilege privilege = users.getPrivilege(name);
 			if (privilege == null) {
 				privilege = users.savePrivilege(new Privilege(name, name));
+				createdPrivileges.add(name);
 			}
 			role.addPrivilege(privilege);
 		}
 		users.saveRole(role);
+		createdRoles.add(role.getRole());
 		Person person = new Person();
 		person.addName(new PersonName(username, null, "Tester"));
 		person.setGender("F");
@@ -526,6 +800,8 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 		if (clinics != null) {
 			user.setUserProperty(UserClinics.PROPERTY, clinics);
 		}
-		return users.createUser(user, "Password123");
+		User created = users.createUser(user, "Password123");
+		createdUsers.add(created.getUserId());
+		return created;
 	}
 }

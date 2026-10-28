@@ -141,17 +141,6 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   `configuration/reports/reportdescriptors` itself when that property is true. It logs whether it
   loaded, skipped or failed. Remove this once the reporting module does it
   ([mherman22/openmrs-module-reporting#1](https://github.com/mherman22/openmrs-module-reporting/issues/1)).
-- **Report access.** The reporting module guards its services with View Reports and Run Reports alone, so
-  any role holding them can run any report. A report whose descriptor names a privilege under
-  `config: privilege:` is an ACT report, and this module puts advice in front of the report services,
-  ahead of core's authorization, that refuses a user who lacks that privilege and, for one who holds it,
-  lets the call through without View Reports or Run Reports. The advice covers looking a report up,
-  listing, evaluating it (a posted definition carrying an ACT report's uuid runs the stored one), queuing
-  a run and reading its output; a descriptor that names no privilege is for administrators only, and a
-  report that is not an ACT report is left to OpenMRS. A user limited to their clinics (see above) is held
-  to them: `clinics` is set on every dataset they evaluate, and in the stored request when they queue a
-  run, to their clinics, or to a value matching none when they have none. The advice is put back at every
-  refresh of the application context, and stands aside for daemon threads and super users.
 
 ### Next steps
 
@@ -393,11 +382,10 @@ Listing the research studies needs Get Programs. Creating and renaming them need
 program with Manage Concepts and Manage Programs on the caller's behalf, so grant it only to roles you
 would let add concepts and programs.
 
-Running an ACT report needs its `Task: act.report.*` privilege, which the distribution creates and
-grants to the roles whose screens use it; View Reports and Run Reports are no longer needed for it. While
-a call runs, the module stands in for the caller's View Reports, Run Reports, Get Patients and Get Users,
-the last because a stored report definition names its creator, so a role without Get Users still runs its
-reports.
+Looking up, listing and evaluating an ACT report needs its `Task: act.report.*` privilege, which the
+distribution grants to the roles whose screens use it; View Reports and Run Reports are not needed for
+those. Queuing a run and reading its output also need Run Reports. A user limited to their clinics sees
+only those clinics' rows.
 
 A download needs `Task: act.downloadData`, or `Task: act.downloadResearchData` for a research download
 only, plus Get Forms, Get Concepts, Get Encounters, Get Observations and Get Patients. With
