@@ -196,6 +196,15 @@ public class ReportAccess implements MethodInterceptor {
 	private Object reportRequests(MethodInvocation invocation, User me) throws Throwable {
 		String method = invocation.getMethod().getName();
 		Object[] args = invocation.getArguments();
+		if ("getReportDesigns".equals(method) && args.length > 0 && args[0] instanceof ReportDefinition) {
+			String needed = ReportPrivileges.of(((ReportDefinition) args[0]).getUuid());
+			if (needed != null) {
+				if (!Context.hasPrivilege(needed)) {
+					throw refusal(needed);
+				}
+				return asDaemon(invocation::proceed);
+			}
+		}
 		if (args.length > 0 && args[0] instanceof ReportRequest) {
 			ReportRequest request = (ReportRequest) args[0];
 			String needed = privilegeOf(request);

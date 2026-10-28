@@ -334,7 +334,7 @@ follow-up) have priority `RHD High` and show red; missing data flags have priori
 
 ## Requirements
 
-OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0, reporting 2.2.0.
+OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0, reporting 2.1.0 or later. The per-report privilege replaces View Reports and Run Reports for a report only on reporting 2.2.0, where they guard the services.
 
 ## Installing and running
 

@@ -601,6 +601,31 @@ public class ReportAccessContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void getReportDesigns_shouldReadAnActReportsDesignsWithOnlyThePerReportPrivilege() throws Exception {
+		become(holder);
+		
+		assertNotNull(Context.getService(ReportService.class).getReportDesigns(definition(ACT_REPORT, "x"), null, false));
+	}
+	
+	@Test
+	public void getReportDesigns_shouldRefuseAGenericHolderWithoutThePerReportPrivilege() throws Exception {
+		become(generic);
+		
+		refusedFor(PRIVILEGE,
+		    () -> Context.getService(ReportService.class).getReportDesigns(definition(ACT_REPORT, "x"), null, false));
+	}
+	
+	@Test
+	public void getReportDesigns_shouldLeaveANonActReportToCore() throws Exception {
+		become(holder);
+		refusedFor("View Reports",
+		    () -> Context.getService(ReportService.class).getReportDesigns(definition(OTHER_REPORT, "x"), null, false));
+		
+		become(generic);
+		assertNotNull(Context.getService(ReportService.class).getReportDesigns(definition(OTHER_REPORT, "x"), null, false));
+	}
+	
+	@Test
 	public void load_shouldGoOnPastADescriptorItCannotReadAndOneWithNoUuid() throws Exception {
 		ReportDescriptor noUuid = new ReportDescriptor();
 		noUuid.setName("No uuid");

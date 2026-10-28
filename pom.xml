@@ -34,6 +34,7 @@
     <cohortVersion>3.7.3</cohortVersion>
     <webservicesRestVersion>2.40.0</webservicesRestVersion>
     <reportingVersion>2.2.0</reportingVersion>
+    <reportingRequiredVersion>2.1.0</reportingRequiredVersion>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
