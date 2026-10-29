@@ -89,8 +89,12 @@ public final class UserClinics {
 	
 	/** The roles, by uuid, a limited administrator may give out; empty leaves roles to OpenMRS. */
 	public static Set<String> assignableRoles() {
-		List<String> values = column("select property_value from global_property where property = ?",
-		    ASSIGNABLE_ROLES_PROPERTY);
+		return rolesIn(ASSIGNABLE_ROLES_PROPERTY);
+	}
+	
+	/** The role uuids in a global property, read without flushing the session; empty when unset. */
+	public static Set<String> rolesIn(String property) {
+		List<String> values = column("select property_value from global_property where property = ?", property);
 		return parse(values.isEmpty() ? null : values.get(0));
 	}
 	
