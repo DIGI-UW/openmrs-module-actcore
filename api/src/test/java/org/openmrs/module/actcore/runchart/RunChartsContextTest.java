@@ -231,6 +231,23 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void calculate_shouldRefuseMoreThanAThousandPointsBeforeEvaluatingTheReportAndAllowAThousand() {
+		try {
+			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS), END, RunCharts.Period.DAY);
+			fail("expected the range to be refused");
+		}
+		catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains(String.valueOf(RunCharts.MOST_POINTS)));
+		}
+		saveReportOf(clinic.getUuid(), 21);
+		
+		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS - 1),
+		    END, RunCharts.Period.DAY);
+		
+		assertEquals(RunCharts.MOST_POINTS, series.get("total_registrants").size());
+	}
+	
+	@Test
 	public void calculate_shouldSayWhenNoReportHasTheConfiguredUuid() {
 		try {
 			runCharts.calculate(null, END, END, RunCharts.Period.DAY);

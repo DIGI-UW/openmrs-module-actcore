@@ -168,12 +168,16 @@ public class RunCharts {
 	
 	/**
 	 * The days the range's points are as of, earliest first: the end, then the last day of each earlier
-	 * period while it is not before the start.
+	 * period while it is not before the start. Refuses more than MOST_POINTS of them.
 	 */
 	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
 		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
 		for (LocalDate day = end; !day.isBefore(start); day = period.previous(day)) {
 			dates.addFirst(day);
+		}
+		if (dates.size() > MOST_POINTS) {
+			throw new IllegalArgumentException("The range has " + dates.size() + " points; at most " + MOST_POINTS
+			        + " can be charted, so shorten it or ask for longer periods");
 		}
 		return dates;
 	}

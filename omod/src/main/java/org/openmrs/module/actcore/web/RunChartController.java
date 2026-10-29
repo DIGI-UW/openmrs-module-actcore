@@ -78,10 +78,11 @@ public class RunChartController extends BaseRestController {
 			throw new IllegalRequestException(
 			        "points=day is for a range of up to " + RunCharts.MOST_DAILY_DAYS + " days; ask for weeks or months");
 		}
-		int count = RunCharts.pointDates(start, end, period).size();
-		if (count > RunCharts.MOST_POINTS) {
-			throw new IllegalRequestException("The range has " + count + " points; at most " + RunCharts.MOST_POINTS
-			        + " can be charted, so shorten it or ask for longer periods");
+		try {
+			RunCharts.pointDates(start, end, period);
+		}
+		catch (IllegalArgumentException e) {
+			throw new IllegalRequestException(e.getMessage());
 		}
 		Map<String, List<RunCharts.Point>> series = calculate(location(clinic), start, end, period);
 		SimpleObject metrics = new SimpleObject();
@@ -99,8 +100,8 @@ public class RunChartController extends BaseRestController {
 	}
 	
 	/**
-	 * Runs as the daemon user: the reporting module evaluates a report under Run Reports, which the
-	 * caller's Dashboard privilege need not come with.
+	 * Runs as the daemon user: loading the report definition needs Get Users (the reporting serializer
+	 * loads its creator), which the caller's Dashboard privilege need not come with.
 	 */
 	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
 	        final LocalDate end, final RunCharts.Period period) {
