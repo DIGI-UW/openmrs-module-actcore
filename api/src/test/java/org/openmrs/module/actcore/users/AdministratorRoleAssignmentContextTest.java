@@ -12,6 +12,8 @@ package org.openmrs.module.actcore.users;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -30,6 +32,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
@@ -194,6 +197,43 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		User clerk = users.createUser(newUser("zz128-held", DATA_CLERK), "Password123");
 		Context.becomeUser(instanceAdmin.getSystemId());
 		User edited = users.getUserByUuid(clerk.getUuid());
+		edited.addRole(users.getRoleByUuid(CLINICIAN));
+		
+		refused(() -> users.saveUser(edited), "in order to assign");
+	}
+	
+	@Test
+	public void letsTheInstanceAdministratorRetireAndRestoreAClinicianAndRestoresTheirOwnContext() {
+		User clinician = users.createUser(newUser("zz128-retire", CLINICIAN), "Password123");
+		Context.becomeUser(instanceAdmin.getSystemId());
+		UserContext own = Context.getUserContext();
+		
+		users.retireUser(users.getUserByUuid(clinician.getUuid()), "Left");
+		assertTrue(users.getUserByUuid(clinician.getUuid()).getRetired());
+		users.unretireUser(users.getUserByUuid(clinician.getUuid()));
+		
+		assertFalse(users.getUserByUuid(clinician.getUuid()).getRetired());
+		assertSame(own, Context.getUserContext());
+		assertFalse(Context.hasPrivilege(CLINICAL_PRIVILEGE));
+	}
+	
+	@Test
+	public void restoresTheirOwnContextWhenTheSaveIsRefused() {
+		Context.becomeUser(instanceAdmin.getSystemId());
+		UserContext own = Context.getUserContext();
+		
+		refused(() -> users.createUser(newUser("zz128-fail", CLINICIAN, DATA_CLERK), "Created123"), "in order to assign");
+		
+		assertSame(own, Context.getUserContext());
+		assertFalse(Context.hasPrivilege(CLINICAL_PRIVILEGE));
+	}
+	
+	@Test
+	public void refusesAChangeToAUserWhoseStoredRoleIsNotTheirsEvenWhenTheEditDropsIt() {
+		User clerk = users.createUser(newUser("zz128-stored", DATA_CLERK), "Password123");
+		Context.becomeUser(instanceAdmin.getSystemId());
+		User edited = users.getUserByUuid(clerk.getUuid());
+		edited.removeRole(users.getRoleByUuid(DATA_CLERK));
 		edited.addRole(users.getRoleByUuid(CLINICIAN));
 		
 		refused(() -> users.saveUser(edited), "in order to assign");

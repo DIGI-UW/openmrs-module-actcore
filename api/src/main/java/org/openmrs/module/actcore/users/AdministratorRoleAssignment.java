@@ -9,7 +9,9 @@
  */
 package org.openmrs.module.actcore.users;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -45,12 +47,15 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	/** The roles, by uuid, a global administrator may give out. */
 	public static final String GLOBAL_ROLES_PROPERTY = "actcore.users.globalAdministratorRoles";
 	
+	/** Core's retire and unretire save the user through the service itself, so they are named too. */
+	private static final List<String> SAVES = Arrays.asList("saveUser", "createUser", "retireUser", "unretireUser");
+	
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();
 		String method = invocation.getMethod().getName();
 		Object[] args = invocation.getArguments();
-		boolean saves = "saveUser".equals(method) || "createUser".equals(method);
+		boolean saves = SAVES.contains(method);
 		if (!saves || args.length == 0 || !(args[0] instanceof User) || me == null || me.isSuperUser()) {
 			return invocation.proceed();
 		}

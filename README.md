@@ -139,8 +139,8 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   user holds the instance or global administrator role and every role the saved user has, now and
   already, is in `actcore.users.instanceAdministratorRoles` or `actcore.users.globalAdministratorRoles`
   respectively, the save runs holding the privileges of those roles, on that thread only. The user is
-  still saved as the administrator. Any other save, and an administrator's own account, is left to
-  OpenMRS.
+  still saved as the administrator, and so is a retire or unretire. A role's own inherited roles come
+  with it. Any other save, and an administrator's own account, is left to OpenMRS.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
