@@ -16,9 +16,7 @@ import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
-import org.openmrs.module.actcore.reports.ReportAccess;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
-import org.openmrs.module.actcore.reports.ReportPrivileges;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -71,24 +69,11 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS);
 	}
 	
-	/**
-	 * Rebuilt services have no advice, so the report protection is put back at every refresh of the
-	 * application context, which runs {@link #started()} only for the module being started.
-	 */
-	@Override
-	public void contextRefreshed() {
-		protectReports();
-	}
-	
-	private static void protectReports() {
-		ReportPrivileges.load();
-		ReportAccess.install();
 	}
 	
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
-		protectReports();
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 		            + " of the same name.",
@@ -145,7 +130,6 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	@Override
 	public void stopped() {
-		ReportAccess.uninstall();
 		log.info("ACT Core module stopped");
 	}
 }
