@@ -226,7 +226,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			fail("expected the list to be refused");
 		}
 		catch (APIException e) {
-			assertTrue(e.getMessage(), e.getMessage().contains("cut short"));
+			assertTrue(e.getMessage(), e.getMessage().contains(RunCharts.BPG_COUNT_COLUMN));
 		}
 	}
 	

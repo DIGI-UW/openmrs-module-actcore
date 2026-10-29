@@ -61,7 +61,7 @@ public class RunCharts {
 	
 	/**
 	 * The report's count of the patients the list names: GROUP_CONCAT cuts a long list short without an
-	 * error, so a list shorter than its count is refused rather than read.
+	 * error, so a list that does not number its count is refused rather than read.
 	 */
 	static final String BPG_COUNT_COLUMN = "active_registrants_on_bpg";
 	
@@ -73,6 +73,15 @@ public class RunCharts {
 	    "active_registrants", "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
 	    "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
 	    "consultation_visits_with_intervention", "interventions_completed"));
+	
+	/** The report's columns that must hold a number in every row. */
+	private static final List<String> NUMBER_COLUMNS;
+	
+	static {
+		List<String> columns = new ArrayList<String>(COLUMNS);
+		columns.add(BPG_COUNT_COLUMN);
+		NUMBER_COLUMNS = Collections.unmodifiableList(columns);
+	}
 	
 	/** The metrics ACT 2.0 charted as a percent, of the column given, as dashboard_query.py does. */
 	static final Map<String, String> PERCENT_OF;
@@ -211,13 +220,10 @@ public class RunCharts {
 			if (day == null) {
 				throw new APIException("The run chart report has a row with no " + DATE_COLUMN);
 			}
-			for (String column : COLUMNS) {
+			for (String column : NUMBER_COLUMNS) {
 				if (!(row.getColumnValue(column) instanceof Number)) {
 					throw new APIException("The run chart report has no number in its column " + column);
 				}
-			}
-			if (!(row.getColumnValue(BPG_COUNT_COLUMN) instanceof Number)) {
-				throw new APIException("The run chart report has no number in its column " + BPG_COUNT_COLUMN);
 			}
 			rows.put(toLocalDate(day), row);
 		}
@@ -264,8 +270,8 @@ public class RunCharts {
 			}
 		}
 		if (ids.size() != number(row, BPG_COUNT_COLUMN)) {
-			throw new APIException("The run chart report lists " + ids.size() + " BPG patients in a row that counts "
-			        + number(row, BPG_COUNT_COLUMN) + ", so the list was cut short");
+			throw new APIException("The run chart report lists " + ids.size() + " BPG patients in a row whose "
+			        + BPG_COUNT_COLUMN + " is " + number(row, BPG_COUNT_COLUMN) + "; GROUP_CONCAT cuts a long list short");
 		}
 		return ids;
 	}
