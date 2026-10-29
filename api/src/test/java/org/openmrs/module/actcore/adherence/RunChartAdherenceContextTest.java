@@ -86,4 +86,16 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		assertNull(adherent.get(1).value);
 		assertEquals(0, rows().size());
 	}
+	
+	@Test
+	public void calculate_shouldCountAnAdherenceOfExactlyEightyPercentAsAdherent() {
+		prescribe(encounter(7, 60), oralPenicillin, 60, null);
+		estimate(encounter(7, 15), 80.0);
+		
+		RunCharts.Point today = new RunCharts().calculate(null, TODAY, TODAY, RunCharts.Period.DAY)
+		        .get("active_registrants_adherent").get(0);
+		
+		assertEquals(Long.valueOf(1), today.count);
+		assertEquals(Double.valueOf(100), today.value);
+	}
 }

@@ -144,7 +144,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Long.valueOf(19), active.get(0).count);
 		assertNull(active.get(0).total);
 		assertEquals(Double.valueOf(21), active.get(2).value);
-		// 5 of 21 active seen in 7 months; 1 of the clinic's 4 visits with an echo, and of none for every clinic.
+		// 5 of 21 active seen in 7 months; 1 of the clinic's 4 visits with an echo, none for every clinic.
 		assertEquals(Double.valueOf(23.8), series.get("active_registrants_seen_last_7_months").get(2).value);
 		assertEquals(Long.valueOf(5), series.get("active_registrants_seen_last_7_months").get(2).count);
 		assertEquals(Long.valueOf(21), series.get("active_registrants_seen_last_7_months").get(2).total);
@@ -172,7 +172,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void calculate_shouldGiveNoAdherentWithNoBpgPatientsListedAndWriteNothing() {
+	public void calculate_shouldGiveNoAdherentWithNoBpgPatientsListed() {
 		saveReportOf(clinic.getUuid(), 21);
 		
 		RunCharts.Point adherent = runCharts.calculate(clinic, END, END, RunCharts.Period.DAY)

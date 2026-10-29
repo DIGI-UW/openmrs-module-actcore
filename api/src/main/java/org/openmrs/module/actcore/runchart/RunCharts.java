@@ -39,9 +39,8 @@ import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 
 /**
- * ACT 2.0's run charts, calculated when asked: the report actcore.runCharts.report names gives each
- * clinic's metrics as of every point of a range in one pass, and the adherent count of each point
- * is replayed from the patients' dose histories to that day. Nothing is stored.
+ * ACT 2.0's run charts, calculated when asked and never stored: one pass of the report
+ * actcore.runCharts.report names, and a replay of BPG patients' histories to each point's day.
  */
 public class RunCharts {
 	

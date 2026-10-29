@@ -176,8 +176,7 @@ final class AdherenceReplay {
 			next = wanted.hasNext() ? wanted.next() : null;
 		}
 		
-		// The state on a save day is that day's alone, so the walk starts at the last save on or before the first
-		// day wanted, which the loop above has brought to or past the first save.
+		// A save day's state needs nothing earlier, so the walk starts at the last save at or before next.
 		LocalDate computed = null;
 		Stored stored = null;
 		for (LocalDate day = saves.floor(next); next != null && !day.isAfter(last); day = day.plusDays(1)) {

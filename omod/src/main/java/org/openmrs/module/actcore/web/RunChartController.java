@@ -37,9 +37,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The run chart metrics over a date range in days, weeks or months, each point calculated when
- * asked from the records as they are now, with the median of each metric's points, of a clinic or
- * of every clinic.
+ * The run chart metrics of a clinic or of every clinic over a range in days, weeks or months, each
+ * point calculated when asked from the records as they are now, with each metric's median.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
@@ -49,9 +48,8 @@ public class RunChartController extends BaseRestController {
 	public static final String READ_PRIVILEGE = "App: act.dashboard";
 	
 	/**
-	 * The year to today in weeks unless the request says day or month, of a clinic's rows or, with none
-	 * given, of every clinic; ACT limits the clinics a user is offered on the client, not here. Every
-	 * metric is answered under metrics, and the one named, if any, under points and median too.
+	 * The year to today in weeks unless the request says day or month, of a clinic or of every clinic;
+	 * every metric under metrics, and the named one, if any, under points and median too.
 	 */
 	@RequestMapping(value = "/runchart", method = RequestMethod.GET)
 	@ResponseBody
@@ -101,8 +99,8 @@ public class RunChartController extends BaseRestController {
 	}
 	
 	/**
-	 * Runs as the daemon user: the report reads every patient and is held to its own report privilege,
-	 * which the caller's Dashboard privilege need not come with.
+	 * Runs as the daemon user: the reporting module evaluates a report under Run Reports, which the
+	 * caller's Dashboard privilege need not come with.
 	 */
 	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
 	        final LocalDate end, final RunCharts.Period period) {

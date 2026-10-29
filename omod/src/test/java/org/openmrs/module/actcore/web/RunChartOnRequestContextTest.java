@@ -47,9 +47,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The run chart as the Dashboard reads it: each point calculated from the report when asked.
- * Outside a test transaction, so the daemon thread that evaluates the report sees the stub report
- * and the property naming it.
+ * The run chart as the Dashboard reads it, outside a test transaction so the daemon thread that
+ * evaluates the report sees the stub report and the property naming it.
  */
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveTest {
