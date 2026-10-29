@@ -11,8 +11,10 @@ package org.openmrs.module.actcore.web;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
@@ -22,8 +24,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
-import org.openmrs.module.actcore.runchart.RunChartRuns;
-import org.openmrs.module.actcore.runchart.RunChartSnapshotTask;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -37,8 +37,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * A run chart metric over a date range in days, weeks or months, with the median of its points, of
- * a clinic or of every clinic, and the snapshot taken on demand.
+ * The run chart metrics of a clinic or of every clinic over a range in days, weeks or months, each
+ * point calculated when asked from the records as they are now, with each metric's median.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
@@ -47,26 +47,19 @@ public class RunChartController extends BaseRestController {
 	/** The Dashboard's own privilege in the distribution, which the run charts sit on. */
 	public static final String READ_PRIVILEGE = "App: act.dashboard";
 	
-	private static final int DEFAULT_RUNS = 30;
-	
-	private static final int MAX_RUNS = 100;
-	
-	/** Taking the snapshot now is the flag refresh's privilege, the instance administrator's. */
-	public static final String RUN_PRIVILEGE = RefreshController.PRIVILEGE;
-	
 	/**
-	 * The year to today in weeks unless the request says day or month, of a clinic's rows or, with none
-	 * given, of every clinic; ACT limits the clinics a user is offered on the client, not here.
+	 * The year to today in weeks unless the request says day or month, of a clinic or of every clinic;
+	 * every metric under metrics, and the named one, if any, under points and median too.
 	 */
 	@RequestMapping(value = "/runchart", method = RequestMethod.GET)
 	@ResponseBody
-	public SimpleObject get(@RequestParam("metric") String metric,
+	public SimpleObject get(@RequestParam(value = "metric", required = false) String metric,
 	        @RequestParam(value = "clinic", required = false) String clinic,
 	        @RequestParam(value = "startDate", required = false) String startDate,
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "points", required = false) String points) {
 		requirePrivilege(READ_PRIVILEGE);
-		if (!RunCharts.METRICS.contains(metric)) {
+		if (StringUtils.isNotBlank(metric) && !RunCharts.METRICS.contains(metric)) {
 			throw new IllegalRequestException("metric must be one of " + RunCharts.METRICS);
 		}
 		LocalDate end = date("endDate", endDate, LocalDate.now());
@@ -81,38 +74,49 @@ public class RunChartController extends BaseRestController {
 		catch (IllegalArgumentException e) {
 			throw new IllegalRequestException(e.getMessage());
 		}
-		RunCharts runCharts = new RunCharts();
-		List<RunCharts.Point> series = runCharts.series(metric, location(clinic), start, end, period);
-		List<SimpleObject> values = new ArrayList<SimpleObject>();
-		for (RunCharts.Point point : series) {
-			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value)
-			        .add("count", point.count).add("total", point.total));
+		if (period == RunCharts.Period.DAY && ChronoUnit.DAYS.between(start, end) > RunCharts.MOST_DAILY_DAYS) {
+			throw new IllegalRequestException(
+			        "points=day is for a range of up to " + RunCharts.MOST_DAILY_DAYS + " days; ask for weeks or months");
 		}
-		return new SimpleObject().add("metric", metric).add("startDate", start.toString()).add("endDate", end.toString())
-		        .add("period", period.name().toLowerCase()).add("points", values).add("median", RunCharts.median(series))
-		        .add("lastSnapshot", lastSnapshot(runCharts));
+		try {
+			RunCharts.pointDates(start, end, period);
+		}
+		catch (IllegalArgumentException e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
+		Map<String, List<RunCharts.Point>> series = calculate(location(clinic), start, end, period);
+		SimpleObject metrics = new SimpleObject();
+		for (Map.Entry<String, List<RunCharts.Point>> entry : series.entrySet()) {
+			metrics.add(entry.getKey(), new SimpleObject().add("points", describe(entry.getValue())).add("median",
+			    RunCharts.median(entry.getValue())));
+		}
+		SimpleObject response = new SimpleObject().add("startDate", start.toString()).add("endDate", end.toString())
+		        .add("period", period.name().toLowerCase());
+		if (StringUtils.isNotBlank(metric)) {
+			response.add("metric", metric).add("points", describe(series.get(metric))).add("median",
+			    RunCharts.median(series.get(metric)));
+		}
+		return response.add("metrics", metrics);
 	}
 	
 	/**
-	 * Runs as the scheduler's daemon user, as the daily run does: the report reads every patient, which
-	 * the caller's own privileges need not allow.
+	 * Runs as the daemon user: loading the report definition needs Get Users (the reporting serializer
+	 * loads its creator), which the caller's Dashboard privilege need not come with.
 	 */
-	@RequestMapping(value = "/runchart", method = RequestMethod.POST)
-	@ResponseBody
-	public SimpleObject snapshot() {
-		requirePrivilege(RUN_PRIVILEGE);
+	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
+	        final LocalDate end, final RunCharts.Period period) {
 		DaemonToken token = ActCoreActivator.getDaemonToken();
 		if (token == null) {
-			throw new APIException("ACT Core has not started, so it cannot take the run chart snapshot");
+			throw new APIException("ACT Core has not started, so it cannot calculate the run chart");
 		}
-		final RunChartRuns.Run[] ran = new RunChartRuns.Run[1];
+		final List<Map<String, List<RunCharts.Point>>> calculated = new ArrayList<Map<String, List<RunCharts.Point>>>();
 		final RuntimeException[] failure = new RuntimeException[1];
 		Daemon.runInDaemonThreadAndWait(new Runnable() {
 			
 			@Override
 			public void run() {
 				try {
-					ran[0] = new RunChartSnapshotTask().runIfIdle(RunChartRuns.MANUAL);
+					calculated.add(new RunCharts().calculate(clinic, start, end, period));
 				}
 				catch (RuntimeException e) {
 					failure[0] = e;
@@ -120,44 +124,18 @@ public class RunChartController extends BaseRestController {
 			}
 		}, token);
 		if (failure[0] != null) {
-			throw new APIException("The run chart snapshot failed", failure[0]);
+			throw new APIException("The run chart could not be calculated", failure[0]);
 		}
-		return new SimpleObject().add("snapshotTaken", ran[0] != null).add("rows", ran[0] == null ? null : ran[0].rows)
-		        .add("clinics", ran[0] == null ? null : ran[0].clinics).add("lastSnapshot", lastSnapshot(new RunCharts()));
+		return calculated.get(0);
 	}
 	
-	/**
-	 * The latest runs of the snapshot, newest first, taken or failed with the reason, the latest that
-	 * took a snapshot, and whether one is running now.
-	 */
-	@RequestMapping(value = "/runchart/runs", method = RequestMethod.GET)
-	@ResponseBody
-	public SimpleObject runs(@RequestParam(value = "limit", required = false) Integer limit) {
-		requirePrivilege(RUN_PRIVILEGE);
-		int count = limit == null ? DEFAULT_RUNS : limit;
-		if (count < 1 || count > MAX_RUNS) {
-			throw new IllegalRequestException("limit must be from 1 to " + MAX_RUNS);
+	private static List<SimpleObject> describe(List<RunCharts.Point> points) {
+		List<SimpleObject> values = new ArrayList<SimpleObject>();
+		for (RunCharts.Point point : points) {
+			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value)
+			        .add("count", point.count).add("total", point.total));
 		}
-		RunChartRuns runs = new RunChartRuns();
-		List<SimpleObject> latest = new ArrayList<SimpleObject>();
-		for (RunChartRuns.Run run : runs.latest(count)) {
-			latest.add(describe(run));
-		}
-		RunChartRuns.Run lastTaken = runs.lastTaken();
-		return new SimpleObject().add("running", RunChartSnapshotTask.isRunning()).add("runs", latest).add("lastTaken",
-		    lastTaken == null ? null : describe(lastTaken));
-	}
-	
-	private static SimpleObject describe(RunChartRuns.Run run) {
-		return new SimpleObject().add("runDate", run.runDate.toString()).add("finished", run.finished.toInstant().toString())
-		        .add("durationMillis", run.durationMillis).add("source", run.source)
-		        .add("status", run.taken ? "taken" : "failed").add("rows", run.rows).add("clinics", run.clinics)
-		        .add("reason", run.reason);
-	}
-	
-	private static String lastSnapshot(RunCharts runCharts) {
-		LocalDate last = runCharts.lastSnapshot();
-		return last == null ? null : last.toString();
+		return values;
 	}
 	
 	private static LocalDate date(String name, String value, LocalDate fallback) {
