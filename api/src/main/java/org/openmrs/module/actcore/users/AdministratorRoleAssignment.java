@@ -28,6 +28,7 @@ import org.openmrs.api.context.Credentials;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.util.PrivilegeConstants;
+import org.openmrs.util.RoleConstants;
 
 /**
  * Lets the instance and global administrators give the roles configured for them, which OpenMRS
@@ -75,19 +76,28 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	
 	/**
 	 * Whether the administrator may give out every role the user has, now or already, and may add or
-	 * edit users; anyone else, and an administrator's own account, is left to OpenMRS.
+	 * edit users; anyone else, an administrator's own account and System Developer are left to OpenMRS.
 	 */
 	private static boolean mayGiveTheRolesOf(User me, User user) {
 		Set<String> grantable = grantableBy(me);
 		boolean isNew = user.getUserId() == null;
 		boolean mayAdminister = Context.hasPrivilege(isNew ? PrivilegeConstants.ADD_USERS : PrivilegeConstants.EDIT_USERS);
 		boolean isMe = me.getUserId() != null && me.getUserId().equals(user.getUserId());
-		if (grantable.isEmpty() || !mayAdminister || isMe) {
+		if (grantable.isEmpty() || !mayAdminister || isMe || holdsSuperUserRole(user)) {
 			return false;
 		}
 		Set<String> roles = new HashSet<String>(UserClinics.roleUuids(user));
 		roles.addAll(UserClinics.storedRoles(user.getUserId()));
 		return grantable.containsAll(roles);
+	}
+	
+	private static boolean holdsSuperUserRole(User user) {
+		for (Role role : user.getAllRoles()) {
+			if (RoleConstants.SUPERUSER.equals(role.getRole())) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	/** The roles the administrator may give out, from the property of each administrator role held. */

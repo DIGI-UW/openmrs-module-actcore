@@ -140,7 +140,10 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   already, is in `actcore.users.instanceAdministratorRoles` or `actcore.users.globalAdministratorRoles`
   respectively, the save runs holding the privileges of those roles, on that thread only. The user is
   still saved as the administrator, and so is a retire or unretire. A role's own inherited roles come
-  with it. Any other save, and an administrator's own account, is left to OpenMRS.
+  with it, and a holder of both administrator roles may give the roles of either list. Any other save,
+  an administrator's own account and any save that gives System Developer are left to OpenMRS. The
+  defaults follow ACT 2.0's sets, which had no Data Clerk, and are a placeholder pending the decision
+  on that role, not a ruling.
 - **Report descriptors at startup.** The reporting module reads
   `reporting.loadReportsFromConfigurationAtStartup` while it starts, before Initializer sets the
   distribution's value, so on a fresh database it loads no descriptors. This module requires reporting
@@ -374,8 +377,8 @@ stopped, this module will not start on the next boot either; start Initializer f
 | `actcore.adherence.*` | the ACT forms' concepts | The concepts the adherence refresh reads, the regimen intervals and prescription durations as `uuid:days` pairs, and the regimen answers that prescribe nothing (None); see `config.xml` |
 | `actcore.consultation.*` | the RHD Consultation Visit's Next Consultation Time Amount and CIEL Time Period (1732) | The two questions the next cardiology visit reads; the period's answers must be CIEL days, weeks, months or years (1072, 1073, 1074, 1734); see `config.xml` |
 | `actcore.users.siteAdministratorRoles` | ACT's Community Clinician, Data Clerk and Clinician | The roles, by uuid, an administrator limited to their clinics may give a user; empty leaves roles to OpenMRS's own rule |
-| `actcore.users.instanceAdministratorRoles` | ACT's Site Administrator, Community Clinician and Clinician | The roles, by uuid, an instance administrator may give a user; empty leaves roles to OpenMRS's own rule |
-| `actcore.users.globalAdministratorRoles` | ACT's Global, Instance and Site Administrator, Community Clinician and Clinician | The roles, by uuid, a global administrator may give a user; empty leaves roles to OpenMRS's own rule |
+| `actcore.users.instanceAdministratorRoles` | ACT's Site Administrator, Community Clinician and Clinician | The roles, by uuid, an instance administrator may give a user; empty leaves roles to OpenMRS's own rule; the default follows ACT 2.0's sets, which had no Data Clerk, and is a placeholder pending that decision, not a ruling |
+| `actcore.users.globalAdministratorRoles` | ACT's Global, Instance and Site Administrator, Community Clinician and Clinician | The roles, by uuid, a global administrator may give a user; empty leaves roles to OpenMRS's own rule; the default follows ACT 2.0's sets, which had no Data Clerk, and is a placeholder pending that decision, not a ruling |
 | `actcore.download.identifyingIdentifierTypes` | the National ID, External Patient ID and Alternate ID | The identifier types a download leaves out without identifiers, and gives as columns with them; the ACT ID is the preferred identifier of any other type |
 | `actcore.download.identifyingAttributeTypes` | the primary and secondary phones, their owners and the consent person | The person attribute types a download gives as columns only with identifiers |
 | `actcore.download.identifyingConcepts` | the RHD Patient Information form's Home Address, Village/Area of Residence, School Name, Additional information to help locate patient and Relocation Area | The questions a download gives only with identifiers, so never in a research download; without, it leaves them out and lists their labels in `withheld` |

@@ -34,8 +34,10 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
+import org.openmrs.util.RoleConstants;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,8 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 	private static final String DATA_CLERK = "61e9bb28-11df-4df1-965d-11ef928d5239";
 	
 	private static final String SITE_ADMINISTRATOR = "a1295a20-7273-4339-b5df-2f8a3a841c77";
+	
+	private static final String CLINIC = "aaaaaaaa-0000-4000-8000-00000000000a";
 	
 	private static final String CLINICAL_PRIVILEGE = "Task: act.test.clinical";
 	
@@ -119,6 +123,7 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		}
 		Context.getAdministrationService().executeSQL("delete from role_role where parent_role like 'Test %'", false);
 		Context.getAdministrationService().executeSQL("delete from role_privilege where role like 'Test %'", false);
+		Context.getAdministrationService().executeSQL("delete from role_privilege where role = 'System Developer'", false);
 		for (String name : createdRoles) {
 			Context.getAdministrationService().executeSQL("delete from role where role = '" + name + "'", false);
 		}
@@ -226,6 +231,62 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		
 		assertSame(own, Context.getUserContext());
 		assertFalse(Context.hasPrivilege(CLINICAL_PRIVILEGE));
+	}
+	
+	@Test
+	public void restoresTheirOwnContextWhenTheSaveFailsWhileTheRolesAreHeld() {
+		Context.becomeUser(instanceAdmin.getSystemId());
+		UserContext own = Context.getUserContext();
+		
+		try {
+			users.createUser(newUser("zz128-short", CLINICIAN), "short");
+			fail("Expected the password to be refused");
+		}
+		catch (APIException e) {
+			assertFalse(e.getMessage().contains("in order to assign"));
+		}
+		
+		assertSame(own, Context.getUserContext());
+		assertFalse(Context.hasPrivilege(CLINICAL_PRIVILEGE));
+	}
+	
+	@Test
+	public void refusesToLendSystemDeveloperEvenWhenTheListNamesIt() {
+		Role developer = users.getRole(RoleConstants.SUPERUSER);
+		Privilege assign = users.savePrivilege(new Privilege("Assign System Developer Role", "Assign"));
+		createdPrivileges.add(assign.getPrivilege());
+		developer.addPrivilege(assign);
+		users.saveRole(developer);
+		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, developer.getUuid() + "," + CLINICIAN);
+		Context.becomeUser(instanceAdmin.getSystemId());
+		String developerUuid = developer.getUuid();
+		
+		refused(() -> users.createUser(newUser("zz128-dev", developerUuid), "Created123"), "must have the role");
+	}
+	
+	@Test
+	public void leavesALimitedSiteAdministratorToClinicScopingAndElevatesAnInstanceAdministrator() {
+		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, SITE_ADMINISTRATOR + "," + DATA_CLERK);
+		users.setUserProperty(siteAdmin, UserClinics.PROPERTY, CLINIC);
+		Context.removeAdvice(UserService.class, advice);
+		ClinicScopedUserAdministration clinics = new ClinicScopedUserAdministration();
+		Context.addAdvice(UserService.class, clinics);
+		Context.addAdvice(UserService.class, advice);
+		try {
+			Context.becomeUser(siteAdmin.getSystemId());
+			User clerk = newUser("zz128-bylimited", DATA_CLERK);
+			clerk.setUserProperty(UserClinics.PROPERTY, CLINIC);
+			refused(() -> users.createUser(clerk, "Created123"), "in order to assign");
+			
+			Context.logout();
+			authenticate();
+			Context.becomeUser(instanceAdmin.getSystemId());
+			User created = users.createUser(newUser("zz128-byinstance", DATA_CLERK), "Created123");
+			assertTrue(users.getUserByUuid(created.getUuid()).hasRole("Test Data Clerk"));
+		}
+		finally {
+			Context.removeAdvice(UserService.class, clinics);
+		}
 	}
 	
 	@Test
