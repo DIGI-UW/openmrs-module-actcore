@@ -334,7 +334,7 @@ follow-up) have priority `RHD High` and show red; missing data flags have priori
 
 ## Requirements
 
-OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0, reporting 2.1.0.
+OpenMRS platform 2.4.0 or later, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0, reporting 2.1.0 or later. The per-report privilege replaces View Reports and Run Reports for a report only on reporting 2.2.0, where they guard the services.
 
 ## Installing and running
 
@@ -381,6 +381,11 @@ Listing the research studies needs Get Programs. Creating and renaming them need
 `Task: act.manageStudies`, which the distribution creates; the module then saves the study's concept and
 program with Manage Concepts and Manage Programs on the caller's behalf, so grant it only to roles you
 would let add concepts and programs.
+
+Looking up, listing and evaluating an ACT report needs its `Task: act.report.*` privilege, which the
+distribution grants to the roles whose screens use it; View Reports and Run Reports are not needed for
+those. Queuing a run and reading its output also need Run Reports. A user limited to their clinics sees
+only those clinics' rows.
 
 A download needs `Task: act.downloadData`, or `Task: act.downloadResearchData` for a research download
 only, plus Get Forms, Get Concepts, Get Encounters, Get Observations and Get Patients. With
