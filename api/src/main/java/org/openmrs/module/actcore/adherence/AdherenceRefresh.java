@@ -13,6 +13,8 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -181,7 +183,7 @@ public class AdherenceRefresh {
 	private int refresh(AdministrationService admin, LocalDate today) {
 		List<String> rows = new ArrayList<String>();
 		List<String> timings = new ArrayList<String>();
-		compute(read(admin, null), today, rows, timings);
+		compute(read(admin, (Integer) null), today, rows, timings);
 		rewrite(admin, "", rows, timings);
 		return rows.size();
 	}
@@ -213,17 +215,25 @@ public class AdherenceRefresh {
 	
 	/** Every patient's history, or only that of the patient given. */
 	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
+		return read(admin, patientId == null ? null : Collections.singletonList(patientId));
+	}
+	
+	/** The histories of the patients given, or of every patient when null. */
+	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Collection<Integer> patientIds) {
 		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
+		if (patientIds != null && patientIds.isEmpty()) {
+			return histories;
+		}
 		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS),
-		    only("g.person_id", patientId), histories);
-		readInjections(admin, only("o.person_id", patientId), histories);
-		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), only("e.patient_id", patientId), histories);
-		readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), only("o.person_id", patientId), histories);
+		    only("g.person_id", patientIds), histories);
+		readInjections(admin, only("o.person_id", patientIds), histories);
+		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), only("e.patient_id", patientIds), histories);
+		readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), only("o.person_id", patientIds), histories);
 		return histories;
 	}
 	
-	private static String only(String column, Integer patientId) {
-		return patientId == null ? "" : " and " + column + " = " + patientId;
+	private static String only(String column, Collection<Integer> patientIds) {
+		return patientIds == null ? "" : " and " + column + " in (" + StringUtils.join(patientIds, ", ") + ")";
 	}
 	
 	/**

@@ -341,4 +341,24 @@
       <column name="month"/>
     </createIndex>
   </changeSet>
+  <changeSet id="actcore-2026-10-29-drop-run-chart-record" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <tableExists tableName="actcore_run_chart_record"/>
+    </preConditions>
+    <comment>Run charts are calculated when viewed, so the nightly snapshot's rows go</comment>
+    <dropTable tableName="actcore_run_chart_record"/>
+  </changeSet>
+  <changeSet id="actcore-2026-10-29-drop-run-chart-run" author="UW DIGI">
+    <preConditions onFail="MARK_RAN">
+      <tableExists tableName="actcore_run_chart_run"/>
+    </preConditions>
+    <comment>The snapshot's run log goes with the snapshot</comment>
+    <dropTable tableName="actcore_run_chart_run"/>
+  </changeSet>
+  <changeSet id="actcore-2026-10-29-drop-run-chart-task" author="UW DIGI">
+    <comment>The scheduled snapshot task goes with the snapshot</comment>
+    <delete tableName="scheduler_task_config">
+      <where>name = 'RHD Run Chart Snapshot'</where>
+    </delete>
+  </changeSet>
 </databaseChangeLog>

@@ -162,4 +162,35 @@ public class AdherenceReplayTest {
 		
 		assertNull(AdherenceReplay.replay(h, TODAY));
 	}
+	
+	@Test
+	public void replayOn_shouldGiveEachDayTheRowAReplayToThatDayGives() {
+		prescribed(60, 60, Q21, Q21_ID);
+		h.injections.add(ago(60));
+		h.injections.add(ago(39));
+		h.consultations.add(ago(60));
+		java.util.TreeSet<LocalDate> days = new java.util.TreeSet<LocalDate>();
+		for (int daysAgo : new int[] { 70, 60, 45, 35, 18, 10, 0 }) {
+			days.add(ago(daysAgo));
+		}
+		
+		java.util.Map<LocalDate, AdherenceReplay.Row> rows = AdherenceReplay.replayOn(h, days, null);
+		
+		assertEquals(days, rows.keySet());
+		for (LocalDate day : days) {
+			AdherenceReplay.Row once = AdherenceReplay.replay(h, day);
+			AdherenceReplay.Row walked = rows.get(day);
+			if (once == null) {
+				assertNull(walked);
+			} else {
+				assertEquals(once.adherence, walked.adherence);
+				assertEquals(once.lastGiven, walked.lastGiven);
+				assertEquals(once.nextDue, walked.nextDue);
+				assertEquals(once.interval, walked.interval);
+			}
+		}
+		assertNull(rows.get(ago(70)));
+		assertEquals(Double.valueOf(1), rows.get(ago(35)).adherence);
+	}
+	
 }

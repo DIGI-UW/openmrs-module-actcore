@@ -18,14 +18,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
-import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.adherence.AdherenceSeries;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
@@ -33,29 +37,41 @@ import org.openmrs.module.reporting.evaluation.EvaluationException;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
-import org.openmrs.util.PrivilegeConstants;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * ACT 2.0's run charts: each clinic's metrics, snapshotted daily into actcore_run_chart_record from
- * the report actcore.runCharts.report names, and read back as a series over a date range.
+ * ACT 2.0's run charts, calculated when asked: the report actcore.runCharts.report names gives each
+ * clinic's metrics as of every point of a range in one pass, and the adherent count of each point
+ * is replayed from the patients' dose histories to that day. Nothing is stored.
  */
 public class RunCharts {
 	
-	public static final String TABLE = "actcore_run_chart_record";
-	
 	public static final String GP_REPORT = "actcore.runCharts.report";
 	
-	/** The report's column, and the table's, naming the clinic; empty for the row of every clinic. */
+	/** The report's column naming the clinic; empty for the row of every clinic. */
 	static final String CLINIC_COLUMN = "clinic_uuid";
 	
-	/** ACT 2.0's runchart_record columns, which the report gives and the table keeps. */
+	/** The report's column naming the day a row is as of. */
+	static final String DATE_COLUMN = "point_date";
+	
+	/**
+	 * The report's column listing, separated by commas, the active patients on an in-force BPG regimen
+	 * as of the day, whose adherence the point replays.
+	 */
+	static final String BPG_COLUMN = "bpg_patient_ids";
+	
+	/**
+	 * GROUP_CONCAT cuts a longer list short without an error, so one this long is refused rather than
+	 * read; MariaDB's default limit is 1,048,576 characters.
+	 */
+	static final int LONGEST_BPG_LIST = 1000000;
+	
+	/** The metric the report does not give: counted here from the BPG list and the replay. */
+	static final String ADHERENT = "active_registrants_adherent";
+	
+	/** ACT 2.0's runchart_record columns the report gives as numbers. */
 	public static final List<String> COLUMNS = Collections.unmodifiableList(Arrays.asList("total_registrants",
 	    "active_registrants", "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
-	    "active_registrants_adherent", "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
+	    "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
 	    "consultation_visits_with_intervention", "interventions_completed"));
 	
 	/** The metrics ACT 2.0 charted as a percent, of the column given, as dashboard_query.py does. */
@@ -65,19 +81,25 @@ public class RunCharts {
 		Map<String, String> percentOf = new HashMap<String, String>();
 		percentOf.put("active_registrants_seen_last_7_months", "active_registrants");
 		percentOf.put("active_registrants_prescribed_prophylaxis", "active_registrants");
-		percentOf.put("active_registrants_adherent", "active_registrants");
+		percentOf.put(ADHERENT, "active_registrants");
 		percentOf.put("consultation_visits_with_echocardiogram_resulted", "consultation_visit_total");
 		percentOf.put("consultation_visits_with_intervention", "consultation_visit_total");
 		PERCENT_OF = Collections.unmodifiableMap(percentOf);
 	}
 	
 	/** ACT 2.0's eight run chart metrics; consultation_visit_total is only a denominator. */
-	public static final List<String> METRICS = Collections.unmodifiableList(Arrays.asList("total_registrants",
-	    "active_registrants", "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
-	    "active_registrants_adherent", "consultation_visits_with_echocardiogram_resulted",
-	    "consultation_visits_with_intervention", "interventions_completed"));
+	public static final List<String> METRICS = Collections.unmodifiableList(
+	    Arrays.asList("total_registrants", "active_registrants", "active_registrants_seen_last_7_months",
+	        "active_registrants_prescribed_prophylaxis", ADHERENT, "consultation_visits_with_echocardiogram_resulted",
+	        "consultation_visits_with_intervention", "interventions_completed"));
 	
-	/** How the daily snapshots are grouped into points: a week starts on Monday. */
+	/** The most points one request calculates; MariaDB stops a recursive query at 1000 iterations. */
+	public static final int MOST_POINTS = 1000;
+	
+	/** The longest range, in days, charted in daily points. */
+	public static final int MOST_DAILY_DAYS = 92;
+	
+	/** How a range is cut into points: each point is the figure as of the last day of its period. */
 	public enum Period {
 		
 		DAY,
@@ -97,30 +119,31 @@ public class RunCharts {
 			throw new IllegalArgumentException("points must be day, week or month");
 		}
 		
-		LocalDate startOf(LocalDate day) {
+		/** The last day of the period before the one holding the day, as the report's SQL steps. */
+		LocalDate previous(LocalDate day) {
 			switch (this) {
 				case WEEK:
-					return day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+					return day.with(TemporalAdjusters.previous(DayOfWeek.SUNDAY));
 				case MONTH:
-					return day.withDayOfMonth(1);
+					return day.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth());
 				default:
-					return day;
+					return day.minusDays(1);
 			}
 		}
 	}
 	
 	public static class Point {
 		
-		/** The period's first day, which may precede the range's start. */
+		/** The day the figure is as of: the period's last day, or the range's end for the last period. */
 		public final LocalDate date;
 		
 		/** The metric's total, or its percent rounded to one decimal; null for a percent of none. */
 		public final Double value;
 		
-		/** The numerator summed over the period's days; for a count, its value. */
+		/** A count's value, or a percent's numerator. */
 		public final Long count;
 		
-		/** The denominator summed over the period's days; null for a count. */
+		/** A percent's denominator; null for a count. */
 		public final Long total;
 		
 		Point(LocalDate date, Double value) {
@@ -136,41 +159,119 @@ public class RunCharts {
 	}
 	
 	/**
-	 * Evaluates the report as of the day and replaces that day's rows with its rows, so a second run on
-	 * one day takes the place of the first, in one transaction. Returns how many rows it wrote.
+	 * The days the range's points are as of, earliest first: the end, then the last day of each earlier
+	 * period while it is not before the start.
 	 */
-	public int snapshot(LocalDate day) {
-		final List<String> values = new ArrayList<String>();
-		for (DataSetRow row : evaluate(day)) {
-			values.add(values(day, row));
+	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
+		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
+		for (LocalDate day = end; !day.isBefore(start); day = period.previous(day)) {
+			dates.addFirst(day);
 		}
-		if (values.isEmpty()) {
-			throw new APIException("The run chart report has no rows for " + day + ", so the day's snapshot is kept");
-		}
-		final String date = "'" + Date.valueOf(day) + "'";
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			final AdministrationService admin = Context.getAdministrationService();
-			PlatformTransactionManager transactions = Context.getRegisteredComponent("transactionManager",
-			    PlatformTransactionManager.class);
-			new TransactionTemplate(transactions).execute(new TransactionCallbackWithoutResult() {
-				
-				@Override
-				protected void doInTransactionWithoutResult(TransactionStatus status) {
-					admin.executeSQL("delete from " + TABLE + " where record_date = " + date, false);
-					admin.executeSQL("insert into " + TABLE + " (record_date, location_id, "
-					        + StringUtils.join(COLUMNS, ", ") + ", date_created) values " + StringUtils.join(values, ", "),
-					    false);
-				}
-			});
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
-		return values.size();
+		return dates;
 	}
 	
-	private DataSet evaluate(LocalDate day) {
+	/**
+	 * Every metric in points of the period over the range, of a clinic or of every clinic when it is
+	 * null, from one evaluation of the report. A day the report gives no row for counts nobody.
+	 */
+	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
+		List<LocalDate> days = pointDates(start, end, period);
+		Map<LocalDate, DataSetRow> rows = rowsOf(clinic, start, end, period);
+		Map<LocalDate, Long> adherent = adherentOf(rows, days);
+		Map<String, List<Point>> series = new LinkedHashMap<String, List<Point>>();
+		for (String metric : METRICS) {
+			String denominator = PERCENT_OF.get(metric);
+			List<Point> points = new ArrayList<Point>();
+			for (LocalDate day : days) {
+				DataSetRow row = rows.get(day);
+				long numerator = ADHERENT.equals(metric) ? adherent.get(day) : number(row, metric);
+				if (denominator == null) {
+					points.add(new Point(day, Double.valueOf(numerator), Long.valueOf(numerator), null));
+				} else {
+					long total = number(row, denominator);
+					Double value = total == 0 ? null : Double.valueOf(Math.round(1000.0 * numerator / total) / 10.0);
+					points.add(new Point(day, value, Long.valueOf(numerator), Long.valueOf(total)));
+				}
+			}
+			series.put(metric, points);
+		}
+		return series;
+	}
+	
+	/** The report's rows of the clinic, or of every clinic, by the day each is as of. */
+	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period) {
+		String wanted = clinic == null ? "" : clinic.getUuid();
+		Map<LocalDate, DataSetRow> rows = new HashMap<LocalDate, DataSetRow>();
+		for (DataSetRow row : evaluate(start, end, period)) {
+			Object named = row.getColumnValue(CLINIC_COLUMN);
+			if (!wanted.equals(named == null ? "" : named.toString())) {
+				continue;
+			}
+			Object day = row.getColumnValue(DATE_COLUMN);
+			if (day == null) {
+				throw new APIException("The run chart report has a row with no " + DATE_COLUMN);
+			}
+			for (String column : COLUMNS) {
+				if (!(row.getColumnValue(column) instanceof Number)) {
+					throw new APIException("The run chart report has no number in its column " + column);
+				}
+			}
+			rows.put(toLocalDate(day), row);
+		}
+		return rows;
+	}
+	
+	/**
+	 * How many of each day's listed BPG patients were adherent on it, from one replay of each history.
+	 */
+	private static Map<LocalDate, Long> adherentOf(Map<LocalDate, DataSetRow> rows, List<LocalDate> days) {
+		Map<LocalDate, Set<Integer>> listed = new HashMap<LocalDate, Set<Integer>>();
+		Set<Integer> everyone = new LinkedHashSet<Integer>();
+		for (LocalDate day : days) {
+			Set<Integer> ids = patientIds(rows.get(day));
+			listed.put(day, ids);
+			everyone.addAll(ids);
+		}
+		Map<Integer, Map<LocalDate, Double>> adherence = everyone.isEmpty()
+		        ? Collections.<Integer, Map<LocalDate, Double>> emptyMap()
+		        : AdherenceSeries.adherenceOn(everyone, new TreeSet<LocalDate>(days));
+		Map<LocalDate, Long> adherent = new HashMap<LocalDate, Long>();
+		for (LocalDate day : days) {
+			long count = 0;
+			for (Integer id : listed.get(day)) {
+				Double value = adherence.containsKey(id) ? adherence.get(id).get(day) : null;
+				if (value != null && value >= 0.8) {
+					count++;
+				}
+			}
+			adherent.put(day, Long.valueOf(count));
+		}
+		return adherent;
+	}
+	
+	private static Set<Integer> patientIds(DataSetRow row) {
+		Set<Integer> ids = new LinkedHashSet<Integer>();
+		Object value = row == null ? null : row.getColumnValue(BPG_COLUMN);
+		if (value == null) {
+			return ids;
+		}
+		String list = value.toString();
+		if (list.length() >= LONGEST_BPG_LIST) {
+			throw new APIException("The run chart report lists more BPG patients in one row than can be read whole");
+		}
+		for (String id : StringUtils.split(list, ',')) {
+			if (StringUtils.isNotBlank(id)) {
+				ids.add(Integer.valueOf(id.trim()));
+			}
+		}
+		return ids;
+	}
+	
+	private static long number(DataSetRow row, String column) {
+		return row == null ? 0 : ((Number) row.getColumnValue(column)).longValue();
+	}
+	
+	private DataSet evaluate(LocalDate start, LocalDate end, Period period) {
 		String uuid = Context.getAdministrationService().getGlobalProperty(GP_REPORT);
 		ReportDefinitionService reports = Context.getService(ReportDefinitionService.class);
 		ReportDefinition report = StringUtils.isBlank(uuid) ? null : reports.getDefinitionByUuid(uuid.trim());
@@ -178,7 +279,9 @@ public class RunCharts {
 			throw new APIException("No report has the uuid " + GP_REPORT + " names: " + uuid);
 		}
 		EvaluationContext context = new EvaluationContext();
-		context.addParameterValue("endDate", Date.valueOf(day));
+		context.addParameterValue("startDate", Date.valueOf(start));
+		context.addParameterValue("endDate", Date.valueOf(end));
+		context.addParameterValue("points", period.name().toLowerCase());
 		try {
 			ReportData data = reports.evaluate(report, context);
 			if (data.getDataSets().isEmpty()) {
@@ -189,77 +292,6 @@ public class RunCharts {
 		catch (EvaluationException e) {
 			throw new APIException("Could not evaluate the run chart report " + uuid, e);
 		}
-	}
-	
-	/**
-	 * A row's SQL values; a clinic that is no location is an error rather than a row of every clinic.
-	 */
-	private static String values(LocalDate day, DataSetRow row) {
-		Object clinic = row.getColumnValue(CLINIC_COLUMN);
-		String locationId = "null";
-		if (clinic != null && StringUtils.isNotBlank(clinic.toString())) {
-			Location location = Context.getLocationService().getLocationByUuid(clinic.toString());
-			if (location == null) {
-				throw new APIException("The run chart report names no location " + clinic);
-			}
-			locationId = location.getLocationId().toString();
-		}
-		List<String> values = new ArrayList<String>();
-		values.add("'" + Date.valueOf(day) + "'");
-		values.add(locationId);
-		for (String column : COLUMNS) {
-			Object value = row.getColumnValue(column);
-			if (!(value instanceof Number)) {
-				throw new APIException("The run chart report has no number in its column " + column);
-			}
-			values.add(String.valueOf(((Number) value).longValue()));
-		}
-		values.add("current_timestamp");
-		return "(" + StringUtils.join(values, ", ") + ")";
-	}
-	
-	/**
-	 * The metric in points of the period, of a clinic or of every clinic when it is null: a percent is
-	 * the ratio of its sums over the period's days (null for none), a count its latest in the period.
-	 */
-	public List<Point> series(String metric, Location clinic, LocalDate start, LocalDate end, Period period) {
-		if (!METRICS.contains(metric)) {
-			throw new IllegalArgumentException("No run chart metric is named " + metric);
-		}
-		String denominator = PERCENT_OF.get(metric);
-		String where = " where record_date >= '" + Date.valueOf(start) + "' and record_date <= '" + Date.valueOf(end)
-		        + "' and location_id " + (clinic == null ? "is null" : "= " + clinic.getLocationId());
-		List<List<Object>> rows;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			rows = Context.getAdministrationService().executeSQL(
-			    "select record_date, sum(" + metric + ")" + (denominator == null ? "" : ", sum(" + denominator + ")")
-			            + " from " + TABLE + where + " group by record_date order by record_date",
-			    true);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
-		Map<LocalDate, double[]> periods = new LinkedHashMap<LocalDate, double[]>();
-		for (List<Object> row : rows) {
-			double[] sums = periods.computeIfAbsent(period.startOf(toLocalDate(row.get(0))), day -> new double[2]);
-			double numerator = ((Number) row.get(1)).doubleValue();
-			if (denominator == null) {
-				sums[0] = numerator;
-			} else {
-				sums[0] += numerator;
-				sums[1] += ((Number) row.get(2)).doubleValue();
-			}
-		}
-		List<Point> points = new ArrayList<Point>();
-		for (Map.Entry<LocalDate, double[]> entry : periods.entrySet()) {
-			double[] sums = entry.getValue();
-			Double value = denominator == null ? Double.valueOf(sums[0])
-			        : sums[1] == 0 ? null : Double.valueOf(Math.round(1000.0 * sums[0] / sums[1]) / 10.0);
-			points.add(new Point(entry.getKey(), value, Long.valueOf(Math.round(sums[0])),
-			        denominator == null ? null : Long.valueOf(Math.round(sums[1]))));
-		}
-		return points;
 	}
 	
 	/**
@@ -281,39 +313,15 @@ public class RunCharts {
 		return values.size() % 2 == 1 ? values.get(middle) : (values.get(middle - 1) + values.get(middle)) / 2;
 	}
 	
-	/** How many clinics' rows the day's snapshot holds, which leaves out the row of every clinic. */
-	public int clinicRows(LocalDate day) {
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			List<List<Object>> rows = Context.getAdministrationService().executeSQL("select count(*) from " + TABLE
-			        + " where record_date = '" + Date.valueOf(day) + "' and location_id is not null",
-			    true);
-			return ((Number) rows.get(0).get(0)).intValue();
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
-	}
-	
-	/** The latest day with a snapshot, or null before the first. */
-	public LocalDate lastSnapshot() {
-		List<List<Object>> rows;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			rows = Context.getAdministrationService().executeSQL("select max(record_date) from " + TABLE, true);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
-		return rows.isEmpty() || rows.get(0).get(0) == null ? null : toLocalDate(rows.get(0).get(0));
-	}
-	
 	private static LocalDate toLocalDate(Object value) {
 		if (value instanceof java.sql.Date) {
 			return ((java.sql.Date) value).toLocalDate();
 		}
 		if (value instanceof java.util.Date) {
 			return new java.sql.Date(((java.util.Date) value).getTime()).toLocalDate();
+		}
+		if (value instanceof LocalDate) {
+			return (LocalDate) value;
 		}
 		return LocalDate.parse(value.toString().substring(0, 10));
 	}

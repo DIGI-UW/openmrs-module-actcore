@@ -442,7 +442,7 @@
     <property>actcore.runCharts.report</property>
     <defaultValue>ba3371da-3c6c-4fb2-bf47-0c3fcfe9dce1</defaultValue>
     <description>
-      The report, by uuid, whose rows the daily run chart snapshot keeps: one per clinic, named by its location uuid in clinic_uuid, and one with no clinic_uuid for every clinic, each with ACT 2.0's runchart_record columns (total_registrants, active_registrants, active_registrants_seen_last_7_months, active_registrants_prescribed_prophylaxis, active_registrants_adherent, consultation_visit_total, consultation_visits_with_echocardiogram_resulted, consultation_visits_with_intervention, interventions_completed). It is evaluated with endDate set to the day. The default is the distribution's RHD Run Chart Metrics.
+      The report, by uuid, the run charts are calculated from when they are viewed. It is evaluated with startDate, endDate and points (day, week or month) and gives, for every point of the range, one row per clinic, named by its location uuid in clinic_uuid, and one with no clinic_uuid for every clinic, each with point_date, ACT 2.0's runchart_record counts (total_registrants, active_registrants, active_registrants_seen_last_7_months, active_registrants_prescribed_prophylaxis, consultation_visit_total, consultation_visits_with_echocardiogram_resulted, consultation_visits_with_intervention, interventions_completed) and bpg_patient_ids, the ids, separated by commas, of the active patients on an in-force BPG regimen as of the point, whose adherence ACT Core replays to that day. The default is the distribution's RHD Run Chart Metrics.
     </description>
   </globalProperty>
   <globalProperty>

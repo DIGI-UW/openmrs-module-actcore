@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.adherence;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -141,26 +142,57 @@ final class AdherenceReplay {
 	 * @see #replay(History, LocalDate)
 	 */
 	static Row replay(History h, LocalDate today, Integer oralFirstDueDays) {
+		TreeSet<LocalDate> day = new TreeSet<LocalDate>();
+		day.add(today);
+		return replayOn(h, day, oralFirstDueDays).get(today);
+	}
+	
+	/**
+	 * The row ACT 2.0 would have held on each of the days, from one walk of the history to the last of
+	 * them; null for a day it held none.
+	 */
+	static Map<LocalDate, Row> replayOn(History h, SortedSet<LocalDate> days, Integer oralFirstDueDays) {
+		Map<LocalDate, Row> rows = new TreeMap<LocalDate, Row>();
+		if (days.isEmpty()) {
+			return rows;
+		}
+		LocalDate last = days.last();
 		TreeSet<LocalDate> saves = new TreeSet<LocalDate>();
 		saves.addAll(h.prescriptions.keySet());
 		saves.addAll(h.injections);
 		saves.addAll(h.oral.keySet());
 		saves.addAll(h.consultations);
-		saves = new TreeSet<LocalDate>(saves.headSet(today.plusDays(1)));
+		saves = new TreeSet<LocalDate>(saves.headSet(last.plusDays(1)));
+		Iterator<LocalDate> wanted = days.iterator();
+		LocalDate next = wanted.next();
 		if (saves.isEmpty()) {
-			return null;
+			for (LocalDate day : days) {
+				rows.put(day, null);
+			}
+			return rows;
+		}
+		while (next != null && next.isBefore(saves.first())) {
+			rows.put(next, null);
+			next = wanted.hasNext() ? wanted.next() : null;
 		}
 		
 		LocalDate computed = null;
 		Stored stored = null;
-		for (LocalDate day = saves.first(); !day.isAfter(today); day = day.plusDays(1)) {
+		for (LocalDate day = saves.first(); next != null && !day.isAfter(last); day = day.plusDays(1)) {
 			boolean nightly = stored != null && stored.interval != null && stored.interval > 0 && !held(h, day, stored);
 			if (saves.contains(day) || nightly) {
 				computed = day;
 				stored = new Stored(h, day);
 			}
+			if (day.equals(next)) {
+				rows.put(day, rowOf(h, stored, computed, oralFirstDueDays));
+				next = wanted.hasNext() ? wanted.next() : null;
+			}
 		}
-		
+		return rows;
+	}
+	
+	private static Row rowOf(History h, Stored stored, LocalDate computed, Integer oralFirstDueDays) {
 		if (stored.prescriptions == null || stored.prescriptions.intervals.isEmpty()) {
 			return null;
 		}
