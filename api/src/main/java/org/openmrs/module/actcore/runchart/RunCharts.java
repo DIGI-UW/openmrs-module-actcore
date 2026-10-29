@@ -60,10 +60,10 @@ public class RunCharts {
 	static final String BPG_COLUMN = "bpg_patient_ids";
 	
 	/**
-	 * GROUP_CONCAT cuts a longer list short without an error, so one this long is refused rather than
-	 * read; MariaDB's default limit is 1,048,576 characters.
+	 * The report's count of the patients the list names: GROUP_CONCAT cuts a long list short without an
+	 * error, so a list shorter than its count is refused rather than read.
 	 */
-	static final int LONGEST_BPG_LIST = 1000000;
+	static final String BPG_COUNT_COLUMN = "active_registrants_on_bpg";
 	
 	/** The metric the report does not give: counted here from the BPG list and the replay. */
 	static final String ADHERENT = "active_registrants_adherent";
@@ -216,6 +216,9 @@ public class RunCharts {
 					throw new APIException("The run chart report has no number in its column " + column);
 				}
 			}
+			if (!(row.getColumnValue(BPG_COUNT_COLUMN) instanceof Number)) {
+				throw new APIException("The run chart report has no number in its column " + BPG_COUNT_COLUMN);
+			}
 			rows.put(toLocalDate(day), row);
 		}
 		return rows;
@@ -251,18 +254,18 @@ public class RunCharts {
 	
 	private static Set<Integer> patientIds(DataSetRow row) {
 		Set<Integer> ids = new LinkedHashSet<Integer>();
-		Object value = row == null ? null : row.getColumnValue(BPG_COLUMN);
-		if (value == null) {
+		if (row == null) {
 			return ids;
 		}
-		String list = value.toString();
-		if (list.length() >= LONGEST_BPG_LIST) {
-			throw new APIException("The run chart report lists more BPG patients in one row than can be read whole");
-		}
-		for (String id : StringUtils.split(list, ',')) {
+		Object value = row.getColumnValue(BPG_COLUMN);
+		for (String id : StringUtils.split(value == null ? "" : value.toString(), ',')) {
 			if (StringUtils.isNotBlank(id)) {
 				ids.add(Integer.valueOf(id.trim()));
 			}
+		}
+		if (ids.size() != number(row, BPG_COUNT_COLUMN)) {
+			throw new APIException("The run chart report lists " + ids.size() + " BPG patients in a row that counts "
+			        + number(row, BPG_COUNT_COLUMN) + ", so the list was cut short");
 		}
 		return ids;
 	}

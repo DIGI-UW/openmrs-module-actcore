@@ -82,7 +82,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 			        .append(" 2 as active_registrants_seen_last_7_months, 3 as active_registrants_prescribed_prophylaxis,")
 			        .append(" 2 as consultation_visit_total, 1 as consultation_visits_with_echocardiogram_resulted,")
 			        .append(" 0 as consultation_visits_with_intervention, 1 as interventions_completed,")
-			        .append(" null as bpg_patient_ids");
+			        .append(" 0 as active_registrants_on_bpg, null as bpg_patient_ids");
 		}
 		SqlDataSetDefinition sql = new SqlDataSetDefinition();
 		sql.addParameter(new Parameter("startDate", "From", java.util.Date.class));
@@ -146,7 +146,6 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		assertEquals(Long.valueOf(21), points.get(3).get("count"));
 		assertNull(points.get(3).get("total"));
 		assertEquals(14.5, (Double) response.get("median"), 0);
-		assertNull(response.get("lastSnapshot"));
 	}
 	
 	@Test

@@ -60,8 +60,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * What the refresh endpoint runs the refresh with, as the scheduler's daemon user; null until the
-	 * module has started.
+	 * What the refresh endpoint runs the refresh with, and the run chart endpoint its report, as the
+	 * scheduler's daemon user; null until the module has started.
 	 */
 	public static DaemonToken getDaemonToken() {
 		return daemonToken;

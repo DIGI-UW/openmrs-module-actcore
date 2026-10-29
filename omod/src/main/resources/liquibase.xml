@@ -356,7 +356,10 @@
     <dropTable tableName="actcore_run_chart_run"/>
   </changeSet>
   <changeSet id="actcore-2026-10-29-drop-run-chart-task" author="UW DIGI">
-    <comment>The scheduled snapshot task goes with the snapshot</comment>
+    <comment>The scheduled snapshot task goes with the snapshot; its properties first, which reference it</comment>
+    <delete tableName="scheduler_task_config_property">
+      <where>task_config_id in (select task_config_id from scheduler_task_config where name = 'RHD Run Chart Snapshot')</where>
+    </delete>
     <delete tableName="scheduler_task_config">
       <where>name = 'RHD Run Chart Snapshot'</where>
     </delete>

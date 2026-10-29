@@ -13,6 +13,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import java.time.LocalDate;
+import java.util.Map;
+import java.util.TreeSet;
 
 import org.junit.Test;
 
@@ -169,12 +171,12 @@ public class AdherenceReplayTest {
 		h.injections.add(ago(60));
 		h.injections.add(ago(39));
 		h.consultations.add(ago(60));
-		java.util.TreeSet<LocalDate> days = new java.util.TreeSet<LocalDate>();
+		TreeSet<LocalDate> days = new TreeSet<LocalDate>();
 		for (int daysAgo : new int[] { 70, 60, 45, 35, 18, 10, 0 }) {
 			days.add(ago(daysAgo));
 		}
 		
-		java.util.Map<LocalDate, AdherenceReplay.Row> rows = AdherenceReplay.replayOn(h, days, null);
+		Map<LocalDate, AdherenceReplay.Row> rows = AdherenceReplay.replayOn(h, days, null);
 		
 		assertEquals(days, rows.keySet());
 		for (LocalDate day : days) {

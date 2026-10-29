@@ -19,7 +19,7 @@
   <package>org.openmrs.module.actcore</package>
   <author>UW DIGI</author>
   <description>
-    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, a download of forms' fields, each recorded, the Logs page's activity, reads and downloads, a daily snapshot of each clinic's run chart metrics, and loading the report descriptors at startup.
+    The ACT registry's server side: scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, a look-up of the data missing behind a flag, each patient's prophylaxis adherence and next due date, a download of forms' fields, each recorded, the Logs page's activity, reads and downloads, the run charts, calculated from the run chart report when viewed, and loading the report descriptors at startup.
   </description>
 
   <activator>org.openmrs.module.actcore.ActCoreActivator</activator>
@@ -442,7 +442,7 @@
     <property>actcore.runCharts.report</property>
     <defaultValue>ba3371da-3c6c-4fb2-bf47-0c3fcfe9dce1</defaultValue>
     <description>
-      The report, by uuid, the run charts are calculated from when they are viewed. It is evaluated with startDate, endDate and points (day, week or month) and gives, for every point of the range, one row per clinic, named by its location uuid in clinic_uuid, and one with no clinic_uuid for every clinic, each with point_date, ACT 2.0's runchart_record counts (total_registrants, active_registrants, active_registrants_seen_last_7_months, active_registrants_prescribed_prophylaxis, consultation_visit_total, consultation_visits_with_echocardiogram_resulted, consultation_visits_with_intervention, interventions_completed) and bpg_patient_ids, the ids, separated by commas, of the active patients on an in-force BPG regimen as of the point, whose adherence ACT Core replays to that day. The default is the distribution's RHD Run Chart Metrics.
+      The report, by uuid, the run charts are calculated from when they are viewed. It is evaluated with startDate, endDate and points (day, week or month) and gives, for every point of the range, one row per clinic, named by its location uuid in clinic_uuid, and one with no clinic_uuid for every clinic, each with point_date, ACT 2.0's runchart_record counts (total_registrants, active_registrants, active_registrants_seen_last_7_months, active_registrants_prescribed_prophylaxis, consultation_visit_total, consultation_visits_with_echocardiogram_resulted, consultation_visits_with_intervention, interventions_completed), active_registrants_on_bpg, and bpg_patient_ids, the ids, separated by commas, of the active patients on an in-force BPG regimen as of the point, as many as that count, whose adherence ACT Core replays to that day. The default is the distribution's RHD Run Chart Metrics.
     </description>
   </globalProperty>
   <globalProperty>

@@ -47,7 +47,7 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 			        .append(" 1 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,")
 			        .append(
 			            " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,")
-			        .append(" 0 as interventions_completed, '7' as bpg_patient_ids");
+			        .append(" 0 as interventions_completed, 1 as active_registrants_on_bpg, '7' as bpg_patient_ids");
 		}
 		SqlDataSetDefinition sql = new SqlDataSetDefinition();
 		sql.addParameter(new Parameter("startDate", "From", java.util.Date.class));

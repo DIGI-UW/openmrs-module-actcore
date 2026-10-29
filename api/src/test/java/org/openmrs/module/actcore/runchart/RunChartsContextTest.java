@@ -66,7 +66,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 				        .append(" as consultation_visit_total,")
 				        .append(" 1 as consultation_visits_with_echocardiogram_resulted,")
 				        .append(" 0 as consultation_visits_with_intervention, 3 as interventions_completed,")
-				        .append(" null as bpg_patient_ids");
+				        .append(" 0 as active_registrants_on_bpg, null as bpg_patient_ids");
 			}
 		}
 		useReportSelecting(select.toString());
@@ -201,7 +201,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		useReportSelecting("select null as point_date, null as clinic_uuid, 1 as total_registrants, 1 as active_registrants,"
 		        + " 0 as active_registrants_seen_last_7_months, 0 as active_registrants_prescribed_prophylaxis,"
 		        + " 0 as consultation_visit_total, 0 as consultation_visits_with_echocardiogram_resulted,"
-		        + " 0 as consultation_visits_with_intervention, 0 as interventions_completed, null as bpg_patient_ids");
+		        + " 0 as consultation_visits_with_intervention, 0 as interventions_completed,"
+		        + " 0 as active_registrants_on_bpg, null as bpg_patient_ids");
 		
 		try {
 			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
@@ -213,20 +214,19 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void calculate_shouldRefuseABpgListTooLongToBeWhole() {
+	public void calculate_shouldRefuseABpgListShorterThanItsCount() {
 		useReportSelecting("select date '2026-10-21' as point_date, null as clinic_uuid, 1 as total_registrants,"
 		        + " 1 as active_registrants, 0 as active_registrants_seen_last_7_months,"
 		        + " 0 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,"
 		        + " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
-		        + " 0 as interventions_completed, repeat('7,', " + (RunCharts.LONGEST_BPG_LIST / 2)
-		        + ") as bpg_patient_ids");
+		        + " 0 as interventions_completed, 3 as active_registrants_on_bpg, '7,8' as bpg_patient_ids");
 		
 		try {
 			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
 			fail("expected the list to be refused");
 		}
 		catch (APIException e) {
-			assertTrue(e.getMessage(), e.getMessage().contains("BPG"));
+			assertTrue(e.getMessage(), e.getMessage().contains("cut short"));
 		}
 	}
 	

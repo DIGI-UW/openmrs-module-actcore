@@ -101,8 +101,8 @@ public class RunChartController extends BaseRestController {
 	}
 	
 	/**
-	 * Runs as the scheduler's daemon user: the report reads every patient and is held to its own report
-	 * privilege, which the caller's Dashboard privilege need not come with.
+	 * Runs as the daemon user: the report reads every patient and is held to its own report privilege,
+	 * which the caller's Dashboard privilege need not come with.
 	 */
 	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
 	        final LocalDate end, final RunCharts.Period period) {
