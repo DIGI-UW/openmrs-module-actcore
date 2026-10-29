@@ -69,8 +69,6 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS);
 	}
 	
-	}
-	
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
