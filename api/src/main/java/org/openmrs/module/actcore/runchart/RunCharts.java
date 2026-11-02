@@ -184,8 +184,8 @@ public class RunCharts {
 	}
 	
 	/**
-	 * Every metric in points of the period over the range, of a clinic or of every clinic when it is
-	 * null, from one evaluation of the report. A day the report gives no row for counts nobody.
+	 * Every metric in points of the period, of a clinic or of every clinic when it is null, from one
+	 * evaluation of the report. A point the report gives the clinic no row for counts nobody.
 	 */
 	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
 		List<LocalDate> days = pointDates(start, end, period);
@@ -212,13 +212,14 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The report's rows of the clinic, or of every clinic, by day. An undated or off-point row of any
-	 * clinic is refused, and so is a second row of one day, as either would misread a point.
+	 * The report's rows of the clinic, or of every clinic, by day. An undated, off-point or second row
+	 * of a day is refused, and so is a point with no row of every clinic.
 	 */
 	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
 	        Set<LocalDate> days) {
 		String wanted = clinic == null ? "" : clinic.getUuid();
 		Map<LocalDate, DataSetRow> rows = new HashMap<LocalDate, DataSetRow>();
+		Set<LocalDate> everyClinic = new HashSet<LocalDate>();
 		for (DataSetRow row : evaluate(start, end, period)) {
 			Object dated = row.getColumnValue(DATE_COLUMN);
 			if (dated == null) {
@@ -231,7 +232,11 @@ public class RunCharts {
 				        + "s, so the report's point dates and ACT Core's disagree");
 			}
 			Object named = row.getColumnValue(CLINIC_COLUMN);
-			if (!wanted.equals(named == null ? "" : named.toString())) {
+			String rowClinic = named == null ? "" : named.toString();
+			if (rowClinic.isEmpty()) {
+				everyClinic.add(day);
+			}
+			if (!wanted.equals(rowClinic)) {
 				continue;
 			}
 			for (String column : NUMBER_COLUMNS) {
@@ -242,6 +247,12 @@ public class RunCharts {
 			if (rows.put(day, row) != null) {
 				throw new APIException("The run chart report has more than one row for "
 				        + (wanted.isEmpty() ? "every clinic" : "clinic " + wanted) + " on " + DATE_COLUMN + " " + day);
+			}
+		}
+		for (LocalDate day : new TreeSet<LocalDate>(days)) {
+			if (!everyClinic.contains(day)) {
+				throw new APIException("The run chart report has no row of every clinic for the point " + day
+				        + ", so it left the point out");
 			}
 		}
 		return rows;
