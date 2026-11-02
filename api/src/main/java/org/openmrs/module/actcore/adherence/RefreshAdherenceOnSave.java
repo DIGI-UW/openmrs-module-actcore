@@ -31,6 +31,9 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	private static final Logger log = LoggerFactory.getLogger(RefreshAdherenceOnSave.class);
 	
+	/** A refresh longer than this is logged as a warning, as the save waits for it. */
+	static final long SLOW_MILLIS = 1000L;
+	
 	private static final Set<String> METHODS = new HashSet<String>(
 	        Arrays.asList("saveEncounter", "voidEncounter", "unvoidEncounter", "purgeEncounter"));
 	
@@ -103,8 +106,12 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		catch (RuntimeException e) {
 			log.error("Could not refresh the flags of patient {}", patientId, e);
 		}
-		// The save waits for this.
-		log.debug("Refreshing the adherence and flags of patient {} took {} ms", patientId,
-		    System.currentTimeMillis() - startedAt);
+		long took = System.currentTimeMillis() - startedAt;
+		if (took > SLOW_MILLIS) {
+			log.warn("Refreshing the adherence and flags of patient {} took {} ms, which the save waited for", patientId,
+			    took);
+		} else {
+			log.debug("Refreshing the adherence and flags of patient {} took {} ms", patientId, took);
+		}
 	}
 }
