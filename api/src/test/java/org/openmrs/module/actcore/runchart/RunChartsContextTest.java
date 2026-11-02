@@ -59,17 +59,21 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 				if (select.length() > 0) {
 					select.append(" union all ");
 				}
-				select.append("select date '2026-10-").append(String.format("%02d", day)).append("' as point_date, ")
-				        .append(named).append(" as clinic_uuid, 10 as total_registrants, ").append(day)
-				        .append(" as active_registrants, 5 as active_registrants_seen_last_7_months,")
-				        .append(" 4 as active_registrants_prescribed_prophylaxis, ").append(named.equals("null") ? 0 : 4)
-				        .append(" as consultation_visit_total,")
-				        .append(" 1 as consultation_visits_with_echocardiogram_resulted,")
-				        .append(" 0 as consultation_visits_with_intervention, 3 as interventions_completed,")
-				        .append(" 0 as active_registrants_on_bpg, null as bpg_patient_ids");
+				select.append(row(named, day));
 			}
 		}
 		useReportSelecting(select.toString());
+	}
+	
+	/** One report row of October 2026's day, for the clinic named as SQL, or every clinic for null. */
+	private static String row(String named, int day) {
+		return "select date '2026-10-" + String.format("%02d", day) + "' as point_date, " + named
+		        + " as clinic_uuid, 10 as total_registrants, " + day
+		        + " as active_registrants, 5 as active_registrants_seen_last_7_months,"
+		        + " 4 as active_registrants_prescribed_prophylaxis, " + (named.equals("null") ? 0 : 4)
+		        + " as consultation_visit_total, 1 as consultation_visits_with_echocardiogram_resulted,"
+		        + " 0 as consultation_visits_with_intervention, 3 as interventions_completed,"
+		        + " 0 as active_registrants_on_bpg, null as bpg_patient_ids";
 	}
 	
 	private void useReportSelecting(String select) {
@@ -227,6 +231,66 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		}
 		catch (APIException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(RunCharts.BPG_COUNT_COLUMN));
+		}
+	}
+	
+	@Test
+	public void calculate_shouldRefuseARowDatedInTheRangeOnADayThatIsNotAPoint() {
+		// 19 October 2026 is a Monday; a week's point is its Sunday, or the range's end.
+		saveReportOf(clinic.getUuid(), 18, 19, 21);
+		
+		assertRefusedNaming("2026-10-19");
+	}
+	
+	@Test
+	public void calculate_shouldRefuseARowDatedAfterTheRangesEnd() {
+		saveReportOf(clinic.getUuid(), 18, 21, 22);
+		
+		assertRefusedNaming("2026-10-22");
+	}
+	
+	@Test
+	public void calculate_shouldRefuseAnOffPointRowOfAnotherClinicToo() {
+		useReportSelecting(row("'" + clinic.getUuid() + "'", 18) + " union all " + row("'" + clinic.getUuid() + "'", 21)
+		        + " union all " + row("'another-clinic'", 19));
+		
+		assertRefusedNaming("2026-10-19");
+	}
+	
+	@Test
+	public void calculate_shouldRefuseARowOfAnotherClinicWithNoDate() {
+		useReportSelecting(row("'" + clinic.getUuid() + "'", 21) + " union all "
+		        + row("'another-clinic'", 21).replace("date '2026-10-21' as point_date", "null as point_date"));
+		
+		try {
+			runCharts.calculate(clinic, END, END, RunCharts.Period.DAY);
+			fail("expected the row to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("no " + RunCharts.DATE_COLUMN));
+		}
+	}
+	
+	@Test
+	public void calculate_shouldIgnoreARowDatedBeforeTheRangesStart() {
+		saveReportOf(clinic.getUuid(), 4, 18, 21);
+		
+		List<RunCharts.Point> active = runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK)
+		        .get("active_registrants");
+		
+		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 18), END), dates(active));
+		assertEquals(Double.valueOf(18), active.get(0).value);
+		assertEquals(Double.valueOf(21), active.get(1).value);
+	}
+	
+	private void assertRefusedNaming(String day) {
+		try {
+			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			fail("expected the report to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains(RunCharts.DATE_COLUMN));
+			assertTrue(e.getMessage(), e.getMessage().contains(day));
 		}
 	}
 	

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -188,7 +189,7 @@ public class RunCharts {
 	 */
 	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
 		List<LocalDate> days = pointDates(start, end, period);
-		Map<LocalDate, DataSetRow> rows = rowsOf(clinic, start, end, period);
+		Map<LocalDate, DataSetRow> rows = rowsOf(clinic, start, end, period, new HashSet<LocalDate>(days));
 		Map<LocalDate, Long> adherent = adherentOf(rows, days);
 		Map<String, List<Point>> series = new LinkedHashMap<String, List<Point>>();
 		for (String metric : METRICS) {
@@ -210,25 +211,35 @@ public class RunCharts {
 		return series;
 	}
 	
-	/** The report's rows of the clinic, or of every clinic, by the day each is as of. */
-	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period) {
+	/**
+	 * The report's rows of the clinic, or of every clinic, by day. A row of any clinic that is undated,
+	 * or on or after the start but off the points, is refused, as a point it misses would read as zero.
+	 */
+	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
+	        Set<LocalDate> days) {
 		String wanted = clinic == null ? "" : clinic.getUuid();
 		Map<LocalDate, DataSetRow> rows = new HashMap<LocalDate, DataSetRow>();
 		for (DataSetRow row : evaluate(start, end, period)) {
+			Object dated = row.getColumnValue(DATE_COLUMN);
+			if (dated == null) {
+				throw new APIException("The run chart report has a row with no " + DATE_COLUMN);
+			}
+			LocalDate day = toLocalDate(dated);
+			if (!day.isBefore(start) && !days.contains(day)) {
+				throw new APIException("The run chart report has a row whose " + DATE_COLUMN + " " + day
+				        + " is not a point of " + start + " to " + end + " in " + period.name().toLowerCase()
+				        + "s, so the report's point dates and ACT Core's disagree");
+			}
 			Object named = row.getColumnValue(CLINIC_COLUMN);
 			if (!wanted.equals(named == null ? "" : named.toString())) {
 				continue;
-			}
-			Object day = row.getColumnValue(DATE_COLUMN);
-			if (day == null) {
-				throw new APIException("The run chart report has a row with no " + DATE_COLUMN);
 			}
 			for (String column : NUMBER_COLUMNS) {
 				if (!(row.getColumnValue(column) instanceof Number)) {
 					throw new APIException("The run chart report has no number in its column " + column);
 				}
 			}
-			rows.put(toLocalDate(day), row);
+			rows.put(day, row);
 		}
 		return rows;
 	}

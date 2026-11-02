@@ -64,7 +64,9 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   day of its period, or `endDate` for the last period. It answers every metric under `metrics`, each
   with its `points` and `median`, and the one named by `metric`, if any, under `points` and `median`
   too. A point has a `value`, and a `count` and `total` (of a percent, its numerator and denominator;
-  of a count, the value and null); a day the report gives no row for counts nobody.
+  of a count, the value and null); a day the report gives no row for counts nobody. A report row dated
+  on or after `startDate` on a day that is not a point fails the request, since the report's point
+  dates and ACT Core's then disagree.
 - **Monthly screening counts.** ACT 2.0's screening data: per clinic and month, for school, community
   and health facility, the people screened, children 0-9, adolescents 10-19, adults 20+, females and
   positives, with notes, in `actcore_screening_count`. `GET /ws/rest/v1/actcore/screeningcounts?clinic=<uuid>&month=YYYY-MM`
