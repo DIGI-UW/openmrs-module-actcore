@@ -195,19 +195,16 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void refusesReadsTooManyToFoldAsABadRequest() {
+	public void answersMoreReadsThanOneQueryPageFetches() {
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '" + Timestamp.valueOf(LocalDate.now().atStartOfDay())
-		        + "', random_uuid() from system_range(1, 50000)");
+		        + "', random_uuid() from system_range(1, 50001)");
 		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
 		
-		try {
-			reads.getReads(null, null, null, null, null, null);
-			fail("expected the reads to be refused");
-		}
-		catch (IllegalRequestException e) {
-			assertTrue(e.getMessage(), e.getMessage().startsWith("More than 50000 reads match"));
-		}
+		SimpleObject page = reads.getReads("bulk", null, null, null, null, null);
+		
+		assertEquals(Integer.valueOf(1), page.get("totalCount"));
+		assertEquals(Integer.valueOf(50001), ((SimpleObject) ((List<?>) page.get("results")).get(0)).get("count"));
 	}
 	
 	private static void sql(String statement) {
