@@ -3,8 +3,8 @@
 create table if not exists revision_entity (id int primary key, timestamp bigint, changedBy int, changedOn datetime);
 create table if not exists encounter_AUD (encounter_id int, REV int, REVTYPE tinyint, uuid varchar(38), voided boolean, void_reason varchar(255), encounter_datetime datetime, encounter_type int, form_id int, location_id int, patient_id int, visit_id int);
 create table if not exists obs_AUD (obs_id int, REV int, REVTYPE tinyint, uuid varchar(38), person_id int, obs_datetime datetime, value_datetime datetime, value_numeric double, value_text clob, value_complex varchar(1000), voided boolean, void_reason varchar(255), concept_id int, value_coded int, value_coded_name_id int, value_drug int, encounter_id int, obs_group_id int, previous_version int, location_id int);
-create table if not exists person_AUD (person_id int, REV int, REVTYPE tinyint, uuid varchar(38), gender varchar(50), birthdate datetime, dead boolean, death_date datetime, voided boolean, cause_of_death int);
-create table if not exists patient_AUD (patient_id int, REV int, voided boolean);
+create table if not exists person_AUD (person_id int, REV int, REVTYPE tinyint, uuid varchar(38), gender varchar(50), birthdate datetime, dead boolean, death_date datetime, voided boolean, void_reason varchar(255), cause_of_death int);
+create table if not exists patient_AUD (patient_id int, REV int, voided boolean, void_reason varchar(255));
 create table if not exists person_name_AUD (person_name_id int, REV int, REVTYPE tinyint, uuid varchar(38), preferred boolean, given_name varchar(50), middle_name varchar(50), family_name varchar(50), voided boolean, person_id int);
 create table if not exists person_address_AUD (person_address_id int, REV int, REVTYPE tinyint, uuid varchar(38), address1 varchar(255), city_village varchar(255), voided boolean, person_id int);
 create table if not exists person_attribute_AUD (person_attribute_id int, REV int, REVTYPE tinyint, uuid varchar(38), value varchar(50), voided boolean, person_id int, person_attribute_type_id int);

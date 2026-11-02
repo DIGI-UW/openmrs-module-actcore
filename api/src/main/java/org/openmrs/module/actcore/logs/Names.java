@@ -144,11 +144,11 @@ public class Names {
 		Subject subject = new Subject();
 		subject.id = personId;
 		subject.uuid = uuid;
-		subject.display = StringUtils.defaultIfBlank(
-		    personName("select given_name, middle_name, family_name from person_name where person_id = ? and voided = 0"
-		            + " order by preferred desc, person_name_id",
-		        personId),
-		    uuid);
+		// A voided patient keeps only voided names, so those are read after the unvoided.
+		subject.display = StringUtils
+		        .defaultIfBlank(personName("select given_name, middle_name, family_name from person_name where person_id = ?"
+		                + " order by voided, preferred desc, person_name_id",
+		            personId), uuid);
 		subject.actId = actId(personId);
 		return subject;
 	}
@@ -161,10 +161,9 @@ public class Names {
 		if (identifyingTypes == null) {
 			identifyingTypes = FormDownload.uuids(FormDownload.IDENTIFIER_TYPES_PROPERTY);
 		}
-		for (Map<String, Object> row : Rows.select(
-		    "select i.identifier, t.uuid type_uuid from patient_identifier i"
-		            + " join patient_identifier_type t on t.patient_identifier_type_id = i.identifier_type"
-		            + " where i.patient_id = ? and i.voided = 0 order by i.preferred desc, i.patient_identifier_id",
+		for (Map<String, Object> row : Rows.select("select i.identifier, t.uuid type_uuid from patient_identifier i"
+		        + " join patient_identifier_type t on t.patient_identifier_type_id = i.identifier_type"
+		        + " where i.patient_id = ? order by i.voided, i.preferred desc, i.patient_identifier_id",
 		    personId)) {
 			if (!identifyingTypes.contains(Rows.string(row, "type_uuid"))) {
 				return Rows.string(row, "identifier");
