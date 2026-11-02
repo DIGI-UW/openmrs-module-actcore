@@ -34,7 +34,10 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 	
 	private static final LocalDate EARLIER = TODAY.minusDays(35);
 	
-	/** A report listing patient 7 as the one active BPG patient on two days, 35 days apart. */
+	/**
+	 * A report listing patient 7 as the one active BPG patient on two days 35 days apart, from the
+	 * start on.
+	 */
 	@Before
 	public void pointAtAReportListingPatient7() {
 		StringBuilder select = new StringBuilder();
@@ -53,7 +56,7 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		sql.addParameter(new Parameter("startDate", "From", java.util.Date.class));
 		sql.addParameter(new Parameter("endDate", "To", java.util.Date.class));
 		sql.addParameter(new Parameter("points", "Points", String.class));
-		sql.setSqlQuery(select.toString());
+		sql.setSqlQuery("select * from (" + select + ") points where point_date >= :startDate");
 		ReportDefinition report = new ReportDefinition();
 		report.setUuid(REPORT_UUID);
 		report.setName("Run chart adherence test report");

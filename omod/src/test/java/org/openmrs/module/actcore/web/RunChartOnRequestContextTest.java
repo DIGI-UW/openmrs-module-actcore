@@ -66,7 +66,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	
 	/**
 	 * A report answering a row of every clinic for four point dates, with the day of month as the
-	 * active count, whatever range it is asked for.
+	 * active count, from the range's start on.
 	 */
 	@Before
 	public void pointAtAReportOfFourPoints() {
@@ -87,7 +87,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		sql.addParameter(new Parameter("startDate", "From", java.util.Date.class));
 		sql.addParameter(new Parameter("endDate", "To", java.util.Date.class));
 		sql.addParameter(new Parameter("points", "Points", String.class));
-		sql.setSqlQuery(select.toString());
+		sql.setSqlQuery("select * from (" + select + ") points where point_date >= :startDate");
 		ReportDefinition report = new ReportDefinition();
 		report.setUuid(REPORT_UUID);
 		report.setName("Run chart on request test report");
