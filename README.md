@@ -54,21 +54,17 @@ admin rebuild page cannot be scripted from platform 2.6.0.
 - **Prophylaxis adherence.** The task **RHD Prophylaxis Adherence Refresh** recomputes, every day,
   each patient's adherence and next due date into the table `actcore_prophylaxis_adherence`, which
   the registry and care cascade reports read.
-- **Run chart snapshot.** The task **RHD Run Chart Snapshot**, daily from 02:05, recomputes the
-  adherence rows and then keeps each clinic's eight run chart metrics, and one row for every clinic,
-  in `actcore_run_chart_record`, from the report `actcore.runCharts.report` names (the distribution's
-  RHD Run Chart Metrics), every 24 hours from the first run, so an hour off the wall clock after a
-  daylight saving change. A second run on one day replaces the first, and a failure keeps the day's
-  earlier rows. `GET /ws/rest/v1/actcore/runchart?metric=<m>&clinic=<uuid>&startDate=&endDate=&points=week`
-  (App: act.dashboard) answers `points`, their `median` and the `lastSnapshot`; `points` is `day`,
-  `week` (the default) or `month`. A point has a `date`, which is its period's first day and may
-  precede `startDate`, a `value`, and a `count` and `total` (of a percent, its sums of numerator and
-  denominator; of a count, the value and null). `POST` takes today's snapshot now, as the daemon user
-  (Task: act.refreshFlags). History starts the day the task first runs. Each run, taken or failed with the
-  root cause's first line as its reason, is kept in `actcore_run_chart_run`, and
-  `GET /ws/rest/v1/actcore/runchart/runs?limit=` (Task: act.refreshFlags) gives the latest runs, the last one
-  taken and whether one is running now. A run skipped because another was in progress, or one a killed JVM
-  never finished, leaves no row.
+- **Run charts.** `GET /ws/rest/v1/actcore/runchart?clinic=<uuid>&startDate=&endDate=&points=week`
+  (App: act.dashboard) calculates ACT 2.0's eight run chart metrics when asked, for a clinic or, with no
+  clinic, for every clinic, from the records as they are now; nothing is stored. It evaluates the report
+  `actcore.runCharts.report` names (the distribution's RHD Run Chart Metrics) once, as the daemon user,
+  for every point of the range, and replays each point's BPG patients' dose histories to that day for
+  the adherent count. `points` is `day` (for a range of up to 92 days), `week` (the default) or `month`,
+  and a range may hold at most 1000 points. Each point's `date` is the day its figure is as of: the last
+  day of its period, or `endDate` for the last period. It answers every metric under `metrics`, each
+  with its `points` and `median`, and the one named by `metric`, if any, under `points` and `median`
+  too. A point has a `value`, and a `count` and `total` (of a percent, its numerator and denominator;
+  of a count, the value and null); a day the report gives no row for counts nobody.
 - **Monthly screening counts.** ACT 2.0's screening data: per clinic and month, for school, community
   and health facility, the people screened, children 0-9, adolescents 10-19, adults 20+, females and
   positives, with notes, in `actcore_screening_count`. `GET /ws/rest/v1/actcore/screeningcounts?clinic=<uuid>&month=YYYY-MM`
