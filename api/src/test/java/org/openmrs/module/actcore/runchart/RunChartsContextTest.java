@@ -272,6 +272,32 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void calculate_shouldRefuseTwoRowsOfTheClinicOnOneDay() {
+		useReportSelecting(row("'" + clinic.getUuid() + "'", 18) + " union all " + row("'" + clinic.getUuid() + "'", 21)
+		        + " union all " + row("'" + clinic.getUuid() + "'", 21));
+		
+		assertRefusedAsDuplicate(clinic, "2026-10-21");
+	}
+	
+	@Test
+	public void calculate_shouldRefuseTwoRowsOfEveryClinicOnOneDay() {
+		useReportSelecting(row("null", 18) + " union all " + row("null", 18) + " union all " + row("null", 21));
+		
+		assertRefusedAsDuplicate(null, "2026-10-18");
+	}
+	
+	private void assertRefusedAsDuplicate(Location asked, String day) {
+		try {
+			runCharts.calculate(asked, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			fail("expected the report to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("more than one row"));
+			assertTrue(e.getMessage(), e.getMessage().contains(day));
+		}
+	}
+	
+	@Test
 	public void calculate_shouldRefuseARowDatedBeforeTheRangesStart() {
 		saveReportOf(clinic.getUuid(), 4, 18, 21);
 		

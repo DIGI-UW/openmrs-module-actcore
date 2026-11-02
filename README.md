@@ -66,7 +66,7 @@ admin rebuild page cannot be scripted from platform 2.6.0.
   too. A point has a `value`, and a `count` and `total` (of a percent, its numerator and denominator;
   of a count, the value and null); a day the report gives no row for counts nobody. A report row dated
   on a day that is not a point fails the request, since the report's point dates and ACT Core's then
-  disagree.
+  disagree, and so do two rows on one day of the clinic asked for, or, when none is, of every clinic.
 - **Monthly screening counts.** ACT 2.0's screening data: per clinic and month, for school, community
   and health facility, the people screened, children 0-9, adolescents 10-19, adults 20+, females and
   positives, with notes, in `actcore_screening_count`. `GET /ws/rest/v1/actcore/screeningcounts?clinic=<uuid>&month=YYYY-MM`

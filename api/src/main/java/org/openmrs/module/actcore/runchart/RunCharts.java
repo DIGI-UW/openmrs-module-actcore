@@ -212,8 +212,8 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The report's rows of the clinic, or of every clinic, by day. A row of any clinic that is undated
-	 * or off the points is refused, as a point it misses would read as zero.
+	 * The report's rows of the clinic, or of every clinic, by day. An undated or off-point row of any
+	 * clinic is refused, and so is a second row of one day, as either would misread a point.
 	 */
 	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
 	        Set<LocalDate> days) {
@@ -239,7 +239,10 @@ public class RunCharts {
 					throw new APIException("The run chart report has no number in its column " + column);
 				}
 			}
-			rows.put(day, row);
+			if (rows.put(day, row) != null) {
+				throw new APIException("The run chart report has more than one row for "
+				        + (wanted.isEmpty() ? "every clinic" : "clinic " + wanted) + " on " + DATE_COLUMN + " " + day);
+			}
 		}
 		return rows;
 	}
