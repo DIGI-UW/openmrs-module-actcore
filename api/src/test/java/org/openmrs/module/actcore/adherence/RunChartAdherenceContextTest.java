@@ -35,16 +35,19 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 	private static final LocalDate EARLIER = TODAY.minusDays(35);
 	
 	/**
-	 * A report listing patient 7 as the one active BPG patient on two days 35 days apart, from the
-	 * start on.
+	 * A report listing patient 7 as the one active BPG patient on two days 35 days apart, and nobody on
+	 * the days between, from the start on.
 	 */
 	@Before
 	public void pointAtAReportListingPatient7() {
-		StringBuilder select = new StringBuilder();
+		StringBuilder select = new StringBuilder("select cast(dateadd('DAY', -x, date '" + TODAY
+		        + "') as date) as point_date, null as clinic_uuid, 0 as total_registrants, 0 as active_registrants,"
+		        + " 0 as active_registrants_seen_last_7_months, 0 as active_registrants_prescribed_prophylaxis,"
+		        + " 0 as consultation_visit_total, 0 as consultation_visits_with_echocardiogram_resulted,"
+		        + " 0 as consultation_visits_with_intervention, 0 as interventions_completed,"
+		        + " 0 as active_registrants_on_bpg, null as bpg_patient_ids from system_range(1, 34)");
 		for (LocalDate day : new LocalDate[] { EARLIER, TODAY }) {
-			if (select.length() > 0) {
-				select.append(" union all ");
-			}
+			select.append(" union all ");
 			select.append("select date '").append(day).append("' as point_date, null as clinic_uuid,")
 			        .append(" 1 as total_registrants, 1 as active_registrants, 1 as active_registrants_seen_last_7_months,")
 			        .append(" 1 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,")
