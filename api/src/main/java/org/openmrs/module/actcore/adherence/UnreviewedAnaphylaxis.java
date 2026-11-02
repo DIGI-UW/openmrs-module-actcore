@@ -43,7 +43,7 @@ final class UnreviewedAnaphylaxis {
 			EncounterType bpg = type("bpg");
 			EncounterType consult = type("consult");
 			Concept answer = Context.getConceptService().getConceptByUuid(property("actcore.nextSteps.anaphylaxisAnswer"));
-			if (bpg == null || consult == null || answer == null) {
+			if (bpg == null || answer == null) {
 				return false;
 			}
 			Encounter trigger = null;
@@ -59,7 +59,7 @@ final class UnreviewedAnaphylaxis {
 				return false;
 			}
 			for (Encounter encounter : Context.getEncounterService().getEncountersByPatient(patient)) {
-				if (!encounter.getVoided() && consult.equals(encounter.getEncounterType()) && later(encounter, trigger)) {
+				if (encounter.getEncounterType().equals(consult) && later(encounter, trigger)) {
 					return false;
 				}
 			}

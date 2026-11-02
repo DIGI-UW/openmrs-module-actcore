@@ -531,6 +531,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(true, steps.get(1).isDone());
 		assertEquals(false, steps.get(1).isNew());
 		assertEquals("Referral sent: a clinician to review", steps.get(1).getReason());
+		assertEquals(true, steps.get(0).isAlert());
+		assertEquals(false, steps.get(1).isAlert());
 	}
 	
 	@Test

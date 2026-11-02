@@ -119,6 +119,47 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals(false, summary(7).isBpgOnHold());
 	}
 	
+	@Test
+	public void of_shouldNotHoldBpgForAnAnaphylaxisRecordedOnAnotherForm() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reportedOn(f.consult, 10);
+		
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldNotHoldBpgForAnAnaphylaxisOnAVoidedBpgForm() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		Encounter report = f.reported(10);
+		report.setVoided(true);
+		report.setVoidReason("entered in error");
+		Context.getEncounterService().saveEncounter(report);
+		
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldKeepTheHoldWhenTheConsultationIsVoided() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reported(10);
+		Context.getEncounterService().voidEncounter(f.consulted(5), "entered in error");
+		
+		assertEquals(true, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldHoldBpgWhenNoConsultationTypeIsMapped() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		property("actcore.nextSteps.encounterTypes", "bpg:" + f.bpg.getUuid());
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reported(10);
+		
+		assertEquals(true, summary(7).isBpgOnHold());
+	}
+	
 	/**
 	 * A BPG Delivery and an RHD Consultation Visit type, and the anaphylaxis answer, as the distro
 	 * configures them.
@@ -138,19 +179,24 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 			property("actcore.nextSteps.anaphylaxisAnswer", anaphylaxis.getUuid());
 		}
 		
-		private void reported(int daysAgo) {
+		private Encounter reported(int daysAgo) {
+			return reportedOn(bpg, daysAgo);
+		}
+		
+		private Encounter reportedOn(EncounterType type, int daysAgo) {
 			Encounter encounter = encounter(7, daysAgo);
-			encounter.setEncounterType(bpg);
+			encounter.setEncounterType(type);
 			Context.getEncounterService().saveEncounter(encounter);
 			Obs obs = obs(encounter, tolerance);
 			obs.setValueCoded(anaphylaxis);
 			Context.getObsService().saveObs(obs, null);
+			return encounter;
 		}
 		
-		private void consulted(int daysAgo) {
+		private Encounter consulted(int daysAgo) {
 			Encounter encounter = encounter(7, daysAgo);
 			encounter.setEncounterType(consult);
-			Context.getEncounterService().saveEncounter(encounter);
+			return Context.getEncounterService().saveEncounter(encounter);
 		}
 		
 		private EncounterType type(String name) {
