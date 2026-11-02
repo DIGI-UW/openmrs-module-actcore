@@ -238,7 +238,7 @@ public class NextSteps {
 		
 		dose();
 		if (latest("patientInfo") == null) {
-			put("patientInfo", "No diagnosis recorded", false);
+			put("patientInfo", "Patient Information not recorded", false);
 		}
 		if (flags.contains(flagKeys.get("notPrescribed"))) {
 			if (mayConsult) {

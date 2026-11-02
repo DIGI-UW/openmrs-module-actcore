@@ -1536,7 +1536,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("patientInfo", keys(steps));
 		assertEquals("Patient Information", steps.get(0).getTitle());
-		assertEquals("No diagnosis recorded", steps.get(0).getReason());
+		assertEquals("Patient Information not recorded", steps.get(0).getReason());
 		assertEquals(false, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 	}
