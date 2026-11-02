@@ -18,7 +18,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.junit.Test;
+import org.openmrs.Concept;
 import org.openmrs.Encounter;
+import org.openmrs.EncounterType;
+import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 
@@ -67,6 +70,92 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 		assertEquals("dueSoon", summary(7).getStatus());
 		assertEquals(TODAY.plusDays(8), summary(8).getNextDue());
 		assertEquals("ok", summary(8).getStatus());
+	}
+	
+	@Test
+	public void of_shouldHoldBpgWhileAnAnaphylaxisAfterBpgIsUnreviewed() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reported(10);
+		
+		assertEquals(true, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldReleaseTheHoldOnceAConsultationFollowsTheAnaphylaxis() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reported(10);
+		f.consulted(5);
+		
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldCountAConsultationSavedAfterTheAnaphylaxisAtTheSameTimeAsTheReview() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		f.reported(10);
+		f.consulted(10);
+		
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldNotHoldBpgForAPatientNowOnOralProphylaxis() {
+		AnaphylaxisFixture f = new AnaphylaxisFixture();
+		f.reported(10);
+		prescribe(encounter(7, 5), oralPenicillin, 5, null);
+		
+		assertEquals("Oral", summary(7).getType());
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	@Test
+	public void of_shouldNotHoldBpgWithoutAnAnaphylaxis() {
+		new AnaphylaxisFixture();
+		prescribe(encounter(7, 40), q28, 40, null);
+		
+		assertEquals(false, summary(7).isBpgOnHold());
+	}
+	
+	/**
+	 * A BPG Delivery and an RHD Consultation Visit type, and the anaphylaxis answer, as the distro
+	 * configures them.
+	 */
+	private class AnaphylaxisFixture {
+		
+		private final EncounterType bpg = type("BPG Delivery");
+		
+		private final EncounterType consult = type("Consultation Visit");
+		
+		private final Concept tolerance = concept("Injection tolerance", "Coded");
+		
+		private final Concept anaphylaxis = concept("Anaphylaxis", "N/A");
+		
+		private AnaphylaxisFixture() {
+			property("actcore.nextSteps.encounterTypes", "bpg:" + bpg.getUuid() + ",consult:" + consult.getUuid());
+			property("actcore.nextSteps.anaphylaxisAnswer", anaphylaxis.getUuid());
+		}
+		
+		private void reported(int daysAgo) {
+			Encounter encounter = encounter(7, daysAgo);
+			encounter.setEncounterType(bpg);
+			Context.getEncounterService().saveEncounter(encounter);
+			Obs obs = obs(encounter, tolerance);
+			obs.setValueCoded(anaphylaxis);
+			Context.getObsService().saveObs(obs, null);
+		}
+		
+		private void consulted(int daysAgo) {
+			Encounter encounter = encounter(7, daysAgo);
+			encounter.setEncounterType(consult);
+			Context.getEncounterService().saveEncounter(encounter);
+		}
+		
+		private EncounterType type(String name) {
+			return Context.getEncounterService().saveEncounterType(new EncounterType(name + " " + System.nanoTime(), name));
+		}
 	}
 	
 	@Test

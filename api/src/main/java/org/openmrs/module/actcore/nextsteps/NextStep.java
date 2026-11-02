@@ -31,12 +31,19 @@ public class NextStep {
 	
 	private final String referralType;
 	
+	private final boolean alert;
+	
 	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold) {
 		this(key, form, title, reason, isNew, done, onHold, null);
 	}
 	
 	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold,
 	    String referralType) {
+		this(key, form, title, reason, isNew, done, onHold, referralType, false);
+	}
+	
+	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold,
+	    String referralType, boolean alert) {
 		this.key = key;
 		this.form = form;
 		this.title = title;
@@ -45,6 +52,7 @@ public class NextStep {
 		this.done = done;
 		this.onHold = onHold;
 		this.referralType = referralType;
+		this.alert = alert;
 	}
 	
 	public String getKey() {
@@ -92,5 +100,13 @@ public class NextStep {
 	 */
 	public String getReferralType() {
 		return referralType;
+	}
+	
+	/**
+	 * Whether the step is a patient safety alert: the review of an anaphylaxis after BPG that no
+	 * consultation has reviewed, or the BPG it holds back.
+	 */
+	public boolean isAlert() {
+		return alert;
 	}
 }

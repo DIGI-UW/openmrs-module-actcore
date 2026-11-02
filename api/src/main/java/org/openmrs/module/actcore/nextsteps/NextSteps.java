@@ -78,6 +78,10 @@ public class NextSteps {
 	
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
 	
+	private static final String ANAPHYLAXIS_REVIEW = "Anaphylaxis reported after BPG: review before the next dose";
+	
+	private static final String ANAPHYLAXIS_REFERRAL = "Anaphylaxis reported: a clinician must review before the next dose";
+	
 	private static final Map<String, String> TITLES = new HashMap<String, String>();
 	static {
 		TITLES.put("bpg", "Give BPG injection");
@@ -268,9 +272,7 @@ public class NextSteps {
 		review(mayConsult, savedThisVisit.contains("echo") ? latest("echo") : null,
 		    "Review the new echo result and update the care plan", null);
 		Encounter anaphylaxisTrigger = anaphylaxis();
-		Review anaphylaxis = review(mayConsult, anaphylaxisTrigger,
-		    "Anaphylaxis reported after BPG: review before the next dose",
-		    "Anaphylaxis reported: a clinician must review before the next dose");
+		Review anaphylaxis = review(mayConsult, anaphylaxisTrigger, ANAPHYLAXIS_REVIEW, ANAPHYLAXIS_REFERRAL);
 		addReferTrigger(mayConsult, anaphylaxisTrigger, anaphylaxis);
 		String below = "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: ";
 		Encounter lowEstimate = lowAdherence();
@@ -288,6 +290,15 @@ public class NextSteps {
 			bpg.reason = mayConsult ? "On hold: complete the consultation before giving BPG"
 			        : "On hold: a clinician must review before the next dose";
 			bpg.onHold = true;
+			bpg.alert = true;
+		}
+		// After every rule, as a later rule's reason can replace the anaphylaxis one on the same step.
+		for (String key : Arrays.asList("consult", "refer")) {
+			Step review = steps.get(key);
+			if (anaphylaxis == Review.NONE && review != null && !review.done
+			        && (ANAPHYLAXIS_REVIEW.equals(review.reason) || ANAPHYLAXIS_REFERRAL.equals(review.reason))) {
+				review.alert = true;
+			}
 		}
 		// Only a review this user is listed holds the BPG dose back; Patient Information never does.
 		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))) {
@@ -714,6 +725,8 @@ public class NextSteps {
 		
 		private boolean onHold;
 		
+		private boolean alert;
+		
 		private boolean referred;
 		
 		private boolean routine;
@@ -732,7 +745,7 @@ public class NextSteps {
 			return new NextStep(key, "refer".equals(key) || onHold ? null : form,
 			        "refer".equals(key) ? "Refer to clinician" : TITLES.get(key),
 			        referred && !done ? "Referral sent: a clinician to review" : reason, isNew && !shownDone, shownDone,
-			        onHold, referralType);
+			        onHold, referralType, alert && !shownDone);
 		}
 	}
 }

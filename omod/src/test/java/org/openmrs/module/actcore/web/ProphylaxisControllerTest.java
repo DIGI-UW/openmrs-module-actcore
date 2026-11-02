@@ -66,11 +66,12 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 		
 		assertEquals("none", summary.get("status"));
 		assertEquals(new HashSet<String>(Arrays.asList("regimen", "type", "intervalDays", "lastGiven", "nextDue", "status",
-		    "onTime", "adherence", "injections")), summary.keySet());
+		    "onTime", "adherence", "injections", "bpgOnHold")), summary.keySet());
 		assertNull(summary.get("regimen"));
 		assertNull(summary.get("onTime"));
 		assertNull(summary.get("adherence"));
 		assertEquals(Collections.emptyList(), summary.get("injections"));
+		assertEquals(false, summary.get("bpgOnHold"));
 	}
 	
 	@Test

@@ -191,6 +191,79 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldMarkTheAnaphylaxisReviewAndTheHeldBpgAsAlerts() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|bpg", keys(steps));
+		assertEquals(true, steps.get(0).isAlert());
+		assertEquals(true, steps.get(1).isAlert());
+	}
+	
+	@Test
+	public void of_shouldMarkTheReferralForAnUnreviewedAnaphylaxisAsAnAlert() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		consult.setEditPrivilege(privilege("Task: test.consult"));
+		Context.getEncounterService().saveEncounterType(consult);
+		authenticateWith("Add Encounters");
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("refer|bpg", keys(steps));
+		assertEquals(true, steps.get(0).isAlert());
+		assertEquals(true, steps.get(1).isAlert());
+	}
+	
+	@Test
+	public void of_shouldNotMarkAConsultationThatReviewedTheAnaphylaxisThisVisit() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("bpg|consult", keys(steps));
+		assertEquals(false, steps.get(0).isAlert());
+		assertEquals(false, steps.get(1).isAlert());
+	}
+	
+	@Test
+	public void of_shouldNotMarkTheReviewOfANewEcho() {
+		lastGiven(10);
+		echoed(at(30));
+		startVisit();
+		inVisit(echo, 0);
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("consult|echo", keys(steps));
+		assertEquals(false, steps.get(0).isAlert());
+	}
+	
+	@Test
+	public void of_shouldNotMarkAConsultationWhoseReasonALowOralEstimateReplaced() {
+		answered(encounterOf(bpg, 20), tolerance, anaphylaxis);
+		prescribe(encounter(7, 15), oralPenicillin, 15, null);
+		estimate(encounterOf(oral, 10), 50);
+		echoed(at(30));
+		
+		List<NextStep> steps = steps();
+		
+		NextStep review = steps.get(0);
+		assertEquals("consult", review.getKey());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", review.getReason());
+		assertEquals(false, review.isAlert());
+	}
+	
+	@Test
 	public void of_shouldListTheHeldBpgOfAnEarlierAnaphylaxisBesideTheReferral() {
 		form(bpg);
 		lastGiven(36);
