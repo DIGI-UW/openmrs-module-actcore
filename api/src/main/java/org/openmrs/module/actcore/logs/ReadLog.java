@@ -13,6 +13,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,8 +39,8 @@ public class ReadLog {
 	
 	static final int PATIENT_MATCHES = 100;
 	
-	/** The most reads one request folds, so a broad filter answers 400 rather than filling the heap. */
-	static final int MAX_READS = 50000;
+	/** How many reads one query fetches; the reads are fetched page by page, by id. */
+	static final int READ_PAGE = 10000;
 	
 	/**
 	 * Entities whose reads are of patients' data even with no patient found, such as a search; the
@@ -133,12 +134,8 @@ public class ReadLog {
 	
 	public Page list(Filter filter) {
 		Page page = new Page();
-		StringBuilder sql = new StringBuilder("select l.id, l.username, l.user_uuid, l.event_time, l.entity_name,"
-		        + " l.session_id, l.ip_address, l.user_agent, l.read_success, count(m.id) as targets,"
-		        + " count(distinct m.patient_uuid) as patients, min(m.patient_uuid) as patient_uuid,"
-		        + " min(m.patient_name) as patient_name from read_audit_log l"
-		        + " left join read_audit_entity_metadata m on m.read_audit_id = l.id where (l.entity_name in ("
-		        + Rows.placeholders(PATIENT_DATA) + ") or exists (select 1 from read_audit_entity_metadata p"
+		StringBuilder sql = new StringBuilder(" where (l.entity_name in (" + Rows.placeholders(PATIENT_DATA)
+		        + ") or exists (select 1 from read_audit_entity_metadata p"
 		        + " where p.read_audit_id = l.id and p.patient_uuid is not null))");
 		List<Object> params = new ArrayList<Object>(PATIENT_DATA);
 		if (filter.username != null) {
@@ -162,13 +159,37 @@ public class ReadLog {
 			        .append(Rows.placeholders(uuids)).append("))");
 			params.addAll(uuids);
 		}
-		sql.append(" group by l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
-		        + " l.user_agent, l.read_success order by l.username, l.event_time, l.id limit " + (MAX_READS + 1));
+		// The page's last id first, through the primary key, so each grouping sorts one page and not the rest.
+		String bound = "select l.id from read_audit_log l" + sql + " and l.id > ? order by l.id limit 1 offset "
+		        + (READ_PAGE - 1);
+		String fetch = "select l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
+		        + " l.user_agent, l.read_success, count(m.id) as targets, count(distinct m.patient_uuid) as patients,"
+		        + " min(m.patient_uuid) as patient_uuid, min(m.patient_name) as patient_name from read_audit_log l"
+		        + " left join read_audit_entity_metadata m on m.read_audit_id = l.id" + sql + " and l.id > ? and l.id <= ?"
+		        + " group by l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
+		        + " l.user_agent, l.read_success";
 		
-		List<Map<String, Object>> reads = Rows.select(sql.toString(), params.toArray());
-		if (reads.size() > MAX_READS) {
-			throw new Rows.TooMany("More than " + MAX_READS + " reads match; narrow the dates, the user or the patient");
+		List<Raw> reads = new ArrayList<Raw>();
+		long after = 0;
+		while (true) {
+			List<Object> boundParams = new ArrayList<Object>(params);
+			boundParams.add(after);
+			List<Map<String, Object>> last = Rows.select(bound, boundParams.toArray());
+			long upTo = last.isEmpty() ? Long.MAX_VALUE : Rows.integer(last.get(0), "id");
+			List<Object> fetchParams = new ArrayList<Object>(params);
+			fetchParams.add(after);
+			fetchParams.add(upTo);
+			for (Map<String, Object> read : Rows.select(fetch, fetchParams.toArray())) {
+				reads.add(new Raw(read));
+			}
+			if (last.isEmpty()) {
+				break;
+			}
+			after = upTo;
 		}
+		reads.sort(
+		    Comparator.comparing((Raw read) -> read.username, Comparator.nullsFirst(Comparator.<String> naturalOrder()))
+		            .thenComparing(read -> read.time).thenComparingLong(read -> read.id));
 		List<Row> rows = fold(reads);
 		rows.sort((a, b) -> b.from.compareTo(a.from));
 		page.totalCount = rows.size();
@@ -183,39 +204,82 @@ public class ReadLog {
 	 * Reads ordered by user and time, folded per patient, or per entity for reads of no single patient,
 	 * while each falls within the window of its row's first.
 	 */
-	static List<Row> fold(List<Map<String, Object>> reads) {
+	static List<Row> fold(List<Raw> reads) {
 		List<Row> rows = new ArrayList<Row>();
 		Map<String, Row> open = new HashMap<String, Row>();
-		for (Map<String, Object> read : reads) {
-			int patients = Rows.integer(read, "patients");
-			String username = StringUtils.defaultIfBlank(Rows.string(read, "username"), Rows.string(read, "user_uuid"));
-			String patientUuid = patients == 1 ? Rows.string(read, "patient_uuid") : null;
-			Date time = Rows.date(read, "event_time");
-			String key = username + ":" + (patientUuid == null ? "-:" + Rows.string(read, "entity_name") : patientUuid);
+		for (Raw read : reads) {
+			String username = StringUtils.defaultIfBlank(read.username, read.userUuid);
+			String patientUuid = read.patients == 1 ? read.patientUuid : null;
+			String key = username + ":" + (patientUuid == null ? "-:" + read.entity : patientUuid);
 			Row row = open.get(key);
-			if (row == null || time.getTime() - row.from.getTime() > WINDOW_MILLIS) {
+			if (row == null || read.time.getTime() - row.from.getTime() > WINDOW_MILLIS) {
 				row = new Row();
-				row.id = username + ":" + (patientUuid == null ? "-" : patientUuid) + ":" + Rows.integer(read, "id");
-				row.from = time;
+				row.id = username + ":" + (patientUuid == null ? "-" : patientUuid) + ":" + read.id;
+				row.from = read.time;
 				row.username = username;
-				row.userUuid = Rows.string(read, "user_uuid");
+				row.userUuid = read.userUuid;
 				row.patientUuid = patientUuid;
-				row.patientName = patientUuid == null ? null : Rows.string(read, "patient_name");
-				row.sessionId = Rows.string(read, "session_id");
-				row.ip = Rows.string(read, "ip_address");
-				row.userAgent = Rows.string(read, "user_agent");
+				row.patientName = patientUuid == null ? null : read.patientName;
+				row.sessionId = read.sessionId;
+				row.ip = read.ip;
+				row.userAgent = read.userAgent;
 				rows.add(row);
 				open.put(key, row);
 			}
-			row.to = time;
+			row.to = read.time;
 			Read entry = new Read();
-			entry.time = time;
-			entry.entity = Rows.string(read, "entity_name");
-			entry.description = describe(entry.entity, Rows.integer(read, "targets"), patients,
-			    Rows.truthy(read, "read_success"));
+			entry.time = read.time;
+			entry.entity = read.entity;
+			entry.description = describe(read.entity, read.targets, read.patients, read.success);
 			row.reads.add(entry);
 		}
 		return rows;
+	}
+	
+	/** One row of the reads query, kept as fields rather than a map while every page is read. */
+	static final class Raw {
+		
+		final long id;
+		
+		final String username;
+		
+		final String userUuid;
+		
+		final Date time;
+		
+		final String entity;
+		
+		final String sessionId;
+		
+		final String ip;
+		
+		final String userAgent;
+		
+		final boolean success;
+		
+		final int targets;
+		
+		final int patients;
+		
+		final String patientUuid;
+		
+		final String patientName;
+		
+		Raw(Map<String, Object> read) {
+			id = Rows.integer(read, "id");
+			username = Rows.string(read, "username");
+			userUuid = Rows.string(read, "user_uuid");
+			time = Rows.date(read, "event_time");
+			entity = Rows.string(read, "entity_name");
+			sessionId = Rows.string(read, "session_id");
+			ip = Rows.string(read, "ip_address");
+			userAgent = Rows.string(read, "user_agent");
+			success = Rows.truthy(read, "read_success");
+			targets = Rows.integer(read, "targets");
+			patients = Rows.integer(read, "patients");
+			patientUuid = Rows.string(read, "patient_uuid");
+			patientName = Rows.string(read, "patient_name");
+		}
 	}
 	
 	/** "the patient record", "2 encounters", "a search: 4 patients". */

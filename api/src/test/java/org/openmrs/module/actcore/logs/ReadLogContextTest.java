@@ -220,18 +220,22 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void refusesAFilterMatchingMoreReadsThanOneRequestFolds() {
+	public void foldsReadsAcrossQueryPagesWithoutACap() {
+		int bulk = 5 * ReadLog.READ_PAGE + 1;
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '2026-10-21 10:00:00', random_uuid()"
 		        + " from system_range(1, %d)",
-		    ReadLog.MAX_READS);
+		    bulk);
 		
-		try {
-			log.list(new ReadLog.Filter());
-			fail("expected the reads to be refused");
-		}
-		catch (Rows.TooMany expected) {}
+		ReadLog.Page all = log.list(new ReadLog.Filter());
+		ReadLog.Page page = log.list(filter("bulk", null, null, null));
+		
+		assertEquals(1, page.totalCount);
+		assertEquals(bulk, page.results.get(0).reads.size());
 		assertEquals(4, log.list(filter("communityClinician", null, null, null)).totalCount);
+		assertEquals(log.list(filter("communityClinician", null, null, null)).totalCount + 1
+		        + log.list(filter("dataClerk", null, null, null)).totalCount,
+		    all.totalCount);
 	}
 	
 	private static ReadLog.Filter filter(String username, String patient, LocalDate from, LocalDate to) {
