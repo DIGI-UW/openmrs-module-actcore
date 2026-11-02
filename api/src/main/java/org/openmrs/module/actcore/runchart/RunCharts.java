@@ -212,8 +212,8 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The report's rows of the clinic, or of every clinic, by day. A row of any clinic that is undated,
-	 * or on or after the start but off the points, is refused, as a point it misses would read as zero.
+	 * The report's rows of the clinic, or of every clinic, by day. A row of any clinic that is undated
+	 * or off the points is refused, as a point it misses would read as zero.
 	 */
 	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
 	        Set<LocalDate> days) {
@@ -225,7 +225,7 @@ public class RunCharts {
 				throw new APIException("The run chart report has a row with no " + DATE_COLUMN);
 			}
 			LocalDate day = toLocalDate(dated);
-			if (!day.isBefore(start) && !days.contains(day)) {
+			if (!days.contains(day)) {
 				throw new APIException("The run chart report has a row whose " + DATE_COLUMN + " " + day
 				        + " is not a point of " + start + " to " + end + " in " + period.name().toLowerCase()
 				        + "s, so the report's point dates and ACT Core's disagree");

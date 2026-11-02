@@ -272,15 +272,10 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void calculate_shouldIgnoreARowDatedBeforeTheRangesStart() {
+	public void calculate_shouldRefuseARowDatedBeforeTheRangesStart() {
 		saveReportOf(clinic.getUuid(), 4, 18, 21);
 		
-		List<RunCharts.Point> active = runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK)
-		        .get("active_registrants");
-		
-		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 18), END), dates(active));
-		assertEquals(Double.valueOf(18), active.get(0).value);
-		assertEquals(Double.valueOf(21), active.get(1).value);
+		assertRefusedNaming("2026-10-04");
 	}
 	
 	private void assertRefusedNaming(String day) {
