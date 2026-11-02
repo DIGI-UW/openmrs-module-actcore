@@ -170,6 +170,8 @@ public class ActivityLog {
 		
 		String voidReason;
 		
+		boolean patientVoided;
+		
 		Revision revision;
 	}
 	
@@ -566,6 +568,12 @@ public class ActivityLog {
 		if (personId != null && isPatient(personId)) {
 			entry.kind = "edited";
 			entry.patientId = personId;
+			// Not patient_AUD: it has no REVTYPE, so became() would read every voided row as the void.
+			Map<String, Object> voided = voiding(revision.first("person_AUD", MOD), "person_AUD", "person_id", revision.id);
+			if (voided != null) {
+				entry.patientVoided = true;
+				entry.voidReason = Rows.string(voided, "void_reason");
+			}
 			return entry;
 		}
 		List<Map<String, Object>> users = revision.of("users_AUD");
@@ -623,6 +631,11 @@ public class ActivityLog {
 		return before == null || !Rows.truthy(before, flag);
 	}
 	
+	/** The row when it voids its entity in this revision, else null. */
+	private static Map<String, Object> voiding(Map<String, Object> row, String table, String idColumn, int revisionId) {
+		return row != null && became(row, table, idColumn, "voided", revisionId) ? row : null;
+	}
+	
 	/** Whether the row's column holds a value where the entity's previous revision had none. */
 	private static boolean gained(Map<String, Object> row, String table, String idColumn, String column, int revisionId) {
 		if (row.get(column) == null) {
@@ -641,6 +654,12 @@ public class ActivityLog {
 			case "edited":
 			case "voided": {
 				entry.target = patient(entry.patientId, revision);
+				if (entry.encounterId == null && entry.patientVoided) {
+					entry.action = "Voided the patient";
+					entry.summary = StringUtils.isBlank(entry.voidReason) ? "No reason given"
+					        : "Reason: " + entry.voidReason;
+					return;
+				}
 				if (entry.encounterId == null) {
 					entry.action = "Edited patient details";
 					entry.summary = changed(fields(entry), "Details changed");

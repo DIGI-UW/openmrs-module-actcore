@@ -351,6 +351,35 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void listsAVoidedPatientByNameAsVoidedAndALaterEditAsAnEdit() {
+		sql("update person set voided = true where person_id = %d", PATIENT);
+		sql("update patient set voided = true where patient_id = %d", PATIENT);
+		sql("update person_name set voided = true where person_id = %d", PATIENT);
+		sql("update patient_identifier set voided = true where patient_id = %d", PATIENT);
+		revision(60, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, voided, void_reason) values (%d, 60, 1, 'F', true, 'entered twice')",
+		    PATIENT);
+		sql("insert into patient_AUD (patient_id, REV, voided, void_reason) values (%d, 60, true, 'entered twice')",
+		    PATIENT);
+		revision(61, "2026-10-21 14:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, birthdate, voided, void_reason) values (%d, 61, 1, 'F', '1976-08-26 00:00:00', true, 'entered twice')",
+		    PATIENT);
+		sql("insert into patient_AUD (patient_id, REV, voided, void_reason) values (%d, 61, true, 'entered twice')",
+		    PATIENT);
+		
+		ActivityLog.Page page = log.list(new ActivityLog.Filter());
+		
+		ActivityLog.Entry voided = entry(page, 60);
+		assertEquals("edited", voided.kind);
+		assertEquals("Voided the patient", voided.action);
+		assertEquals("Reason: entered twice", voided.summary);
+		assertEquals("Collet Test Chebaskwony", voided.target.display);
+		assertEquals("6TS-4", voided.target.actId);
+		assertEquals("Edited patient details", entry(page, 61).action);
+		assertEquals("Collet Test Chebaskwony", entry(page, 61).target.display);
+	}
+	
+	@Test
 	public void listsALaterEditOfADeceasedPatientOrAVoidedFormAsAnEdit() {
 		revision(DECEASED, "2026-10-21 13:00:00", clinician.getUserId());
 		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, dead, death_date) values (%d, %d, 1, 'F', true, '2026-10-18 00:00:00')",
