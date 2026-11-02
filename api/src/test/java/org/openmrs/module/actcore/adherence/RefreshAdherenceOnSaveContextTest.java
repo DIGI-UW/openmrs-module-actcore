@@ -368,6 +368,62 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		assertTrue(logged.get(0), logged.get(0).startsWith("Refreshing the adherence and flags of patient 7 took "));
 	}
 	
+	@Test
+	public void saveEncounter_shouldNotWarnOfARefreshUnderASecond() {
+		List<LogEvent> logged = warnings(encounters());
+		
+		assertEquals(0, logged.size());
+	}
+	
+	@Test
+	public void saveEncounter_shouldWarnOfARefreshOverASecond() {
+		List<LogEvent> logged = warnings(encounters(new IntConsumer() {
+			
+			@Override
+			public void accept(int patientId) {
+				try {
+					Thread.sleep(RefreshAdherenceOnSave.SLOW_MILLIS + 100);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+		}));
+		
+		assertEquals(1, logged.size());
+		assertEquals(Level.WARN, logged.get(0).getLevel());
+		String message = logged.get(0).getMessage().getFormattedMessage();
+		assertTrue(message, message.startsWith("Refreshing the adherence and flags of patient 7 took "));
+	}
+	
+	/**
+	 * What the advice logs at WARN, as the distribution's log4j2.xml leaves org.openmrs, for one save.
+	 */
+	private List<LogEvent> warnings(EncounterService service) {
+		final List<LogEvent> logged = new ArrayList<LogEvent>();
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				logged.add(event.toImmutable());
+			}
+		};
+		appender.start();
+		Logger logger = (Logger) LogManager.getLogger(RefreshAdherenceOnSave.class);
+		Level level = logger.getLevel();
+		logger.addAppender(appender);
+		logger.setLevel(Level.WARN);
+		try {
+			service.saveEncounter(encounter(7, 0));
+			commit();
+		}
+		finally {
+			logger.removeAppender(appender);
+			logger.setLevel(level);
+		}
+		return logged;
+	}
+	
 	private Flag overdueDoseNotYetGiven() {
 		Flag overdue = committed(overdueFlag());
 		prescribe(committed(encounter(7, 40)), q28, 40, null);
