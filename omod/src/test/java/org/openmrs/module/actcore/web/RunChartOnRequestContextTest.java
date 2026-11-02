@@ -65,29 +65,27 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	private final List<String> createdPrivileges = new ArrayList<String>();
 	
 	/**
-	 * A report answering a row of every clinic for four point dates, with the day of month as the
-	 * active count, from the range's start on.
+	 * A report answering a row of every clinic for each point of the range asked for in 2026 up to 21
+	 * October, with the day of month as the active count.
 	 */
 	@Before
-	public void pointAtAReportOfFourPoints() {
+	public void pointAtAReportOfEveryPoint() {
 		DaemonTokens.pass("actcore", new ActCoreActivator());
-		StringBuilder select = new StringBuilder();
-		for (int day : new int[] { 4, 11, 18, 21 }) {
-			if (select.length() > 0) {
-				select.append(" union all ");
-			}
-			select.append("select date '2026-10-").append(day).append("' as point_date, null as clinic_uuid,")
-			        .append(" 40 as total_registrants, ").append(day).append(" as active_registrants,")
-			        .append(" 2 as active_registrants_seen_last_7_months, 3 as active_registrants_prescribed_prophylaxis,")
-			        .append(" 2 as consultation_visit_total, 1 as consultation_visits_with_echocardiogram_resulted,")
-			        .append(" 0 as consultation_visits_with_intervention, 1 as interventions_completed,")
-			        .append(" 0 as active_registrants_on_bpg, null as bpg_patient_ids");
-		}
+		String day = "cast(dateadd('DAY', -x, date '2026-10-21') as date)";
+		String select = "select " + day + " as point_date, null as clinic_uuid, 40 as total_registrants, day_of_month(" + day
+		        + ") as active_registrants, 2 as active_registrants_seen_last_7_months,"
+		        + " 3 as active_registrants_prescribed_prophylaxis, 2 as consultation_visit_total,"
+		        + " 1 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
+		        + " 1 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"
+		        + " from system_range(0, 293)";
 		SqlDataSetDefinition sql = new SqlDataSetDefinition();
 		sql.addParameter(new Parameter("startDate", "From", java.util.Date.class));
 		sql.addParameter(new Parameter("endDate", "To", java.util.Date.class));
 		sql.addParameter(new Parameter("points", "Points", String.class));
-		sql.setSqlQuery("select * from (" + select + ") points where point_date >= :startDate");
+		sql.setSqlQuery("select * from (" + select + ") points where point_date >= :startDate"
+		        + " and point_date <= :endDate and (point_date = :endDate or :points = 'day'"
+		        + " or (:points = 'week' and day_of_week(point_date) = 1)"
+		        + " or (:points = 'month' and day_of_month(dateadd('DAY', 1, point_date)) = 1))");
 		ReportDefinition report = new ReportDefinition();
 		report.setUuid(REPORT_UUID);
 		report.setName("Run chart on request test report");

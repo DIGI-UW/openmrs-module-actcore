@@ -160,8 +160,10 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void calculate_shouldCountNobodyOnADayTheReportGivesNoRowFor() {
-		saveReportOf(clinic.getUuid(), 19, 21);
+	public void calculate_shouldCountNobodyForTheClinicOnAPointItHasNoRowFor() {
+		String clinicRow = "'" + clinic.getUuid() + "'";
+		useReportSelecting(row(clinicRow, 19) + " union all " + row(clinicRow, 21) + " union all " + row("null", 19)
+		        + " union all " + row("null", 20) + " union all " + row("null", 21));
 		
 		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, LocalDate.of(2026, 10, 19), END,
 		    RunCharts.Period.DAY);
@@ -272,6 +274,35 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void calculate_shouldRefuseAPointWithNoRowOfEveryClinic() {
+		useReportSelecting(row("'" + clinic.getUuid() + "'", 18) + " union all " + row("'" + clinic.getUuid() + "'", 21)
+		        + " union all " + row("null", 21));
+		
+		try {
+			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			fail("expected the report to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("no row of every clinic"));
+			assertTrue(e.getMessage(), e.getMessage().contains("2026-10-18"));
+		}
+	}
+	
+	@Test
+	public void calculate_shouldRefuseAReportGivingOnlyTheEndDatesPointOfAMultiPointRange() {
+		saveReportOf(clinic.getUuid(), 21);
+		
+		try {
+			runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunCharts.Period.DAY);
+			fail("expected the report to be refused");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("no row of every clinic"));
+			assertTrue(e.getMessage(), e.getMessage().contains("2026-10-19"));
+		}
+	}
+	
+	@Test
 	public void calculate_shouldRefuseTwoRowsOfTheClinicOnOneDay() {
 		useReportSelecting(row("'" + clinic.getUuid() + "'", 18) + " union all " + row("'" + clinic.getUuid() + "'", 21)
 		        + " union all " + row("'" + clinic.getUuid() + "'", 21));
@@ -324,7 +355,12 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(String.valueOf(RunCharts.MOST_POINTS)));
 		}
-		saveReportOf(clinic.getUuid(), 21);
+		useReportSelecting("select cast(dateadd('DAY', -x, date '2026-10-21') as date) as point_date, null as clinic_uuid,"
+		        + " 0 as total_registrants, 0 as active_registrants, 0 as active_registrants_seen_last_7_months,"
+		        + " 0 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,"
+		        + " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
+		        + " 0 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"
+		        + " from system_range(0, " + (RunCharts.MOST_POINTS - 1) + ")");
 		
 		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS - 1),
 		    END, RunCharts.Period.DAY);
