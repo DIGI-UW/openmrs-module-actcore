@@ -33,7 +33,37 @@ public class NextStepsDefaultsUpgradeTest {
 	        + "consult:c2503561-c00d-5460-8157-43d594472b4a,echo:730f5ec2-7102-55d0-8602-2d792844f245,"
 	        + "procedures:c9b87090-8768-50be-987e-8ca0a8983429,inr:b4bb88a3-9a04-5142-85bd-bb63c270f632";
 	
+	private static final String REFER_CHANGESET = "//changeSet[@id='actcore-2026-11-02-next-steps-refer']/update";
+	
+	private static final String REFER = "refer:f423ba04-0f7a-414e-98c7-6b4d5ba0d93a";
+	
+	// The value config.xml shipped before the refer changeset; never update it to a later default.
+	private static final String DEFAULT_BEFORE_REFER = EARLIER_DEFAULT + "," + PATIENT_INFO
+	        + ",pregnancy:ce6b111e-9beb-5a91-91ad-ec5043976fd5";
+	
 	private final XPath xpath = XPathFactory.newInstance().newXPath();
+	
+	@Test
+	public void upgradeAddsReferOnlyToTheDefaultsBeforeIt() throws Exception {
+		Document liquibase = parse("target/classes/liquibase.xml");
+		
+		assertEquals(DEFAULT_BEFORE_REFER + "," + REFER,
+		    xpath.evaluate(REFER_CHANGESET + "[1]/column[@name='property_value']/@value", liquibase));
+		assertEquals("property = 'actcore.nextSteps.encounterTypes' AND property_value = '" + DEFAULT_BEFORE_REFER + "'",
+		    xpath.evaluate(REFER_CHANGESET + "[1]/where", liquibase).trim());
+		// An install upgraded by the patientInfo changeset before pregnancy joined the default.
+		String beforePregnancy = EARLIER_DEFAULT + "," + PATIENT_INFO;
+		assertEquals(DEFAULT_BEFORE_REFER + "," + REFER,
+		    xpath.evaluate(REFER_CHANGESET + "[2]/column[@name='property_value']/@value", liquibase));
+		assertEquals("property = 'actcore.nextSteps.encounterTypes' AND property_value = '" + beforePregnancy + "'",
+		    xpath.evaluate(REFER_CHANGESET + "[2]/where", liquibase).trim());
+		assertEquals("2", xpath.evaluate("count(" + REFER_CHANGESET + ")", liquibase));
+	}
+	
+	@Test
+	public void encounterTypesDefaultIncludesRefer() throws Exception {
+		assertEquals(DEFAULT_BEFORE_REFER + "," + REFER, currentDefault());
+	}
 	
 	@Test
 	public void upgradeAddsPatientInformationOnlyToTheEarlierEncounterTypesDefault() throws Exception {
@@ -47,12 +77,12 @@ public class NextStepsDefaultsUpgradeTest {
 	
 	@Test
 	public void encounterTypesDefaultIncludesPatientInformation() throws Exception {
-		String current = xpath
-		        .evaluate("//globalProperty[normalize-space(property)='actcore.nextSteps.encounterTypes']/defaultValue",
-		            parse("target/classes/config.xml"))
-		        .trim();
-		
-		assertTrue(Arrays.asList(current.split(",")).contains(PATIENT_INFO));
+		assertTrue(Arrays.asList(currentDefault().split(",")).contains(PATIENT_INFO));
+	}
+	
+	private String currentDefault() throws Exception {
+		return xpath.evaluate("//globalProperty[normalize-space(property)='actcore.nextSteps.encounterTypes']/defaultValue",
+		    parse("target/classes/config.xml")).trim();
 	}
 	
 	private static Document parse(String path) throws Exception {
