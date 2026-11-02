@@ -47,8 +47,10 @@ public final class ProphylaxisSummary {
 	
 	private final List<Injection> injections;
 	
+	private final boolean bpgOnHold;
+	
 	private ProphylaxisSummary(String regimen, String type, Integer intervalDays, LocalDate lastGiven, LocalDate nextDue,
-	    String status, OnTime onTime, Double adherence, List<Injection> injections) {
+	    String status, OnTime onTime, Double adherence, List<Injection> injections, boolean bpgOnHold) {
 		this.regimen = regimen;
 		this.type = type;
 		this.intervalDays = intervalDays;
@@ -58,6 +60,7 @@ public final class ProphylaxisSummary {
 		this.onTime = onTime;
 		this.adherence = adherence;
 		this.injections = injections;
+		this.bpgOnHold = bpgOnHold;
 	}
 	
 	/**
@@ -68,11 +71,12 @@ public final class ProphylaxisSummary {
 		AdherenceReplay.Row row = AdherenceReplay.replay(history, today, AdherenceRefresh.oralFirstDueDays());
 		List<Injection> injections = timings(history.prescriptions, history.injections, today);
 		if (row == null || row.interval == null) {
-			return new ProphylaxisSummary(null, null, null, null, null, "none", null, null, injections);
+			return new ProphylaxisSummary(null, null, null, null, null, "none", null, null, injections, false);
 		}
 		boolean injected = row.interval > 0;
 		return new ProphylaxisSummary(name(row.regimen), injected ? "BPG" : "Oral", row.interval, row.lastGiven, row.nextDue,
-		        status(row.nextDue, today), injected ? onTime(injections, today) : null, row.adherence, injections);
+		        status(row.nextDue, today), injected ? onTime(injections, today) : null, row.adherence, injections,
+		        injected && UnreviewedAnaphylaxis.of(patient));
 	}
 	
 	private static String name(Integer conceptId) {
@@ -210,6 +214,14 @@ public final class ProphylaxisSummary {
 	 */
 	public Double getAdherence() {
 		return adherence;
+	}
+	
+	/**
+	 * Whether the patient is on BPG and a BPG Delivery form recorded anaphylaxis that no RHD
+	 * Consultation Visit has followed: no dose until a clinician reviews it.
+	 */
+	public boolean isBpgOnHold() {
+		return bpgOnHold;
 	}
 	
 	/** Every BPG injection recorded up to today, newest first, whatever the regimen in force now. */

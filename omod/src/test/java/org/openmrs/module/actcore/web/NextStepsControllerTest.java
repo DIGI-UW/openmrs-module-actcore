@@ -69,6 +69,7 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(false, step.get("isNew"));
 		assertEquals(false, step.get("done"));
 		assertEquals(false, step.get("onHold"));
+		assertEquals(false, step.get("alert"));
 		assertTrue(step.containsKey("form"));
 		assertTrue(step.containsKey("referralType"));
 		assertNull(step.get("referralType"));
