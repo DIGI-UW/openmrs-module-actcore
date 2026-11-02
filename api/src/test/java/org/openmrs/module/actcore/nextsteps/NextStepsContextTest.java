@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.nextsteps;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -36,6 +37,7 @@ import org.openmrs.Visit;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.AdherenceContextTest;
+import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.actcore.registry.EnrolOnRegistration;
 import org.openmrs.module.actcore.task.RaisedFlags;
@@ -153,6 +155,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(true, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 		assertEquals(true, steps.get(1).isDone());
+		// The dose is done, and the banner holds the next one.
+		assertEquals(true, ProphylaxisSummary.of(patient, TODAY).isBpgOnHold());
 	}
 	
 	@Test
@@ -233,6 +237,103 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("bpg|consult", keys(steps));
 		assertEquals(false, steps.get(0).isAlert());
 		assertEquals(false, steps.get(1).isAlert());
+	}
+	
+	@Test
+	public void of_shouldHoldBpgAsTheBannerDoesForAnUnreviewedAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		assertHeldOnTheCardAndTheBanner(true);
+	}
+	
+	@Test
+	public void of_shouldLiftTheBpgHoldAsTheBannerDoesOnceALaterConsultationReviewsIt() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(consult, 5);
+		
+		assertHeldOnTheCardAndTheBanner(false);
+	}
+	
+	@Test
+	public void of_shouldHoldBpgAsTheBannerDoesWhenTheOnlyConsultationCameBeforeTheAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		encounterOf(consult, 20);
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		assertHeldOnTheCardAndTheBanner(true);
+	}
+	
+	@Test
+	public void of_shouldLeaveBpgUnheldAsTheBannerDoesWhenTheAnaphylaxisAnswerIsOnAnotherForm() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(oral, 10), tolerance, anaphylaxis);
+		
+		assertHeldOnTheCardAndTheBanner(false);
+	}
+	
+	@Test
+	public void of_shouldHoldBpgAsTheBannerDoesAfterALaterBpgFormWithoutAnaphylaxis() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		encounterOf(bpg, 3);
+		
+		assertHeldOnTheCardAndTheBanner(true);
+	}
+	
+	@Test
+	public void of_shouldLiftTheBpgHoldAsTheBannerDoesOnceAConsultationThisVisitReviewsIt() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		inVisit(consult, 0);
+		
+		assertHeldOnTheCardAndTheBanner(false);
+	}
+	
+	@Test
+	public void of_shouldHoldBpgAsTheBannerDoesForAnAnaphylaxisSavedAfterAConsultationAtTheSameTime() {
+		lastGiven(36);
+		echoed(at(30));
+		startVisit();
+		inVisit(consult, 0);
+		answered(inVisit(bpg, 0), tolerance, anaphylaxis);
+		
+		assertHeldOnTheCardAndTheBanner(true);
+	}
+	
+	@Test
+	public void of_shouldHoldBpgAsTheBannerDoesForASecondAnaphylaxisAfterAReviewedOne() {
+		lastGiven(36);
+		echoed(at(30));
+		answered(encounterOf(bpg, 20), tolerance, anaphylaxis);
+		encounterOf(consult, 15);
+		answered(encounterOf(bpg, 10), tolerance, anaphylaxis);
+		
+		assertHeldOnTheCardAndTheBanner(true);
+	}
+	
+	@Test
+	public void of_shouldLeaveBpgUnheldAsTheBannerDoesOnceTheAnaphylaxisAnswerIsVoided() {
+		lastGiven(36);
+		echoed(at(30));
+		Context.getObsService().voidObs(answered(encounterOf(bpg, 10), tolerance, anaphylaxis), "answered in error");
+		
+		assertHeldOnTheCardAndTheBanner(false);
+	}
+	
+	private void assertHeldOnTheCardAndTheBanner(boolean held) {
+		NextStep dose = step("bpg");
+		assertFalse("the BPG step is done this visit", dose.isDone());
+		assertEquals(held, dose.isOnHold());
+		assertEquals(held, ProphylaxisSummary.of(patient, TODAY).isBpgOnHold());
 	}
 	
 	@Test
@@ -1900,12 +2001,16 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	private NextStep referStep() {
+		return step("refer");
+	}
+	
+	private NextStep step(String key) {
 		for (NextStep step : steps()) {
-			if ("refer".equals(step.getKey())) {
+			if (key.equals(step.getKey())) {
 				return step;
 			}
 		}
-		throw new AssertionError("No Refer to clinician step");
+		throw new AssertionError("No " + key + " step");
 	}
 	
 	/**
@@ -1977,10 +2082,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		Context.getObsService().saveObs(group, null);
 	}
 	
-	private void answered(Encounter encounter, Concept question, Concept answer) {
+	private Obs answered(Encounter encounter, Concept question, Concept answer) {
 		Obs obs = obs(encounter, question);
 		obs.setValueCoded(answer);
-		Context.getObsService().saveObs(obs, null);
+		return Context.getObsService().saveObs(obs, null);
 	}
 	
 	private Flag flag(String name) {
