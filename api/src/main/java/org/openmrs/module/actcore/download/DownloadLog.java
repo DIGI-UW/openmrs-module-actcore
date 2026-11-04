@@ -24,6 +24,7 @@ import org.hibernate.type.TimestampType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.logs.Names;
 
 /**
  * Each download, as ACT 2.0's audit log kept it. The audit log module records reads and changes but
@@ -107,7 +108,7 @@ public class DownloadLog {
 			entry.date = (Date) columns[0];
 			entry.userUuid = (String) columns[1];
 			entry.formUuid = (String) columns[2];
-			entry.formName = (String) columns[3];
+			entry.formName = Names.formName(entry.formUuid, (String) columns[3]);
 			entry.detail = (String) columns[4];
 			entries.add(entry);
 		}

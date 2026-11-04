@@ -1179,7 +1179,7 @@ public class ActivityLog {
 				return names.program(((Number) value).intValue());
 			case "form_id": {
 				Map<String, Object> form = names.form(((Number) value).intValue());
-				return form == null ? "Form " + value : Rows.string(form, "name");
+				return form == null ? "Form " + value : Names.formName(Rows.string(form, "uuid"), Rows.string(form, "name"));
 			}
 			case "encounter_type": {
 				Map<String, Object> type = names.row("encounter_type", "encounter_type_id", ((Number) value).intValue());
@@ -1294,7 +1294,7 @@ public class ActivityLog {
 		Map<String, Object> form = names.form(Rows.integer(row, "form_id"));
 		if (form != null) {
 			ref.formUuid = Rows.string(form, "uuid");
-			ref.formName = Rows.string(form, "name");
+			ref.formName = Names.formName(ref.formUuid, Rows.string(form, "name"));
 		}
 		return ref;
 	}
