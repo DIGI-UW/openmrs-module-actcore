@@ -226,6 +226,19 @@ public class Names {
 		return row("form", "form_id", formId);
 	}
 	
+	/**
+	 * The name users see for a form: its ui.i18n.Form.name message, as REST displays it, else its
+	 * stored name.
+	 */
+	public static String formName(String uuid, String name) {
+		if (uuid == null) {
+			return name;
+		}
+		String code = "ui.i18n.Form.name." + uuid;
+		String shown = Context.getMessageSourceService().getMessage(code);
+		return shown == null || shown.equals(code) ? name : shown;
+	}
+	
 	public String encounterTypeName(Integer typeId) {
 		Map<String, Object> type = row("encounter_type", "encounter_type_id", typeId);
 		return type == null ? null : Rows.string(type, "name");

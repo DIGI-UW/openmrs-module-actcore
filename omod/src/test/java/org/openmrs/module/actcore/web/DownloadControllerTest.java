@@ -43,6 +43,10 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.messagesource.MessageSourceService;
+import org.openmrs.messagesource.MutableMessageSource;
+import org.openmrs.messagesource.PresentationMessage;
+import org.openmrs.messagesource.impl.CachedMessageSource;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -212,6 +216,26 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		detail.put("identifiers", false);
 		detail.put("researchOnly", true);
 		assertEquals(detail, entry.get("detail"));
+	}
+	
+	@Test
+	public void namesADownloadedFormByTheNameUsersSee() throws Exception {
+		MessageSourceService service = Context.getMessageSourceService();
+		MutableMessageSource previous = service.getActiveMessageSource();
+		CachedMessageSource shown = new CachedMessageSource();
+		shown.addPresentation(
+		    new PresentationMessage("ui.i18n.Form.name." + form.getUuid(), Context.getLocale(), "Echocardiogram", null));
+		service.setActiveMessageSource(shown);
+		try {
+			Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, question.getUuid());
+			authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+			controller.download(body());
+			
+			assertEquals("Echocardiogram", new DownloadLog().list(null, null, null, null).get(0).formName);
+		}
+		finally {
+			service.setActiveMessageSource(previous);
+		}
 	}
 	
 	@Test

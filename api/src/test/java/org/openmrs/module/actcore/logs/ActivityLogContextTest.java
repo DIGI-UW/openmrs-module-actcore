@@ -37,6 +37,10 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.messagesource.MessageSourceService;
+import org.openmrs.messagesource.MutableMessageSource;
+import org.openmrs.messagesource.PresentationMessage;
+import org.openmrs.messagesource.impl.CachedMessageSource;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -191,6 +195,55 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(encounter.getUuid(), entry.encounter.uuid);
 		assertEquals(form.getUuid(), entry.encounter.formUuid);
 		assertEquals(Timestamp.valueOf("2026-10-21 10:52:00"), entry.encounter.visitDate);
+	}
+	
+	@Test
+	public void namesAFormByTheNameUsersSeeWhenItHasOne() {
+		MessageSourceService service = Context.getMessageSourceService();
+		MutableMessageSource previous = service.getActiveMessageSource();
+		CachedMessageSource shown = new CachedMessageSource();
+		shown.addPresentation(
+		    new PresentationMessage("ui.i18n.Form.name." + form.getUuid(), Context.getLocale(), "BPG Delivery", null));
+		service.setActiveMessageSource(shown);
+		try {
+			ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), SAVED);
+			
+			assertEquals("Saved BPG Delivery", entry.action);
+			assertEquals("BPG Delivery", entry.encounter.formName);
+		}
+		finally {
+			service.setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesAFormAnEditMovedTheEncounterToByTheNameUsersSee() {
+		Form other = new Form();
+		other.setName("RHD Pregnancy");
+		other.setVersion("1");
+		other.setEncounterType(Context.getEncounterService().getEncounterType(1));
+		Context.getFormService().saveForm(other);
+		revision(40, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, 40, 1, '%s', false, '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), other.getFormId(), PATIENT);
+		MessageSourceService service = Context.getMessageSourceService();
+		MutableMessageSource previous = service.getActiveMessageSource();
+		CachedMessageSource shown = new CachedMessageSource();
+		shown.addPresentation(
+		    new PresentationMessage("ui.i18n.Form.name." + other.getUuid(), Context.getLocale(), "Pregnancy", null));
+		service.setActiveMessageSource(shown);
+		try {
+			List<String> values = new ArrayList<String>();
+			for (ActivityLog.Field field : log.details(40).fields) {
+				values.add(field.current);
+			}
+			
+			assertTrue(values.toString(), values.contains("Pregnancy"));
+		}
+		finally {
+			service.setActiveMessageSource(previous);
+		}
 	}
 	
 	@Test
