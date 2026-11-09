@@ -182,8 +182,7 @@ public final class AdherenceCalculation {
 		LocalDate latestPrescription = started.lastKey();
 		int intervalDays = started.get(latestPrescription);
 		if (intervalDays != 0) {
-			// A change of injection prescription keeps the dose that was due: the new interval counts from the
-			// latest injection of the run, or from the run's start when none was given, as adherence does.
+			// A change of injection prescription keeps the dose already due, so count from the run as adherence does.
 			List<LocalDate> dates = new ArrayList<LocalDate>(started.keySet());
 			LocalDate runStart = injectionRunStart(started, dates, dates.size() - 1);
 			LocalDate from = latestInjection != null && !latestInjection.isBefore(runStart) ? latestInjection : runStart;
