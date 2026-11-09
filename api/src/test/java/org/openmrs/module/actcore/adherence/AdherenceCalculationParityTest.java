@@ -87,6 +87,9 @@ public class AdherenceCalculationParityTest {
 				recounted++;
 			}
 			LocalDate deviation = dueFromInjectionBeforeTheYear(prescriptions, injections, today);
+			if (deviation == null) {
+				deviation = dueAcrossAChangeOfInjectionPrescription(prescriptions, injections, today);
+			}
 			if (deviation != null) {
 				assertEquals(label, deviation, result.getNextDue());
 				deviations++;
@@ -142,6 +145,31 @@ public class AdherenceCalculationParityTest {
 			}
 		}
 		return total == 0 ? null : 1 - ((double) late / total);
+	}
+	
+	/**
+	 * ACT Core's second deviation: when the latest injection prescription follows another with no oral
+	 * one between, and no injection was given since it started, the dose is due one new interval after
+	 * the run's latest injection, or after the run's start when none was given; ACT 2.0 counted from
+	 * the new prescription's start, so a change of regimen hid a dose already due.
+	 */
+	private static LocalDate dueAcrossAChangeOfInjectionPrescription(TreeMap<LocalDate, Integer> prescriptions,
+	        TreeSet<LocalDate> injections, LocalDate today) {
+		Map.Entry<LocalDate, Integer> latest = prescriptions.floorEntry(today);
+		if (latest == null || latest.getValue() == 0) {
+			return null;
+		}
+		LocalDate runStart = latest.getKey();
+		for (Map.Entry<LocalDate, Integer> earlier = prescriptions.lowerEntry(runStart); earlier != null
+		        && earlier.getValue() != 0; earlier = prescriptions.lowerEntry(runStart)) {
+			runStart = earlier.getKey();
+		}
+		LocalDate injection = injections.floor(today);
+		if (runStart.equals(latest.getKey()) || injection != null && injection.isAfter(latest.getKey())) {
+			return null;
+		}
+		LocalDate from = injection != null && !injection.isBefore(runStart) ? injection : runStart;
+		return from.plusDays(latest.getValue());
 	}
 	
 	/**

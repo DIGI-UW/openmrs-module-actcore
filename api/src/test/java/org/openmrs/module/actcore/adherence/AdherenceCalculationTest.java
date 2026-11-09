@@ -100,6 +100,36 @@ public class AdherenceCalculationTest {
 	}
 	
 	@Test
+	public void calculate_shouldKeepAnOverdueDoseDueOverAChangeOfInjectionPrescription() {
+		// Q28 from 1 Sep, last given 1 Sep, due 29 Sep and missed; Q21 from today is due 21 days after 1 Sep.
+		prescriptions.put(date("2026-09-01"), 28);
+		prescriptions.put(TODAY, 21);
+		injections.add(date("2026-09-01"));
+		
+		assertEquals(date("2026-09-22"), calculate(TODAY).getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldKeepAFirstDoseNeverGivenDueOverAChangeOfInjectionPrescription() {
+		// Q28 from 1 Sep, never given, due 29 Sep; Q21 from today counts from the run's start, 1 Sep.
+		prescriptions.put(date("2026-09-01"), 28);
+		prescriptions.put(TODAY, 21);
+		
+		assertEquals(date("2026-09-22"), calculate(TODAY).getNextDue());
+	}
+	
+	@Test
+	public void calculate_shouldDateTheFirstInjectionAfterAnOralCourseFromItsStart() {
+		// An injection before the oral course does not carry over: Q28 from 1 Oct is due 29 Oct.
+		prescriptions.put(date("2026-06-01"), 28);
+		prescriptions.put(date("2026-07-01"), 0);
+		prescriptions.put(date("2026-10-01"), 28);
+		injections.add(date("2026-06-01"));
+		
+		assertEquals(date("2026-10-29"), calculate(TODAY).getNextDue());
+	}
+	
+	@Test
 	public void calculate_shouldCountAfreshFromTheInjectionPrescriptionAfterAnOralOne() {
 		// June: due 29 Jun, the oral course from 1 Jul leaves 2 late days. July and August are oral.
 		// From 1 Sep the injection is due 29 Sep, so the 20 Sep one leaves 44 days on time.

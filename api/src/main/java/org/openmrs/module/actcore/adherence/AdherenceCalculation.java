@@ -24,7 +24,8 @@ import java.util.SortedSet;
  * over days prescribed: an injection covers its interval's days, the prescription's start covers
  * them as the first injection would, a change of injection prescription carries the last
  * injection's cover on, and a dose due today is not yet late. The next due date is ACT 2.0's but
- * counted from the latest injection however old; AdherenceCalculationParityTest holds both.
+ * counted from the latest injection however old, and, unlike ACT 2.0, a change of injection
+ * prescription does not move it past a dose already due; AdherenceCalculationParityTest holds both.
  */
 public final class AdherenceCalculation {
 	
@@ -181,8 +182,10 @@ public final class AdherenceCalculation {
 		LocalDate latestPrescription = started.lastKey();
 		int intervalDays = started.get(latestPrescription);
 		if (intervalDays != 0) {
-			LocalDate from = latestInjection != null && latestInjection.isAfter(latestPrescription) ? latestInjection
-			        : latestPrescription;
+			// A change of injection prescription keeps the dose already due, so count from the run as adherence does.
+			List<LocalDate> dates = new ArrayList<LocalDate>(started.keySet());
+			LocalDate runStart = injectionRunStart(started, dates, dates.size() - 1);
+			LocalDate from = latestInjection != null && !latestInjection.isBefore(runStart) ? latestInjection : runStart;
 			return from.plusDays(intervalDays);
 		}
 		// Nothing recorded since the oral regimen started: its first oral visit is due, if a day is set. Before
