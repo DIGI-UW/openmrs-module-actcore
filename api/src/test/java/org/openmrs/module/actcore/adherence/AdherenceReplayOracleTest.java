@@ -58,10 +58,11 @@ public class AdherenceReplayOracleTest {
 		patient.regimen = regimen;
 		patient.interval = interval;
 		if (interval != null && (interval > 0 ? injected.isEmpty() : estimated.isEmpty())) {
-			// ACT 2.0 left both as they were; the port stores no adherence and the first due date.
+			// ACT 2.0 left both as they were; the port stores no adherence and the first due date, which a
+			// change of injection prescription counts from the run's start rather than the new one's.
 			patient.last = null;
 			patient.adherence = null;
-			patient.due = interval > 0 ? started.lastKey().plusDays(interval) : null;
+			patient.due = interval > 0 ? injectionRunStart(started).plusDays(interval) : null;
 			return;
 		}
 		AdherenceCalculation.Result result = AdherenceCalculation.calculate(p.intervals, h.injections, h.oral, day);
@@ -72,6 +73,17 @@ public class AdherenceReplayOracleTest {
 		} else {
 			patient.last = interval > 0 ? injected.last() : estimated.lastKey();
 		}
+	}
+	
+	/** The start of the injection prescriptions running unbroken by an oral one up to the latest. */
+	private static LocalDate injectionRunStart(SortedMap<LocalDate, Integer> started) {
+		LocalDate start = started.lastKey();
+		SortedMap<LocalDate, Integer> before = started.headMap(start);
+		while (!before.isEmpty() && before.get(before.lastKey()) != 0) {
+			start = before.lastKey();
+			before = started.headMap(start);
+		}
+		return start;
 	}
 	
 	private static Act2Patient act2(AdherenceReplay.History h) {
