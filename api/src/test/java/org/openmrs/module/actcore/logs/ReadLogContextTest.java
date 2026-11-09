@@ -13,10 +13,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import org.hibernate.SessionFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Patient;
@@ -217,11 +221,16 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 			fail("expected the search to be refused");
 		}
 		catch (Rows.TooMany expected) {}
+		try {
+			log.list(filter(null, "grace", LocalDate.of(2030, 1, 1), LocalDate.of(2030, 1, 1)));
+			fail("expected the search to be refused on a day with no reads");
+		}
+		catch (Rows.TooMany expected) {}
 	}
 	
 	@Test
-	public void foldsReadsAcrossQueryPagesWithoutACap() {
-		int bulk = 5 * ReadLog.READ_PAGE + 1;
+	public void foldsReadsAcrossIdSpansWithoutACap() {
+		int bulk = 5 * ReadLog.READ_SPAN + 1;
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '2026-10-21 10:00:00', random_uuid()"
 		        + " from system_range(1, %d)",
@@ -236,6 +245,46 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(log.list(filter("communityClinician", null, null, null)).totalCount + 1
 		        + log.list(filter("dataClerk", null, null, null)).totalCount,
 		    all.totalCount);
+	}
+	
+	@Test
+	public void listsADaysReadsWhenIdsAreOutOfTimeOrder() {
+		read(300, "lateReader", clinician, "2026-10-22 08:00:00", "Patient", "C3", collet, 1);
+		read(10, "lateReader", clinician, "2026-10-22 18:00:00", "Patient", "C3", anet, 1);
+		read(20, "lateReader", clinician, "2026-10-23 08:00:00", "Patient", "C3", collet, 1);
+		read(400, "lateReader", clinician, "2026-10-21 23:00:00", "Patient", "C3", anet, 1);
+		
+		ReadLog.Page day = log.list(filter("lateReader", null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 22)));
+		
+		assertEquals(2, day.totalCount);
+		assertEquals("lateReader:" + anet.getUuid() + ":10", day.results.get(0).id);
+		assertEquals("lateReader:" + collet.getUuid() + ":300", day.results.get(1).id);
+	}
+	
+	@Test
+	public void spansOnlyTheIdsWithinTheDates() {
+		read(3 * ReadLog.READ_SPAN + 1, "spanReader", clinician, "2026-10-22 08:00:00", "Patient", "D4", collet, 1);
+		read(ReadLog.READ_SPAN, "spanReader", clinician, "2020-01-01 08:00:00", "Patient", "D4", collet, 1);
+		read(10 * ReadLog.READ_SPAN, "spanReader", clinician, "2026-10-30 08:00:00", "Patient", "D4", collet, 1);
+		queryStatistics(false);
+		queryStatistics(true);
+		
+		ReadLog.Page day = log.list(filter(null, null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 22)));
+		
+		assertEquals(1, day.totalCount);
+		assertEquals(1,
+		    Rows.integer(Rows.select("select sum(execution_count) as spans"
+		            + " from information_schema.query_statistics where sql_statement like '%l.id > ?%'").get(0),
+		        "spans").intValue());
+		queryStatistics(false);
+	}
+	
+	@Test
+	public void listsNothingForADayWithNoReads() {
+		ReadLog.Page day = log.list(filter(null, null, LocalDate.of(2030, 1, 1), LocalDate.of(2030, 1, 1)));
+		
+		assertEquals(0, day.totalCount);
+		assertEquals(0, day.results.size());
 	}
 	
 	private static ReadLog.Filter filter(String username, String patient, LocalDate from, LocalDate to) {
@@ -270,6 +319,19 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	private static void target(int readId, Patient patient) {
 		sql("insert into read_audit_entity_metadata (read_audit_id, entity_uuid, patient_uuid, patient_name) values (%d, '%s', '%s', '%s')",
 		    readId, UUID.randomUUID(), patient.getUuid(), patient.getPersonName().getFullName());
+	}
+	
+	/**
+	 * H2's per-statement execution counts; turning them off clears them. Set on a connection of its
+	 * own, as a set commits the test's transaction.
+	 */
+	private static void queryStatistics(boolean on) {
+		Context.getRegisteredComponents(SessionFactory.class).get(0).getCurrentSession().doWork(test -> {
+			try (Connection connection = DriverManager.getConnection(test.getMetaData().getURL(), "sa", "");
+			        Statement statement = connection.createStatement()) {
+				statement.execute("set query_statistics " + on);
+			}
+		});
 	}
 	
 	private static void sql(String statement, Object... args) {
