@@ -40,7 +40,8 @@ public class ReadLog {
 	static final int PATIENT_MATCHES = 100;
 	
 	/**
-	 * Ids per reads query: over ~200k MariaDB reads all of read_audit_entity_metadata for the exists.
+	 * Ids per reads query; past ~200k ids MariaDB scans all of read_audit_entity_metadata for the
+	 * exists.
 	 */
 	static final int READ_SPAN = 10000;
 	

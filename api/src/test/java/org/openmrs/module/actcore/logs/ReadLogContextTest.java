@@ -13,10 +13,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import org.hibernate.SessionFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Patient;
@@ -258,6 +262,24 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void spansOnlyTheIdsWithinTheDates() {
+		read(100, "spanReader", clinician, "2026-10-22 08:00:00", "Patient", "D4", collet, 1);
+		read(5 * ReadLog.READ_SPAN, "spanReader", clinician, "2020-01-01 08:00:00", "Patient", "D4", collet, 1);
+		read(10 * ReadLog.READ_SPAN, "spanReader", clinician, "2026-10-30 08:00:00", "Patient", "D4", collet, 1);
+		queryStatistics(false);
+		queryStatistics(true);
+		
+		ReadLog.Page day = log.list(filter(null, null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 22)));
+		
+		assertEquals(1, day.totalCount);
+		assertEquals(1,
+		    Rows.integer(Rows.select("select sum(execution_count) as spans"
+		            + " from information_schema.query_statistics where sql_statement like '%l.id > ?%'").get(0),
+		        "spans").intValue());
+		queryStatistics(false);
+	}
+	
+	@Test
 	public void listsNothingForADayWithNoReads() {
 		ReadLog.Page day = log.list(filter(null, null, LocalDate.of(2030, 1, 1), LocalDate.of(2030, 1, 1)));
 		
@@ -297,6 +319,19 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	private static void target(int readId, Patient patient) {
 		sql("insert into read_audit_entity_metadata (read_audit_id, entity_uuid, patient_uuid, patient_name) values (%d, '%s', '%s', '%s')",
 		    readId, UUID.randomUUID(), patient.getUuid(), patient.getPersonName().getFullName());
+	}
+	
+	/**
+	 * H2's per-statement execution counts; turning them off clears them. Set on a connection of its
+	 * own, as a set commits the test's transaction.
+	 */
+	private static void queryStatistics(boolean on) {
+		Context.getRegisteredComponents(SessionFactory.class).get(0).getCurrentSession().doWork(test -> {
+			try (Connection connection = DriverManager.getConnection(test.getMetaData().getURL(), "sa", "");
+			        Statement statement = connection.createStatement()) {
+				statement.execute("set query_statistics " + on);
+			}
+		});
 	}
 	
 	private static void sql(String statement, Object... args) {
