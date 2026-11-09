@@ -148,11 +148,6 @@ public class AdherenceCalculationParityTest {
 	}
 	
 	/**
-	 * ACT 2.0 dates the next injection from the past year's latest injection, else from the
-	 * prescription's start; ACT Core dates it from the latest injection however old. They differ only
-	 * when that injection is over a year old and follows the latest prescription.
-	 */
-	/**
 	 * ACT Core's second deviation: when the latest injection prescription follows another with no oral
 	 * one between, and no injection was given since it started, the dose is due one new interval after
 	 * the run's latest injection, or after the run's start when none was given; ACT 2.0 counted from
