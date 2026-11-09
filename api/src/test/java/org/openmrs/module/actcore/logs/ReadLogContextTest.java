@@ -263,8 +263,8 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void spansOnlyTheIdsWithinTheDates() {
-		read(100, "spanReader", clinician, "2026-10-22 08:00:00", "Patient", "D4", collet, 1);
-		read(5 * ReadLog.READ_SPAN, "spanReader", clinician, "2020-01-01 08:00:00", "Patient", "D4", collet, 1);
+		read(3 * ReadLog.READ_SPAN + 1, "spanReader", clinician, "2026-10-22 08:00:00", "Patient", "D4", collet, 1);
+		read(ReadLog.READ_SPAN, "spanReader", clinician, "2020-01-01 08:00:00", "Patient", "D4", collet, 1);
 		read(10 * ReadLog.READ_SPAN, "spanReader", clinician, "2026-10-30 08:00:00", "Patient", "D4", collet, 1);
 		queryStatistics(false);
 		queryStatistics(true);
