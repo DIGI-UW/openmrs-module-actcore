@@ -39,8 +39,11 @@ public class ReadLog {
 	
 	static final int PATIENT_MATCHES = 100;
 	
-	/** How many reads one query fetches; the reads are fetched page by page, by id. */
-	static final int READ_PAGE = 10000;
+	/**
+	 * Ids per reads query; past ~200k ids MariaDB scans all of read_audit_entity_metadata for the
+	 * exists.
+	 */
+	static final int READ_SPAN = 10000;
 	
 	/**
 	 * Entities whose reads are of patients' data even with no patient found, such as a search; the
@@ -142,14 +145,18 @@ public class ReadLog {
 			sql.append(" and l.username = ?");
 			params.add(filter.username);
 		}
+		StringBuilder dates = new StringBuilder();
+		List<Object> dateParams = new ArrayList<Object>();
 		if (filter.from != null) {
-			sql.append(" and l.event_time >= ?");
-			params.add(Timestamp.valueOf(filter.from.atStartOfDay()));
+			dates.append(" and l.event_time >= ?");
+			dateParams.add(Timestamp.valueOf(filter.from.atStartOfDay()));
 		}
 		if (filter.to != null) {
-			sql.append(" and l.event_time < ?");
-			params.add(Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
+			dates.append(" and l.event_time < ?");
+			dateParams.add(Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
 		}
+		sql.append(dates);
+		params.addAll(dateParams);
 		if (StringUtils.isNotBlank(filter.patient)) {
 			List<String> uuids = patientUuids(filter.patient.trim());
 			if (uuids.isEmpty()) {
@@ -159,9 +166,14 @@ public class ReadLog {
 			        .append(Rows.placeholders(uuids)).append("))");
 			params.addAll(uuids);
 		}
-		// The page's last id first, through the primary key, so each grouping sorts one page and not the rest.
-		String bound = "select l.id from read_audit_log l" + sql + " and l.id > ? order by l.id limit 1 offset "
-		        + (READ_PAGE - 1);
+		Map<String, Object> ids = Rows
+		        .select("select min(l.id) as lowest, max(l.id) as highest from read_audit_log l where 1 = 1" + dates,
+		            dateParams.toArray())
+		        .get(0);
+		if (ids.get("lowest") == null) {
+			return page;
+		}
+		long highest = Rows.integer(ids, "highest");
 		String fetch = "select l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
 		        + " l.user_agent, l.read_success, count(m.id) as targets, count(distinct m.patient_uuid) as patients,"
 		        + " min(m.patient_uuid) as patient_uuid, min(m.patient_name) as patient_name from read_audit_log l"
@@ -170,22 +182,13 @@ public class ReadLog {
 		        + " l.user_agent, l.read_success";
 		
 		List<Raw> reads = new ArrayList<Raw>();
-		long after = 0;
-		while (true) {
-			List<Object> boundParams = new ArrayList<Object>(params);
-			boundParams.add(after);
-			List<Map<String, Object>> last = Rows.select(bound, boundParams.toArray());
-			long upTo = last.isEmpty() ? Long.MAX_VALUE : Rows.integer(last.get(0), "id");
+		for (long after = Rows.integer(ids, "lowest") - 1L; after < highest; after += READ_SPAN) {
 			List<Object> fetchParams = new ArrayList<Object>(params);
 			fetchParams.add(after);
-			fetchParams.add(upTo);
+			fetchParams.add(after + READ_SPAN);
 			for (Map<String, Object> read : Rows.select(fetch, fetchParams.toArray())) {
 				reads.add(new Raw(read));
 			}
-			if (last.isEmpty()) {
-				break;
-			}
-			after = upTo;
 		}
 		reads.sort(
 		    Comparator.comparing((Raw read) -> read.username, Comparator.nullsFirst(Comparator.<String> naturalOrder()))
@@ -236,7 +239,7 @@ public class ReadLog {
 		return rows;
 	}
 	
-	/** One row of the reads query, kept as fields rather than a map while every page is read. */
+	/** One row of the reads query, kept as fields rather than a map while every span is read. */
 	static final class Raw {
 		
 		final long id;
