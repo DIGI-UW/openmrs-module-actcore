@@ -108,7 +108,7 @@ public class DownloadLog {
 			entry.date = (Date) columns[0];
 			entry.userUuid = (String) columns[1];
 			entry.formUuid = (String) columns[2];
-			entry.formName = Names.formName(entry.formUuid, (String) columns[3]);
+			entry.formName = Names.shown("Form", entry.formUuid, (String) columns[3]);
 			entry.detail = (String) columns[4];
 			entries.add(entry);
 		}
