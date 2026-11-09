@@ -226,22 +226,31 @@ public class Names {
 		return row("form", "form_id", formId);
 	}
 	
+	public static String shown(String type, Map<String, Object> row) {
+		return shown(type, Rows.string(row, "uuid"), Rows.string(row, "name"));
+	}
+	
 	/**
-	 * The name users see for a form: its ui.i18n.Form.name message, as REST displays it, else its
-	 * stored name.
+	 * The name users see for metadata of a type such as Form or EncounterType: its ui.i18n message, as
+	 * REST displays it, else its stored name.
 	 */
-	public static String formName(String uuid, String name) {
+	public static String shown(String type, String uuid, String name) {
 		if (uuid == null) {
 			return name;
 		}
-		String code = "ui.i18n.Form.name." + uuid;
+		String code = "ui.i18n." + type + ".name." + uuid;
 		String shown = Context.getMessageSourceService().getMessage(code);
 		return shown == null || shown.equals(code) ? name : shown;
 	}
 	
 	public String encounterTypeName(Integer typeId) {
 		Map<String, Object> type = row("encounter_type", "encounter_type_id", typeId);
-		return type == null ? null : Rows.string(type, "name");
+		return type == null ? null : shown("EncounterType", type);
+	}
+	
+	public String visitTypeName(Integer typeId) {
+		Map<String, Object> type = row("visit_type", "visit_type_id", typeId);
+		return type == null ? null : shown("VisitType", type);
 	}
 	
 	public static <T> T proxied(String privilege, Supplier<T> lookup) {

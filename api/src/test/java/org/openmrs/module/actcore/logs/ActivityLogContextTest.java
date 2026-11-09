@@ -35,6 +35,7 @@ import org.openmrs.PersonName;
 import org.openmrs.Program;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.VisitType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.messagesource.MessageSourceService;
@@ -159,24 +160,82 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void namesAnEncounterNoFormRecordedByItsEncounterType() {
-		EncounterType type = new EncounterType("RHD Referral", "A referral to a clinician");
-		Context.getEncounterService().saveEncounterType(type);
-		Encounter sent = new Encounter();
-		sent.setPatient(Context.getPatientService().getPatient(PATIENT));
-		sent.setEncounterType(type);
-		sent.setLocation(Context.getLocationService().getLocation(1));
-		sent.setEncounterDatetime(Timestamp.valueOf("2026-10-21 13:00:00"));
-		Context.getEncounterService().saveEncounter(sent);
-		revision(REFERRED, "2026-10-21 13:00:14", clinician.getUserId());
-		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, patient_id)"
-		        + " values (%d, %d, 0, '%s', false, '2026-10-21 13:00:00', %d)",
-		    sent.getEncounterId(), REFERRED, sent.getUuid(), PATIENT);
+		referral();
 		
 		ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), REFERRED);
 		
 		assertEquals("Saved RHD Referral", entry.action);
 		assertNull(entry.summary);
 		assertNull(entry.encounter.formName);
+	}
+	
+	@Test
+	public void namesAnEncounterNoFormRecordedByTheNameUsersSeeForItsType() {
+		MutableMessageSource previous = showing("ui.i18n.EncounterType.name." + referral().getUuid(), "Referral");
+		try {
+			assertEquals("Saved Referral", entry(log.list(new ActivityLog.Filter()), REFERRED).action);
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesAStartedVisitsTypeByTheNameUsersSee() {
+		VisitType type = Context.getVisitService().getVisitType(1);
+		revision(41, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 41, 0, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, type.getVisitTypeId());
+		MutableMessageSource previous = showing("ui.i18n.VisitType.name." + type.getUuid(), "Clinic Visit");
+		try {
+			ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), 41);
+			
+			assertEquals("Started a visit", entry.action);
+			assertEquals("Clinic Visit, 21-Oct-2026", entry.summary);
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesTheTypeAnEditMovedTheEncounterToByTheNameUsersSee() {
+		EncounterType other = new EncounterType("RHD Pregnancy", "Pregnancy");
+		Context.getEncounterService().saveEncounterType(other);
+		revision(40, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, encounter_type,"
+		        + " form_id, patient_id) values (%d, 40, 1, '%s', false, '2026-10-21 10:52:00', %d, %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), other.getEncounterTypeId(), form.getFormId(), PATIENT);
+		MutableMessageSource previous = showing("ui.i18n.EncounterType.name." + other.getUuid(), "Pregnancy");
+		try {
+			assertTrue(currentValues(40).toString(), currentValues(40).contains("Pregnancy"));
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesTheTypeAnEditMovedTheVisitToByTheNameUsersSee() {
+		VisitType first = Context.getVisitService().getVisitType(1);
+		VisitType other = new VisitType("RHD Clinic Visit", "A visit to an RHD clinic");
+		Context.getVisitService().saveVisitType(other);
+		revision(41, "2026-10-21 13:00:00", clinician.getUserId());
+		revision(42, "2026-10-21 13:05:00", clinician.getUserId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 41, 0, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, first.getVisitTypeId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 42, 1, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, other.getVisitTypeId());
+		MutableMessageSource previous = showing("ui.i18n.VisitType.name." + other.getUuid(), "Clinic Visit");
+		try {
+			assertTrue(currentValues(42).toString(), currentValues(42).contains("Clinic Visit"));
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
 	}
 	
 	@Test
@@ -199,12 +258,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void namesAFormByTheNameUsersSeeWhenItHasOne() {
-		MessageSourceService service = Context.getMessageSourceService();
-		MutableMessageSource previous = service.getActiveMessageSource();
-		CachedMessageSource shown = new CachedMessageSource();
-		shown.addPresentation(
-		    new PresentationMessage("ui.i18n.Form.name." + form.getUuid(), Context.getLocale(), "BPG Delivery", null));
-		service.setActiveMessageSource(shown);
+		MutableMessageSource previous = showing("ui.i18n.Form.name." + form.getUuid(), "BPG Delivery");
 		try {
 			ActivityLog.Entry entry = entry(log.list(new ActivityLog.Filter()), SAVED);
 			
@@ -212,7 +266,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 			assertEquals("BPG Delivery", entry.encounter.formName);
 		}
 		finally {
-			service.setActiveMessageSource(previous);
+			Context.getMessageSourceService().setActiveMessageSource(previous);
 		}
 	}
 	
@@ -227,22 +281,12 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
 		        + " values (%d, 40, 1, '%s', false, '2026-10-21 10:52:00', %d, %d)",
 		    encounter.getEncounterId(), encounter.getUuid(), other.getFormId(), PATIENT);
-		MessageSourceService service = Context.getMessageSourceService();
-		MutableMessageSource previous = service.getActiveMessageSource();
-		CachedMessageSource shown = new CachedMessageSource();
-		shown.addPresentation(
-		    new PresentationMessage("ui.i18n.Form.name." + other.getUuid(), Context.getLocale(), "Pregnancy", null));
-		service.setActiveMessageSource(shown);
+		MutableMessageSource previous = showing("ui.i18n.Form.name." + other.getUuid(), "Pregnancy");
 		try {
-			List<String> values = new ArrayList<String>();
-			for (ActivityLog.Field field : log.details(40).fields) {
-				values.add(field.current);
-			}
-			
-			assertTrue(values.toString(), values.contains("Pregnancy"));
+			assertTrue(currentValues(40).toString(), currentValues(40).contains("Pregnancy"));
 		}
 		finally {
-			service.setActiveMessageSource(previous);
+			Context.getMessageSourceService().setActiveMessageSource(previous);
 		}
 	}
 	
@@ -641,6 +685,40 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static void sql(String statement, Object... args) {
 		Context.getAdministrationService().executeSQL(String.format(statement, args), false);
+	}
+	
+	private EncounterType referral() {
+		EncounterType type = new EncounterType("RHD Referral", "A referral to a clinician");
+		Context.getEncounterService().saveEncounterType(type);
+		Encounter sent = new Encounter();
+		sent.setPatient(Context.getPatientService().getPatient(PATIENT));
+		sent.setEncounterType(type);
+		sent.setLocation(Context.getLocationService().getLocation(1));
+		sent.setEncounterDatetime(Timestamp.valueOf("2026-10-21 13:00:00"));
+		Context.getEncounterService().saveEncounter(sent);
+		revision(REFERRED, "2026-10-21 13:00:14", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, patient_id)"
+		        + " values (%d, %d, 0, '%s', false, '2026-10-21 13:00:00', %d)",
+		    sent.getEncounterId(), REFERRED, sent.getUuid(), PATIENT);
+		return type;
+	}
+	
+	/** Makes the message source give the code the text, returning the source to restore after. */
+	private static MutableMessageSource showing(String code, String text) {
+		MessageSourceService service = Context.getMessageSourceService();
+		MutableMessageSource previous = service.getActiveMessageSource();
+		CachedMessageSource shown = new CachedMessageSource();
+		shown.addPresentation(new PresentationMessage(code, Context.getLocale(), text, null));
+		service.setActiveMessageSource(shown);
+		return previous;
+	}
+	
+	private List<String> currentValues(int revisionId) {
+		List<String> values = new ArrayList<String>();
+		for (ActivityLog.Field field : log.details(revisionId).fields) {
+			values.add(field.current);
+		}
+		return values;
 	}
 	
 	private static ActivityLog.Entry entry(ActivityLog.Page page, int revisionId) {

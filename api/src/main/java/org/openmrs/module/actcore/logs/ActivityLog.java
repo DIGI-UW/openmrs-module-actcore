@@ -735,9 +735,8 @@ public class ActivityLog {
 				entry.action = type(row) == ADD ? "Started a visit"
 				        : Rows.truthy(row, "voided") ? "Voided a visit"
 				                : row.get("date_stopped") != null ? "Ended a visit" : "Changed a visit";
-				Map<String, Object> visitType = names.row("visit_type", "visit_type_id", Rows.integer(row, "visit_type_id"));
-				entry.summary = (visitType == null ? "" : Rows.string(visitType, "name") + ", ")
-				        + Names.date(Rows.date(row, "date_started"));
+				String visitType = names.visitTypeName(Rows.integer(row, "visit_type_id"));
+				entry.summary = (visitType == null ? "" : visitType + ", ") + Names.date(Rows.date(row, "date_started"));
 				return;
 			}
 			default:
@@ -1179,15 +1178,15 @@ public class ActivityLog {
 				return names.program(((Number) value).intValue());
 			case "form_id": {
 				Map<String, Object> form = names.form(((Number) value).intValue());
-				return form == null ? "Form " + value : Names.formName(Rows.string(form, "uuid"), Rows.string(form, "name"));
+				return form == null ? "Form " + value : Names.shown("Form", form);
 			}
 			case "encounter_type": {
-				Map<String, Object> type = names.row("encounter_type", "encounter_type_id", ((Number) value).intValue());
-				return type == null ? value.toString() : Rows.string(type, "name");
+				String type = names.encounterTypeName(((Number) value).intValue());
+				return type == null ? value.toString() : type;
 			}
 			case "visit_type_id": {
-				Map<String, Object> type = names.row("visit_type", "visit_type_id", ((Number) value).intValue());
-				return type == null ? value.toString() : Rows.string(type, "name");
+				String type = names.visitTypeName(((Number) value).intValue());
+				return type == null ? value.toString() : type;
 			}
 			case "visit_id":
 				return "Visit " + value;
@@ -1294,7 +1293,7 @@ public class ActivityLog {
 		Map<String, Object> form = names.form(Rows.integer(row, "form_id"));
 		if (form != null) {
 			ref.formUuid = Rows.string(form, "uuid");
-			ref.formName = Names.formName(ref.formUuid, Rows.string(form, "name"));
+			ref.formName = Names.shown("Form", form);
 		}
 		return ref;
 	}
