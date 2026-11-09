@@ -177,6 +177,11 @@ public class AdherenceCalculationParityTest {
 		return from.plusDays(latest.getValue());
 	}
 	
+	/**
+	 * ACT 2.0 dates the next injection from the past year's latest injection, else from the
+	 * prescription's start; ACT Core dates it from the latest injection however old. They differ only
+	 * when that injection is over a year old and follows the latest prescription.
+	 */
 	private static LocalDate dueFromInjectionBeforeTheYear(TreeMap<LocalDate, Integer> prescriptions,
 	        TreeSet<LocalDate> injections, LocalDate today) {
 		Map.Entry<LocalDate, Integer> latest = prescriptions.floorEntry(today);
