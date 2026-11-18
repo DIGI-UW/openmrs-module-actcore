@@ -15,7 +15,7 @@ jobs:
   build:
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     with:
-      # That workflow deploys only for the openmrs organization, so the deploy job below does it here.
+      # The shared deploy job's GITHUB_TOKEN has no packages: write, so the deploy job below publishes here.
       deploy_snapshots: false
 
   deploy:
