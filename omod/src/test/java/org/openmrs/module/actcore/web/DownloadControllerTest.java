@@ -556,6 +556,44 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void recordsIdentifiersOnlyWhenAnIdentifyingPatientFieldOrQuestionWasGiven() throws Exception {
+		encounter(7);
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		Map<String, Object> body = body();
+		for (Object rowPerPatient : Arrays.asList(false, true)) {
+			body.put("rowPerPatient", rowPerPatient);
+			identifyingQuestions("");
+			body.put("patient", Collections.singletonList("age"));
+			assertIdentifiers(false, controller.download(body));
+			body.put("patient", Arrays.asList("age", "givenName"));
+			assertIdentifiers(true, controller.download(body));
+			identifyingQuestions(question.getUuid());
+			body.put("patient", Collections.singletonList("age"));
+			assertIdentifiers(true, controller.download(body));
+		}
+		
+		signInAs("deidentified", with(DownloadController.DOWNLOAD_PRIVILEGE));
+		body.put("patient", Arrays.asList("age", "givenName"));
+		assertIdentifiers(false, controller.download(body));
+	}
+	
+	private static void identifyingQuestions(String uuids) {
+		Context.addProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
+		try {
+			Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, uuids);
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
+		}
+	}
+	
+	private static void assertIdentifiers(boolean expected, SimpleObject result) {
+		assertEquals(expected, result.get("identifiers"));
+		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		assertTrue(detail, detail.contains("\"identifiers\":" + expected));
+	}
+	
+	@Test
 	public void refusesAPatientFieldItDoesNotKnow() throws Exception {
 		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
 		Map<String, Object> unknown = body();

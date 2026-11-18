@@ -305,6 +305,26 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void buildPerPatient_shouldHeadEachFormsColumnsWhenNoPatientSavedIt() {
+		Form consult = otherForm("RHD Consultation Visit");
+		encounter(form, 7, 0);
+		List<FormDownload.Choice> choices = Arrays.asList(choice(form, "Echo", ejection, "EF"),
+		    choice(consult, "Consultation", finding, "MR"));
+		List<String> headers = Arrays.asList("ACT ID", "Sex", "Age", "Echo 1: Form date", "Echo 1: Location", "Echo 1: EF",
+		    "Consultation 1: Form date", "Consultation 1: Location", "Consultation 1: MR");
+		
+		FormDownload.Table one = new FormDownload().buildPerPatient(choices, null, null, false, false,
+		    filters(null, null, null));
+		assertEquals(headers, one.headers);
+		assertEquals(Arrays.asList("", "", ""), one.rows.get(0).subList(6, 9));
+		
+		FormDownload.Table none = new FormDownload().buildPerPatient(choices, DAY.plusDays(1), null, false, false,
+		    filters(null, null, null));
+		assertEquals(headers, none.headers);
+		assertTrue(none.rows.isEmpty());
+	}
+	
+	@Test
 	public void filters_shouldKeepTheActiveOrInactivePatientsByTheirLatestRegistryEnrolment() {
 		Program registry = registryProgram();
 		enrol(7, registry, null);

@@ -47,8 +47,8 @@ import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * One row per saved form of a kind with the questions chosen, as ACT 2.0's Download gave them. A
- * row always keeps the ACT ID, as ACT 2.0 kept the registry id, then the patient fields chosen.
+ * ACT 2.0's Download: a row per saved form of a kind, or a row per patient across forms. A row
+ * always keeps the ACT ID, as ACT 2.0 kept the registry id, then the patient fields chosen.
  */
 public class FormDownload {
 	
@@ -98,6 +98,9 @@ public class FormDownload {
 		
 		/** The keys of the patient fields asked for and left out because they identify the patient. */
 		public final List<String> withheldPatient = new ArrayList<String>();
+		
+		/** Whether a patient field or question that identifies the patient was given. */
+		public boolean identifiers;
 	}
 	
 	/**
@@ -221,13 +224,15 @@ public class FormDownload {
 		
 		Table table = new Table();
 		patientFields(table, chosen, identified);
-		List<String> identifyingConcepts = identified ? Collections.emptyList() : uuids(CONCEPTS_PROPERTY);
+		List<String> identifyingConcepts = uuids(CONCEPTS_PROPERTY);
 		List<Concept> concepts = new ArrayList<Concept>();
 		List<String> labels = new ArrayList<String>();
 		for (int i = 0; i < asked.size(); i++) {
-			if (identifyingConcepts.contains(asked.get(i).getUuid())) {
+			boolean question = identifyingConcepts.contains(asked.get(i).getUuid());
+			if (question && !identified) {
 				table.withheld.add(askedLabels.get(i));
 			} else {
+				table.identifiers |= question;
 				concepts.add(asked.get(i));
 				labels.add(askedLabels.get(i));
 			}
@@ -271,7 +276,7 @@ public class FormDownload {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
-		List<String> identifyingConcepts = identified ? Collections.emptyList() : uuids(CONCEPTS_PROPERTY);
+		List<String> identifyingConcepts = uuids(CONCEPTS_PROPERTY);
 		Table table = new Table();
 		patientFields(table, chosen, identified);
 		patientHeaders(table, identifying, attributeTypes);
@@ -280,13 +285,16 @@ public class FormDownload {
 		List<List<Concept>> concepts = new ArrayList<List<Concept>>();
 		List<Map<Integer, List<Encounter>>> saves = new ArrayList<Map<Integer, List<Encounter>>>();
 		List<Map<Integer, Map<Integer, List<Obs>>>> answers = new ArrayList<Map<Integer, Map<Integer, List<Obs>>>>();
+		List<Integer> groups = new ArrayList<Integer>();
 		for (Choice choice : choices) {
 			List<Concept> given = new ArrayList<Concept>();
 			List<String> labels = new ArrayList<String>();
 			for (int i = 0; i < choice.concepts.size(); i++) {
-				if (identifyingConcepts.contains(choice.concepts.get(i).getUuid())) {
+				boolean question = identifyingConcepts.contains(choice.concepts.get(i).getUuid());
+				if (question && !identified) {
 					table.withheld.add(choice.name + ": " + choice.labels.get(i));
 				} else {
+					table.identifiers |= question;
 					given.add(choice.concepts.get(i));
 					labels.add(choice.labels.get(i));
 				}
@@ -297,7 +305,9 @@ public class FormDownload {
 				patients.putIfAbsent(encounter.getPatient().getPatientId(), encounter.getPatient());
 				byPatient.computeIfAbsent(encounter.getPatient().getPatientId(), id -> new ArrayList<>()).add(encounter);
 			}
-			int most = byPatient.values().stream().mapToInt(List::size).max().orElse(0);
+			// At least one group, so a form no kept patient saved still heads its columns.
+			int most = Math.max(1, byPatient.values().stream().mapToInt(List::size).max().orElse(0));
+			groups.add(most);
 			for (int n = 1; n <= most; n++) {
 				String prefix = choice.name + " " + n + ": ";
 				table.headers.add(prefix + "Form date");
@@ -317,8 +327,7 @@ public class FormDownload {
 			patientCells(row, table.patient, patient, patient.getAge(), identifying, attributeTypes);
 			for (int c = 0; c < choices.size(); c++) {
 				List<Encounter> theirs = saves.get(c).getOrDefault(patient.getPatientId(), Collections.emptyList());
-				int most = saves.get(c).values().stream().mapToInt(List::size).max().orElse(0);
-				for (int n = 0; n < most; n++) {
+				for (int n = 0; n < groups.get(c); n++) {
 					Encounter encounter = n < theirs.size() ? theirs.get(n) : null;
 					row.add(encounter == null ? "" : date(encounter.getEncounterDatetime()));
 					row.add(encounter == null || encounter.getLocation() == null ? "" : encounter.getLocation().getName());
@@ -335,14 +344,19 @@ public class FormDownload {
 	}
 	
 	/**
-	 * Sets the patient fields given, in PATIENT_FIELDS's order. Without a choice, those given before
-	 * they could be chosen: every one when identified, else sex and age.
+	 * Sets the patient fields given, in PATIENT_FIELDS's order, and whether one identifies. Without a
+	 * choice, those given before they could be chosen: every one when identified, else sex and age.
 	 */
 	private static void patientFields(Table table, List<String> asked, boolean identified) {
 		for (String key : PATIENT_FIELDS.keySet()) {
 			boolean identifying = IDENTIFYING_PATIENT_FIELDS.contains(key);
 			if (asked == null ? identified || !identifying : asked.contains(key)) {
-				(identifying && !identified ? table.withheldPatient : table.patient).add(key);
+				if (identifying && !identified) {
+					table.withheldPatient.add(key);
+				} else {
+					table.patient.add(key);
+					table.identifiers |= identifying;
+				}
 			}
 		}
 	}

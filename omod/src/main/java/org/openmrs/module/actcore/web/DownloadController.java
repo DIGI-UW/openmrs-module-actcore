@@ -147,7 +147,7 @@ public class DownloadController extends BaseRestController {
 		detail.put("startDate", from == null ? null : from.toString());
 		detail.put("endDate", to == null ? null : to.toString());
 		detail.put("rows", table.rows.size());
-		detail.put("identifiers", identified);
+		detail.put("identifiers", table.identifiers);
 		detail.put("researchOnly", researchOnly);
 		detail.put("forms", forms);
 		detail.put("rowPerPatient", rowPerPatient);
@@ -156,7 +156,7 @@ public class DownloadController extends BaseRestController {
 		// Recorded before the rows are returned, so no download goes unrecorded.
 		log(choices.size() == 1 ? only.form.getFormId() : null, detail);
 		
-		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", identified)
+		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", table.identifiers)
 		        .add("researchOnly", researchOnly).add("withheld", withheld);
 	}
 	
