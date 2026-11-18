@@ -85,7 +85,7 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Joseph Odongo", folded.user.display);
 		assertEquals("Collet Test Chebaskwony", folded.patient.display);
 		assertEquals("6TS-4", folded.patient.actId);
-		assertEquals("ED97E5A1", folded.sessionId);
+		assertEquals("7F6171EB", folded.sessionId);
 		assertEquals("Patient", folded.reads.get(0).entity);
 	}
 	
@@ -98,6 +98,15 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(anet.getUuid(), page.results.get(1).patient.uuid);
 		assertEquals("dataClerk", page.results.get(2).user.username);
 		assertEquals("dataClerk", page.results.get(2).user.display);
+	}
+	
+	@Test
+	public void labelsEachSessionWithoutGivingItsId() {
+		ReadLog.Page page = log.list(new ReadLog.Filter());
+		
+		for (ReadLog.Row row : page.results) {
+			assertEquals("dataClerk".equals(row.username) ? "ABDBC2B5" : "7F6171EB", row.sessionId);
+		}
 	}
 	
 	@Test

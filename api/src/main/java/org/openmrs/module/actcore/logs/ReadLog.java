@@ -9,6 +9,9 @@
  */
 package org.openmrs.module.actcore.logs;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -102,6 +105,7 @@ public class ReadLog {
 		
 		public final List<Read> reads = new ArrayList<Read>();
 		
+		/** The session's label, not its id. */
 		public String sessionId;
 		
 		public String ip;
@@ -204,6 +208,22 @@ public class ReadLog {
 	}
 	
 	/**
+	 * A short label for a session, hashed because its id signs in as its user while the session lives.
+	 */
+	static String sessionLabel(String sessionId) {
+		if (StringUtils.isBlank(sessionId)) {
+			return null;
+		}
+		try {
+			byte[] hash = MessageDigest.getInstance("SHA-256").digest(sessionId.getBytes(StandardCharsets.UTF_8));
+			return String.format("%02X%02X%02X%02X", hash[0], hash[1], hash[2], hash[3]);
+		}
+		catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+	
+	/**
 	 * Reads ordered by user and time, folded per patient, or per entity for reads of no single patient,
 	 * while each falls within the window of its row's first.
 	 */
@@ -274,7 +294,7 @@ public class ReadLog {
 			userUuid = Rows.string(read, "user_uuid");
 			time = Rows.date(read, "event_time");
 			entity = Rows.string(read, "entity_name");
-			sessionId = Rows.string(read, "session_id");
+			sessionId = sessionLabel(Rows.string(read, "session_id"));
 			ip = Rows.string(read, "ip_address");
 			userAgent = Rows.string(read, "user_agent");
 			success = Rows.truthy(read, "read_success");

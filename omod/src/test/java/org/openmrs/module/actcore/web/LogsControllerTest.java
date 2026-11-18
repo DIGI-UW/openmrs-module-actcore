@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -44,6 +45,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 /** The endpoints' privileges and shapes; the grouping and folding are the api tests'. */
 public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
+	private static final String SESSION_ID = "D2361ED8C0CE974BBCE145108ECC6299";
+	
 	@Autowired
 	private ActivityController activity;
 	
@@ -71,9 +74,9 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) values (10, 0, 1, '2026-10-21 10:52:14')");
 		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
 		        + " values (3, 10, 0, 'enc', false, '2026-10-21 10:52:00', 1, 7)");
-		sql("insert into read_audit_log (id, entity_name, read_success, username, user_uuid, event_time, uuid)"
+		sql("insert into read_audit_log (id, entity_name, read_success, username, user_uuid, event_time, session_id, uuid)"
 		        + " values (1, 'Patient', true, 'admin', 'admin-uuid', '" + Timestamp.valueOf(LocalDate.now().atTime(7, 41))
-		        + "', '" + UUID.randomUUID() + "')");
+		        + "', '" + SESSION_ID + "', '" + UUID.randomUUID() + "')");
 	}
 	
 	@Test
@@ -161,6 +164,8 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("admin", ((SimpleObject) row.get("user")).get("username"));
 		assertNull(row.get("patient"));
 		assertEquals("no patient found", ((SimpleObject) ((List<?>) row.get("reads")).get(0)).get("description"));
+		assertEquals("5C9A774E", row.get("sessionId"));
+		assertFalse(page.toString().contains(SESSION_ID));
 	}
 	
 	@Test
