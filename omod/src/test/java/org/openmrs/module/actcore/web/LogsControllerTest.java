@@ -45,7 +45,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 /** The endpoints' privileges and shapes; the grouping and folding are the api tests'. */
 public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
-	private static final String SESSION_ID = "D2361ED8C0CE974BBCE145108ECC6299";
+	private static final String SESSION_ID = "0123456789ABCDEF0123456789ABCDEF";
 	
 	@Autowired
 	private ActivityController activity;
@@ -164,7 +164,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("admin", ((SimpleObject) row.get("user")).get("username"));
 		assertNull(row.get("patient"));
 		assertEquals("no patient found", ((SimpleObject) ((List<?>) row.get("reads")).get(0)).get("description"));
-		assertEquals("5C9A774E", row.get("sessionId"));
+		assertEquals("CD6C1F7D", row.get("sessionId"));
 		assertFalse(page.toString().contains(SESSION_ID));
 	}
 	
