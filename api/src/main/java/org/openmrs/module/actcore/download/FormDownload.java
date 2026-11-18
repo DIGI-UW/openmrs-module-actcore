@@ -47,8 +47,8 @@ import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * One row per saved form of a kind with the questions chosen, as ACT 2.0's Download gave them.
- * Without identifiers a row keeps the ACT ID, sex and age, as ACT 2.0 kept the registry id.
+ * One row per saved form of a kind with the questions chosen, as ACT 2.0's Download gave them. A
+ * row always keeps the ACT ID, as ACT 2.0 kept the registry id, then the patient fields chosen.
  */
 public class FormDownload {
 	
@@ -63,6 +63,26 @@ public class FormDownload {
 	
 	private static final int OBS_BATCH = 500;
 	
+	/**
+	 * The patient columns a request may choose, by key, with their labels; the ACT ID is always first.
+	 * identifiers and phones give a column per type the identifying properties name.
+	 */
+	public static final Map<String, String> PATIENT_FIELDS = new LinkedHashMap<String, String>();
+	
+	/** The patient fields only an identified download gives. */
+	public static final List<String> IDENTIFYING_PATIENT_FIELDS = Arrays.asList("givenName", "familyName", "birthDate",
+	    "identifiers", "phones");
+	
+	static {
+		PATIENT_FIELDS.put("givenName", "Given name");
+		PATIENT_FIELDS.put("familyName", "Family name");
+		PATIENT_FIELDS.put("birthDate", "Birth date");
+		PATIENT_FIELDS.put("identifiers", "ID numbers");
+		PATIENT_FIELDS.put("phones", "Phone numbers");
+		PATIENT_FIELDS.put("sex", "Sex");
+		PATIENT_FIELDS.put("age", "Age");
+	}
+	
 	/** The CSV's header row and its rows. */
 	public static class Table {
 		
@@ -72,6 +92,12 @@ public class FormDownload {
 		
 		/** The labels of the questions left out because they identify the patient. */
 		public final List<String> withheld = new ArrayList<String>();
+		
+		/** The keys of the patient fields given, in their columns' order. */
+		public final List<String> patient = new ArrayList<String>();
+		
+		/** The keys of the patient fields asked for and left out because they identify the patient. */
+		public final List<String> withheldPatient = new ArrayList<String>();
 	}
 	
 	/**
@@ -95,10 +121,11 @@ public class FormDownload {
 		}
 	}
 	
-	/** ACT 2.0's download filters: the patient's status and clinics. A null leaves that one out. */
+	/**
+	 * ACT 2.0's download filters: the patient's status and clinics. A null leaves that one out. One per
+	 * download, as it keeps each patient's answer.
+	 */
 	public static class Filters {
-		
-		public static final Filters NONE = new Filters(null, null, null);
 		
 		/** active, inactive or null. */
 		public final String status;
@@ -111,18 +138,23 @@ public class FormDownload {
 		
 		private List<String> clinicTypes;
 		
+		private final Map<Integer, Boolean> kept = new HashMap<Integer, Boolean>();
+		
 		public Filters(String status, Location cardiacClinic, Location primaryCareClinic) {
 			this.status = status;
 			this.cardiacClinic = cardiacClinic;
 			this.primaryCareClinic = primaryCareClinic;
 		}
 		
+		/** Decided once per patient, as each form's saves ask again and a status costs a query. */
 		boolean matches(Patient patient) {
-			if (status != null && active(patient) != "active".equals(status)) {
-				return false;
-			}
-			// The clinic types in the order ActivityLog keeps them: primary care, then cardiac.
-			return atClinic(patient, 0, primaryCareClinic) && atClinic(patient, 1, cardiacClinic);
+			return kept.computeIfAbsent(patient.getPatientId(), id -> {
+				if (status != null && active(patient) != "active".equals(status)) {
+					return false;
+				}
+				// The order actcore.logs.clinicAttributeTypes's description sets: primary care, then cardiac.
+				return atClinic(patient, 0, primaryCareClinic) && atClinic(patient, 1, cardiacClinic);
+			});
 		}
 		
 		/** The distro's Active: the latest RHD Registry enrolment open, and the person alive. */
@@ -166,22 +198,29 @@ public class FormDownload {
 	}
 	
 	/**
-	 * The forms between the days, either open, a column per chosen concept. Only identified rows have
-	 * the names, birth date, ID numbers, phones and identifying questions.
+	 * The forms between the days, either open, a column per chosen concept. Only an identified download
+	 * gives the names, birth date, ID numbers, phones and identifying questions.
 	 */
 	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
 	        boolean identified, boolean researchOnly) {
-		return build(form, asked, askedLabels, from, to, identified, researchOnly, Filters.NONE);
+		return build(form, asked, askedLabels, from, to, identified, researchOnly, new Filters(null, null, null));
 	}
 	
 	/** As build, of the patients the filters keep. */
 	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
 	        boolean identified, boolean researchOnly, Filters filters) {
+		return build(form, asked, askedLabels, from, to, identified, researchOnly, filters, null);
+	}
+	
+	/** As build, with the patient fields chosen, or null for the default patientFields gives. */
+	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
+	        boolean identified, boolean researchOnly, Filters filters, List<String> chosen) {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
 		
 		Table table = new Table();
+		patientFields(table, chosen, identified);
 		List<String> identifyingConcepts = identified ? Collections.emptyList() : uuids(CONCEPTS_PROPERTY);
 		List<Concept> concepts = new ArrayList<Concept>();
 		List<String> labels = new ArrayList<String>();
@@ -193,13 +232,8 @@ public class FormDownload {
 				labels.add(askedLabels.get(i));
 			}
 		}
-		table.headers.add("ACT ID");
-		if (identified) {
-			table.headers.addAll(Arrays.asList("Given name", "Family name", "Birth date"));
-			identifying.forEach(type -> table.headers.add(type.getName()));
-			attributeTypes.forEach(type -> table.headers.add(type.getName()));
-		}
-		table.headers.addAll(Arrays.asList("Sex", "Age", "Form date", "Location"));
+		patientHeaders(table, identifying, attributeTypes);
+		table.headers.addAll(Arrays.asList("Form date", "Location"));
 		table.headers.addAll(labels);
 		
 		List<Encounter> encounters = encounters(form, from, to, researchOnly, filters);
@@ -207,13 +241,8 @@ public class FormDownload {
 		for (Encounter encounter : encounters) {
 			Patient patient = encounter.getPatient();
 			List<String> row = new ArrayList<String>();
-			row.add(actId(patient, identifying));
-			if (identified) {
-				identityCells(row, patient, identifying, attributeTypes);
-			}
-			row.add(StringUtils.defaultString(patient.getGender()));
 			Integer age = patient.getBirthdate() == null ? null : patient.getAge(encounter.getEncounterDatetime());
-			row.add(age == null ? "" : age.toString());
+			patientCells(row, table.patient, patient, age, identifying, attributeTypes);
 			row.add(date(encounter.getEncounterDatetime()));
 			row.add(encounter.getLocation() == null ? "" : encounter.getLocation().getName());
 			Map<Integer, List<Obs>> byConcept = answers.getOrDefault(encounter.getEncounterId(), Collections.emptyMap());
@@ -231,18 +260,21 @@ public class FormDownload {
 	 */
 	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
 	        boolean researchOnly, Filters filters) {
+		return buildPerPatient(choices, from, to, identified, researchOnly, filters, null);
+	}
+	
+	/**
+	 * As buildPerPatient, with the patient fields chosen, or null for the default patientFields gives.
+	 */
+	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly, Filters filters, List<String> chosen) {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
 		List<String> identifyingConcepts = identified ? Collections.emptyList() : uuids(CONCEPTS_PROPERTY);
 		Table table = new Table();
-		table.headers.add("ACT ID");
-		if (identified) {
-			table.headers.addAll(Arrays.asList("Given name", "Family name", "Birth date"));
-			identifying.forEach(type -> table.headers.add(type.getName()));
-			attributeTypes.forEach(type -> table.headers.add(type.getName()));
-		}
-		table.headers.addAll(Arrays.asList("Sex", "Age"));
+		patientFields(table, chosen, identified);
+		patientHeaders(table, identifying, attributeTypes);
 		
 		Map<Integer, Patient> patients = new LinkedHashMap<Integer, Patient>();
 		List<List<Concept>> concepts = new ArrayList<List<Concept>>();
@@ -282,12 +314,7 @@ public class FormDownload {
 		    Comparator.comparing((Patient patient) -> actId(patient, identifying)).thenComparing(Patient::getPatientId));
 		for (Patient patient : ordered) {
 			List<String> row = new ArrayList<String>();
-			row.add(actId(patient, identifying));
-			if (identified) {
-				identityCells(row, patient, identifying, attributeTypes);
-			}
-			row.add(StringUtils.defaultString(patient.getGender()));
-			row.add(patient.getAge() == null ? "" : patient.getAge().toString());
+			patientCells(row, table.patient, patient, patient.getAge(), identifying, attributeTypes);
 			for (int c = 0; c < choices.size(); c++) {
 				List<Encounter> theirs = saves.get(c).getOrDefault(patient.getPatientId(), Collections.emptyList());
 				int most = saves.get(c).values().stream().mapToInt(List::size).max().orElse(0);
@@ -307,18 +334,58 @@ public class FormDownload {
 		return table;
 	}
 	
-	private static void identityCells(List<String> row, Patient patient, List<PatientIdentifierType> identifying,
-	        List<PersonAttributeType> attributeTypes) {
-		row.add(StringUtils.defaultString(patient.getGivenName()));
-		row.add(StringUtils.defaultString(patient.getFamilyName()));
-		row.add(patient.getBirthdate() == null ? "" : date(patient.getBirthdate()));
-		for (PatientIdentifierType type : identifying) {
-			PatientIdentifier identifier = patient.getPatientIdentifier(type);
-			row.add(identifier == null ? "" : identifier.getIdentifier());
+	/**
+	 * Sets the patient fields given, in PATIENT_FIELDS's order. Without a choice, those given before
+	 * they could be chosen: every one when identified, else sex and age.
+	 */
+	private static void patientFields(Table table, List<String> asked, boolean identified) {
+		for (String key : PATIENT_FIELDS.keySet()) {
+			boolean identifying = IDENTIFYING_PATIENT_FIELDS.contains(key);
+			if (asked == null ? identified || !identifying : asked.contains(key)) {
+				(identifying && !identified ? table.withheldPatient : table.patient).add(key);
+			}
 		}
-		for (PersonAttributeType type : attributeTypes) {
-			PersonAttribute attribute = patient.getAttribute(type);
-			row.add(attribute == null ? "" : StringUtils.defaultString(attribute.getValue()));
+	}
+	
+	private static void patientHeaders(Table table, List<PatientIdentifierType> identifying,
+	        List<PersonAttributeType> attributeTypes) {
+		table.headers.add("ACT ID");
+		for (String key : table.patient) {
+			if (key.equals("identifiers")) {
+				identifying.forEach(type -> table.headers.add(type.getName()));
+			} else if (key.equals("phones")) {
+				attributeTypes.forEach(type -> table.headers.add(type.getName()));
+			} else {
+				table.headers.add(PATIENT_FIELDS.get(key));
+			}
+		}
+	}
+	
+	private static void patientCells(List<String> row, List<String> fields, Patient patient, Integer age,
+	        List<PatientIdentifierType> identifying, List<PersonAttributeType> attributeTypes) {
+		row.add(actId(patient, identifying));
+		for (String key : fields) {
+			if (key.equals("givenName")) {
+				row.add(StringUtils.defaultString(patient.getGivenName()));
+			} else if (key.equals("familyName")) {
+				row.add(StringUtils.defaultString(patient.getFamilyName()));
+			} else if (key.equals("birthDate")) {
+				row.add(patient.getBirthdate() == null ? "" : date(patient.getBirthdate()));
+			} else if (key.equals("identifiers")) {
+				for (PatientIdentifierType type : identifying) {
+					PatientIdentifier identifier = patient.getPatientIdentifier(type);
+					row.add(identifier == null ? "" : identifier.getIdentifier());
+				}
+			} else if (key.equals("phones")) {
+				for (PersonAttributeType type : attributeTypes) {
+					PersonAttribute attribute = patient.getAttribute(type);
+					row.add(attribute == null ? "" : StringUtils.defaultString(attribute.getValue()));
+				}
+			} else if (key.equals("sex")) {
+				row.add(StringUtils.defaultString(patient.getGender()));
+			} else {
+				row.add(age == null ? "" : age.toString());
+			}
 		}
 	}
 	

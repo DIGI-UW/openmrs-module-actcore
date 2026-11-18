@@ -112,11 +112,15 @@ public class DownloadController extends BaseRestController {
 		if (from != null && to != null && from.isAfter(to)) {
 			throw new IllegalRequestException("The start date is after the end date");
 		}
+		List<String> patient = patient(body.get("patient"));
 		FormDownload.Choice only = choices.get(0);
 		FormDownload.Table table = rowPerPatient
-		        ? new FormDownload().buildPerPatient(choices, from, to, identified, researchOnly, filters)
+		        ? new FormDownload().buildPerPatient(choices, from, to, identified, researchOnly, filters, patient)
 		        : new FormDownload().build(only.form, only.concepts, only.labels, from, to, identified, researchOnly,
-		            filters);
+		            filters, patient);
+		List<String> withheld = new ArrayList<String>();
+		table.withheldPatient.forEach(key -> withheld.add(FormDownload.PATIENT_FIELDS.get(key)));
+		withheld.addAll(table.withheld);
 		List<String> given = new ArrayList<String>();
 		List<Map<String, Object>> forms = new ArrayList<Map<String, Object>>();
 		for (FormDownload.Choice choice : choices) {
@@ -139,7 +143,7 @@ public class DownloadController extends BaseRestController {
 		shown.put("primaryCareClinic", filters.primaryCareClinic == null ? null : filters.primaryCareClinic.getName());
 		Map<String, Object> detail = new LinkedHashMap<String, Object>();
 		detail.put("fields", given);
-		detail.put("withheld", table.withheld);
+		detail.put("withheld", withheld);
 		detail.put("startDate", from == null ? null : from.toString());
 		detail.put("endDate", to == null ? null : to.toString());
 		detail.put("rows", table.rows.size());
@@ -148,11 +152,12 @@ public class DownloadController extends BaseRestController {
 		detail.put("forms", forms);
 		detail.put("rowPerPatient", rowPerPatient);
 		detail.put("filters", shown);
+		detail.put("patient", table.patient);
 		// Recorded before the rows are returned, so no download goes unrecorded.
 		log(choices.size() == 1 ? only.form.getFormId() : null, detail);
 		
 		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", identified)
-		        .add("researchOnly", researchOnly).add("withheld", table.withheld);
+		        .add("researchOnly", researchOnly).add("withheld", withheld);
 	}
 	
 	/**
@@ -197,7 +202,7 @@ public class DownloadController extends BaseRestController {
 		Names names = new Names();
 		List<SimpleObject> matching = new ArrayList<SimpleObject>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to, null)) {
+		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to)) {
 			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
 			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
 				continue;
@@ -306,6 +311,25 @@ public class DownloadController extends BaseRestController {
 			    new FormDownload.Choice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
 		}
 		return choices;
+	}
+	
+	/** The patient fields asked for, by FormDownload.PATIENT_FIELDS's keys, or null when not asked. */
+	private static List<String> patient(Object asked) {
+		if (asked == null) {
+			return null;
+		}
+		if (!(asked instanceof List)) {
+			throw new IllegalRequestException("patient must be a list of " + FormDownload.PATIENT_FIELDS.keySet());
+		}
+		List<String> keys = new ArrayList<String>();
+		for (Object key : (List<?>) asked) {
+			if (!FormDownload.PATIENT_FIELDS.containsKey(String.valueOf(key))) {
+				throw new IllegalRequestException(
+				        "Not a patient field: " + key + "; one of " + FormDownload.PATIENT_FIELDS.keySet());
+			}
+			keys.add(String.valueOf(key));
+		}
+		return keys;
 	}
 	
 	private static Location clinic(Object uuid) {

@@ -134,6 +134,43 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void build_shouldGiveOnlyThePatientFieldsChosen() {
+		encounter(7, 0);
+		
+		FormDownload.Table table = new FormDownload().build(form, Arrays.asList(ejection), Arrays.asList("EF"), null, null,
+		    true, false, filters(null, null, null), Arrays.asList("sex"));
+		
+		assertEquals(Arrays.asList("ACT ID", "Sex", "Form date", "Location", "EF"), table.headers);
+		assertEquals(Arrays.asList("6TS-4", "F", DAY.toString()), table.rows.get(0).subList(0, 3));
+		assertEquals(Arrays.asList("ACT ID", "Form date", "Location", "EF"),
+		    new FormDownload().build(form, Arrays.asList(ejection), Arrays.asList("EF"), null, null, true, false,
+		        filters(null, null, null), Collections.<String> emptyList()).headers);
+	}
+	
+	@Test
+	public void buildPerPatient_shouldGiveTheIdentifyingPatientFieldsChosenOnlyWhenIdentified() {
+		encounter(form, 7, 0);
+		List<String> chosen = Arrays.asList("phones", "givenName", "identifiers", "age");
+		Patient patient = Context.getPatientService().getPatient(7);
+		
+		FormDownload.Table identified = new FormDownload().buildPerPatient(
+		    Collections.singletonList(choice(form, "Echo", ejection, "EF")), null, null, true, false,
+		    filters(null, null, null), chosen);
+		FormDownload.Table not = new FormDownload().buildPerPatient(
+		    Collections.singletonList(choice(form, "Echo", ejection, "EF")), null, null, false, false,
+		    filters(null, null, null), chosen);
+		
+		assertEquals(Arrays.asList("ACT ID", "Given name", "National ID", "Primary Phone", "Age"),
+		    identified.headers.subList(0, 5));
+		assertEquals(Arrays.asList("6TS-4", patient.getGivenName(), "CM123", "+256 700 000001", patient.getAge().toString()),
+		    identified.rows.get(0).subList(0, 5));
+		assertTrue(identified.withheldPatient.isEmpty());
+		assertEquals(Arrays.asList("ACT ID", "Age", "Echo 1: Form date"), not.headers.subList(0, 3));
+		assertEquals(Arrays.asList("givenName", "identifiers", "phones"), not.withheldPatient);
+		assertEquals(Arrays.asList("age"), not.patient);
+	}
+	
+	@Test
 	public void build_shouldKeepTheFormsInTheDateRange() {
 		encounter(7, 10);
 		encounter(7, 5);
@@ -220,7 +257,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		
 		FormDownload.Table table = new FormDownload().buildPerPatient(
 		    Arrays.asList(choice(form, "Echo", ejection, "EF"), choice(consult, "Consultation", finding, "MR")), null, null,
-		    false, false, FormDownload.Filters.NONE);
+		    false, false, filters(null, null, null));
 		
 		assertEquals(Arrays.asList("ACT ID", "Sex", "Age", "Echo 1: Form date", "Echo 1: Location", "Echo 1: EF",
 		    "Echo 2: Form date", "Echo 2: Location", "Echo 2: EF", "Consultation 1: Form date", "Consultation 1: Location",
@@ -244,7 +281,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		
 		FormDownload.Table table = new FormDownload().buildPerPatient(
 		    Arrays.asList(choice(form, "Echo", ejection, "EF"), choice(consult, "Consultation", finding, "MR")),
-		    DAY.minusDays(5), DAY, false, false, FormDownload.Filters.NONE);
+		    DAY.minusDays(5), DAY, false, false, filters(null, null, null));
 		
 		assertEquals(1, table.rows.size());
 		assertEquals("6TS-4", table.rows.get(0).get(0));
@@ -261,7 +298,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		        Arrays.asList("EF", "Home Address"));
 		
 		FormDownload.Table table = new FormDownload().buildPerPatient(Collections.singletonList(echo), null, null, false,
-		    false, FormDownload.Filters.NONE);
+		    false, filters(null, null, null));
 		
 		assertEquals(Arrays.asList("Echo: Home Address"), table.withheld);
 		assertFalse(table.headers.contains("Echo 1: Home Address"));
@@ -284,6 +321,34 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		seven.setCauseOfDeath(severe);
 		Context.getPatientService().savePatient(seven);
 		assertTrue(actIds(filters("active", null, null)).isEmpty());
+	}
+	
+	@Test
+	public void filters_shouldKeepAPatientReEnrolledAfterACompletedEnrolmentActive() {
+		Program registry = registryProgram();
+		enrol(7, registry, DAY.minusDays(60), DAY.minusDays(40));
+		enrol(7, registry, DAY.minusDays(30), null);
+		encounter(form, 7, 0);
+		
+		assertEquals(Arrays.asList("6TS-4"), actIds(filters("active", null, null)));
+		assertTrue(actIds(filters("inactive", null, null)).isEmpty());
+	}
+	
+	@Test
+	public void filters_shouldDecideEachPatientOnceADownload() {
+		Program registry = registryProgram();
+		enrol(7, registry, null);
+		Patient seven = Context.getPatientService().getPatient(7);
+		FormDownload.Filters active = filters("active", null, null);
+		assertTrue(active.matches(seven));
+		
+		PatientProgram enrolment = Context.getProgramWorkflowService()
+		        .getPatientPrograms(seven, registry, null, null, null, null, false).get(0);
+		enrolment.setDateCompleted(Timestamp.valueOf(DAY.atStartOfDay()));
+		Context.getProgramWorkflowService().savePatientProgram(enrolment);
+		
+		assertTrue(active.matches(seven));
+		assertFalse(filters("active", null, null).matches(seven));
 	}
 	
 	@Test
@@ -358,10 +423,14 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private static void enrol(int patientId, Program program, LocalDate completed) {
+		enrol(patientId, program, DAY.minusDays(30), completed);
+	}
+	
+	private static void enrol(int patientId, Program program, LocalDate enrolled, LocalDate completed) {
 		PatientProgram enrolment = new PatientProgram();
 		enrolment.setPatient(Context.getPatientService().getPatient(patientId));
 		enrolment.setProgram(program);
-		enrolment.setDateEnrolled(Timestamp.valueOf(DAY.minusDays(30).atStartOfDay()));
+		enrolment.setDateEnrolled(Timestamp.valueOf(enrolled.atStartOfDay()));
 		enrolment.setDateCompleted(completed == null ? null : Timestamp.valueOf(completed.atStartOfDay()));
 		Context.getProgramWorkflowService().savePatientProgram(enrolment);
 	}

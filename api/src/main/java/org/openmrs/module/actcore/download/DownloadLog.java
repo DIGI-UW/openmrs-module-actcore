@@ -67,7 +67,7 @@ public class DownloadLog {
 	}
 	
 	/** Every download matching the filters, newest first; each filter is left out when null. */
-	public List<Entry> list(Integer userId, LocalDate from, LocalDate to, Integer formId) {
+	public List<Entry> list(Integer userId, LocalDate from, LocalDate to) {
 		StringBuilder where = new StringBuilder();
 		Map<String, Object> params = new LinkedHashMap<String, Object>();
 		if (userId != null) {
@@ -81,10 +81,6 @@ public class DownloadLog {
 		if (to != null) {
 			where.append(" and d.date_created < :to");
 			params.put("to", Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
-		}
-		if (formId != null) {
-			where.append(" and d.form_id = :form");
-			params.put("form", formId);
 		}
 		return select(where.toString(), params);
 	}
