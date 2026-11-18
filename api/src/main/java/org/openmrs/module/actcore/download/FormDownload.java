@@ -122,8 +122,8 @@ public class FormDownload {
 	}
 	
 	/**
-	 * ACT 2.0's download filters: the patient's status and clinics. A null leaves that one out. One per
-	 * download, as it keeps each patient's answer.
+	 * ACT 2.0's download filters, status and clinics, a null leaving one out. Make one per download: it
+	 * keeps each patient's answer.
 	 */
 	public static class Filters {
 		
