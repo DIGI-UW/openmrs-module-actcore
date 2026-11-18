@@ -50,6 +50,7 @@ import org.openmrs.messagesource.impl.CachedMessageSource;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
+import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -215,6 +216,17 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		detail.put("rows", 0);
 		detail.put("identifiers", false);
 		detail.put("researchOnly", true);
+		Map<String, Object> echo = new LinkedHashMap<String, Object>();
+		echo.put("uuid", form.getUuid());
+		echo.put("name", "RHD Echocardiogram");
+		echo.put("fields", Collections.emptyList());
+		detail.put("forms", Collections.singletonList(echo));
+		detail.put("rowPerPatient", false);
+		Map<String, Object> filters = new LinkedHashMap<String, Object>();
+		filters.put("status", null);
+		filters.put("cardiacClinic", null);
+		filters.put("primaryCareClinic", null);
+		detail.put("filters", filters);
 		assertEquals(detail, entry.get("detail"));
 	}
 	
@@ -427,6 +439,120 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			catch (IllegalRequestException expected) {}
 		}
 		assertTrue(new DownloadLog().list(null, null, null, null).isEmpty());
+	}
+	
+	@Test
+	public void downloadsSeveralFormsAsARowPerPatientAndListsItUnderEach() throws Exception {
+		Form consult = secondForm();
+		encounter(7);
+		Encounter visit = encounter(7);
+		visit.setForm(consult);
+		Context.getEncounterService().saveEncounter(visit);
+		Form other = secondForm();
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> body = body();
+		body.remove("form");
+		body.remove("fields");
+		body.put("forms", Arrays.asList(choice(form), choice(consult)));
+		
+		SimpleObject result = controller.download(body);
+		
+		List<?> headers = (List<?>) result.get("headers");
+		assertTrue(headers.toString(), headers.contains("RHD Echocardiogram 1: Mitral regurgitation"));
+		assertTrue(headers.toString(), headers.contains("RHD Consultation Visit 1: Mitral regurgitation"));
+		assertEquals(1, ((List<?>) result.get("rows")).size());
+		DownloadLog.Entry logged = new DownloadLog().list(null, null, null, null).get(0);
+		assertNull(logged.formName);
+		assertTrue(logged.detail, logged.detail.contains("\"rowPerPatient\":true"));
+		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		for (Form each : Arrays.asList(form, consult)) {
+			assertEquals(Integer.valueOf(1),
+			    controller.getDownloads(null, null, null, each.getUuid(), null, null, null).get("totalCount"));
+		}
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, other.getUuid(), null, null, null).get("totalCount"));
+	}
+	
+	@Test
+	public void givesOneFormAsARowPerPatientWhenAsked() throws Exception {
+		encounter(7);
+		encounter(7);
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> body = body();
+		body.put("rowPerPatient", true);
+		
+		SimpleObject result = controller.download(body);
+		
+		assertTrue(((List<?>) result.get("headers")).contains("RHD Echocardiogram 2: Form date"));
+		assertEquals(1, ((List<?>) result.get("rows")).size());
+	}
+	
+	@Test
+	public void appliesAndRecordsTheStatusAndClinicFilters() throws Exception {
+		PersonAttributeType primaryCare = locationAttributeType("Primary care clinic");
+		PersonAttributeType cardiac = locationAttributeType("Cardiac clinic");
+		Context.getAdministrationService().setGlobalProperty(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY,
+		    primaryCare.getUuid() + "," + cardiac.getUuid());
+		Patient seven = Context.getPatientService().getPatient(7);
+		seven.addAttribute(new PersonAttribute(cardiac, "1"));
+		Context.getPatientService().savePatient(seven);
+		encounter(7);
+		encounter(2);
+		org.openmrs.Location one = Context.getLocationService().getLocation(1);
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> body = body();
+		body.put("cardiacClinic", one.getUuid());
+		body.put("status", "inactive");
+		
+		SimpleObject result = controller.download(body);
+		
+		assertEquals(1, ((List<?>) result.get("rows")).size());
+		String detail = new DownloadLog().list(null, null, null, null).get(0).detail;
+		assertTrue(detail, detail.contains("\"status\":\"inactive\""));
+		assertTrue(detail, detail.contains("\"cardiacClinic\":\"" + one.getName()));
+	}
+	
+	@Test
+	public void refusesAnUnknownStatusOrClinic() throws Exception {
+		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		Map<String, Object> status = body();
+		status.put("status", "deceased");
+		Map<String, Object> clinic = body();
+		clinic.put("primaryCareClinic", "no-such-location");
+		
+		for (Map<String, Object> body : Arrays.asList(status, clinic)) {
+			try {
+				controller.download(body);
+				fail("expected " + body + " to be refused");
+			}
+			catch (IllegalRequestException expected) {}
+		}
+		assertTrue(new DownloadLog().list(null, null, null, null).isEmpty());
+	}
+	
+	private Form secondForm() {
+		Form second = new Form();
+		second.setName("RHD Consultation Visit");
+		second.setVersion("1." + Math.abs(UUID.randomUUID().hashCode()));
+		second.setEncounterType(form.getEncounterType());
+		return Context.getFormService().saveForm(second);
+	}
+	
+	private Map<String, Object> choice(Form chosen) {
+		Map<String, Object> field = new HashMap<String, Object>();
+		field.put("concept", question.getUuid());
+		field.put("label", "Mitral regurgitation");
+		Map<String, Object> choice = new HashMap<String, Object>();
+		choice.put("form", chosen.getUuid());
+		choice.put("fields", Collections.singletonList(field));
+		return choice;
+	}
+	
+	private static PersonAttributeType locationAttributeType(String name) {
+		PersonAttributeType type = new PersonAttributeType();
+		type.setName(name);
+		type.setFormat("org.openmrs.Location");
+		return Context.getPersonService().savePersonAttributeType(type);
 	}
 	
 	private Map<String, Object> body() {

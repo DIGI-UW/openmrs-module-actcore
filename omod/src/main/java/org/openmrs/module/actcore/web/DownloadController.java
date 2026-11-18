@@ -16,6 +16,7 @@ import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.Form;
+import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.download.DownloadLog;
@@ -97,55 +99,57 @@ public class DownloadController extends BaseRestController {
 		}
 		boolean identified = all && Context.hasPrivilege(IDENTIFIERS_PRIVILEGE);
 		boolean researchOnly = !all;
-		
-		Object formUuid = body == null ? null : body.get("form");
-		if (formUuid == null) {
-			throw new IllegalRequestException("The form is required");
+		List<FormDownload.Choice> choices = choices(body);
+		boolean rowPerPatient = choices.size() > 1 || Boolean.TRUE.equals(body.get("rowPerPatient"));
+		Object status = body.get("status");
+		if (status != null && !Arrays.asList("active", "inactive").contains(status.toString())) {
+			throw new IllegalRequestException("status must be active or inactive");
 		}
-		Form form = Context.getFormService().getFormByUuid(formUuid.toString());
-		if (form == null) {
-			throw new ObjectNotFoundException();
-		}
-		List<Concept> concepts = new ArrayList<Concept>();
-		List<String> labels = new ArrayList<String>();
-		Object fields = body.get("fields");
-		if (!(fields instanceof List) || ((List<?>) fields).isEmpty()) {
-			throw new IllegalRequestException("Choose at least one field");
-		}
-		for (Object field : (List<?>) fields) {
-			Object conceptUuid = field instanceof Map ? ((Map<?, ?>) field).get("concept") : null;
-			Concept concept = conceptUuid == null ? null
-			        : Context.getConceptService().getConceptByUuid(conceptUuid.toString());
-			if (concept == null) {
-				throw new IllegalRequestException("Not a concept: " + conceptUuid);
-			}
-			if (concepts.contains(concept)) {
-				continue;
-			}
-			Object label = ((Map<?, ?>) field).get("label");
-			concepts.add(concept);
-			labels.add(StringUtils.isBlank(label == null ? null : label.toString()) ? concept.getName().getName()
-			        : StringUtils.left(label.toString().trim(), MAX_LABEL));
-		}
+		FormDownload.Filters filters = new FormDownload.Filters(status == null ? null : status.toString(),
+		        clinic(body.get("cardiacClinic")), clinic(body.get("primaryCareClinic")));
 		LocalDate from = date(body.get("startDate"));
 		LocalDate to = date(body.get("endDate"));
 		if (from != null && to != null && from.isAfter(to)) {
 			throw new IllegalRequestException("The start date is after the end date");
 		}
-		
-		FormDownload.Table table = new FormDownload().build(form, concepts, labels, from, to, identified, researchOnly);
-		
-		int given = labels.size() - table.withheld.size();
+		FormDownload.Choice only = choices.get(0);
+		FormDownload.Table table = rowPerPatient
+		        ? new FormDownload().buildPerPatient(choices, from, to, identified, researchOnly, filters)
+		        : new FormDownload().build(only.form, only.concepts, only.labels, from, to, identified, researchOnly,
+		            filters);
+		List<String> given = new ArrayList<String>();
+		List<Map<String, Object>> forms = new ArrayList<Map<String, Object>>();
+		for (FormDownload.Choice choice : choices) {
+			List<String> fields = new ArrayList<String>();
+			for (String label : choice.labels) {
+				if (!table.withheld.contains(rowPerPatient ? choice.name + ": " + label : label)) {
+					fields.add(label);
+					given.add(choices.size() > 1 ? choice.name + ": " + label : label);
+				}
+			}
+			Map<String, Object> form = new LinkedHashMap<String, Object>();
+			form.put("uuid", choice.form.getUuid());
+			form.put("name", choice.name);
+			form.put("fields", fields);
+			forms.add(form);
+		}
+		Map<String, Object> shown = new LinkedHashMap<String, Object>();
+		shown.put("status", filters.status);
+		shown.put("cardiacClinic", filters.cardiacClinic == null ? null : filters.cardiacClinic.getName());
+		shown.put("primaryCareClinic", filters.primaryCareClinic == null ? null : filters.primaryCareClinic.getName());
 		Map<String, Object> detail = new LinkedHashMap<String, Object>();
-		detail.put("fields", table.headers.subList(table.headers.size() - given, table.headers.size()));
+		detail.put("fields", given);
 		detail.put("withheld", table.withheld);
 		detail.put("startDate", from == null ? null : from.toString());
 		detail.put("endDate", to == null ? null : to.toString());
 		detail.put("rows", table.rows.size());
 		detail.put("identifiers", identified);
 		detail.put("researchOnly", researchOnly);
+		detail.put("forms", forms);
+		detail.put("rowPerPatient", rowPerPatient);
+		detail.put("filters", shown);
 		// Recorded before the rows are returned, so no download goes unrecorded.
-		log(form.getFormId(), detail);
+		log(choices.size() == 1 ? only.form.getFormId() : null, detail);
 		
 		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", identified)
 		        .add("researchOnly", researchOnly).add("withheld", table.withheld);
@@ -177,14 +181,14 @@ public class DownloadController extends BaseRestController {
 				return none;
 			}
 		}
-		Integer formId = null;
+		String chosenForm = null;
 		if (StringUtils.isNotBlank(formUuid)) {
 			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
 			    () -> Context.getFormService().getFormByUuid(formUuid.trim()));
 			if (form == null) {
 				return none;
 			}
-			formId = form.getFormId();
+			chosenForm = form.getUuid();
 		}
 		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
 			throw new IllegalRequestException("identifiers must be with, without or research");
@@ -192,9 +196,13 @@ public class DownloadController extends BaseRestController {
 		ObjectMapper json = new ObjectMapper();
 		Names names = new Names();
 		List<SimpleObject> matching = new ArrayList<SimpleObject>();
-		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to, formId)) {
+		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
+		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to, null)) {
 			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
 			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
+				continue;
+			}
+			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
 				continue;
 			}
 			Object list = detail == null ? null : detail.get("list");
@@ -250,6 +258,84 @@ public class DownloadController extends BaseRestController {
 		    body.get("filters") instanceof Map ? body.get("filters") : new LinkedHashMap<String, Object>());
 		log(null, detail);
 		return new SimpleObject().add("recorded", true);
+	}
+	
+	/**
+	 * The forms asked for, each with its chosen fields: forms [{form, fields}], or one form and its
+	 * fields.
+	 */
+	private static List<FormDownload.Choice> choices(Map<String, Object> body) {
+		List<?> asked = body == null ? null
+		        : body.get("forms") instanceof List ? (List<?>) body.get("forms")
+		                : body.get("form") == null ? null : Collections.singletonList(body);
+		if (asked == null || asked.isEmpty()) {
+			throw new IllegalRequestException("The form is required");
+		}
+		List<FormDownload.Choice> choices = new ArrayList<FormDownload.Choice>();
+		for (Object each : asked) {
+			Object formUuid = each instanceof Map ? ((Map<?, ?>) each).get("form") : null;
+			Form form = formUuid == null ? null : Context.getFormService().getFormByUuid(formUuid.toString());
+			if (form == null) {
+				throw new ObjectNotFoundException();
+			}
+			if (choices.stream().anyMatch(choice -> choice.form.equals(form))) {
+				throw new IllegalRequestException("A form is asked for twice: " + formUuid);
+			}
+			List<Concept> concepts = new ArrayList<Concept>();
+			List<String> labels = new ArrayList<String>();
+			Object fields = ((Map<?, ?>) each).get("fields");
+			if (!(fields instanceof List) || ((List<?>) fields).isEmpty()) {
+				throw new IllegalRequestException("Choose at least one field");
+			}
+			for (Object field : (List<?>) fields) {
+				Object conceptUuid = field instanceof Map ? ((Map<?, ?>) field).get("concept") : null;
+				Concept concept = conceptUuid == null ? null
+				        : Context.getConceptService().getConceptByUuid(conceptUuid.toString());
+				if (concept == null) {
+					throw new IllegalRequestException("Not a concept: " + conceptUuid);
+				}
+				if (concepts.contains(concept)) {
+					continue;
+				}
+				Object label = ((Map<?, ?>) field).get("label");
+				concepts.add(concept);
+				labels.add(StringUtils.isBlank(label == null ? null : label.toString()) ? concept.getName().getName()
+				        : StringUtils.left(label.toString().trim(), MAX_LABEL));
+			}
+			choices.add(
+			    new FormDownload.Choice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
+		}
+		return choices;
+	}
+	
+	private static Location clinic(Object uuid) {
+		if (uuid == null || StringUtils.isBlank(uuid.toString())) {
+			return null;
+		}
+		// A clinic is configuration, so a downloader needs no privilege to read it.
+		Location clinic = Names.proxied(PrivilegeConstants.GET_LOCATIONS,
+		    () -> Context.getLocationService().getLocationByUuid(uuid.toString().trim()));
+		if (clinic == null) {
+			throw new IllegalRequestException("Not a clinic: " + uuid);
+		}
+		return clinic;
+	}
+	
+	/**
+	 * The uuids of the forms a download recorded, empty for a list or an entry from before they were
+	 * recorded.
+	 */
+	private static List<String> formsOf(Map<?, ?> detail) {
+		List<String> uuids = new ArrayList<String>();
+		Object forms = detail == null ? null : detail.get("forms");
+		if (forms instanceof List) {
+			for (Object form : (List<?>) forms) {
+				if (form instanceof Map && ((Map<?, ?>) form).get("uuid") != null) {
+					uuids.add(((Map<?, ?>) form).get("uuid").toString());
+				}
+			}
+		}
+		return uuids;
 	}
 	
 	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
