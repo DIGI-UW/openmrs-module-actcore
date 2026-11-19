@@ -92,10 +92,16 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	 */
 	private static void closeEnrolmentsOfTheDead() {
 		try {
+			// The work runs on the daemon thread, so its failures are caught there.
 			Daemon.runInDaemonThreadAndWait(() -> {
-				int ended = CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead();
-				if (ended > 0) {
-					log.info("Ended {} open enrolments of patients already recorded dead", ended);
+				try {
+					int ended = CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead();
+					if (ended > 0) {
+						log.info("Ended {} open enrolments of patients already recorded dead", ended);
+					}
+				}
+				catch (RuntimeException e) {
+					log.error("Could not end the open enrolments of patients already recorded dead", e);
 				}
 			}, daemonToken);
 		}

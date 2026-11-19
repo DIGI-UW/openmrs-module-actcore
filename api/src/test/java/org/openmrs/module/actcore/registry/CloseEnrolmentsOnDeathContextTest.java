@@ -150,6 +150,36 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
+	public void savePatientProgram_shouldAcceptAnOpenRegistryEnrolmentForTheDeadWhenTheWorkflowHasNoDeathState() {
+		Patient patient = Context.getPatientService().getPatient(2);
+		markDead(patient, daysAgo(10));
+		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, concept("Not a registry state").getUuid());
+		
+		PatientProgram open = Context.getProgramWorkflowService().savePatientProgram(enrolment(patient, daysAgo(5), null));
+		
+		assertNull(open.getDateCompleted());
+	}
+	
+	@Test
+	public void closeEnrolmentsOfTheDead_shouldLeaveEnrolmentsInProgramsWithNoDeathStateAlone() {
+		Program other = new Program();
+		other.setName("Other program");
+		other.setDescription("Other program");
+		other.setConcept(concept("Other program concept"));
+		other = Context.getProgramWorkflowService().saveProgram(other);
+		Patient dead = Context.getPatientService().getPatient(2);
+		PatientProgram elsewhere = enrolment(dead, daysAgo(30), null);
+		elsewhere.setProgram(other);
+		Context.getProgramWorkflowService().savePatientProgram(elsewhere);
+		markDead(dead, daysAgo(10));
+		
+		assertEquals(0, CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead());
+		
+		assertNull(
+		    Context.getProgramWorkflowService().getPatientProgram(elsewhere.getPatientProgramId()).getDateCompleted());
+	}
+	
+	@Test
 	public void savePatient_shouldEndTheRegistryEnrolmentOfAPatientRegisteredAfterTheyDied() {
 		Date died = daysAgo(10);
 		Patient patient = newPatient();

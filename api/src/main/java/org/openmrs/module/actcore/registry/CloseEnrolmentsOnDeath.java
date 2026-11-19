@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.registry;
 
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -19,8 +20,8 @@ import org.apache.commons.lang3.time.DateUtils;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
 import org.openmrs.PatientState;
-import org.openmrs.Program;
 import org.openmrs.Person;
+import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
@@ -31,9 +32,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice on PersonService and PatientService that ends a dead patient's open RHD Registry and study
- * enrolments in their death state, from the death date on, when they are saved or have a duplicate
- * merged in.
+ * Advice that ends a dead patient's open RHD Registry and study enrolments in their death state
+ * when the patient is saved or has a duplicate merged in.
  */
 public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
@@ -64,15 +64,21 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	/**
 	 * Ends the open enrolments of patients recorded dead before this module ended them on death, such
-	 * as ACT 2.0's or an import's, and returns how many it ended.
+	 * as ACT 2.0's or an import's, and returns how many it ended; a patient whose enrolment cannot be
+	 * ended is logged.
 	 */
 	public static int closeEnrolmentsOfTheDead() {
+		List<Integer> programIds = programsWithADeathState();
+		if (programIds.isEmpty()) {
+			return 0;
+		}
 		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 		List<List<Object>> rows;
 		try {
-			rows = Context.getAdministrationService().executeSQL(
-			    "select distinct pp.patient_id from patient_program pp join person p on p.person_id ="
-			            + " pp.patient_id where p.dead = 1 and p.voided = 0 and pp.voided = 0 and pp.date_completed is null",
+			rows = Context.getAdministrationService().executeSQL("select distinct pp.patient_id from patient_program pp"
+			        + " join person p on p.person_id = pp.patient_id where p.dead = 1 and p.voided = 0 and pp.voided = 0"
+			        + " and pp.date_completed is null and pp.program_id in ("
+			        + programIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")",
 			    true);
 		}
 		finally {
@@ -80,31 +86,31 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		}
 		int ended = 0;
 		for (List<Object> row : rows) {
-			Person person = Context.getPersonService().getPerson(((Number) row.get(0)).intValue());
-			if (person != null) {
-				ended += close(person);
+			Integer personId = ((Number) row.get(0)).intValue();
+			try {
+				Person person = Context.getPersonService().getPerson(personId);
+				if (person != null) {
+					ended += close(person);
+				}
+			}
+			catch (RuntimeException e) {
+				log.error("Could not end the open enrolments of dead patient {}", personId, e);
 			}
 		}
 		return ended;
 	}
 	
 	/**
-	 * Ends a dead patient's enrolment in its death state, without saving it; false when it is not the
-	 * registry or a study, or no death state is configured for it.
+	 * Ends a dead patient's enrolment in its death state, without saving it; false when the program has
+	 * no death state configured.
 	 */
 	public static boolean endInDeathState(PatientProgram enrolment, Person person) {
 		for (String privilege : PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			String concept = deathConceptFor(enrolment.getProgram());
-			if (StringUtils.isBlank(concept)) {
-				return false;
-			}
-			ProgramWorkflowState death = deathState(enrolment, concept.trim());
+			ProgramWorkflowState death = deathStateOf(enrolment.getProgram());
 			if (death == null) {
-				log.warn("{} has no state on concept {}; enrolment {} stays open", enrolment.getProgram().getName(), concept,
-				    enrolment.getUuid());
 				return false;
 			}
 			Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
@@ -123,18 +129,51 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	}
 	
 	/**
-	 * The death state concept for the registry or a study, by its property; null for any other program.
+	 * The state a dead patient's enrolment in the program ends in: the registry's or a study's death
+	 * state by its property, or null when it has none.
 	 */
-	static String deathConceptFor(Program program) {
-		if (program == null) {
+	static ProgramWorkflowState deathStateOf(Program program) {
+		String property = deathPropertyFor(program);
+		String concept = property == null ? null : Context.getAdministrationService().getGlobalProperty(property);
+		if (StringUtils.isBlank(concept)) {
 			return null;
 		}
-		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
-		if (StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid())) {
-			return Context.getAdministrationService().getGlobalProperty(REGISTRY_DEATH_STATE_PROPERTY);
+		for (ProgramWorkflow workflow : program.getWorkflows()) {
+			if (workflow.getRetired()) {
+				continue;
+			}
+			for (ProgramWorkflowState state : workflow.getStates(false)) {
+				if (concept.trim().equals(state.getConcept().getUuid())) {
+					return state;
+				}
+			}
 		}
-		return new Studies().isStudy(program) ? Context.getAdministrationService().getGlobalProperty(DEATH_STATE_PROPERTY)
-		        : null;
+		log.warn("{} has no state on the concept {} names ({}); its enrolments stay open on death", program.getName(),
+		    property, concept);
+		return null;
+	}
+	
+	private static String deathPropertyFor(Program program) {
+		if (EnrolOnRegistration.isRegistry(program)) {
+			return REGISTRY_DEATH_STATE_PROPERTY;
+		}
+		return program != null && new Studies().isStudy(program) ? DEATH_STATE_PROPERTY : null;
+	}
+	
+	private static List<Integer> programsWithADeathState() {
+		for (String privilege : PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
+			return Context.getProgramWorkflowService().getAllPrograms().stream()
+			        .filter(program -> deathPropertyFor(program) != null && deathStateOf(program) != null)
+			        .map(Program::getProgramId).collect(Collectors.toList());
+		}
+		finally {
+			for (String privilege : PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
+		}
 	}
 	
 	private static int close(Person person) {
@@ -165,20 +204,6 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		}
 	}
 	
-	private static ProgramWorkflowState deathState(PatientProgram enrolment, String conceptUuid) {
-		for (ProgramWorkflow workflow : enrolment.getProgram().getWorkflows()) {
-			if (workflow.getRetired()) {
-				continue;
-			}
-			for (ProgramWorkflowState state : workflow.getStates(false)) {
-				if (conceptUuid.equals(state.getConcept().getUuid())) {
-					return state;
-				}
-			}
-		}
-		return null;
-	}
-	
 	private static boolean hasStateOnDay(PatientProgram enrolment, ProgramWorkflowState state, Date day) {
 		for (PatientState recorded : enrolment.getStates()) {
 			if (!Boolean.TRUE.equals(recorded.getVoided()) && state.equals(recorded.getState())
@@ -191,7 +216,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	/**
 	 * The death date, moved up to the enrolment's latest recorded start or end, since a death state
-	 * cannot overlap the statuses recorded before it and close() does not rewrite them.
+	 * cannot overlap the statuses recorded before it and endInDeathState does not rewrite them.
 	 */
 	private static Date notBefore(Date date, PatientProgram enrolment) {
 		Date earliest = later(date, enrolment.getDateEnrolled());
