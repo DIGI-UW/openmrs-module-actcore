@@ -24,6 +24,8 @@ jobs:
       development_version: ${{ inputs.development_version }}
       branch: ${{ inputs.branch }}
       java_version: '8'
+      # Outside the openmrs org the shared workflow refuses to release unless this is true.
+      publish: ${{ github.repository_owner == 'DIGI-UW' }}
     secrets:
       # The shared job's GITHUB_TOKEN has no packages: write, so the release publishes as the bot.
       MAVEN_REPO_USERNAME: uwdigi
