@@ -128,6 +128,23 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 	}
 	
 	@Test
+	public void savePatientProgram_shouldRefuseReopeningTheEndedRegistryEnrolmentOfAPatientWhoHasDied() {
+		Patient patient = Context.getPatientService().getPatient(2);
+		PatientProgram enrolment = enrol(patient, daysAgo(30));
+		markDead(patient, daysAgo(10));
+		assertNotNull(enrolment.getDateCompleted());
+		
+		enrolment.setDateCompleted(null);
+		try {
+			Context.getProgramWorkflowService().savePatientProgram(enrolment);
+			fail("the ended RHD Registry enrolment of a patient who has died was reopened");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("has died"));
+		}
+	}
+	
+	@Test
 	public void savePatientProgram_shouldAcceptACompletedRegistryEnrolmentForAPatientWhoHasDied() {
 		Patient patient = Context.getPatientService().getPatient(2);
 		markDead(patient, daysAgo(10));
