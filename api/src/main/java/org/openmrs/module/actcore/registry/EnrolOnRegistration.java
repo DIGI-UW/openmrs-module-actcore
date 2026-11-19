@@ -69,6 +69,10 @@ public class EnrolOnRegistration implements MethodInterceptor {
 			enrolment.setProgram(registry);
 			enrolment.setDateEnrolled(new Date());
 			enrolment.setLocation(Context.getUserContext().getLocation());
+			// A patient registered after they died is enrolled ended in the death state, never open.
+			if (Boolean.TRUE.equals(patient.getDead())) {
+				CloseEnrolmentsOnDeath.endInDeathState(enrolment, patient);
+			}
 			programs.savePatientProgram(enrolment);
 		}
 		catch (RuntimeException e) {

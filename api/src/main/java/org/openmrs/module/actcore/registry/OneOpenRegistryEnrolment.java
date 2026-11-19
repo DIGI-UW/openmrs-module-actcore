@@ -46,6 +46,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		}
 		if ("savePatientProgram".equals(method) && args.length == 1 && args[0] instanceof PatientProgram
 		        && !SUSPENDED.get()) {
+			refuseOpenRegistryEnrolmentOfTheDead((PatientProgram) args[0]);
 			refuseOverlappingEnrolment((PatientProgram) args[0]);
 		}
 		return invocation.proceed();
@@ -147,6 +148,29 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
 		return StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid())
 		        || new Studies().isStudy(program);
+	}
+	
+	/**
+	 * A dead patient's registry enrolment is ended in its death state, so an open one would count them
+	 * as active. Off while actcore.registry.deathStateConcept is empty, as during an import.
+	 */
+	private static void refuseOpenRegistryEnrolmentOfTheDead(PatientProgram enrolment) {
+		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getDateCompleted() != null
+		        || enrolment.getPatient() == null || !Boolean.TRUE.equals(enrolment.getPatient().getDead())) {
+			return;
+		}
+		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
+		boolean isRegistry = enrolment.getProgram() != null && StringUtils.isNotBlank(registry)
+		        && registry.trim().equals(enrolment.getProgram().getUuid());
+		if (!isRegistry || StringUtils.isBlank(
+		    Context.getAdministrationService().getGlobalProperty(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY))) {
+			return;
+		}
+		String message = "The patient has died, so their " + enrolment.getProgram().getName()
+		        + " enrolment cannot stay open; end it as Deceased";
+		Errors errors = new BindException(enrolment, "patientProgram");
+		errors.reject("actcore.deadPatientEnrolment", message);
+		throw new ValidationException(message, errors);
 	}
 	
 	private static void refuseOverlappingEnrolment(PatientProgram enrolment) {

@@ -7,9 +7,10 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.studies;
+package org.openmrs.module.actcore.registry;
 
 import java.util.Date;
+import java.util.List;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -18,25 +19,29 @@ import org.apache.commons.lang3.time.DateUtils;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
 import org.openmrs.PatientState;
+import org.openmrs.Program;
 import org.openmrs.Person;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
+import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice on PersonService and PatientService that ends a dead patient's open study enrolments in
- * Inactive - Death, from their death date on, when they are saved or have a duplicate merged in.
+ * Advice on PersonService and PatientService that ends a dead patient's open RHD Registry and study
+ * enrolments in their death state, from the death date on, when they are saved or have a duplicate
+ * merged in.
  */
-public class CloseStudiesOnDeath implements MethodInterceptor {
+public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	public static final String DEATH_STATE_PROPERTY = "actcore.studies.deathStateConcept";
 	
-	private static final Logger log = LoggerFactory.getLogger(CloseStudiesOnDeath.class);
+	public static final String REGISTRY_DEATH_STATE_PROPERTY = "actcore.registry.deathStateConcept";
+	
+	private static final Logger log = LoggerFactory.getLogger(CloseEnrolmentsOnDeath.class);
 	
 	// The user marking a patient deceased needs Edit People or Edit Patients, not program privileges.
 	private static final String[] PRIVILEGES = { PrivilegeConstants.GET_GLOBAL_PROPERTIES, PrivilegeConstants.GET_PATIENTS,
@@ -57,38 +62,101 @@ public class CloseStudiesOnDeath implements MethodInterceptor {
 		return saved;
 	}
 	
-	private static void close(Person person) {
+	/**
+	 * Ends the open enrolments of patients recorded dead before this module ended them on death, such
+	 * as ACT 2.0's or an import's, and returns how many it ended.
+	 */
+	public static int closeEnrolmentsOfTheDead() {
+		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		List<List<Object>> rows;
+		try {
+			rows = Context.getAdministrationService().executeSQL(
+			    "select distinct pp.patient_id from patient_program pp join person p on p.person_id ="
+			            + " pp.patient_id where p.dead = 1 and p.voided = 0 and pp.voided = 0 and pp.date_completed is null",
+			    true);
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		}
+		int ended = 0;
+		for (List<Object> row : rows) {
+			Person person = Context.getPersonService().getPerson(((Number) row.get(0)).intValue());
+			if (person != null) {
+				ended += close(person);
+			}
+		}
+		return ended;
+	}
+	
+	/**
+	 * Ends a dead patient's enrolment in its death state, without saving it; false when it is not the
+	 * registry or a study, or no death state is configured for it.
+	 */
+	public static boolean endInDeathState(PatientProgram enrolment, Person person) {
 		for (String privilege : PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			String concept = Context.getAdministrationService().getGlobalProperty(DEATH_STATE_PROPERTY);
+			String concept = deathConceptFor(enrolment.getProgram());
+			if (StringUtils.isBlank(concept)) {
+				return false;
+			}
+			ProgramWorkflowState death = deathState(enrolment, concept.trim());
+			if (death == null) {
+				log.warn("{} has no state on concept {}; enrolment {} stays open", enrolment.getProgram().getName(), concept,
+				    enrolment.getUuid());
+				return false;
+			}
+			Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
+			// Status dates are stored as days, so a death state already on that day would be a duplicate.
+			if (!hasStateOnDay(enrolment, death, date)) {
+				enrolment.transitionToState(death, date);
+			}
+			enrolment.setDateCompleted(date);
+			return true;
+		}
+		finally {
+			for (String privilege : PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
+		}
+	}
+	
+	/**
+	 * The death state concept for the registry or a study, by its property; null for any other program.
+	 */
+	static String deathConceptFor(Program program) {
+		if (program == null) {
+			return null;
+		}
+		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
+		if (StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid())) {
+			return Context.getAdministrationService().getGlobalProperty(REGISTRY_DEATH_STATE_PROPERTY);
+		}
+		return new Studies().isStudy(program) ? Context.getAdministrationService().getGlobalProperty(DEATH_STATE_PROPERTY)
+		        : null;
+	}
+	
+	private static int close(Person person) {
+		for (String privilege : PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
 			Patient patient = person instanceof Patient ? (Patient) person
 			        : Context.getPatientService().getPatient(person.getPersonId());
-			if (StringUtils.isBlank(concept) || patient == null) {
-				return;
+			if (patient == null) {
+				return 0;
 			}
 			ProgramWorkflowService programs = Context.getProgramWorkflowService();
-			Studies studies = new Studies();
+			int ended = 0;
 			for (PatientProgram enrolment : programs.getPatientPrograms(patient, null, null, null, null, null, false)) {
-				if (enrolment.getDateCompleted() != null || !studies.isStudy(enrolment.getProgram())) {
-					continue;
+				if (enrolment.getDateCompleted() == null && endInDeathState(enrolment, person)) {
+					// Ending each one leaves no overlap, but ending the first of two overlapping ones would be refused.
+					OneOpenRegistryEnrolment.withoutRefusing(() -> programs.savePatientProgram(enrolment));
+					ended++;
 				}
-				ProgramWorkflowState death = deathState(enrolment, concept.trim());
-				if (death == null) {
-					log.warn("{} has no state on {} {}; enrolment {} stays open", enrolment.getProgram().getName(),
-					    DEATH_STATE_PROPERTY, concept, enrolment.getUuid());
-					continue;
-				}
-				Date date = notBefore(person.getDeathDate() == null ? new Date() : person.getDeathDate(), enrolment);
-				// Status dates are stored as days, so a death state already on that day would be a duplicate.
-				if (!hasStateOnDay(enrolment, death, date)) {
-					enrolment.transitionToState(death, date);
-				}
-				enrolment.setDateCompleted(date);
-				// Ending each one leaves no overlap, but ending the first of two overlapping ones would be refused.
-				OneOpenRegistryEnrolment.withoutRefusing(() -> programs.savePatientProgram(enrolment));
 			}
+			return ended;
 		}
 		finally {
 			for (String privilege : PRIVILEGES) {

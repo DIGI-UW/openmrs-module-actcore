@@ -79,7 +79,7 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			// Not on an edit, so a withdrawal after consent is revoked and CloseStudiesOnDeath still save.
+			// Not on an edit, so a withdrawal after consent is revoked and CloseEnrolmentsOnDeath still save.
 			if (!existing) {
 				// A completed enrolment is history, such as ACT 2.0's, which a later death does not undo.
 				if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {
