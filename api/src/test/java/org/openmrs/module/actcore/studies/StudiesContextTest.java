@@ -442,7 +442,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void savePerson_shouldEndOpenStudyEnrolmentsOfAPatientWhoDiedInInactiveDeathOnTheirDeathDate() {
 		Program arc = studies.create("ARC");
 		Program miller = studies.create("Miller");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		ProgramWorkflowService programs = Context.getProgramWorkflowService();
 		Patient patient = Context.getPatientService().getPatient(2);
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
@@ -544,7 +544,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePerson_shouldEndBothOfTwoOverlappingOpenEnrolmentsInAStudy() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		Patient patient = Context.getPatientService().getPatient(2);
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		PatientProgram first = enrolment(patient, study);
@@ -568,7 +568,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndOpenStudyEnrolmentsOfAPatientWhoDied() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);
@@ -588,7 +588,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedStudyEnrolmentOfAPatientWhoDied() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);
@@ -613,7 +613,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheWithdrawalOfAReopenedEnrolmentWhenItDiedBefore() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -632,7 +632,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheEndOfAReopenedEnrolmentCompletedByDateWhenItDiedBefore() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -651,7 +651,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldCompleteAReopenedEnrolmentAlreadyInDeathNoEarlierThanThatDeath() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -670,7 +670,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void savePatient_shouldEndAStudyEnrolmentNoEarlierThanAnEndedStatusInAnotherWorkflow() {
 		Program study = studies.create("ARC");
 		ProgramWorkflowState control = addArmWorkflow(study);
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -688,7 +688,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheDeathDateWhenItFollowsTheWithdrawalOfAReopenedEnrolment() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -707,7 +707,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldDateTheDeathOfAPatientWhoDiedWithoutRegardToVoidedStatuses() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -731,7 +731,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathStartsWithItsWithdrawal() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -753,7 +753,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathSharesADayWithAnotherStatusInEitherOrder() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		Date day = DateUtils.truncate(daysAgo(5), Calendar.DATE);
 		PatientProgram activeFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(2), study, day, false);
 		PatientProgram deathFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(6), study, day, true);
@@ -822,7 +822,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void mergePatients_shouldEndTheStudyEnrolmentsAPatientWhoDiedGainsFromTheDuplicate() throws Exception {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		Patient preferred = Context.getPatientService().getPatient(2);
@@ -876,7 +876,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void mergePatients_shouldFoldOverlappingStudyEnrolmentsIntoOneEndedOnThePreferredPatientsDeath()
 	        throws Exception {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		Date died = new Date(enrolled.getTime() + 5 * 86400000L);
@@ -905,7 +905,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndOpenEnrolmentsInARetiredStudyOfAPatientWhoDied() {
 		Program study = studies.create("ARC");
-		property(CloseEnrolmentsOnDeath.DEATH_STATE_PROPERTY, death.getUuid());
+		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);

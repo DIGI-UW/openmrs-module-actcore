@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  */
 public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
-	public static final String DEATH_STATE_PROPERTY = "actcore.studies.deathStateConcept";
+	public static final String STUDY_DEATH_STATE_PROPERTY = "actcore.studies.deathStateConcept";
 	
 	public static final String REGISTRY_DEATH_STATE_PROPERTY = "actcore.registry.deathStateConcept";
 	
@@ -64,8 +64,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	/**
 	 * Ends the open enrolments of patients recorded dead before this module ended them on death, such
-	 * as ACT 2.0's or an import's, and returns how many it ended; a patient whose enrolment cannot be
-	 * ended is logged.
+	 * as ACT 2.0's or an import's, and returns how many it ended.
 	 */
 	public static int closeEnrolmentsOfTheDead() {
 		List<Integer> programIds = programsWithADeathState();
@@ -157,7 +156,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		if (EnrolOnRegistration.isRegistry(program)) {
 			return REGISTRY_DEATH_STATE_PROPERTY;
 		}
-		return program != null && new Studies().isStudy(program) ? DEATH_STATE_PROPERTY : null;
+		return program != null && new Studies().isStudy(program) ? STUDY_DEATH_STATE_PROPERTY : null;
 	}
 	
 	private static List<Integer> programsWithADeathState() {

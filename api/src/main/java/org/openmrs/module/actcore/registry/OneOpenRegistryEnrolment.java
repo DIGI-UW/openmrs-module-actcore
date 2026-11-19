@@ -31,9 +31,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses an RHD Registry or study enrolment overlapping another in its program while either is
- * open, and an open registry enrolment for a patient who died; folds overlapping pairs into one
- * when patients are merged.
+ * Refuses an overlapping RHD Registry or study enrolment while either is open, and an open registry
+ * enrolment for the dead; folds overlaps into one when patients are merged.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
