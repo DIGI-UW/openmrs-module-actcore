@@ -21,6 +21,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
 import org.openmrs.Program;
+import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
@@ -30,8 +31,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses an RHD Registry or research study enrolment overlapping another in its program while
- * either is open, which core allows, and folds such pairs into one when two patients are merged.
+ * Refuses an overlapping RHD Registry or study enrolment while either is open, and an open registry
+ * enrolment for the dead; folds overlaps into one when patients are merged.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
@@ -46,6 +47,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		}
 		if ("savePatientProgram".equals(method) && args.length == 1 && args[0] instanceof PatientProgram
 		        && !SUSPENDED.get()) {
+			refuseOpenRegistryEnrolmentOfTheDead((PatientProgram) args[0]);
 			refuseOverlappingEnrolment((PatientProgram) args[0]);
 		}
 		return invocation.proceed();
@@ -144,9 +146,28 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		if (program == null) {
 			return false;
 		}
-		String registry = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
-		return StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid())
-		        || new Studies().isStudy(program);
+		return EnrolOnRegistration.isRegistry(program) || new Studies().isStudy(program);
+	}
+	
+	/**
+	 * A dead patient's registry enrolment is ended in its death state, so an open one would count them
+	 * as active. Off while the registry has no death state configured, as during an import.
+	 */
+	private static void refuseOpenRegistryEnrolmentOfTheDead(PatientProgram enrolment) {
+		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getDateCompleted() != null
+		        || enrolment.getPatient() == null || !Boolean.TRUE.equals(enrolment.getPatient().getDead())
+		        || !EnrolOnRegistration.isRegistry(enrolment.getProgram())) {
+			return;
+		}
+		ProgramWorkflowState death = CloseEnrolmentsOnDeath.deathStateOf(enrolment.getProgram());
+		if (death == null) {
+			return;
+		}
+		String message = "The patient has died, so their " + enrolment.getProgram().getName()
+		        + " enrolment cannot stay open; end it in " + death.getConcept().getName().getName();
+		Errors errors = new BindException(enrolment, "patientProgram");
+		errors.reject("actcore.deadPatientEnrolment", message);
+		throw new ValidationException(message, errors);
 	}
 	
 	private static void refuseOverlappingEnrolment(PatientProgram enrolment) {

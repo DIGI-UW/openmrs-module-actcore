@@ -12,10 +12,12 @@ package org.openmrs.module.actcore;
 import java.util.Date;
 
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
 import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
+import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
@@ -72,6 +74,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
+		closeEnrolmentsOfTheDead();
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 		            + " of the same name.",
@@ -81,6 +84,30 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		            + " injections and oral adherence estimates.",
 		    soon());
 		log.info("ACT Core module started");
+	}
+	
+	/**
+	 * Ends the open enrolments of patients already recorded dead, as the daemon user. A failure is
+	 * logged, so the module still starts.
+	 */
+	private static void closeEnrolmentsOfTheDead() {
+		try {
+			// The work runs on the daemon thread, so its failures are caught there.
+			Daemon.runInDaemonThreadAndWait(() -> {
+				try {
+					int ended = CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead();
+					if (ended > 0) {
+						log.info("Ended {} open enrolments of patients already recorded dead", ended);
+					}
+				}
+				catch (RuntimeException e) {
+					log.error("Could not end the open enrolments of patients already recorded dead", e);
+				}
+			}, daemonToken);
+		}
+		catch (Exception e) {
+			log.error("Could not end the open enrolments of patients already recorded dead", e);
+		}
 	}
 	
 	private void schedule(String name, String taskClass, String description, Date firstRun) {

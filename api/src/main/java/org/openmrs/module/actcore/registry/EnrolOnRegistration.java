@@ -45,6 +45,12 @@ public class EnrolOnRegistration implements MethodInterceptor {
 		return saved;
 	}
 	
+	/** Whether the program is the RHD Registry, by actcore.registryProgram. */
+	public static boolean isRegistry(Program program) {
+		String registry = Context.getAdministrationService().getGlobalProperty(PROGRAM_PROPERTY);
+		return program != null && StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid());
+	}
+	
 	private static void enrol(Patient patient) {
 		String uuid = Context.getAdministrationService().getGlobalProperty(PROGRAM_PROPERTY);
 		if (StringUtils.isBlank(uuid)) {
@@ -69,6 +75,10 @@ public class EnrolOnRegistration implements MethodInterceptor {
 			enrolment.setProgram(registry);
 			enrolment.setDateEnrolled(new Date());
 			enrolment.setLocation(Context.getUserContext().getLocation());
+			// A patient registered after they died is enrolled ended in the death state, never open.
+			if (Boolean.TRUE.equals(patient.getDead())) {
+				CloseEnrolmentsOnDeath.endInDeathState(enrolment, patient);
+			}
 			programs.savePatientProgram(enrolment);
 		}
 		catch (RuntimeException e) {

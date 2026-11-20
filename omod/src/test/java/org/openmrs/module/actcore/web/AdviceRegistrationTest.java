@@ -32,8 +32,8 @@ import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.UserService;
 import org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave;
 import org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration;
+import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
-import org.openmrs.module.actcore.studies.CloseStudiesOnDeath;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.actcore.studies.StudyEnrolmentStatus;
 import org.openmrs.module.actcore.task.HideDismissedFlags;
@@ -68,13 +68,13 @@ public class AdviceRegistrationTest {
 		assertEquals(points(PatientService.class, ProgramWorkflowService.class), pointsOf(OneOpenRegistryEnrolment.class));
 		assertEquals(points(ProgramWorkflowService.class), pointsOf(StudyEnrolmentStatus.class));
 		assertEquals(points(ProgramWorkflowService.class), pointsOf(StudyEnrolmentRules.class));
-		assertEquals(points(PatientService.class, PersonService.class), pointsOf(CloseStudiesOnDeath.class));
+		assertEquals(points(PatientService.class, PersonService.class), pointsOf(CloseEnrolmentsOnDeath.class));
 	}
 	
 	@Test
-	public void configRegistersCloseStudiesOnDeathOnPatientServiceBeforeTheGuardSoTheMergeFoldsFirst() throws Exception {
+	public void configRegistersCloseEnrolmentsOnDeathOnPatientServiceBeforeTheGuardSoTheMergeFoldsFirst() throws Exception {
 		List<String> advice = adviceOn(PatientService.class);
-		int close = advice.indexOf(CloseStudiesOnDeath.class.getName());
+		int close = advice.indexOf(CloseEnrolmentsOnDeath.class.getName());
 		int guard = advice.indexOf(OneOpenRegistryEnrolment.class.getName());
 		assertTrue(advice.toString(), close >= 0 && guard >= 0 && close < guard);
 	}
