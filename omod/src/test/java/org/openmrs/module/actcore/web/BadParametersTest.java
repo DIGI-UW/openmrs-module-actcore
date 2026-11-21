@@ -11,13 +11,13 @@ package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
-import java.util.Map;
-
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Test;
-import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,7 +63,7 @@ public class BadParametersTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void answersAMissingRequiredParameterWithABadRequestNamingIt() throws Exception {
+	public void answersAMissingRequiredParameterWithABadRequest() throws Exception {
 		MockHttpServletRequest request = get("/rest/v1/actcore/screeningcounts");
 		request.setParameter("clinic", "x");
 		
@@ -81,6 +81,23 @@ public class BadParametersTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertEquals(400, response.getStatus());
 		assertEquals("{error={message=month is required}}", body.toString());
+	}
+	
+	@Test
+	public void everyControllerInThisPackageGetsTheBadParameterHandler() {
+		Set<Class<?>> controllers = new HashSet<Class<?>>();
+		for (RequestMappingHandlerMapping mapping : mappings) {
+			for (HandlerMethod method : mapping.getHandlerMethods().values()) {
+				if (getClass().getPackage().equals(method.getBeanType().getPackage())) {
+					controllers.add(method.getBeanType());
+				}
+			}
+		}
+		
+		assertTrue(controllers.contains(ReadsController.class));
+		for (Class<?> controller : controllers) {
+			assertTrue(controller.getName(), ActCoreRestController.class.isAssignableFrom(controller));
+		}
 	}
 	
 	private static MockHttpServletRequest get(String uri) {
