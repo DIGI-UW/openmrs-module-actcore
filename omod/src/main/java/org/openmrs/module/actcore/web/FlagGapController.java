@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
-public class FlagGapController extends BaseRestController {
+public class FlagGapController extends ActCoreRestController {
 	
 	private final FlagGapLookup lookup = new FlagGapLookup();
 	

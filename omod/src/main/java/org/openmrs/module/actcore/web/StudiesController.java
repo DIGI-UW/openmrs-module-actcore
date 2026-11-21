@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/studies")
-public class StudiesController extends BaseRestController {
+public class StudiesController extends ActCoreRestController {
 	
 	/**
 	 * The distribution creates it; a user without it, other than a superuser, cannot change studies.

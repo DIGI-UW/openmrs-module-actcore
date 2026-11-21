@@ -46,7 +46,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
-public class ScreeningCountController extends BaseRestController {
+public class ScreeningCountController extends ActCoreRestController {
 	
 	/** Opens the Screening counts page, where they are read. */
 	public static final String READ_PRIVILEGE = "App: act.screeningCounts";

@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 /** The Logs page's Patients opened tab: who read which patient's record, folded by the hour. */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/reads")
-public class ReadsController extends BaseRestController {
+public class ReadsController extends ActCoreRestController {
 	
 	/** Shorter than the other logs' default, as every chart opened writes reads. */
 	static final int DEFAULT_DAYS = 30;

@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
-public class CardiologyController extends BaseRestController {
+public class CardiologyController extends ActCoreRestController {
 	
 	@RequestMapping(value = "/cardiology", method = RequestMethod.GET)
 	@ResponseBody

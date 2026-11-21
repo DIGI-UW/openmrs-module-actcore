@@ -53,7 +53,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/download")
-public class DownloadController extends BaseRestController {
+public class DownloadController extends ActCoreRestController {
 	
 	/** Download any patient's forms, without identifiers. */
 	public static final String DOWNLOAD_PRIVILEGE = "Task: act.downloadData";

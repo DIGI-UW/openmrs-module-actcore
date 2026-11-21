@@ -49,7 +49,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/raisedflags")
-public class RaisedFlagsController extends BaseRestController {
+public class RaisedFlagsController extends ActCoreRestController {
 	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody

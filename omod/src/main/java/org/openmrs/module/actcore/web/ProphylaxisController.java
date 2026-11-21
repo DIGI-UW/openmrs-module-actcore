@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
-public class ProphylaxisController extends BaseRestController {
+public class ProphylaxisController extends ActCoreRestController {
 	
 	@RequestMapping(value = "/prophylaxis", method = RequestMethod.GET)
 	@ResponseBody

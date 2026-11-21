@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/activity")
-public class ActivityController extends BaseRestController {
+public class ActivityController extends ActCoreRestController {
 	
 	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
 	static final int KIND_DEFAULT_DAYS = 30;
