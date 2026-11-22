@@ -26,6 +26,7 @@ import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -48,12 +49,12 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class ScreeningCountController extends ActCoreRestController {
 	
 	/** Opens the Screening counts page, where they are read. */
-	public static final String READ_PRIVILEGE = "App: act.screeningCounts";
+	public static final String READ_PRIVILEGE = ActCorePrivileges.SCREENING_COUNTS;
 	
 	/** The Dashboard's, whose screening section reads them. */
 	public static final String DASHBOARD_PRIVILEGE = RunChartController.READ_PRIVILEGE;
 	
-	public static final String ENTER_PRIVILEGE = "Task: act.enterScreeningCounts";
+	public static final String ENTER_PRIVILEGE = ActCorePrivileges.ENTER_SCREENING_COUNTS;
 	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
 	

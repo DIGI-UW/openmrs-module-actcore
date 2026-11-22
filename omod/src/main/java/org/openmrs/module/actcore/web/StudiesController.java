@@ -21,6 +21,7 @@ import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -43,7 +44,7 @@ public class StudiesController extends ActCoreRestController {
 	/**
 	 * The distribution creates it; a user without it, other than a superuser, cannot change studies.
 	 */
-	public static final String MANAGE_PRIVILEGE = "Task: act.manageStudies";
+	public static final String MANAGE_PRIVILEGE = ActCorePrivileges.MANAGE_STUDIES;
 	
 	private final Studies studies = new Studies();
 	

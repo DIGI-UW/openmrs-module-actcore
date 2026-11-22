@@ -23,6 +23,7 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSession;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -45,7 +46,7 @@ public class RaisedFlags {
 	/**
 	 * The distribution creates it; a user without it, other than a superuser, cannot dismiss a flag.
 	 */
-	public static final String DISMISS_PRIVILEGE = "Task: act.dismissFlags";
+	public static final String DISMISS_PRIVILEGE = ActCorePrivileges.DISMISS_FLAGS;
 	
 	public static final String DISMISS_TAG_PROPERTY = "actcore.dismissFlagTag";
 	
