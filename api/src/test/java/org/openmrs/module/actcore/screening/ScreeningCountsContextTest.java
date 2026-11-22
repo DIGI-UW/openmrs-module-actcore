@@ -27,6 +27,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
@@ -35,11 +36,12 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final int CLINIC_B = 2;
 	
-	private final ScreeningCounts screeningCounts = new ScreeningCounts();
+	private ScreeningCountService screeningCounts;
 	
 	@Before
 	public void createModuleTables() {
 		ModuleTables.create();
+		screeningCounts = Context.getService(ScreeningCountService.class);
 	}
 	
 	/**
@@ -63,9 +65,9 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void save_shouldKeepTheMonthsCountsAndNotesWithAQuoteAsTyped() {
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(138), "Two primary schools'); --");
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(138), "Two primary schools'); --");
 		
-		ScreeningCounts.Month month = screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 9));
+		ScreeningCounts.Month month = screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9));
 		
 		assertTrue(month.saved);
 		assertEquals(Integer.valueOf(412), month.counts.get("school_screened"));
@@ -78,17 +80,17 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void save_shouldVoidTheMonthItReplacesAndKeepIt() {
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(138), "first");
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(55), null);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(138), "first");
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(55), null);
 		
-		ScreeningCounts.Month month = screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 9));
+		ScreeningCounts.Month month = screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9));
 		
 		assertEquals(Integer.valueOf(55), month.counts.get("community_screened"));
 		assertNull(month.notes);
 		assertEquals(1, count("voided = false"));
 		assertEquals(1, count("voided = true and voided_by is not null and date_voided is not null"
 		        + " and void_reason is not null and notes = 'first'"));
-		assertEquals(1, screeningCounts.summary(null, YearMonth.of(2026, 9), YearMonth.of(2026, 9)).months);
+		assertEquals(1, screeningCounts.getSummary(null, YearMonth.of(2026, 9), YearMonth.of(2026, 9)).months);
 	}
 	
 	private static int count(String where) {
@@ -99,7 +101,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void get_shouldGiveZerosForAMonthNotSaved() {
-		ScreeningCounts.Month month = screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 8));
+		ScreeningCounts.Month month = screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 8));
 		
 		assertFalse(month.saved);
 		assertEquals(ScreeningCounts.COLUMNS.size(), month.counts.size());
@@ -137,7 +139,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 		refused(unknown, "school_total");
 		
 		try {
-			screeningCounts.save(location(CLINIC_A), YearMonth.now().plusMonths(1), september(138), null);
+			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.now().plusMonths(1), september(138), null);
 			fail("expected a month to come to be refused");
 		}
 		catch (IllegalArgumentException e) {
@@ -158,27 +160,27 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void save_shouldKeepNotesOfTheMostCharactersAndRefuseOneMore() {
 		String most = StringUtils.repeat("n", ScreeningCounts.NOTES_LENGTH);
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 8), september(138), " " + most + " ");
-		assertEquals(most, screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 8)).notes);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 8), september(138), " " + most + " ");
+		assertEquals(most, screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 8)).notes);
 		
 		try {
-			screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(138), most + "n");
+			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(138), most + "n");
 			fail("expected notes too long to be refused");
 		}
 		catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("Notes may be at most"));
 		}
-		assertFalse(screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
+		assertFalse(screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
 	}
 	
 	@Test
 	public void summary_shouldSumTheClinicsAndMonthsInTheRange() {
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 8), september(10), null);
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(20), null);
-		screeningCounts.save(location(CLINIC_B), YearMonth.of(2026, 9), september(30), null);
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 10), september(40), null);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 8), september(10), null);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(20), null);
+		screeningCounts.saveMonth(location(CLINIC_B), YearMonth.of(2026, 9), september(30), null);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 10), september(40), null);
 		
-		ScreeningCounts.Summary both = screeningCounts.summary(Arrays.asList(CLINIC_A, CLINIC_B), YearMonth.of(2026, 8),
+		ScreeningCounts.Summary both = screeningCounts.getSummary(Arrays.asList(CLINIC_A, CLINIC_B), YearMonth.of(2026, 8),
 		    YearMonth.of(2026, 9));
 		
 		assertEquals(3, both.months);
@@ -189,11 +191,11 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Long.valueOf(3 * 96), both.total("children"));
 		assertEquals(Long.valueOf(3 * 231), both.total("females"));
 		
-		ScreeningCounts.Summary every = screeningCounts.summary(null, YearMonth.of(2026, 1), YearMonth.of(2026, 12));
+		ScreeningCounts.Summary every = screeningCounts.getSummary(null, YearMonth.of(2026, 1), YearMonth.of(2026, 12));
 		assertEquals(4, every.months);
 		assertEquals(Long.valueOf(4 * 412 + 100), every.screened());
 		
-		ScreeningCounts.Summary one = screeningCounts.summary(Collections.singletonList(CLINIC_B), YearMonth.of(2026, 1),
+		ScreeningCounts.Summary one = screeningCounts.getSummary(Collections.singletonList(CLINIC_B), YearMonth.of(2026, 1),
 		    YearMonth.of(2026, 12));
 		assertEquals(1, one.months);
 		assertEquals(Long.valueOf(412 + 30), one.screened());
@@ -201,9 +203,9 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void summary_shouldCountNothingForNoClinicsRatherThanEveryClinic() {
-		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(20), null);
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(20), null);
 		
-		ScreeningCounts.Summary none = screeningCounts.summary(Collections.<Integer> emptyList(), YearMonth.of(2026, 1),
+		ScreeningCounts.Summary none = screeningCounts.getSummary(Collections.<Integer> emptyList(), YearMonth.of(2026, 1),
 		    YearMonth.of(2026, 12));
 		
 		assertEquals(0, none.months);
@@ -213,13 +215,13 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void refused(Map<String, Integer> counts, String naming) {
 		try {
-			screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), counts, null);
+			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), counts, null);
 			fail("expected the counts to be refused");
 		}
 		catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(naming));
 		}
-		assertFalse(screeningCounts.get(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
+		assertFalse(screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
 	}
 	
 	private static org.openmrs.Location location(int id) {

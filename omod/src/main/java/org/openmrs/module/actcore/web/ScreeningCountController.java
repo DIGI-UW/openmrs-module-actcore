@@ -27,6 +27,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -58,15 +59,13 @@ public class ScreeningCountController extends ActCoreRestController {
 	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
 	
-	private final ScreeningCounts screeningCounts = new ScreeningCounts();
-	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject get(@RequestParam("clinic") String clinic, @RequestParam("month") String month) {
 		requireReader();
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
-		return describe(location, yearMonth, screeningCounts.get(location, yearMonth));
+		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
 	@RequestMapping(method = RequestMethod.POST)
@@ -78,12 +77,12 @@ public class ScreeningCountController extends ActCoreRestController {
 		YearMonth yearMonth = month("month", month, null);
 		Object notes = body == null ? null : body.get("notes");
 		try {
-			screeningCounts.save(location, yearMonth, counts(body), notes == null ? null : notes.toString());
+			service().saveMonth(location, yearMonth, counts(body), notes == null ? null : notes.toString());
 		}
 		catch (IllegalArgumentException e) {
 			throw new IllegalRequestException(e.getMessage());
 		}
-		return describe(location, yearMonth, screeningCounts.get(location, yearMonth));
+		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
 	/**
@@ -101,7 +100,7 @@ public class ScreeningCountController extends ActCoreRestController {
 		if (start.isAfter(end)) {
 			throw new IllegalRequestException("startMonth is after endMonth");
 		}
-		ScreeningCounts.Summary summary = screeningCounts.summary(locationIds(clinics), start, end);
+		ScreeningCounts.Summary summary = service().getSummary(locationIds(clinics), start, end);
 		SimpleObject settings = new SimpleObject();
 		for (String setting : ScreeningCounts.SETTINGS) {
 			settings.add(setting, summary.sums.get(setting + "_screened"));
@@ -230,5 +229,9 @@ public class ScreeningCountController extends ActCoreRestController {
 		if (!Context.hasPrivilege(privilege)) {
 			throw new APIAuthenticationException("Privilege required: " + privilege);
 		}
+	}
+	
+	private static ScreeningCountService service() {
+		return Context.getService(ScreeningCountService.class);
 	}
 }

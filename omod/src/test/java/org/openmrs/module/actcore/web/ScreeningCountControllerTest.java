@@ -30,8 +30,8 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
@@ -51,9 +51,11 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	@Before
 	public void createTheTableWithTwoClinicsSeptember() {
 		ModuleTables.create();
-		ScreeningCounts counts = new ScreeningCounts();
-		counts.save(Context.getLocationService().getLocationByUuid(CLINIC_A), YearMonth.of(2026, 9), school(100, 10), null);
-		counts.save(Context.getLocationService().getLocationByUuid(CLINIC_B), YearMonth.of(2026, 9), school(50, 5), null);
+		ScreeningCountService counts = Context.getService(ScreeningCountService.class);
+		counts.saveMonth(Context.getLocationService().getLocationByUuid(CLINIC_A), YearMonth.of(2026, 9), school(100, 10),
+		    null);
+		counts.saveMonth(Context.getLocationService().getLocationByUuid(CLINIC_B), YearMonth.of(2026, 9), school(50, 5),
+		    null);
 	}
 	
 	/** A school row of the screened, all children, half female, with the positives given. */
