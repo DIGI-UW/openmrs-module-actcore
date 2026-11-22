@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.hibernate.FlushMode;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
@@ -64,9 +65,14 @@ public class RaisedFlags {
 	/** Records the flag as raised from now, unless it already is or the patient does not exist. */
 	static void raise(int flagId, int patientId) {
 		inTransaction(() -> {
-			RaisedFlag.Key key = new RaisedFlag.Key(patientId, flagId);
-			if (session().get(RaisedFlag.class, key) == null && exists(patientId)) {
-				RaisedFlag raised = new RaisedFlag(key, new Date());
+			// A query, as a raised flag the session holds may since have been lowered by a bulk delete.
+			long absent = (Long) session()
+			        .createQuery("select count(*) from Patient p where p.patientId = :patient and not exists"
+			                + " (select 1 from RaisedFlag r where r.key.patientId = :patient and r.key.flagId = :flag)")
+			        .setParameter("patient", patientId).setParameter("flag", flagId).setHibernateFlushMode(FlushMode.MANUAL)
+			        .uniqueResult();
+			if (absent > 0) {
+				RaisedFlag raised = new RaisedFlag(new RaisedFlag.Key(patientId, flagId), new Date());
 				session().save(raised);
 				// Out of the session, or every later commit of the full refresh dirty-checks it.
 				session().flush();
@@ -195,11 +201,6 @@ public class RaisedFlags {
 		});
 	}
 	
-	private static boolean exists(int patientId) {
-		return ((Number) session().createQuery("select count(*) from Patient where patientId = :id")
-		        .setParameter("id", patientId).uniqueResult()).longValue() > 0;
-	}
-	
 	private static Set<Integer> ids(String hql, int id) {
 		Set<Integer> ids = new HashSet<Integer>();
 		for (Object value : list(hql, id)) {
@@ -217,7 +218,9 @@ public class RaisedFlags {
 	}
 	
 	private static List<?> list(String hql, int id) {
-		return inTransaction(() -> session().createQuery(hql).setParameter("id", id).list());
+		// Its callers flush their own writes, so a read need not dirty-check the whole session first.
+		return inTransaction(
+		    () -> session().createQuery(hql).setParameter("id", id).setHibernateFlushMode(FlushMode.MANUAL).list());
 	}
 	
 	private static <T> T inTransaction(Transactions.Work<T> work) {
