@@ -375,7 +375,7 @@
       <where>property = 'actcore.nextSteps.encounterTypes' AND property_value = 'bpg:04cf03db-3b8e-5020-84b0-50b06338767a,oral:55271793-ef37-58da-9d86-1d9092a5a809,consult:c2503561-c00d-5460-8157-43d594472b4a,echo:730f5ec2-7102-55d0-8602-2d792844f245,procedures:c9b87090-8768-50be-987e-8ca0a8983429,inr:b4bb88a3-9a04-5142-85bd-bb63c270f632,patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0'</where>
     </update>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-download-log-uuid" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-download-log-uuid" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <not><columnExists tableName="actcore_download_log" columnName="uuid"/></not>
     </preConditions>
@@ -392,7 +392,7 @@
     <addNotNullConstraint tableName="actcore_download_log" columnName="uuid" columnDataType="char(38)"/>
     <addUniqueConstraint tableName="actcore_download_log" columnNames="uuid" constraintName="actcore_download_log_uuid"/>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-flag-dismissal-uuid" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-flag-dismissal-uuid" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <not><columnExists tableName="actcore_flag_dismissal" columnName="uuid"/></not>
     </preConditions>
@@ -409,7 +409,7 @@
     <addNotNullConstraint tableName="actcore_flag_dismissal" columnName="uuid" columnDataType="char(38)"/>
     <addUniqueConstraint tableName="actcore_flag_dismissal" columnNames="uuid" constraintName="actcore_flag_dismissal_uuid"/>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-screening-count-uuid" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-screening-count-uuid" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <not><columnExists tableName="actcore_screening_count" columnName="uuid"/></not>
     </preConditions>
@@ -426,7 +426,7 @@
     <addNotNullConstraint tableName="actcore_screening_count" columnName="uuid" columnDataType="char(38)"/>
     <addUniqueConstraint tableName="actcore_screening_count" columnNames="uuid" constraintName="actcore_screening_count_uuid"/>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-screening-count-data" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-screening-count-data" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <not><columnExists tableName="actcore_screening_count" columnName="creator"/></not>
     </preConditions>
@@ -456,7 +456,7 @@
     <addForeignKeyConstraint baseTableName="actcore_screening_count" baseColumnNames="voided_by"
         constraintName="actcore_screening_count_voided_by" referencedTableName="users" referencedColumnNames="user_id"/>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-screening-count-month-index" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-screening-count-month-index" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <not><indexExists tableName="actcore_screening_count" indexName="actcore_screening_count_location_month_all"/></not>
     </preConditions>
@@ -466,7 +466,7 @@
       <column name="month"/>
     </createIndex>
   </changeSet>
-  <changeSet id="actcore-2026-11-22-screening-count-month-not-unique" author="UW DIGI">
+  <changeSet id="actcore-2026-11-22-screening-count-month-not-unique" author="mherman22">
     <preConditions onFail="MARK_RAN">
       <indexExists tableName="actcore_screening_count" indexName="actcore_screening_count_location_month"/>
     </preConditions>
