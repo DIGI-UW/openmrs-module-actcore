@@ -95,8 +95,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		
 		flagService.purgeFlag(flag.getFlagId());
 		
-		assertEquals(0, count("select count(*) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId()));
-		assertEquals(1,
+		assertEquals(0L, count("select count(*) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId()));
+		assertEquals(1L,
 		    count("select count(*) from " + RaisedFlags.DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId()));
 	}
 	
