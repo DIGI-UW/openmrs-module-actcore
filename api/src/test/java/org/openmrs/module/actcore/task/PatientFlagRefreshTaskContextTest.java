@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.task;
 
+import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -79,7 +80,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	
 	@Before
 	public void setUp() {
-		RaisedFlagsTable.create();
+		ModuleTables.create();
 		flagService = Context.getService(FlagService.class);
 		saveCohortType("System List");
 	}

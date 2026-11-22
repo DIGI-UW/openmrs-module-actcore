@@ -47,6 +47,7 @@ import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -71,23 +72,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private Concept question;
 	
-	/**
-	 * The module's liquibase changeset is not run by the test context, so the table is made here. The
-	 * log writes in a transaction of its own, which outlives the test, so the rows are cleared first.
-	 */
-	private static void createTable() {
-		Context.getAdministrationService()
-		        .executeSQL("create table if not exists " + DownloadLog.TABLE
-		                + " (download_id int auto_increment primary key, user_id int not null, form_id int, detail clob,"
-		                + " date_created datetime not null)",
-		            false);
-		Context.getAdministrationService().executeSQL("delete from " + DownloadLog.TABLE, false);
-	}
-	
 	@Before
 	public void setUp() {
-		// Outside the test's transaction, which would otherwise hold a lock that a drop waits on.
-		Transactions.inNewTransaction(DownloadControllerTest::createTable);
+		ModuleTables.create();
 		form = new Form();
 		form.setName("RHD Echocardiogram");
 		form.setVersion("1");
@@ -181,9 +168,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void failsTheDownloadWhenItCannotBeRecorded() throws Exception {
-		// In a transaction of its own, so the DDL does not commit what setUp saved.
-		Transactions.inNewTransaction(
-		    () -> Context.getAdministrationService().executeSQL("drop table " + DownloadLog.TABLE, false));
+		// Renamed away rather than dropped, so the table the changelog made is back for the tests after.
+		renameDownloadLog(DownloadLog.TABLE, "actcore_download_log_away");
 		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
 		try {
 			controller.download(body());
@@ -192,6 +178,17 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		catch (RuntimeException expected) {
 			assertTrue(expected.toString(), causes(expected).toUpperCase().contains(DownloadLog.TABLE.toUpperCase()));
 		}
+		finally {
+			Context.logout();
+			Context.authenticate("admin", "test");
+			renameDownloadLog("actcore_download_log_away", DownloadLog.TABLE);
+		}
+	}
+	
+	/** In a transaction of its own, so the DDL does not commit what setUp saved. */
+	private static void renameDownloadLog(String from, String to) {
+		Transactions.inNewTransaction(
+		    () -> Context.getAdministrationService().executeSQL("alter table " + from + " rename to " + to, false));
 	}
 	
 	@Test
@@ -680,22 +677,35 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		signInAs("downloadcaller", privileges);
 	}
 	
+	/**
+	 * Committed, as the log that names the user writes in a transaction of its own; so the user
+	 * outlives the test, and a later one signing in by the same name takes it with a new role.
+	 */
 	private void signInAs(String username, String... privileges) {
-		UserService users = Context.getUserService();
 		Context.authenticate("admin", "test");
-		Role role = new Role("download caller " + UUID.randomUUID());
-		for (String name : privileges) {
-			Privilege privilege = users.getPrivilege(name);
-			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
-		}
-		users.saveRole(role);
-		Person person = new Person();
-		person.addName(new PersonName("Download", null, "Caller"));
-		person.setGender("F");
-		User user = new User(person);
-		user.setUsername(username);
-		user.addRole(role);
-		users.createUser(user, "Download123");
+		Transactions.inNewTransaction(() -> {
+			UserService users = Context.getUserService();
+			Role role = new Role("download caller " + UUID.randomUUID());
+			for (String name : privileges) {
+				Privilege privilege = users.getPrivilege(name);
+				role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
+			}
+			users.saveRole(role);
+			User user = users.getUserByUsername(username);
+			if (user == null) {
+				Person person = new Person();
+				person.addName(new PersonName("Download", null, "Caller"));
+				person.setGender("F");
+				user = new User(person);
+				user.setUsername(username);
+				user.addRole(role);
+				users.createUser(user, "Download123");
+			} else {
+				user.getRoles().clear();
+				user.addRole(role);
+				users.saveUser(user);
+			}
+		});
 		Context.logout();
 		Context.authenticate(username, "Download123");
 	}

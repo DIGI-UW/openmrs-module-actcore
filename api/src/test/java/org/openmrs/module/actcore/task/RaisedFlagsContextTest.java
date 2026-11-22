@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.task;
 
+import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -65,7 +66,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Before
 	public void setUp() {
-		RaisedFlagsTable.create();
+		ModuleTables.create();
 		Context.getAdministrationService()
 		        .saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, "Critical data"));
 		flagService = Context.getService(FlagService.class);
@@ -82,6 +83,21 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	@After
 	public void removeAdvice() {
 		Context.removeAdvice(FlagService.class, hide);
+	}
+	
+	@Test
+	public void forgetsThePatientsAFlagWasRaisedForWhenTheFlagIsPurgedButKeepsItsDismissals() {
+		execute("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values (" + PATIENT + ", "
+		        + flag.getFlagId() + ", '2026-01-05 10:00:00')");
+		execute(
+		    "insert into " + RaisedFlags.DISMISSAL_TABLE + " (patient_id, flag_id, dismissed_by, date_dismissed) values ("
+		            + PATIENT + ", " + flag.getFlagId() + ", 1, '2026-01-06 10:00:00')");
+		
+		flagService.purgeFlag(flag.getFlagId());
+		
+		assertEquals(0, count("select count(*) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId()));
+		assertEquals(1,
+		    count("select count(*) from " + RaisedFlags.DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId()));
 	}
 	
 	@Test

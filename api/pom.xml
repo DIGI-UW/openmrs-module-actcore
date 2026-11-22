@@ -75,4 +75,19 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <testResources>
+      <testResource>
+        <directory>src/test/resources</directory>
+      </testResource>
+      <!-- the module's changelog, which the tests run to make its tables -->
+      <testResource>
+        <directory>../omod/src/main/resources</directory>
+        <includes>
+          <include>liquibase.xml</include>
+        </includes>
+      </testResource>
+    </testResources>
+  </build>
 </project>

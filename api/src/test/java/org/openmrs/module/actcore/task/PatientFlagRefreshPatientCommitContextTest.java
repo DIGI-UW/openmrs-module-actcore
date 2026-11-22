@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.task;
 
+import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
@@ -37,8 +38,8 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 	private final List<Flag> saved = new ArrayList<Flag>();
 	
 	@Before
-	public void createRaisedFlagsTable() {
-		RaisedFlagsTable.create();
+	public void createModuleTables() {
+		ModuleTables.create();
 	}
 	
 	@Test

@@ -33,6 +33,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
@@ -67,17 +68,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	
 	@Before
 	public void setUp() {
-		// The module's liquibase changeset is not run by the test context; H2 commits DDL at once.
-		Context.getAdministrationService().executeSQL("create table if not exists " + RaisedFlags.TABLE
-		        + " (patient_id int not null, flag_id int not null, raised_since datetime not null, dismissed_by int,"
-		        + " date_dismissed datetime, primary key (patient_id, flag_id))",
-		    false);
-		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.TABLE, false);
-		Context.getAdministrationService()
-		        .executeSQL("create table if not exists " + RaisedFlags.DISMISSAL_TABLE
-		                + " (dismissal_id int auto_increment primary key, patient_id int not null, flag_id int not null,"
-		                + " dismissed_by int, date_dismissed datetime not null)",
-		            false);
+		ModuleTables.create();
 		Context.getAdministrationService()
 		        .saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, "Critical data"));
 		critical = new Tag("Critical data");

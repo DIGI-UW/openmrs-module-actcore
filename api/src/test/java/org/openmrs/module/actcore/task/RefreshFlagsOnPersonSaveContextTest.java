@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.actcore.task;
 
+import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -159,7 +160,7 @@ public class RefreshFlagsOnPersonSaveContextTest extends BaseModuleContextSensit
 	
 	@Test
 	public void savePatient_shouldClearAFlagThatReadsThePersonOnceMarkingDeceasedCommits() {
-		RaisedFlagsTable.create();
+		ModuleTables.create();
 		// As RHD death not recorded on patient reads the person: raised while the patient is not marked dead.
 		Flag notRecorded = new Flag("Death not recorded " + System.nanoTime(),
 		        "select pat.patient_id from patient pat join person p on p.person_id = pat.patient_id"
