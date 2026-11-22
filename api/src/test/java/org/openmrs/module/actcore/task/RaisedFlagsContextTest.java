@@ -86,6 +86,17 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void raisesAFlagAgainAfterLoweringItInTheSameSession() {
+		RaisedFlags.raise(flag.getFlagId(), PATIENT);
+		RaisedFlags.raise(flag.getFlagId(), PATIENT);
+		RaisedFlags.lower(flag.getFlagId(), PATIENT);
+		
+		RaisedFlags.raise(flag.getFlagId(), PATIENT);
+		
+		assertTrue(RaisedFlags.raisedPatients(flag.getFlagId()).contains(PATIENT));
+	}
+	
+	@Test
 	public void forgetsThePatientsAFlagWasRaisedForWhenTheFlagIsPurgedButKeepsItsDismissals() {
 		execute("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values (" + PATIENT + ", "
 		        + flag.getFlagId() + ", '2026-01-05 10:00:00')");
