@@ -375,4 +375,102 @@
       <where>property = 'actcore.nextSteps.encounterTypes' AND property_value = 'bpg:04cf03db-3b8e-5020-84b0-50b06338767a,oral:55271793-ef37-58da-9d86-1d9092a5a809,consult:c2503561-c00d-5460-8157-43d594472b4a,echo:730f5ec2-7102-55d0-8602-2d792844f245,procedures:c9b87090-8768-50be-987e-8ca0a8983429,inr:b4bb88a3-9a04-5142-85bd-bb63c270f632,patientInfo:ffdc883f-f99f-496a-83f9-2c3c581e1af0'</where>
     </update>
   </changeSet>
+  <changeSet id="actcore-2026-11-22-download-log-uuid" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not><columnExists tableName="actcore_download_log" columnName="uuid"/></not>
+    </preConditions>
+    <comment>Gives each row of actcore_download_log the uuid every OpenMRS record carries</comment>
+    <addColumn tableName="actcore_download_log">
+      <column name="uuid" type="char(38)"/>
+    </addColumn>
+    <customChange class="org.openmrs.util.databasechange.GenerateUuid">
+      <param name="tableNames" value="actcore_download_log"/>
+      <param name="columnName" value="uuid"/>
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
+      <param name="idExceptions" value="actcore_download_log_id=download_id"/>
+    </customChange>
+    <addNotNullConstraint tableName="actcore_download_log" columnName="uuid" columnDataType="char(38)"/>
+    <addUniqueConstraint tableName="actcore_download_log" columnNames="uuid" constraintName="actcore_download_log_uuid"/>
+  </changeSet>
+  <changeSet id="actcore-2026-11-22-flag-dismissal-uuid" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not><columnExists tableName="actcore_flag_dismissal" columnName="uuid"/></not>
+    </preConditions>
+    <comment>Gives each row of actcore_flag_dismissal the uuid every OpenMRS record carries</comment>
+    <addColumn tableName="actcore_flag_dismissal">
+      <column name="uuid" type="char(38)"/>
+    </addColumn>
+    <customChange class="org.openmrs.util.databasechange.GenerateUuid">
+      <param name="tableNames" value="actcore_flag_dismissal"/>
+      <param name="columnName" value="uuid"/>
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
+      <param name="idExceptions" value="actcore_flag_dismissal_id=dismissal_id"/>
+    </customChange>
+    <addNotNullConstraint tableName="actcore_flag_dismissal" columnName="uuid" columnDataType="char(38)"/>
+    <addUniqueConstraint tableName="actcore_flag_dismissal" columnNames="uuid" constraintName="actcore_flag_dismissal_uuid"/>
+  </changeSet>
+  <changeSet id="actcore-2026-11-22-screening-count-uuid" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not><columnExists tableName="actcore_screening_count" columnName="uuid"/></not>
+    </preConditions>
+    <comment>Gives each row of actcore_screening_count the uuid every OpenMRS record carries</comment>
+    <addColumn tableName="actcore_screening_count">
+      <column name="uuid" type="char(38)"/>
+    </addColumn>
+    <customChange class="org.openmrs.util.databasechange.GenerateUuid">
+      <param name="tableNames" value="actcore_screening_count"/>
+      <param name="columnName" value="uuid"/>
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
+      <param name="idExceptions" value="actcore_screening_count_id=screening_count_id"/>
+    </customChange>
+    <addNotNullConstraint tableName="actcore_screening_count" columnName="uuid" columnDataType="char(38)"/>
+    <addUniqueConstraint tableName="actcore_screening_count" columnNames="uuid" constraintName="actcore_screening_count_uuid"/>
+  </changeSet>
+  <changeSet id="actcore-2026-11-22-screening-count-data" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not><columnExists tableName="actcore_screening_count" columnName="creator"/></not>
+    </preConditions>
+    <comment>A clinic's month of screening counts is OpenMRS data: who entered it, when, and voided rather than deleted when replaced</comment>
+    <addColumn tableName="actcore_screening_count">
+      <column name="creator" type="int"/>
+      <column name="date_created" type="datetime"/>
+      <column name="voided" type="boolean" defaultValueBoolean="false">
+        <constraints nullable="false"/>
+      </column>
+      <column name="voided_by" type="int"/>
+      <column name="date_voided" type="datetime"/>
+      <column name="void_reason" type="varchar(255)"/>
+    </addColumn>
+    <!-- Nullable before the steps that can fail, as a rerun marks this changeset ran and inserts leave date_changed empty. -->
+    <dropNotNullConstraint tableName="actcore_screening_count" columnName="date_changed" columnDataType="datetime"/>
+    <!-- A month saved with nobody signed in is credited to the daemon user, found by its fixed uuid. -->
+    <sql>
+      UPDATE actcore_screening_count SET date_created = date_changed, creator = COALESCE(changed_by,
+          (SELECT user_id FROM users WHERE uuid = 'A4F30A1B-5EB9-11DF-A648-37A07F9C90FB')),
+          changed_by = NULL, date_changed = NULL
+    </sql>
+    <addNotNullConstraint tableName="actcore_screening_count" columnName="creator" columnDataType="int"/>
+    <addNotNullConstraint tableName="actcore_screening_count" columnName="date_created" columnDataType="datetime"/>
+    <addForeignKeyConstraint baseTableName="actcore_screening_count" baseColumnNames="creator"
+        constraintName="actcore_screening_count_creator" referencedTableName="users" referencedColumnNames="user_id"/>
+    <addForeignKeyConstraint baseTableName="actcore_screening_count" baseColumnNames="voided_by"
+        constraintName="actcore_screening_count_voided_by" referencedTableName="users" referencedColumnNames="user_id"/>
+  </changeSet>
+  <changeSet id="actcore-2026-11-22-screening-count-month-index" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not><indexExists tableName="actcore_screening_count" indexName="actcore_screening_count_location_month_all"/></not>
+    </preConditions>
+    <comment>Indexes a clinic's months, voided ones included, before the unique index goes; on InnoDB that index backs the location foreign key</comment>
+    <createIndex tableName="actcore_screening_count" indexName="actcore_screening_count_location_month_all">
+      <column name="location_id"/>
+      <column name="month"/>
+    </createIndex>
+  </changeSet>
+  <changeSet id="actcore-2026-11-22-screening-count-month-not-unique" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="actcore_screening_count" indexName="actcore_screening_count_location_month"/>
+    </preConditions>
+    <comment>A replaced month stays as a voided row, so a clinic's month is no longer unique</comment>
+    <dropIndex tableName="actcore_screening_count" indexName="actcore_screening_count_location_month"/>
+  </changeSet>
 </databaseChangeLog>

@@ -76,7 +76,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void save_shouldReplaceTheMonthRatherThanAddASecondRow() {
+	public void save_shouldVoidTheMonthItReplacesAndKeepIt() {
 		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(138), "first");
 		screeningCounts.save(location(CLINIC_A), YearMonth.of(2026, 9), september(55), null);
 		
@@ -84,8 +84,16 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(Integer.valueOf(55), month.counts.get("community_screened"));
 		assertNull(month.notes);
-		assertEquals(1, ((Number) Context.getAdministrationService()
-		        .executeSQL("select count(*) from " + ScreeningCounts.TABLE, true).get(0).get(0)).intValue());
+		assertEquals(1, count("voided = false"));
+		assertEquals(1, count("voided = true and voided_by is not null and date_voided is not null"
+		        + " and void_reason is not null and notes = 'first'"));
+		assertEquals(1, screeningCounts.summary(null, YearMonth.of(2026, 9), YearMonth.of(2026, 9)).months);
+	}
+	
+	private static int count(String where) {
+		return ((Number) Context.getAdministrationService()
+		        .executeSQL("select count(*) from " + ScreeningCounts.TABLE + " where " + where, true).get(0).get(0))
+		                .intValue();
 	}
 	
 	@Test

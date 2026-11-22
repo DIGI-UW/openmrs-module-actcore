@@ -100,9 +100,9 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	public void forgetsThePatientsAFlagWasRaisedForWhenTheFlagIsPurgedButKeepsItsDismissals() {
 		execute("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values (" + PATIENT + ", "
 		        + flag.getFlagId() + ", '2026-01-05 10:00:00')");
-		execute(
-		    "insert into " + RaisedFlags.DISMISSAL_TABLE + " (patient_id, flag_id, dismissed_by, date_dismissed) values ("
-		            + PATIENT + ", " + flag.getFlagId() + ", 1, '2026-01-06 10:00:00')");
+		execute("insert into " + RaisedFlags.DISMISSAL_TABLE + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('" + UUID.randomUUID() + "', " + PATIENT + ", " + flag.getFlagId()
+		        + ", 1, '2026-01-06 10:00:00')");
 		
 		flagService.purgeFlag(flag.getFlagId());
 		

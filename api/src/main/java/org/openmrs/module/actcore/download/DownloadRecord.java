@@ -20,10 +20,12 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.openmrs.BaseOpenmrsObject;
+
 /** One download, as {@link DownloadLog} records it. */
 @Entity
 @Table(name = DownloadLog.TABLE)
-public class DownloadRecord {
+public class DownloadRecord extends BaseOpenmrsObject {
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -54,8 +56,14 @@ public class DownloadRecord {
 		this.dateCreated = dateCreated;
 	}
 	
-	public Integer getDownloadId() {
+	@Override
+	public Integer getId() {
 		return downloadId;
+	}
+	
+	@Override
+	public void setId(Integer id) {
+		downloadId = id;
 	}
 	
 	public Integer getUserId() {

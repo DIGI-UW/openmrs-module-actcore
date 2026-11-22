@@ -390,9 +390,9 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsAFlagDismissalFromActCoreOwnRecord() {
-		sql("insert into actcore_flag_dismissal (patient_id, flag_id, dismissed_by, date_dismissed)"
-		        + " values (%d, %d, %d, '2026-10-21 08:30:00')",
-		    PATIENT, flag.getFlagId(), clinician.getUserId());
+		sql("insert into actcore_flag_dismissal (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
+		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
 		
 		ActivityLog.Page page = log.list(new ActivityLog.Filter());
 		ActivityLog.Entry entry = page.results.get(page.results.size() - 1);
@@ -437,9 +437,9 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsOnlyDismissalsForTheFlagKind() {
-		sql("insert into actcore_flag_dismissal (patient_id, flag_id, dismissed_by, date_dismissed)"
-		        + " values (%d, %d, %d, '2026-10-21 08:30:00')",
-		    PATIENT, flag.getFlagId(), clinician.getUserId());
+		sql("insert into actcore_flag_dismissal (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
+		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
 		
 		ActivityLog.Entry entry = only(filter("flag", null, null, null, null, null));
 		
