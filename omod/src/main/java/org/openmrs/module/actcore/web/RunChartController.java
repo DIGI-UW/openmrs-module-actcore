@@ -28,7 +28,6 @@ import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,7 +41,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
-public class RunChartController extends BaseRestController {
+public class RunChartController extends ActCoreRestController {
 	
 	/** The Dashboard's own privilege in the distribution, which the run charts sit on. */
 	public static final String READ_PRIVILEGE = "App: act.dashboard";

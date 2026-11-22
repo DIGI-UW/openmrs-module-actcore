@@ -35,7 +35,6 @@ import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,7 +52,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/download")
-public class DownloadController extends BaseRestController {
+public class DownloadController extends ActCoreRestController {
 	
 	/** Download any patient's forms, without identifiers. */
 	public static final String DOWNLOAD_PRIVILEGE = "Task: act.downloadData";

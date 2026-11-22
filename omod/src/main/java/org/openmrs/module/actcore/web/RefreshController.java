@@ -19,7 +19,6 @@ import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
@@ -32,7 +31,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
-public class RefreshController extends BaseRestController {
+public class RefreshController extends ActCoreRestController {
 	
 	/** The distribution creates it; a user without it, other than a superuser, is refused. */
 	public static final String PRIVILEGE = "Task: act.refreshFlags";

@@ -25,7 +25,6 @@ import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,7 +38,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/studies")
-public class StudiesController extends BaseRestController {
+public class StudiesController extends ActCoreRestController {
 	
 	/**
 	 * The distribution creates it; a user without it, other than a superuser, cannot change studies.

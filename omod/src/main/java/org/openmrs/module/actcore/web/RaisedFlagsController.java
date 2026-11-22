@@ -33,7 +33,6 @@ import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.response.ResponseException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,7 +48,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/raisedflags")
-public class RaisedFlagsController extends BaseRestController {
+public class RaisedFlagsController extends ActCoreRestController {
 	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody

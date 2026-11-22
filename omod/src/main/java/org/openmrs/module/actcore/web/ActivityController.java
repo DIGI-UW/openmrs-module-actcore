@@ -25,7 +25,6 @@ import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,7 +38,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/activity")
-public class ActivityController extends BaseRestController {
+public class ActivityController extends ActCoreRestController {
 	
 	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
 	static final int KIND_DEFAULT_DAYS = 30;

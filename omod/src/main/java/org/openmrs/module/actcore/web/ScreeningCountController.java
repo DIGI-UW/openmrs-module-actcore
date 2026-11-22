@@ -31,7 +31,6 @@ import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
-import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,7 +45,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
-public class ScreeningCountController extends BaseRestController {
+public class ScreeningCountController extends ActCoreRestController {
 	
 	/** Opens the Screening counts page, where they are read. */
 	public static final String READ_PRIVILEGE = "App: act.screeningCounts";
