@@ -21,7 +21,7 @@ import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.task.RaisedFlagsTable;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTest {
@@ -64,20 +64,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	
 	@Before
 	public void setUp() {
-		// The module's liquibase changeset is not run by the test context, so the table is made here; H2
-		// commits DDL at once, so it outlives the test and only its rows are cleared.
-		Context.getAdministrationService().executeSQL("create table if not exists " + AdherenceRefresh.TABLE
-		        + " (patient_id int primary key, regimen_concept_id int, injection_interval_days int, adherence double,"
-		        + " last_given date, next_due date, date_computed datetime not null)",
-		    false);
-		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
-		Context.getAdministrationService()
-		        .executeSQL("create table if not exists " + AdherenceRefresh.TIMING_TABLE
-		                + " (patient_id int not null, injection_date date not null, on_time boolean not null,"
-		                + " primary key (patient_id, injection_date))",
-		            false);
-		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
-		RaisedFlagsTable.create();
+		ModuleTables.create();
 		prescription = concept("Prophylaxis", "Coded");
 		q21 = concept("Q21 day BPG", "N/A");
 		q28 = concept("Q28 day BPG", "N/A");

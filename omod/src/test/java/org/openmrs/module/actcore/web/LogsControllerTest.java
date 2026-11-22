@@ -15,14 +15,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Person;
@@ -33,8 +30,8 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.logs.ActivityLog;
+import org.openmrs.module.actcore.logs.AuditTables;
 import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -55,22 +52,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Before
 	public void setUp() {
-		// The api's audit-tables.sql is on this module's test classpath too; H2 commits the DDL at once.
-		Transactions.inNewTransaction(() -> {
-			try (InputStream script = getClass().getClassLoader().getResourceAsStream("audit-tables.sql")) {
-				for (String statement : IOUtils.toString(script, StandardCharsets.UTF_8).replaceAll("(?m)^--.*$", "")
-				        .split(";")) {
-					if (statement.trim().startsWith("create table")) {
-						Context.getAdministrationService().executeSQL(statement.trim(), false);
-						Context.getAdministrationService().executeSQL("delete from " + statement.trim().split("\\s+")[5],
-						    false);
-					}
-				}
-			}
-			catch (java.io.IOException e) {
-				throw new IllegalStateException(e);
-			}
-		});
+		AuditTables.create();
 		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) values (10, 0, 1, '2026-10-21 10:52:14')");
 		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
 		        + " values (3, 10, 0, 'enc', false, '2026-10-21 10:52:00', 1, 7)");

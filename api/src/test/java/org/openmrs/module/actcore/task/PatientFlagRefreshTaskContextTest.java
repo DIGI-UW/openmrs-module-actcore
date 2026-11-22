@@ -44,6 +44,7 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.cohort.CohortM;
 import org.openmrs.module.cohort.CohortMember;
 import org.openmrs.module.cohort.CohortType;
@@ -79,7 +80,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	
 	@Before
 	public void setUp() {
-		RaisedFlagsTable.create();
+		ModuleTables.create();
 		flagService = Context.getService(FlagService.class);
 		saveCohortType("System List");
 	}

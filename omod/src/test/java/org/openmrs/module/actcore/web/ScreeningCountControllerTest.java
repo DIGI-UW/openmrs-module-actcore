@@ -29,6 +29,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -49,15 +50,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Before
 	public void createTheTableWithTwoClinicsSeptember() {
-		StringBuilder columns = new StringBuilder();
-		for (String column : ScreeningCounts.COLUMNS) {
-			columns.append(", ").append(column).append(" int not null default 0");
-		}
-		Context.getAdministrationService().executeSQL("create table if not exists " + ScreeningCounts.TABLE
-		        + " (screening_count_id int auto_increment primary key, location_id int not null, month date not null"
-		        + columns + ", notes varchar(1000), changed_by int, date_changed datetime not null,"
-		        + " unique (location_id, month))",
-		    false);
+		ModuleTables.create();
 		ScreeningCounts counts = new ScreeningCounts();
 		counts.save(Context.getLocationService().getLocationByUuid(CLINIC_A), YearMonth.of(2026, 9), school(100, 10), null);
 		counts.save(Context.getLocationService().getLocationByUuid(CLINIC_B), YearMonth.of(2026, 9), school(50, 5), null);

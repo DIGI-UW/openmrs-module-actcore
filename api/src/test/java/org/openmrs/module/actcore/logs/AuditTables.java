@@ -15,11 +15,12 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.commons.io.IOUtils;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 
 /**
- * Makes the audit tables of audit-tables.sql, which the test context does not create, and clears
- * them; H2 commits DDL at once, so the tables outlive the test and only their rows are cleared.
+ * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
+ * not create, and empties them.
  */
 public final class AuditTables {
 	
@@ -27,6 +28,7 @@ public final class AuditTables {
 	}
 	
 	public static void create() {
+		ModuleTables.create();
 		Transactions.inNewTransaction(() -> {
 			for (String statement : script().replaceAll("(?m)^--.*$", "").split(";")) {
 				if (statement.trim().startsWith("create table")) {

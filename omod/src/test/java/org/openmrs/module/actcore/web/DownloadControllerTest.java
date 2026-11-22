@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,7 @@ import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -64,6 +66,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	private static final String[] READS = { PrivilegeConstants.GET_FORMS, PrivilegeConstants.GET_CONCEPTS,
 	        PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_OBS, PrivilegeConstants.GET_PATIENTS };
 	
+	private static final String ASIDE = "actcore_download_log_aside";
+	
 	@Autowired
 	private DownloadController controller;
 	
@@ -71,23 +75,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private Concept question;
 	
-	/**
-	 * The module's liquibase changeset is not run by the test context, so the table is made here. The
-	 * log writes in a transaction of its own, which outlives the test, so the rows are cleared first.
-	 */
-	private static void createTable() {
-		Context.getAdministrationService()
-		        .executeSQL("create table if not exists " + DownloadLog.TABLE
-		                + " (download_id int auto_increment primary key, user_id int not null, form_id int, detail clob,"
-		                + " date_created datetime not null)",
-		            false);
-		Context.getAdministrationService().executeSQL("delete from " + DownloadLog.TABLE, false);
-	}
-	
 	@Before
 	public void setUp() {
-		// Outside the test's transaction, which would otherwise hold a lock that a drop waits on.
-		Transactions.inNewTransaction(DownloadControllerTest::createTable);
+		ModuleTables.create();
 		form = new Form();
 		form.setName("RHD Echocardiogram");
 		form.setVersion("1");
@@ -181,9 +171,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void failsTheDownloadWhenItCannotBeRecorded() throws Exception {
-		// In a transaction of its own, so the DDL does not commit what setUp saved.
-		Transactions.inNewTransaction(
-		    () -> Context.getAdministrationService().executeSQL("drop table " + DownloadLog.TABLE, false));
+		// Set aside, not dropped: the changelog runs once, so a dropped table would not come back.
+		renameDownloadLog(DownloadLog.TABLE, ASIDE);
 		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
 		try {
 			controller.download(body());
@@ -192,6 +181,17 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		catch (RuntimeException expected) {
 			assertTrue(expected.toString(), causes(expected).toUpperCase().contains(DownloadLog.TABLE.toUpperCase()));
 		}
+		finally {
+			Context.logout();
+			Context.authenticate("admin", "test");
+			renameDownloadLog(ASIDE, DownloadLog.TABLE);
+		}
+	}
+	
+	/** In a transaction of its own, so the DDL does not commit what setUp saved. */
+	private static void renameDownloadLog(String from, String to) {
+		Transactions.inNewTransaction(
+		    () -> Context.getAdministrationService().executeSQL("alter table " + from + " rename to " + to, false));
 	}
 	
 	@Test
@@ -680,22 +680,39 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		signInAs("downloadcaller", privileges);
 	}
 	
+	/**
+	 * Committed, as the log that names the user writes in a transaction of its own; so the user
+	 * outlives the test, and a later one signing in by the same name takes it with a new role.
+	 */
 	private void signInAs(String username, String... privileges) {
-		UserService users = Context.getUserService();
 		Context.authenticate("admin", "test");
-		Role role = new Role("download caller " + UUID.randomUUID());
-		for (String name : privileges) {
-			Privilege privilege = users.getPrivilege(name);
-			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
-		}
-		users.saveRole(role);
-		Person person = new Person();
-		person.addName(new PersonName("Download", null, "Caller"));
-		person.setGender("F");
-		User user = new User(person);
-		user.setUsername(username);
-		user.addRole(role);
-		users.createUser(user, "Download123");
+		Transactions.inNewTransaction(() -> {
+			UserService users = Context.getUserService();
+			Role role = users.getRole("download caller " + username);
+			if (role == null) {
+				role = new Role("download caller " + username);
+			}
+			role.setPrivileges(new HashSet<>());
+			for (String name : privileges) {
+				Privilege privilege = users.getPrivilege(name);
+				role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
+			}
+			users.saveRole(role);
+			User user = users.getUserByUsername(username);
+			if (user == null) {
+				Person person = new Person();
+				person.addName(new PersonName("Download", null, "Caller"));
+				person.setGender("F");
+				user = new User(person);
+				user.setUsername(username);
+				user.addRole(role);
+				users.createUser(user, "Download123");
+			} else {
+				user.getRoles().clear();
+				user.addRole(role);
+				users.saveUser(user);
+			}
+		});
 		Context.logout();
 		Context.authenticate(username, "Download123");
 	}

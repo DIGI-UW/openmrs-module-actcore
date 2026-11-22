@@ -25,6 +25,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
@@ -36,21 +37,8 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	private final ScreeningCounts screeningCounts = new ScreeningCounts();
 	
 	@Before
-	public void createTheTable() {
-		createTable();
-	}
-	
-	/** The table as the module's changeset makes it, which the test context does not run. */
-	private static void createTable() {
-		StringBuilder columns = new StringBuilder();
-		for (String column : ScreeningCounts.COLUMNS) {
-			columns.append(", ").append(column).append(" int not null default 0");
-		}
-		Context.getAdministrationService().executeSQL("create table if not exists " + ScreeningCounts.TABLE
-		        + " (screening_count_id int auto_increment primary key, location_id int not null, month date not null"
-		        + columns + ", notes varchar(1000), changed_by int, date_changed datetime not null,"
-		        + " unique (location_id, month))",
-		    false);
+	public void createModuleTables() {
+		ModuleTables.create();
 	}
 	
 	/**

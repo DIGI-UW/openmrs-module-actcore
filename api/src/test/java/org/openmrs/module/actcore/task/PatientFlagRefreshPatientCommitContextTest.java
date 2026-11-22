@@ -19,6 +19,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -37,8 +38,8 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 	private final List<Flag> saved = new ArrayList<Flag>();
 	
 	@Before
-	public void createRaisedFlagsTable() {
-		RaisedFlagsTable.create();
+	public void createModuleTables() {
+		ModuleTables.create();
 	}
 	
 	@Test
