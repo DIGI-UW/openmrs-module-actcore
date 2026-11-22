@@ -22,13 +22,15 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.openmrs.BaseOpenmrsData;
+
 /**
  * A clinic's screening counts for a month: a count field per column of
  * {@link ScreeningCounts#COLUMNS}, which {@link #getCounts()} keys by column name.
  */
 @Entity
 @Table(name = ScreeningCounts.TABLE)
-public class ScreeningCount {
+public class ScreeningCount extends BaseOpenmrsData {
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -99,24 +101,14 @@ public class ScreeningCount {
 	@Column(name = "notes", length = ScreeningCounts.NOTES_LENGTH)
 	private String notes;
 	
-	@Column(name = "changed_by")
-	private Integer changedBy;
-	
-	@Temporal(TemporalType.TIMESTAMP)
-	@Column(name = "date_changed", nullable = false)
-	private Date dateChanged;
-	
 	protected ScreeningCount() {
 	}
 	
-	public ScreeningCount(Integer locationId, Date month, Map<String, Integer> counts, String notes, Integer changedBy,
-	    Date dateChanged) {
+	public ScreeningCount(Integer locationId, Date month, Map<String, Integer> counts, String notes) {
 		this.locationId = locationId;
 		this.month = month;
 		setCounts(counts);
 		this.notes = notes;
-		this.changedBy = changedBy;
-		this.dateChanged = dateChanged;
 	}
 	
 	/** Every count by its column name, in the order of {@link ScreeningCounts#COLUMNS}. */
@@ -164,8 +156,14 @@ public class ScreeningCount {
 		facilityPositive = counts.get("facility_positive");
 	}
 	
-	public Integer getScreeningCountId() {
+	@Override
+	public Integer getId() {
 		return screeningCountId;
+	}
+	
+	@Override
+	public void setId(Integer id) {
+		screeningCountId = id;
 	}
 	
 	public Integer getLocationId() {
@@ -180,11 +178,4 @@ public class ScreeningCount {
 		return notes;
 	}
 	
-	public Integer getChangedBy() {
-		return changedBy;
-	}
-	
-	public Date getDateChanged() {
-		return dateChanged;
-	}
 }

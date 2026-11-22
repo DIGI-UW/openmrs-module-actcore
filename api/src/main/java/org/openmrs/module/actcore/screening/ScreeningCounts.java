@@ -60,6 +60,8 @@ public class ScreeningCounts {
 	
 	public static final int NOTES_LENGTH = 1000;
 	
+	static final String REPLACED = "Replaced by a later save of the month";
+	
 	public static class Month {
 		
 		/** Whether the month has been saved; one that has not is all zeros. */
@@ -103,7 +105,8 @@ public class ScreeningCounts {
 	
 	/** The clinic's counts for the month, or zeros when it has not been saved. */
 	public Month get(Location clinic, YearMonth month) {
-		List<?> rows = session().createQuery("from ScreeningCount where locationId = :clinic and month = :month")
+		List<?> rows = session()
+		        .createQuery("from ScreeningCount where locationId = :clinic and month = :month and voided = false")
 		        .setParameter("clinic", clinic.getLocationId()).setParameter("month", firstDay(month)).list();
 		Month result = new Month();
 		ScreeningCount saved = rows.isEmpty() ? null : (ScreeningCount) rows.get(0);
@@ -121,7 +124,7 @@ public class ScreeningCounts {
 	
 	/**
 	 * Replaces the clinic's month with these counts, a column not given being zero, once they hold
-	 * together; an IllegalArgumentException says what does not.
+	 * together, voiding the counts it replaces; an IllegalArgumentException says what does not hold.
 	 */
 	public void save(Location clinic, YearMonth month, Map<String, Integer> counts, String notes) {
 		final Map<String, Integer> values = validated(month, counts, notes);
@@ -131,13 +134,19 @@ public class ScreeningCounts {
 		final User user = Context.getAuthenticatedUser();
 		try {
 			Transactions.inTransaction(() -> {
-				// Saves of one clinic take turns here rather than racing each other to the unique index.
+				// Saves of one clinic take turns here, so a month never has two current rows.
 				session().get(Location.class, clinicId, LockOptions.UPGRADE);
-				// A bulk delete, as a session delete would run after the insert and trip the unique index.
-				session().createQuery("delete from ScreeningCount where locationId = :clinic and month = :month")
-				        .setParameter("clinic", clinicId).setParameter("month", day).executeUpdate();
-				return session().save(new ScreeningCount(clinicId, day, values, text, user == null ? null : user.getUserId(),
-				        new java.util.Date()));
+				java.util.Date now = new java.util.Date();
+				for (Object current : session()
+				        .createQuery("from ScreeningCount where locationId = :clinic and month = :month and voided = false")
+				        .setParameter("clinic", clinicId).setParameter("month", day).list()) {
+					ScreeningCount replaced = (ScreeningCount) current;
+					replaced.setVoided(true);
+					replaced.setVoidedBy(user);
+					replaced.setDateVoided(now);
+					replaced.setVoidReason(REPLACED);
+				}
+				return session().save(new ScreeningCount(clinicId, day, values, text));
 			});
 		}
 		catch (RuntimeException e) {
@@ -160,7 +169,7 @@ public class ScreeningCounts {
 			for (String column : COLUMNS) {
 				select.append(", coalesce(sum(").append(property(column)).append("), 0)");
 			}
-			select.append(" from ScreeningCount where month >= :start and month <= :end");
+			select.append(" from ScreeningCount where voided = false and month >= :start and month <= :end");
 			if (clinics != null) {
 				select.append(" and locationId in (:clinics)");
 			}

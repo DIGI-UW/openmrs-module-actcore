@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -79,11 +80,13 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void readsADownload() throws Exception {
-		sql("insert into " + DownloadLog.TABLE + " (user_id, form_id, detail, date_created) values (1, 99, 'forms: 1',"
-		        + " '2026-10-02 08:30:00')");
+		sql("insert into " + DownloadLog.TABLE
+		        + " (uuid, user_id, form_id, detail, date_created) values ('download-1', 1, 99,"
+		        + " 'forms: 1', '2026-10-02 08:30:00')");
 		
 		DownloadRecord download = (DownloadRecord) single("from DownloadRecord");
 		
+		assertEquals("download-1", download.getUuid());
 		assertEquals(Integer.valueOf(1), download.getUserId());
 		assertEquals(Integer.valueOf(99), download.getFormId());
 		assertEquals("forms: 1", download.getDetail());
@@ -96,8 +99,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		sql("insert into " + RaisedFlags.TABLE
 		        + " (patient_id, flag_id, raised_since, dismissed_by, date_dismissed) values (" + PATIENT + ", " + flagId
 		        + ", '2026-10-01 08:00:00', 1, '2026-10-02 09:00:00')");
-		sql("insert into " + RaisedFlags.DISMISSAL_TABLE + " (patient_id, flag_id, dismissed_by, date_dismissed) values ("
-		        + PATIENT + ", " + flagId + ", 1, '2026-10-02 09:00:00')");
+		sql("insert into " + RaisedFlags.DISMISSAL_TABLE + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('dismissal-1', " + PATIENT + ", " + flagId + ", 1, '2026-10-02 09:00:00')");
 		
 		RaisedFlag raised = (RaisedFlag) session().get(RaisedFlag.class, new RaisedFlag.Key(PATIENT, flagId));
 		FlagDismissal dismissal = (FlagDismissal) single("from FlagDismissal");
@@ -105,6 +108,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("2026-10-01 08:00:00", time(raised.getRaisedSince()));
 		assertEquals(Integer.valueOf(1), raised.getDismissedBy());
 		assertEquals("2026-10-02 09:00:00", time(raised.getDateDismissed()));
+		assertEquals("dismissal-1", dismissal.getUuid());
 		assertEquals(Integer.valueOf(PATIENT), dismissal.getPatientId());
 		assertEquals(Integer.valueOf(flagId), dismissal.getFlagId());
 		assertEquals(Integer.valueOf(1), dismissal.getDismissedBy());
@@ -122,8 +126,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 			values.append(", ").append(value);
 		}
 		sql("insert into " + ScreeningCounts.TABLE + " (location_id, month, " + String.join(", ", written.keySet())
-		        + ", notes, changed_by, date_changed) values (1, '2026-09-01'" + values + ", 'school term', 1,"
-		        + " '2026-10-02 08:30:00')");
+		        + ", notes, uuid, creator, date_created, voided) values (1, '2026-09-01'" + values + ", 'school term',"
+		        + " 'count-1', 1, '2026-10-02 08:30:00', false)");
 		
 		ScreeningCount count = (ScreeningCount) single("from ScreeningCount");
 		
@@ -131,8 +135,10 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Integer.valueOf(1), count.getLocationId());
 		assertEquals("2026-09-01", day(count.getMonth()));
 		assertEquals("school term", count.getNotes());
-		assertEquals(Integer.valueOf(1), count.getChangedBy());
-		assertEquals("2026-10-02 08:30:00", time(count.getDateChanged()));
+		assertEquals("count-1", count.getUuid());
+		assertEquals(Integer.valueOf(1), count.getCreator().getUserId());
+		assertEquals("2026-10-02 08:30:00", time(count.getDateCreated()));
+		assertFalse(count.getVoided());
 	}
 	
 	@Test
@@ -141,7 +147,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		for (String column : ScreeningCounts.COLUMNS) {
 			written.put(column, written.size() + 1);
 		}
-		session().save(new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"), written, null, 1, new Date()));
+		session().save(new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"), written, null));
 		Context.flushSession();
 		
 		List<List<Object>> rows = Context.getAdministrationService()
@@ -153,6 +159,38 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 			stored.put(column, ((Number) rows.get(0).get(stored.size())).intValue());
 		}
 		assertEquals(written, stored);
+	}
+	
+	@Test
+	public void givesEachSavedRecordAUuidAndTheScreeningCountItsCreator() throws Exception {
+		DownloadRecord download = new DownloadRecord(1, null, "forms: 1", new Date());
+		FlagDismissal dismissal = new FlagDismissal(PATIENT, flag(), 1, new Date());
+		ScreeningCount count = new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"),
+		        new LinkedHashMap<String, Integer>(zeros()), null);
+		session().save(download);
+		session().save(dismissal);
+		session().save(count);
+		Context.flushSession();
+		
+		assertEquals(download.getUuid(), column(DownloadLog.TABLE, "uuid"));
+		assertEquals(dismissal.getUuid(), column(RaisedFlags.DISMISSAL_TABLE, "uuid"));
+		assertEquals(count.getUuid(), column(ScreeningCounts.TABLE, "uuid"));
+		assertEquals(Context.getAuthenticatedUser().getUserId(),
+		    Integer.valueOf(((Number) column(ScreeningCounts.TABLE, "creator")).intValue()));
+	}
+	
+	private static Map<String, Integer> zeros() {
+		Map<String, Integer> zeros = new LinkedHashMap<String, Integer>();
+		for (String column : ScreeningCounts.COLUMNS) {
+			zeros.put(column, 0);
+		}
+		return zeros;
+	}
+	
+	private static Object column(String table, String column) {
+		List<List<Object>> rows = Context.getAdministrationService().executeSQL("select " + column + " from " + table, true);
+		assertEquals(1, rows.size());
+		return rows.get(0).get(0);
 	}
 	
 	private int flag() {
