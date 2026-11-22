@@ -165,12 +165,6 @@
   </dependencies>
 
   <build>
-    <testResources>
-      <!-- the api module's test context and hibernate mappings, so both modules test against one setup -->
-      <testResource>
-        <directory>../api/src/test/resources</directory>
-      </testResource>
-    </testResources>
     <resources>
       <resource>
         <directory>src/main/resources</directory>

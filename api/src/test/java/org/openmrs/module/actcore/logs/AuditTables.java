@@ -19,9 +19,8 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 
 /**
- * Makes the audit tables of audit-tables.sql, which the test context does not create, and the
- * module's own; H2 commits DDL at once, so the tables outlive the test and only their rows are
- * cleared.
+ * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
+ * not create, and empties them.
  */
 public final class AuditTables {
 	

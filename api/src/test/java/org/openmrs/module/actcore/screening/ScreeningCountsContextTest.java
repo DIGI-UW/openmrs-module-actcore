@@ -24,8 +24,8 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
-import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
@@ -37,7 +37,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	private final ScreeningCounts screeningCounts = new ScreeningCounts();
 	
 	@Before
-	public void createTheTable() {
+	public void createModuleTables() {
 		ModuleTables.create();
 	}
 	

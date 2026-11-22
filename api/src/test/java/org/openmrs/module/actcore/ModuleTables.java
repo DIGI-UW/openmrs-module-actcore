@@ -10,13 +10,10 @@
 package org.openmrs.module.actcore;
 
 import java.net.URL;
+import java.util.List;
 
 import liquibase.Contexts;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.adherence.AdherenceRefresh;
-import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.util.DatabaseUpdater;
 
 /**
@@ -27,8 +24,8 @@ public final class ModuleTables {
 	
 	private static final String CHANGELOG = "liquibase.xml";
 	
-	private static final String[] TABLES = { AdherenceRefresh.TABLE, AdherenceRefresh.TIMING_TABLE, DownloadLog.TABLE,
-	        RaisedFlags.TABLE, RaisedFlags.DISMISSAL_TABLE, ScreeningCounts.TABLE };
+	// Set only once the changelog has run, so a broken changeset fails every test that needs the tables.
+	private static boolean changelogRan;
 	
 	private ModuleTables() {
 	}
@@ -42,15 +39,21 @@ public final class ModuleTables {
 			        "The module's " + CHANGELOG + " is not first on the test classpath: " + changelog);
 		}
 		try {
-			DatabaseUpdater.executeChangelog(CHANGELOG, new Contexts(), null, loader);
+			if (!changelogRan) {
+				DatabaseUpdater.executeChangelog(CHANGELOG, new Contexts(), null, loader);
+				changelogRan = true;
+			}
 		}
 		catch (Exception e) {
 			throw new IllegalStateException("The module's changelog does not run", e);
 		}
 		// Rows written by a transaction of their own outlive the test, so they are cleared in one too.
 		Transactions.inNewTransaction(() -> {
-			for (String table : TABLES) {
-				Context.getAdministrationService().executeSQL("delete from " + table, false);
+			for (List<Object> table : Context.getAdministrationService()
+			        .executeSQL("select table_name from information_schema.tables where table_schema = 'PUBLIC'"
+			                + " and lower(table_name) like 'actcore\\_%'",
+			            true)) {
+				Context.getAdministrationService().executeSQL("delete from " + table.get(0), false);
 			}
 		});
 	}

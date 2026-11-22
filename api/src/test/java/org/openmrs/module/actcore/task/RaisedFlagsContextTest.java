@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.task;
 
-import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -35,6 +34,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;

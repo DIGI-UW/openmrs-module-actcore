@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.task;
 
-import org.openmrs.module.actcore.ModuleTables;
 import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
@@ -20,6 +19,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;

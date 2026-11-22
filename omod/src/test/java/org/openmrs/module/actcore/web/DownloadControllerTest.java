@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	/** What the distribution's roles give a user who reads patients' forms. */
 	private static final String[] READS = { PrivilegeConstants.GET_FORMS, PrivilegeConstants.GET_CONCEPTS,
 	        PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_OBS, PrivilegeConstants.GET_PATIENTS };
+	
+	private static final String ASIDE = "actcore_download_log_aside";
 	
 	@Autowired
 	private DownloadController controller;
@@ -168,8 +171,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void failsTheDownloadWhenItCannotBeRecorded() throws Exception {
-		// Renamed away rather than dropped, so the table the changelog made is back for the tests after.
-		renameDownloadLog(DownloadLog.TABLE, "actcore_download_log_away");
+		// Set aside, not dropped: the changelog runs once, so a dropped table would not come back.
+		renameDownloadLog(DownloadLog.TABLE, ASIDE);
 		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
 		try {
 			controller.download(body());
@@ -181,7 +184,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		finally {
 			Context.logout();
 			Context.authenticate("admin", "test");
-			renameDownloadLog("actcore_download_log_away", DownloadLog.TABLE);
+			renameDownloadLog(ASIDE, DownloadLog.TABLE);
 		}
 	}
 	
@@ -685,7 +688,11 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		Context.authenticate("admin", "test");
 		Transactions.inNewTransaction(() -> {
 			UserService users = Context.getUserService();
-			Role role = new Role("download caller " + UUID.randomUUID());
+			Role role = users.getRole("download caller " + username);
+			if (role == null) {
+				role = new Role("download caller " + username);
+			}
+			role.setPrivileges(new HashSet<>());
 			for (String name : privileges) {
 				Privilege privilege = users.getPrivilege(name);
 				role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));

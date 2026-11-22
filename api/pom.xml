@@ -84,6 +84,7 @@
       <!-- the module's changelog, which the tests run to make its tables -->
       <testResource>
         <directory>../omod/src/main/resources</directory>
+        <filtering>true</filtering>
         <includes>
           <include>liquibase.xml</include>
         </includes>
