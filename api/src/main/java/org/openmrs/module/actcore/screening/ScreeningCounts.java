@@ -10,7 +10,6 @@
 package org.openmrs.module.actcore.screening;
 
 import java.sql.Date;
-import java.sql.Timestamp;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -110,8 +109,12 @@ public class ScreeningCounts {
 		ScreeningCount saved = rows.isEmpty() ? null : (ScreeningCount) rows.get(0);
 		result.saved = saved != null;
 		result.notes = saved == null ? null : saved.getNotes();
-		for (String column : COLUMNS) {
-			result.counts.put(column, saved == null ? 0 : saved.getCounts().get(column));
+		if (saved == null) {
+			for (String column : COLUMNS) {
+				result.counts.put(column, 0);
+			}
+		} else {
+			result.counts.putAll(saved.getCounts());
 		}
 		return result;
 	}
@@ -134,7 +137,7 @@ public class ScreeningCounts {
 				session().createQuery("delete from ScreeningCount where locationId = :clinic and month = :month")
 				        .setParameter("clinic", clinicId).setParameter("month", day).executeUpdate();
 				return session().save(new ScreeningCount(clinicId, day, values, text, user == null ? null : user.getUserId(),
-				        new Timestamp(System.currentTimeMillis())));
+				        new java.util.Date()));
 			});
 		}
 		catch (RuntimeException e) {

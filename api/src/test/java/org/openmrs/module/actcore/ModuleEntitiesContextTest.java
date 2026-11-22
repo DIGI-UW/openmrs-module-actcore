@@ -10,7 +10,6 @@
 package org.openmrs.module.actcore;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -41,7 +40,7 @@ import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
-/** Each entity reads the row its table, as the changelog makes it, holds. */
+/** Each entity reads back the row its table holds, as the changelog makes the table. */
 public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final int PATIENT = 7;
@@ -133,7 +132,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("2026-09-01", day(count.getMonth()));
 		assertEquals("school term", count.getNotes());
 		assertEquals(Integer.valueOf(1), count.getChangedBy());
-		assertFalse(count.getDateChanged() == null);
+		assertEquals("2026-10-02 08:30:00", time(count.getDateChanged()));
 	}
 	
 	private int flag() {

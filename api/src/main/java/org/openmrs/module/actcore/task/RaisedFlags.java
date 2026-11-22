@@ -218,7 +218,7 @@ public class RaisedFlags {
 	}
 	
 	private static List<?> list(String hql, int id) {
-		// Its callers flush their own writes, so a read need not dirty-check the whole session first.
+		// RaisedFlag changes only by bulk HQL or raise()'s flushed save, so a read need not dirty-check.
 		return inTransaction(
 		    () -> session().createQuery(hql).setParameter("id", id).setHibernateFlushMode(FlushMode.MANUAL).list());
 	}

@@ -23,8 +23,8 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 /**
- * A clinic's screening counts for a month, as {@link ScreeningCounts} keeps them; a count field per
- * column of {@link ScreeningCounts#COLUMNS}, whose names they are.
+ * A clinic's screening counts for a month: a count field per column of
+ * {@link ScreeningCounts#COLUMNS}, which {@link #getCounts()} keys by column name.
  */
 @Entity
 @Table(name = ScreeningCounts.TABLE)
@@ -144,24 +144,24 @@ public class ScreeningCount {
 	}
 	
 	private void setCounts(Map<String, Integer> counts) {
-		schoolScreened = counts.getOrDefault("school_screened", 0);
-		schoolChildren = counts.getOrDefault("school_children", 0);
-		schoolAdolescents = counts.getOrDefault("school_adolescents", 0);
-		schoolAdults = counts.getOrDefault("school_adults", 0);
-		schoolFemales = counts.getOrDefault("school_females", 0);
-		schoolPositive = counts.getOrDefault("school_positive", 0);
-		communityScreened = counts.getOrDefault("community_screened", 0);
-		communityChildren = counts.getOrDefault("community_children", 0);
-		communityAdolescents = counts.getOrDefault("community_adolescents", 0);
-		communityAdults = counts.getOrDefault("community_adults", 0);
-		communityFemales = counts.getOrDefault("community_females", 0);
-		communityPositive = counts.getOrDefault("community_positive", 0);
-		facilityScreened = counts.getOrDefault("facility_screened", 0);
-		facilityChildren = counts.getOrDefault("facility_children", 0);
-		facilityAdolescents = counts.getOrDefault("facility_adolescents", 0);
-		facilityAdults = counts.getOrDefault("facility_adults", 0);
-		facilityFemales = counts.getOrDefault("facility_females", 0);
-		facilityPositive = counts.getOrDefault("facility_positive", 0);
+		schoolScreened = counts.get("school_screened");
+		schoolChildren = counts.get("school_children");
+		schoolAdolescents = counts.get("school_adolescents");
+		schoolAdults = counts.get("school_adults");
+		schoolFemales = counts.get("school_females");
+		schoolPositive = counts.get("school_positive");
+		communityScreened = counts.get("community_screened");
+		communityChildren = counts.get("community_children");
+		communityAdolescents = counts.get("community_adolescents");
+		communityAdults = counts.get("community_adults");
+		communityFemales = counts.get("community_females");
+		communityPositive = counts.get("community_positive");
+		facilityScreened = counts.get("facility_screened");
+		facilityChildren = counts.get("facility_children");
+		facilityAdolescents = counts.get("facility_adolescents");
+		facilityAdults = counts.get("facility_adults");
+		facilityFemales = counts.get("facility_females");
+		facilityPositive = counts.get("facility_positive");
 	}
 	
 	public Integer getScreeningCountId() {
