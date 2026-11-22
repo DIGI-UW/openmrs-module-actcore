@@ -135,6 +135,26 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("2026-10-02 08:30:00", time(count.getDateChanged()));
 	}
 	
+	@Test
+	public void writesEachScreeningCountToItsOwnColumn() throws Exception {
+		Map<String, Integer> written = new LinkedHashMap<String, Integer>();
+		for (String column : ScreeningCounts.COLUMNS) {
+			written.put(column, written.size() + 1);
+		}
+		session().save(new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"), written, null, 1, new Date()));
+		Context.flushSession();
+		
+		List<List<Object>> rows = Context.getAdministrationService()
+		        .executeSQL("select " + String.join(", ", written.keySet()) + " from " + ScreeningCounts.TABLE, true);
+		
+		assertEquals(1, rows.size());
+		Map<String, Integer> stored = new LinkedHashMap<String, Integer>();
+		for (String column : written.keySet()) {
+			stored.put(column, ((Number) rows.get(0).get(stored.size())).intValue());
+		}
+		assertEquals(written, stored);
+	}
+	
 	private int flag() {
 		Flag flag = new Flag();
 		flag.setUuid(UUID.randomUUID().toString());
