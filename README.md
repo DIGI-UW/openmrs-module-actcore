@@ -28,7 +28,7 @@ All under `/ws/rest/v1/actcore`.
 
 | Endpoint | Does |
 | --- | --- |
-| `POST`, `GET refresh` | Run the flag and adherence refresh now, or see when it last ran |
+| `POST`, `GET refresh` | Run the flag and adherence refresh now (send `Content-Type: application/json` with the `POST`), or see when it last ran |
 | `GET gap?patient=&flag=` | The forms and questions missing behind a flag |
 | `GET raisedflags?patient=`, `POST raisedflags/dismiss` | A patient's raised flags, and dismissing one |
 | `GET prophylaxis?patient=` | Regimen, last dose, next due date, status and adherence |
