@@ -42,7 +42,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class StudiesController extends ActCoreRestController {
 	
 	/**
-	 * The distribution creates it; a user without it, other than a superuser, cannot change studies.
+	 * A user without it, other than a superuser, cannot change studies.
 	 */
 	public static final String MANAGE_PRIVILEGE = ActCorePrivileges.MANAGE_STUDIES;
 	

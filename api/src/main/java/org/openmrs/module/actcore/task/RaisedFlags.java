@@ -44,7 +44,7 @@ public class RaisedFlags {
 	public static final String DISMISSAL_TABLE = "actcore_flag_dismissal";
 	
 	/**
-	 * The distribution creates it; a user without it, other than a superuser, cannot dismiss a flag.
+	 * A user without it, other than a superuser, cannot dismiss a flag.
 	 */
 	public static final String DISMISS_PRIVILEGE = ActCorePrivileges.DISMISS_FLAGS;
 	

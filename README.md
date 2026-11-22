@@ -79,7 +79,8 @@ description, is in [`omod/src/main/resources/config.xml`](omod/src/main/resource
 
 ## Privileges
 
-The distro creates these; grant them with care, as several run work with wider access on the caller's behalf.
+ACT Core declares these, so core creates them when the module starts; the distro's privileges CSV gives them its own
+descriptions. Grant them with care, as several run work with wider access on the caller's behalf.
 
 | Privilege | Allows |
 | --- | --- |
@@ -89,6 +90,8 @@ The distro creates these; grant them with care, as several run work with wider a
 | `Task: act.manageStudies` | Creating and renaming studies |
 | `Task: act.downloadData`, `act.downloadResearchData`, `act.downloadIdentifiers` | Downloading data, research data only, and identifiers |
 | `Task: act.allClinics` | Administering every clinic's users, not only one's own |
+| `App: act.dashboard` | Reading the Dashboard's run charts and screening counts |
+| `App: act.screeningCounts` | Reading screening counts |
 
 The gap look-up runs flag SQL with SQL Level Access, so grant Manage Flags only to roles you would trust
 with that.

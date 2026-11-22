@@ -44,7 +44,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RunChartController extends ActCoreRestController {
 	
-	/** The Dashboard's own privilege in the distribution, which the run charts sit on. */
+	/** The Dashboard's own privilege, which the run charts sit on. */
 	public static final String READ_PRIVILEGE = ActCorePrivileges.DASHBOARD;
 	
 	/**

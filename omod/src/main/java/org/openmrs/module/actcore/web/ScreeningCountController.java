@@ -52,7 +52,7 @@ public class ScreeningCountController extends ActCoreRestController {
 	public static final String READ_PRIVILEGE = ActCorePrivileges.SCREENING_COUNTS;
 	
 	/** The Dashboard's, whose screening section reads them. */
-	public static final String DASHBOARD_PRIVILEGE = RunChartController.READ_PRIVILEGE;
+	public static final String DASHBOARD_PRIVILEGE = ActCorePrivileges.DASHBOARD;
 	
 	public static final String ENTER_PRIVILEGE = ActCorePrivileges.ENTER_SCREENING_COUNTS;
 	

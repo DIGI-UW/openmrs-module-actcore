@@ -18,6 +18,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -81,8 +82,11 @@ public class ModulePrivilegesTest extends BaseModuleWebContextSensitiveTest {
 			try (Stream<Path> files = Files.walk(root)) {
 				for (Path file : files.filter(f -> f.toString().endsWith(".java")).collect(Collectors.toList())) {
 					read.add(file.getFileName().toString());
-					Matcher name = NAME.matcher(new String(Files.readAllBytes(file), "UTF-8"));
-					while (name.find() && !file.getFileName().toString().equals("ActCorePrivileges.java")) {
+					if (file.getFileName().toString().equals("ActCorePrivileges.java")) {
+						continue;
+					}
+					Matcher name = NAME.matcher(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+					while (name.find()) {
 						elsewhere.add(file.getFileName() + ": " + name.group(1));
 					}
 				}

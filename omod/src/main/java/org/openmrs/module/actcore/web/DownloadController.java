@@ -48,7 +48,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * ACT 2.0's Download, each recorded in the download log, under privileges the distribution creates.
+ * ACT 2.0's Download, each recorded in the download log, under ACT Core's download privileges.
  * Identifiers only with IDENTIFIERS_PRIVILEGE; a research download is never identified.
  */
 @Controller

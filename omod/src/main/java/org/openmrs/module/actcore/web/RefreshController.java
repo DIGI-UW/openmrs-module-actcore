@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RefreshController extends ActCoreRestController {
 	
-	/** The distribution creates it; a user without it, other than a superuser, is refused. */
+	/** A user without it, other than a superuser, is refused. */
 	public static final String PRIVILEGE = ActCorePrivileges.REFRESH_FLAGS;
 	
 	@RequestMapping(value = "/refresh", method = RequestMethod.GET)
