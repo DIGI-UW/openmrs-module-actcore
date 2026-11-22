@@ -17,10 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.hibernate.SQLQuery;
-import org.hibernate.type.IntegerType;
-import org.hibernate.type.StringType;
-import org.hibernate.type.TimestampType;
+import org.hibernate.Query;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.Transactions;
@@ -59,11 +56,7 @@ public class DownloadLog {
 	
 	/** Writes it in the current transaction. */
 	public void write(int userId, Integer formId, String detail) {
-		sessionFactory().getCurrentSession()
-		        .createSQLQuery("insert into " + TABLE
-		                + " (user_id, form_id, detail, date_created) values (:user, :form, :detail, :date)")
-		        .setParameter("user", userId).setParameter("form", formId, IntegerType.INSTANCE)
-		        .setParameter("detail", detail).setParameter("date", new Date()).executeUpdate();
+		sessionFactory().getCurrentSession().save(new DownloadRecord(userId, formId, detail, new Date()));
 	}
 	
 	/** Every download matching the filters, newest first; each filter is left out when null. */
@@ -71,29 +64,25 @@ public class DownloadLog {
 		StringBuilder where = new StringBuilder();
 		Map<String, Object> params = new LinkedHashMap<String, Object>();
 		if (userId != null) {
-			where.append(" and d.user_id = :user");
+			where.append(" and d.userId = :user");
 			params.put("user", userId);
 		}
 		if (from != null) {
-			where.append(" and d.date_created >= :from");
+			where.append(" and d.dateCreated >= :from");
 			params.put("from", Timestamp.valueOf(from.atStartOfDay()));
 		}
 		if (to != null) {
-			where.append(" and d.date_created < :to");
+			where.append(" and d.dateCreated < :to");
 			params.put("to", Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
 		}
 		return select(where.toString(), params);
 	}
 	
 	private List<Entry> select(String where, Map<String, Object> params) {
-		SQLQuery query = sessionFactory().getCurrentSession()
-		        .createSQLQuery("select d.date_created, u.uuid user_uuid, f.uuid form_uuid, f.name form_name,"
-		                + " d.detail from " + TABLE
-		                + " d join users u on u.user_id = d.user_id left join form f on f.form_id = d.form_id where 1 = 1"
-		                + where + " order by d.date_created desc, d.download_id desc")
-		        .addScalar("date_created", TimestampType.INSTANCE).addScalar("user_uuid", StringType.INSTANCE)
-		        .addScalar("form_uuid", StringType.INSTANCE).addScalar("form_name", StringType.INSTANCE)
-		        .addScalar("detail", StringType.INSTANCE);
+		Query query = sessionFactory().getCurrentSession()
+		        .createQuery("select d.dateCreated, u.uuid, f.uuid, f.name, d.detail from DownloadRecord d"
+		                + " join User u on u.userId = d.userId left join Form f on f.formId = d.formId where 1 = 1" + where
+		                + " order by d.dateCreated desc, d.downloadId desc");
 		for (Map.Entry<String, Object> param : params.entrySet()) {
 			query.setParameter(param.getKey(), param.getValue());
 		}

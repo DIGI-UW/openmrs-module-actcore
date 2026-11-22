@@ -9,10 +9,6 @@
  */
 package org.openmrs.module.actcore.task;
 
-import java.sql.Timestamp;
-import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,9 +16,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.hibernate.FlushMode;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.db.hibernate.DbSession;
+import org.openmrs.api.db.hibernate.DbSessionFactory;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.Tag;
@@ -61,47 +62,62 @@ public class RaisedFlags {
 		REFRESH_RUNNING
 	}
 	
-	/** Records the flag as raised from now, unless it already is. */
+	/** Records the flag as raised from now, unless it already is or the patient does not exist. */
 	static void raise(int flagId, int patientId) {
-		execute("insert into " + TABLE + " (patient_id, flag_id, raised_since) select p.patient_id, " + flagId + ", " + now()
-		        + " from patient p where p.patient_id = " + patientId + " and not exists (select 1 from " + TABLE
-		        + " r where r.patient_id = " + patientId + " and r.flag_id = " + flagId + ")");
+		inTransaction(() -> {
+			// A query, as a raised flag the session holds may since have been lowered by a bulk delete.
+			long absent = (Long) session()
+			        .createQuery("select count(*) from Patient p where p.patientId = :patient and not exists"
+			                + " (select 1 from RaisedFlag r where r.key.patientId = :patient and r.key.flagId = :flag)")
+			        .setParameter("patient", patientId).setParameter("flag", flagId).setHibernateFlushMode(FlushMode.MANUAL)
+			        .uniqueResult();
+			if (absent > 0) {
+				RaisedFlag raised = new RaisedFlag(new RaisedFlag.Key(patientId, flagId), new Date());
+				session().save(raised);
+				// Out of the session, or every later commit of the full refresh dirty-checks it.
+				session().flush();
+				session().evict(raised);
+			}
+			return null;
+		});
 	}
 	
 	static void lower(int flagId, int patientId) {
-		execute("delete from " + TABLE + " where flag_id = " + flagId + " and patient_id = " + patientId);
+		inTransaction(
+		    () -> session().createQuery("delete from RaisedFlag where key.flagId = :flag and key.patientId = :patient")
+		            .setParameter("flag", flagId).setParameter("patient", patientId).executeUpdate());
 	}
 	
 	static void lowerAll(int flagId) {
-		execute("delete from " + TABLE + " where flag_id = " + flagId);
+		inTransaction(() -> session().createQuery("delete from RaisedFlag where key.flagId = :flag")
+		        .setParameter("flag", flagId).executeUpdate());
 	}
 	
 	static Set<Integer> raisedPatients(int flagId) {
-		return ids("select patient_id from " + TABLE + " where flag_id = " + flagId);
+		return ids("select key.patientId from RaisedFlag where key.flagId = :id", flagId);
 	}
 	
 	static Set<Integer> dismissedPatients(int flagId) {
-		return ids("select patient_id from " + TABLE + " where flag_id = " + flagId + " and date_dismissed is not null");
+		return ids("select key.patientId from RaisedFlag where key.flagId = :id and dateDismissed is not null", flagId);
 	}
 	
 	static boolean isDismissed(int flagId, int patientId) {
-		return !ids("select patient_id from " + TABLE + " where flag_id = " + flagId + " and patient_id = " + patientId
-		        + " and date_dismissed is not null").isEmpty();
+		return dismissedFlags(patientId).contains(flagId);
 	}
 	
 	/** The flags dismissed for the patient, by flag id. */
 	public static Set<Integer> dismissedFlags(int patientId) {
-		return ids("select flag_id from " + TABLE + " where patient_id = " + patientId + " and date_dismissed is not null");
+		return ids("select key.flagId from RaisedFlag where key.patientId = :id and dateDismissed is not null", patientId);
 	}
 	
 	/** Since when each of the flag's patients has had it raised, by patient id. */
 	static Map<Integer, Date> raisedSinceByPatient(int flagId) {
-		return dates("select patient_id, raised_since from " + TABLE + " where flag_id = " + flagId);
+		return dates("select key.patientId, raisedSince from RaisedFlag where key.flagId = :id", flagId);
 	}
 	
 	/** Since when the patient has had each of their raised flags, by flag id. */
 	public static Map<Integer, Date> raisedSinceByFlag(int patientId) {
-		return dates("select flag_id, raised_since from " + TABLE + " where patient_id = " + patientId);
+		return dates("select key.flagId, raisedSince from RaisedFlag where key.patientId = :id", patientId);
 	}
 	
 	/**
@@ -139,14 +155,7 @@ public class RaisedFlags {
 			        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
 				return Dismissal.NOT_RAISED;
 			}
-			raise(flag.getFlagId(), patient.getPatientId());
-			Integer userId = Context.getAuthenticatedUser().getUserId();
-			String now = now();
-			String undismissed = " where flag_id = " + flag.getFlagId() + " and patient_id = " + patient.getPatientId()
-			        + " and date_dismissed is null";
-			execute("insert into " + DISMISSAL_TABLE + " (patient_id, flag_id, dismissed_by, date_dismissed)"
-			        + " select patient_id, flag_id, " + userId + ", " + now + " from " + TABLE + undismissed);
-			execute("update " + TABLE + " set dismissed_by = " + userId + ", date_dismissed = " + now + undismissed);
+			recordDismissal(flag.getFlagId(), patient.getPatientId(), Context.getAuthenticatedUser().getUserId());
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
 			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
 			    Context.getAuthenticatedUser().getUserId());
@@ -175,52 +184,58 @@ public class RaisedFlags {
 		return false;
 	}
 	
-	// The JVM's clock, as for the lists' start dates; current_timestamp keeps the database's zone.
-	private static String now() {
-		return "'" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "'";
+	// The list sync runs after this commits, so a failing sync leaves the dismissal recorded.
+	private static void recordDismissal(int flagId, int patientId, Integer userId) {
+		raise(flagId, patientId);
+		inTransaction(() -> {
+			Date now = new Date();
+			int dismissed = session()
+			        .createQuery("update RaisedFlag set dismissedBy = :user, dateDismissed = :now"
+			                + " where key.flagId = :flag and key.patientId = :patient and dateDismissed is null")
+			        .setParameter("user", userId).setParameter("now", now).setParameter("flag", flagId)
+			        .setParameter("patient", patientId).executeUpdate();
+			if (dismissed > 0) {
+				session().save(new FlagDismissal(patientId, flagId, userId, now));
+			}
+			return null;
+		});
 	}
 	
-	private static void execute(String sql) {
-		Context.getAdministrationService().executeSQL(sql, false);
-	}
-	
-	private static Set<Integer> ids(String sql) {
+	private static Set<Integer> ids(String hql, int id) {
 		Set<Integer> ids = new HashSet<Integer>();
-		for (List<Object> row : select(sql)) {
-			ids.add(((Number) row.get(0)).intValue());
+		for (Object value : list(hql, id)) {
+			ids.add((Integer) value);
 		}
 		return ids;
 	}
 	
-	private static Map<Integer, Date> dates(String sql) {
+	private static Map<Integer, Date> dates(String hql, int id) {
 		Map<Integer, Date> dates = new HashMap<Integer, Date>();
-		for (List<Object> row : select(sql)) {
-			dates.put(((Number) row.get(0)).intValue(), date(row.get(1)));
+		for (Object row : list(hql, id)) {
+			dates.put((Integer) ((Object[]) row)[0], (Date) ((Object[]) row)[1]);
 		}
 		return dates;
 	}
 	
-	/**
-	 * A datetime column's value, which the JDBC driver gives as a Date, a LocalDateTime or a LocalDate.
-	 */
-	static Date date(Object value) {
-		if (value instanceof LocalDateTime) {
-			return Timestamp.valueOf((LocalDateTime) value);
-		}
-		if (value instanceof LocalDate) {
-			return Timestamp.valueOf(((LocalDate) value).atStartOfDay());
-		}
-		return (Date) value;
+	private static List<?> list(String hql, int id) {
+		// RaisedFlag changes only by bulk HQL or raise()'s flushed save, so a read need not dirty-check.
+		return inTransaction(
+		    () -> session().createQuery(hql).setParameter("id", id).setHibernateFlushMode(FlushMode.MANUAL).list());
 	}
 	
-	// Proxied for the readers who see flags, such as a clinician loading the chart.
-	private static List<List<Object>> select(String sql) {
-		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+	private static <T> T inTransaction(Transactions.Work<T> work) {
 		try {
-			return Context.getAdministrationService().executeSQL(sql, true);
+			return Transactions.inTransaction(work);
 		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
+		catch (RuntimeException e) {
+			throw e;
 		}
+		catch (Throwable e) {
+			throw new APIException("Could not read or write the raised flags", e);
+		}
+	}
+	
+	private static DbSession session() {
+		return Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession();
 	}
 }

@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
-import org.hibernate.SQLQuery;
-import org.hibernate.type.StringType;
+import org.hibernate.LockOptions;
+import org.hibernate.Query;
 import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIException;
@@ -103,16 +103,18 @@ public class ScreeningCounts {
 	
 	/** The clinic's counts for the month, or zeros when it has not been saved. */
 	public Month get(Location clinic, YearMonth month) {
-		SQLQuery query = session().createSQLQuery("select notes, " + StringUtils.join(COLUMNS, ", ") + " from " + TABLE
-		        + " where location_id = :clinic and month = :month");
-		query.setParameter("clinic", clinic.getLocationId()).setParameter("month", firstDay(month));
-		List<?> rows = query.list();
+		List<?> rows = session().createQuery("from ScreeningCount where locationId = :clinic and month = :month")
+		        .setParameter("clinic", clinic.getLocationId()).setParameter("month", firstDay(month)).list();
 		Month result = new Month();
-		Object[] row = rows.isEmpty() ? null : (Object[]) rows.get(0);
-		result.saved = row != null;
-		result.notes = row == null ? null : (String) row[0];
-		for (int i = 0; i < COLUMNS.size(); i++) {
-			result.counts.put(COLUMNS.get(i), row == null ? 0 : ((Number) row[i + 1]).intValue());
+		ScreeningCount saved = rows.isEmpty() ? null : (ScreeningCount) rows.get(0);
+		result.saved = saved != null;
+		result.notes = saved == null ? null : saved.getNotes();
+		if (saved == null) {
+			for (String column : COLUMNS) {
+				result.counts.put(column, 0);
+			}
+		} else {
+			result.counts.putAll(saved.getCounts());
 		}
 		return result;
 	}
@@ -130,20 +132,12 @@ public class ScreeningCounts {
 		try {
 			Transactions.inTransaction(() -> {
 				// Saves of one clinic take turns here rather than racing each other to the unique index.
-				session().createSQLQuery("select location_id from location where location_id = :clinic for update")
-				        .setParameter("clinic", clinicId).list();
-				session().createSQLQuery("delete from " + TABLE + " where location_id = :clinic and month = :month")
+				session().get(Location.class, clinicId, LockOptions.UPGRADE);
+				// A bulk delete, as a session delete would run after the insert and trip the unique index.
+				session().createQuery("delete from ScreeningCount where locationId = :clinic and month = :month")
 				        .setParameter("clinic", clinicId).setParameter("month", day).executeUpdate();
-				SQLQuery insert = session().createSQLQuery("insert into " + TABLE + " (location_id, month, "
-				        + StringUtils.join(COLUMNS, ", ") + ", notes, changed_by, date_changed) values (:clinic, :month, :"
-				        + StringUtils.join(COLUMNS, ", :") + ", :notes, :user, current_timestamp)");
-				insert.setParameter("clinic", clinicId).setParameter("month", day)
-				        .setParameter("notes", text, StringType.INSTANCE)
-				        .setParameter("user", user == null ? null : user.getUserId());
-				for (Map.Entry<String, Integer> value : values.entrySet()) {
-					insert.setParameter(value.getKey(), value.getValue());
-				}
-				return insert.executeUpdate();
+				return session().save(new ScreeningCount(clinicId, day, values, text, user == null ? null : user.getUserId(),
+				        new java.util.Date()));
 			});
 		}
 		catch (RuntimeException e) {
@@ -164,13 +158,13 @@ public class ScreeningCounts {
 		if (clinics == null || !clinics.isEmpty()) {
 			StringBuilder select = new StringBuilder("select count(*)");
 			for (String column : COLUMNS) {
-				select.append(", coalesce(sum(").append(column).append("), 0)");
+				select.append(", coalesce(sum(").append(property(column)).append("), 0)");
 			}
-			select.append(" from ").append(TABLE).append(" where month >= :start and month <= :end");
+			select.append(" from ScreeningCount where month >= :start and month <= :end");
 			if (clinics != null) {
-				select.append(" and location_id in (:clinics)");
+				select.append(" and locationId in (:clinics)");
 			}
-			SQLQuery query = session().createSQLQuery(select.toString());
+			Query query = session().createQuery(select.toString());
 			query.setParameter("start", firstDay(start)).setParameter("end", firstDay(end));
 			if (clinics != null) {
 				query.setParameterList("clinics", clinics);
@@ -221,6 +215,12 @@ public class ScreeningCounts {
 			}
 		}
 		return values;
+	}
+	
+	/** The entity property of a count column: school_screened is schoolScreened. */
+	private static String property(String column) {
+		String[] parts = column.split("_");
+		return parts[0] + StringUtils.capitalize(parts[1]);
 	}
 	
 	private static Date firstDay(YearMonth month) {

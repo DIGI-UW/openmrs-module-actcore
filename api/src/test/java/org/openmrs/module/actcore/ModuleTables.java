@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 
 import liquibase.Contexts;
@@ -40,6 +41,12 @@ public final class ModuleTables {
 		}
 		try {
 			if (!changelogRan) {
+				// The test context's hbm2ddl makes the mapped tables first, and the changelog would skip them.
+				Transactions.inNewTransaction(() -> {
+					for (String table : moduleTables()) {
+						Context.getAdministrationService().executeSQL("drop table " + table, false);
+					}
+				});
 				DatabaseUpdater.executeChangelog(CHANGELOG, new Contexts(), null, loader);
 				changelogRan = true;
 			}
@@ -49,12 +56,20 @@ public final class ModuleTables {
 		}
 		// Rows written by a transaction of their own outlive the test, so they are cleared in one too.
 		Transactions.inNewTransaction(() -> {
-			for (List<Object> table : Context.getAdministrationService()
-			        .executeSQL("select table_name from information_schema.tables where table_schema = 'PUBLIC'"
-			                + " and lower(table_name) like 'actcore\\_%'",
-			            true)) {
-				Context.getAdministrationService().executeSQL("delete from " + table.get(0), false);
+			for (String table : moduleTables()) {
+				Context.getAdministrationService().executeSQL("delete from " + table, false);
 			}
 		});
+	}
+	
+	private static List<String> moduleTables() {
+		List<String> tables = new ArrayList<String>();
+		for (List<Object> row : Context.getAdministrationService()
+		        .executeSQL("select table_name from information_schema.tables where table_schema = 'PUBLIC'"
+		                + " and lower(table_name) like 'actcore\\_%'",
+		            true)) {
+			tables.add((String) row.get(0));
+		}
+		return tables;
 	}
 }
