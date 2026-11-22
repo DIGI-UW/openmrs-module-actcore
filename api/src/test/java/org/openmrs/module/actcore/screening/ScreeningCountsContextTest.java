@@ -19,6 +19,7 @@ import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -91,9 +92,9 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private static int count(String where) {
-		return ((Number) Context.getAdministrationService()
-		        .executeSQL("select count(*) from " + ScreeningCounts.TABLE + " where " + where, true).get(0).get(0))
-		                .intValue();
+		List<List<Object>> rows = Context.getAdministrationService()
+		        .executeSQL("select count(*) from " + ScreeningCounts.TABLE + " where " + where, true);
+		return ((Number) rows.get(0).get(0)).intValue();
 	}
 	
 	@Test
