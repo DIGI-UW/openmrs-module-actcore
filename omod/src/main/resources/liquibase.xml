@@ -386,7 +386,7 @@
     <customChange class="org.openmrs.util.databasechange.GenerateUuid">
       <param name="tableNames" value="actcore_download_log"/>
       <param name="columnName" value="uuid"/>
-      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which these tables name otherwise. -->
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
       <param name="idExceptions" value="actcore_download_log_id=download_id"/>
     </customChange>
     <addNotNullConstraint tableName="actcore_download_log" columnName="uuid" columnDataType="char(38)"/>
@@ -403,7 +403,7 @@
     <customChange class="org.openmrs.util.databasechange.GenerateUuid">
       <param name="tableNames" value="actcore_flag_dismissal"/>
       <param name="columnName" value="uuid"/>
-      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which these tables name otherwise. -->
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
       <param name="idExceptions" value="actcore_flag_dismissal_id=dismissal_id"/>
     </customChange>
     <addNotNullConstraint tableName="actcore_flag_dismissal" columnName="uuid" columnDataType="char(38)"/>
@@ -420,7 +420,7 @@
     <customChange class="org.openmrs.util.databasechange.GenerateUuid">
       <param name="tableNames" value="actcore_screening_count"/>
       <param name="columnName" value="uuid"/>
-      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which these tables name otherwise. -->
+      <!-- Outside MySQL and MariaDB it reads each row's <table>_id, which this table names otherwise. -->
       <param name="idExceptions" value="actcore_screening_count_id=screening_count_id"/>
     </customChange>
     <addNotNullConstraint tableName="actcore_screening_count" columnName="uuid" columnDataType="char(38)"/>
@@ -441,7 +441,7 @@
       <column name="date_voided" type="datetime"/>
       <column name="void_reason" type="varchar(255)"/>
     </addColumn>
-    <!-- First, so a later step failing cannot leave new rows, which have no date_changed, refused. -->
+    <!-- Nullable before the steps that can fail, as a rerun marks this changeset ran and inserts leave date_changed empty. -->
     <dropNotNullConstraint tableName="actcore_screening_count" columnName="date_changed" columnDataType="datetime"/>
     <!-- A month saved with nobody signed in is credited to the daemon user, found by its fixed uuid. -->
     <sql>
