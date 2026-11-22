@@ -27,6 +27,7 @@ import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.handler.BaseVoidHandler;
 import org.openmrs.api.db.hibernate.DbSession;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.Transactions;
@@ -60,7 +61,7 @@ public class ScreeningCounts {
 	
 	public static final int NOTES_LENGTH = 1000;
 	
-	static final String REPLACED = "Replaced by a later save of the month";
+	static final String REPLACED_REASON = "Replaced by a later save of the month";
 	
 	public static class Month {
 		
@@ -140,11 +141,7 @@ public class ScreeningCounts {
 				for (Object current : session()
 				        .createQuery("from ScreeningCount where locationId = :clinic and month = :month and voided = false")
 				        .setParameter("clinic", clinicId).setParameter("month", day).list()) {
-					ScreeningCount replaced = (ScreeningCount) current;
-					replaced.setVoided(true);
-					replaced.setVoidedBy(user);
-					replaced.setDateVoided(now);
-					replaced.setVoidReason(REPLACED);
+					new BaseVoidHandler().handle((ScreeningCount) current, user, now, REPLACED_REASON);
 				}
 				return session().save(new ScreeningCount(clinicId, day, values, text));
 			});
