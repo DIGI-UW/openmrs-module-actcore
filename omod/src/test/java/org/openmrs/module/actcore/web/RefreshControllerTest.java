@@ -10,11 +10,13 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.After;
@@ -35,11 +37,18 @@ import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.HandlerExecutionChain;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private RefreshController controller;
+	
+	@Autowired
+	private List<RequestMappingHandlerMapping> mappings;
 	
 	@After
 	public void forgetTheDaemonToken() {
@@ -58,6 +67,32 @@ public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(Integer.valueOf(0), response.get("listsFailed"));
 		assertNotNull(response.get("adherenceFailed"));
 		assertNotNull(response.get("lastRefreshed"));
+	}
+	
+	@Test
+	public void runsTheRefreshOnlyForAJsonRequestWhichAnotherSiteCannotSendUnasked() throws Exception {
+		assertEquals("refresh", postToRefresh("application/json"));
+		for (String crossSite : new String[] { "application/x-www-form-urlencoded", "multipart/form-data", "text/plain",
+		        null }) {
+			assertNotEquals(crossSite, "refresh", postToRefresh(crossSite));
+		}
+	}
+	
+	/** The controller method Spring MVC routes the POST to, as the dispatcher would. */
+	private String postToRefresh(String contentType) throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/v1/actcore/refresh");
+		if (contentType != null) {
+			request.setContentType(contentType);
+		}
+		for (RequestMappingHandlerMapping mapping : mappings) {
+			HandlerExecutionChain chain = mapping.getHandler(request);
+			if (chain != null) {
+				HandlerMethod handler = (HandlerMethod) chain.getHandler();
+				return handler.getBeanType() == RefreshController.class ? handler.getMethod().getName()
+				        : handler.getBeanType().getSimpleName();
+			}
+		}
+		return null;
 	}
 	
 	@Test

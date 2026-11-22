@@ -20,6 +20,7 @@ import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -46,7 +47,8 @@ public class RefreshController extends ActCoreRestController {
 	 * Runs as the scheduler's daemon user, as the nightly run does: the refresh reads and writes far
 	 * more than the caller's own privileges allow, and on their request it would fail flag by flag.
 	 */
-	@RequestMapping(value = "/refresh", method = RequestMethod.POST)
+	// JSON only: another site's page can post a form here with the user's cookie, but not JSON.
+	@RequestMapping(value = "/refresh", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public SimpleObject refresh() {
 		requirePrivilege();
