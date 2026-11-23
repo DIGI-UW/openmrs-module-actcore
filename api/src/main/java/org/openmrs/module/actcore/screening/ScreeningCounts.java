@@ -9,28 +9,12 @@
  */
 package org.openmrs.module.actcore.screening;
 
-import java.sql.Date;
-import java.time.YearMonth;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.lang3.StringUtils;
-import org.hibernate.LockOptions;
-import org.hibernate.Query;
-import org.openmrs.Location;
-import org.openmrs.User;
-import org.openmrs.api.APIException;
-import org.openmrs.api.context.Context;
-import org.openmrs.api.handler.BaseVoidHandler;
-import org.openmrs.api.db.hibernate.DbSession;
-import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.actcore.Transactions;
 
 /**
  * ACT 2.0's monthly screening counts: per clinic and month, for each setting, the people screened,
@@ -61,7 +45,7 @@ public class ScreeningCounts {
 	
 	public static final int NOTES_LENGTH = 1000;
 	
-	static final String REPLACED_REASON = "Replaced by a later save of the month";
+	public static final String REPLACED_REASON = "Replaced by a later save of the month";
 	
 	public static class Month {
 		
@@ -102,138 +86,5 @@ public class ScreeningCounts {
 		public Long negative() {
 			return screened() - positive();
 		}
-	}
-	
-	/** The clinic's counts for the month, or zeros when it has not been saved. */
-	public Month get(Location clinic, YearMonth month) {
-		List<?> rows = session()
-		        .createQuery("from ScreeningCount where locationId = :clinic and month = :month and voided = false")
-		        .setParameter("clinic", clinic.getLocationId()).setParameter("month", firstDay(month)).list();
-		Month result = new Month();
-		ScreeningCount saved = rows.isEmpty() ? null : (ScreeningCount) rows.get(0);
-		result.saved = saved != null;
-		result.notes = saved == null ? null : saved.getNotes();
-		if (saved == null) {
-			for (String column : COLUMNS) {
-				result.counts.put(column, 0);
-			}
-		} else {
-			result.counts.putAll(saved.getCounts());
-		}
-		return result;
-	}
-	
-	/**
-	 * Replaces the clinic's month with these counts, a column not given being zero, once they hold
-	 * together, voiding the counts it replaces; an IllegalArgumentException says what does not hold.
-	 */
-	public void save(Location clinic, YearMonth month, Map<String, Integer> counts, String notes) {
-		final Map<String, Integer> values = validated(month, counts, notes);
-		final Integer clinicId = clinic.getLocationId();
-		final Date day = firstDay(month);
-		final String text = StringUtils.trimToNull(notes);
-		final User user = Context.getAuthenticatedUser();
-		try {
-			Transactions.inTransaction(() -> {
-				// Saves of one clinic take turns here, so a month never has two current rows.
-				session().get(Location.class, clinicId, LockOptions.UPGRADE);
-				java.util.Date now = new java.util.Date();
-				for (Object current : session()
-				        .createQuery("from ScreeningCount where locationId = :clinic and month = :month and voided = false")
-				        .setParameter("clinic", clinicId).setParameter("month", day).list()) {
-					new BaseVoidHandler().handle((ScreeningCount) current, user, now, REPLACED_REASON);
-				}
-				return session().save(new ScreeningCount(clinicId, day, values, text));
-			});
-		}
-		catch (RuntimeException e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException("Could not save the screening counts", e);
-		}
-	}
-	
-	/**
-	 * The sums of the clinics' months from start to end, both included: of every clinic when clinics is
-	 * null, of none when it is empty.
-	 */
-	public Summary summary(Collection<Integer> clinics, YearMonth start, YearMonth end) {
-		Summary summary = new Summary();
-		Object[] row = null;
-		if (clinics == null || !clinics.isEmpty()) {
-			StringBuilder select = new StringBuilder("select count(*)");
-			for (String column : COLUMNS) {
-				select.append(", coalesce(sum(").append(property(column)).append("), 0)");
-			}
-			select.append(" from ScreeningCount where voided = false and month >= :start and month <= :end");
-			if (clinics != null) {
-				select.append(" and locationId in (:clinics)");
-			}
-			Query query = session().createQuery(select.toString());
-			query.setParameter("start", firstDay(start)).setParameter("end", firstDay(end));
-			if (clinics != null) {
-				query.setParameterList("clinics", clinics);
-			}
-			row = (Object[]) query.uniqueResult();
-		}
-		summary.months = row == null ? 0 : ((Number) row[0]).intValue();
-		for (int i = 0; i < COLUMNS.size(); i++) {
-			summary.sums.put(COLUMNS.get(i), row == null ? 0L : ((Number) row[i + 1]).longValue());
-		}
-		return summary;
-	}
-	
-	private static Map<String, Integer> validated(YearMonth month, Map<String, Integer> counts, String notes) {
-		// The zone where a month starts first, so a browser ahead of the server can save the month it is in.
-		if (month.isAfter(YearMonth.now(ZoneId.of("Etc/GMT-14")))) {
-			throw new IllegalArgumentException(month + " has not started, so it has no screening counts yet");
-		}
-		for (String column : counts.keySet()) {
-			if (!COLUMNS.contains(column)) {
-				throw new IllegalArgumentException("No screening count is named " + column);
-			}
-		}
-		if (notes != null && notes.trim().length() > NOTES_LENGTH) {
-			throw new IllegalArgumentException("Notes may be at most " + NOTES_LENGTH + " characters");
-		}
-		Map<String, Integer> values = new LinkedHashMap<String, Integer>();
-		for (String column : COLUMNS) {
-			Integer value = counts.get(column);
-			if (value != null && value < 0) {
-				throw new IllegalArgumentException(column + " cannot be below 0");
-			}
-			values.put(column, value == null ? 0 : value);
-		}
-		for (String setting : SETTINGS) {
-			int screened = values.get(setting + "_screened");
-			long ages = (long) values.get(setting + "_children") + values.get(setting + "_adolescents")
-			        + values.get(setting + "_adults");
-			if (ages != screened) {
-				throw new IllegalArgumentException(
-				        "The " + setting + " age groups add up to " + ages + ", not the " + screened + " screened");
-			}
-			for (String part : new String[] { "females", "positive" }) {
-				if (values.get(setting + "_" + part) > screened) {
-					throw new IllegalArgumentException(
-					        "The " + setting + " " + part + " are more than the " + screened + " screened");
-				}
-			}
-		}
-		return values;
-	}
-	
-	/** The entity property of a count column: school_screened is schoolScreened. */
-	private static String property(String column) {
-		String[] parts = column.split("_");
-		return parts[0] + StringUtils.capitalize(parts[1]);
-	}
-	
-	private static Date firstDay(YearMonth month) {
-		return Date.valueOf(month.atDay(1));
-	}
-	
-	private static DbSession session() {
-		return Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession();
 	}
 }

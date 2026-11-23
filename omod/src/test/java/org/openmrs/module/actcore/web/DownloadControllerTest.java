@@ -50,6 +50,7 @@ import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.module.actcore.logs.ActivityLog;
@@ -244,7 +245,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
 			controller.download(body());
 			
-			assertEquals("Echocardiogram", new DownloadLog().list(null, null, null).get(0).formName);
+			assertEquals("Echocardiogram", logged().get(0).formName);
 		}
 		finally {
 			service.setActiveMessageSource(previous);
@@ -256,7 +257,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
 		controller.download(body());
 		
-		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		String detail = logged().get(0).detail;
 		
 		assertTrue(detail, detail.startsWith("{\"fields\":[\"Mitral regurgitation\"],\"withheld\":[]"));
 	}
@@ -314,7 +315,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		controller.record(body);
 		
-		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		String detail = logged().get(0).detail;
 		assertTrue(detail, detail.contains("\"researchOnly\":false"));
 	}
 	
@@ -331,7 +332,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected the record to be refused");
 		}
 		catch (IllegalRequestException expected) {}
-		assertTrue(new DownloadLog().list(null, null, null).isEmpty());
+		assertTrue(logged().isEmpty());
 	}
 	
 	@Test
@@ -351,7 +352,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected a record without a list to be refused");
 		}
 		catch (IllegalRequestException expected) {}
-		assertTrue(new DownloadLog().list(null, null, null).isEmpty());
+		assertTrue(logged().isEmpty());
 	}
 	
 	@Test
@@ -439,7 +440,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			}
 			catch (IllegalRequestException expected) {}
 		}
-		assertTrue(new DownloadLog().list(null, null, null).isEmpty());
+		assertTrue(logged().isEmpty());
 	}
 	
 	@Test
@@ -462,7 +463,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(headers.toString(), headers.contains("RHD Echocardiogram 1: Mitral regurgitation"));
 		assertTrue(headers.toString(), headers.contains("RHD Consultation Visit 1: Mitral regurgitation"));
 		assertEquals(1, ((List<?>) result.get("rows")).size());
-		DownloadLog.Entry logged = new DownloadLog().list(null, null, null).get(0);
+		DownloadLog.Entry logged = logged().get(0);
 		assertNull(logged.formName);
 		assertTrue(logged.detail, logged.detail.contains("\"rowPerPatient\":true"));
 		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
@@ -508,7 +509,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		SimpleObject result = controller.download(body);
 		
 		assertEquals(1, ((List<?>) result.get("rows")).size());
-		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		String detail = logged().get(0).detail;
 		assertTrue(detail, detail.contains("\"status\":\"inactive\""));
 		assertTrue(detail, detail.contains("\"cardiacClinic\":\"" + one.getName()));
 	}
@@ -528,7 +529,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			}
 			catch (IllegalRequestException expected) {}
 		}
-		assertTrue(new DownloadLog().list(null, null, null).isEmpty());
+		assertTrue(logged().isEmpty());
 	}
 	
 	@Test
@@ -542,7 +543,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertEquals(Arrays.asList("ACT ID", "Age", "Form date", "Location", "Mitral regurgitation"), result.get("headers"));
 		assertEquals(Collections.singletonList("Given name"), result.get("withheld"));
-		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		String detail = logged().get(0).detail;
 		assertTrue(detail, detail.contains("\"withheld\":[\"Given name\"]"));
 		assertTrue(detail, detail.contains("\"patient\":[\"age\"]"));
 		
@@ -589,7 +590,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private static void assertIdentifiers(boolean expected, SimpleObject result) {
 		assertEquals(expected, result.get("identifiers"));
-		String detail = new DownloadLog().list(null, null, null).get(0).detail;
+		String detail = logged().get(0).detail;
 		assertTrue(detail, detail.contains("\"identifiers\":" + expected));
 	}
 	
@@ -608,7 +609,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			}
 			catch (IllegalRequestException expected) {}
 		}
-		assertTrue(new DownloadLog().list(null, null, null).isEmpty());
+		assertTrue(logged().isEmpty());
 	}
 	
 	private Form secondForm() {
@@ -715,5 +716,16 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		});
 		Context.logout();
 		Context.authenticate(username, "Download123");
+	}
+	
+	/** The log, read as someone who may read it, whoever is signed in. */
+	private static List<DownloadLog.Entry> logged() {
+		try {
+			Context.addProxyPrivilege(DownloadLog.VIEW_PRIVILEGE);
+			return Context.getService(DownloadLogService.class).getDownloads(null, null, null);
+		}
+		finally {
+			Context.removeProxyPrivilege(DownloadLog.VIEW_PRIVILEGE);
+		}
 	}
 }

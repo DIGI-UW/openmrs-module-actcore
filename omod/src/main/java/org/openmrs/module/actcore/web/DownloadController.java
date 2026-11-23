@@ -28,6 +28,7 @@ import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.module.actcore.logs.Names;
@@ -87,8 +88,6 @@ public class DownloadController extends ActCoreRestController {
 		LOG_TABS.put("downloads", "Downloads");
 		LOG_TABS.put("signIns", "Sign-ins");
 	}
-	
-	private final DownloadLog downloadLog = new DownloadLog();
 	
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
@@ -202,7 +201,7 @@ public class DownloadController extends ActCoreRestController {
 		Names names = new Names();
 		List<SimpleObject> matching = new ArrayList<SimpleObject>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to)) {
+		for (DownloadLog.Entry entry : Context.getService(DownloadLogService.class).getDownloads(userId, from, to)) {
 			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
 			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
 				continue;
@@ -367,7 +366,7 @@ public class DownloadController extends ActCoreRestController {
 		if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DETAIL_BYTES) {
 			throw new IllegalRequestException("Too many or too long columns and filters to record");
 		}
-		downloadLog.record(formId, json);
+		Context.getService(DownloadLogService.class).recordDownload(formId, json);
 	}
 	
 	/** with, without or research, as the identifiers filter names what a download held. */

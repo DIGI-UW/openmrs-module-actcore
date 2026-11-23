@@ -18,4 +18,50 @@
     <!-- Core's session factory chains every Interceptor bean: checks a site administrator's change to a
          user's clinics or roles as it is written, against the values still in the database -->
     <bean id="actcoreUserClinicsFlushCheck" class="org.openmrs.module.actcore.clinics.UserClinicsFlushCheck"/>
+
+    <bean id="actcore.ScreeningCountService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.ScreeningCountServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateScreeningCountDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.ScreeningCountService</value>
+                <ref bean="actcore.ScreeningCountService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.DownloadLogService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.DownloadLogServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.DownloadLogService</value>
+                <ref bean="actcore.DownloadLogService"/>
+            </list>
+        </property>
+    </bean>
 </beans>
