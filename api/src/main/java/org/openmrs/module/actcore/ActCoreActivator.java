@@ -26,20 +26,33 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads the report descriptors, then registers the flag and adherence refreshes with the scheduler
- * on first start. Initializer has no domain for scheduler_task_config, and the patientflags module
- * registers nothing of its own, so without this the task would have to be created by hand in the
- * admin UI on every environment.
+ * The module's activator. Each time the module starts, it loads the report descriptors, ends the
+ * open enrolments of patients already recorded dead, and makes sure the scheduler holds the patient
+ * flag refresh task and the adherence refresh task, registering each one the first time it is
+ * missing.
+ * <p>
+ * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
+ * patientflags module registers nothing of its own, so without this each task would have to be
+ * created by hand in the admin UI on every environment.
  */
 public class ActCoreActivator extends BaseModuleActivator implements DaemonTokenAware {
 	
+	/**
+	 * The name the patient flag refresh task is registered under in the scheduler, and by which the
+	 * activator finds it again on later starts.
+	 */
 	public static final String REFRESH_TASK_NAME = "RHD Patient Flag Refresh";
 	
+	/**
+	 * The name the adherence refresh task is registered under in the scheduler, and by which the
+	 * activator finds it again on later starts.
+	 */
 	public static final String ADHERENCE_TASK_NAME = "RHD Prophylaxis Adherence Refresh";
 	
 	/**
-	 * The scheduler owns the interval once the task exists, so this is only the value the task is first
-	 * registered with. Change it afterwards in Manage Scheduler.
+	 * The interval, in seconds, that each task is first registered with. The scheduler owns the
+	 * interval once the task exists, so changing this value does not change a registered task; change
+	 * it in Manage Scheduler instead.
 	 */
 	private static final long REFRESH_INTERVAL_SECONDS = 86400L;
 	
@@ -61,8 +74,9 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * What the refresh endpoint runs the refresh with, and the run chart endpoint its report, as the
-	 * scheduler's daemon user; null until the module has started.
+	 * Gets the daemon token the module framework gave this module. The refresh endpoint uses it to run
+	 * the patient flag refresh as the scheduler's daemon user, and the run chart endpoint uses it to
+	 * evaluate its report as that user.
 	 *
 	 * @return the module's daemon token, or null before the module framework has set it
 	 */
@@ -91,8 +105,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * Ends the open enrolments of patients already recorded dead, as the daemon user. A failure is
-	 * logged, so the module still starts.
+	 * Ends the open enrolments of patients already recorded dead, running as the daemon user. A failure
+	 * is logged rather than thrown, so that the module still starts.
 	 */
 	private static void closeEnrolmentsOfTheDead() {
 		try {

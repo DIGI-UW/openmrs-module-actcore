@@ -38,29 +38,33 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Re-evaluates every enabled flag, writing only the rows that changed, then syncs the flag lists.
- * patientflags evaluates only on writes, so without this a criterion that time makes true never
- * fires.
+ * The scheduled task that refreshes the patient flags. It first refreshes adherence, then
+ * re-evaluates every enabled, unretired flag, writing only the flag rows that changed, and then
+ * syncs the flag lists. The patientflags module evaluates a flag only when a patient's data is
+ * written, so without this task a criterion that becomes true with the passing of time would never
+ * raise its flag.
  */
 public class PatientFlagRefreshTask extends AbstractTask {
 	
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefreshTask.class);
 	
 	/**
-	 * When the last refresh finished, as an ISO-8601 instant, for the scheduled and on-demand runs
-	 * alike. Written even when some flags failed, or one broken flag would hide every run after it.
+	 * The name of the global property that records when the last refresh finished, as an ISO-8601
+	 * instant, for scheduled and on-demand runs alike. It is written even when some flags failed, as
+	 * otherwise one broken flag would hide every run after it.
 	 */
 	public static final String LAST_FINISHED_PROPERTY = "actcore.refresh.lastFinished";
 	
 	/**
-	 * Static because the REST taskaction resource and the refresh endpoint each run a new instance of
-	 * the task alongside the scheduler's.
+	 * The lock held while a full refresh runs. It is static because the REST taskaction resource and
+	 * the refresh endpoint each run a new instance of the task alongside the scheduler's.
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
 	/**
-	 * Held shared by each patient's refresh and each dismissal, and alone by the full refresh, so the
-	 * full refresh never writes a flag's rows or a list's members alongside either.
+	 * The lock that keeps a full refresh from writing a flag's rows or a list's members at the same
+	 * time as a patient's refresh or a dismissal does. Each patient's refresh and each dismissal hold
+	 * it shared, and the full refresh holds it alone.
 	 */
 	static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
@@ -77,13 +81,16 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	int cleared;
 	
-	/** What failed in a run of the refresh. */
+	/** What failed in a run of the refresh, which the refresh endpoint reports. */
 	public static class Result {
 		
+		/** How many flags failed to be evaluated or written. */
 		public final int flagsFailed;
 		
+		/** How many flag lists failed to sync. */
 		public final int listsFailed;
 		
+		/** Whether the adherence refresh that runs first failed. */
 		public final boolean adherenceFailed;
 		
 		Result(int flagsFailed, int listsFailed, boolean adherenceFailed) {
@@ -100,8 +107,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Runs the refresh unless another run is in progress, returning what failed in it, or null when
-	 * this call did not run it.
+	 * Runs the refresh now unless another run is in progress, and reports what failed in it. When the
+	 * run finishes, it refreshes the patients whose own refresh was left to it.
 	 *
 	 * @return the flags and lists that failed and whether the adherence refresh failed, or null when
 	 *         another run was in progress
@@ -128,8 +135,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Refreshes each patient saved while this run held the rows: it may have passed their flags before
-	 * the save.
+	 * Refreshes each patient saved while this run held the rows, since the run may have evaluated their
+	 * flags before the save.
 	 */
 	private void refreshDeferred() {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
@@ -149,7 +156,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Whether a full refresh is running now.
+	 * Tells whether a full refresh is running now.
 	 *
 	 * @return true while a run holds the refresh, whichever instance started it
 	 */
@@ -158,8 +165,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Re-evaluates and lists one patient's flags, which patientflags' own pass may have read before the
-	 * save committed; while the full refresh writes the rows, it is left to that run's end.
+	 * Re-evaluates one patient's flags and updates the patient's place on the flag lists, after a save
+	 * that the patientflags module's own pass may have evaluated before it committed. While a full
+	 * refresh is writing the rows, the patient is left to that run, which refreshes them when it ends.
 	 *
 	 * @param patientId the patient whose flags to refresh
 	 */
@@ -174,8 +182,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Runs each flag, and each list, as a unit of its own: a criterion that fails marks the transaction
-	 * it ran in rollback-only, which would take every other flag's change with it.
+	 * Refreshes one patient's flags, running each flag, and each list, as a unit of its own. A
+	 * criterion that fails marks the transaction it ran in as rollback-only, which would otherwise take
+	 * every other flag's change with it.
 	 */
 	static void refreshPatient(final int patientId, Consumer<Runnable> unit) {
 		if (!ROWS.readLock().tryLock()) {
@@ -242,7 +251,10 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		}
 	}
 	
-	/** As reconcile does for a flag's every patient, for one; a voided patient matches no flag. */
+	/**
+	 * Reconciles one flag's row for one patient, as the full refresh reconciles a flag's rows for every
+	 * patient. A voided patient matches no flag.
+	 */
 	private static void reconcile(int flagId, int patientId) {
 		FlagService flagService = Context.getService(FlagService.class);
 		Flag flag = flagService.getFlag(flagId);
@@ -319,7 +331,10 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		return new Result(failed, lists.failures, adherenceFailed);
 	}
 	
-	/** A flag no longer evaluated, disabled or retired, has no raised date or dismissal to keep. */
+	/**
+	 * Clears the raised dates and dismissals kept for a flag that is no longer evaluated because it is
+	 * disabled or retired.
+	 */
 	private static void lowerAll(Flag flag) {
 		try {
 			RaisedFlags.lowerAll(flag.getFlagId());
@@ -347,9 +362,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Reports both halves of the run in one line, raised to warn when any of it failed: the packaged
-	 * log4j2.xml leaves this module at warn, where a half-working run would otherwise look like
-	 * silence.
+	 * Logs both halves of the run, the flags and the lists, in one line, at warn level when any of it
+	 * failed. The packaged log4j2.xml leaves this module at warn, where a run that half worked would
+	 * otherwise look like silence.
 	 */
 	private void report(int evaluated, int failed, int added, int removed, FlagListSync.Result lists, long elapsedMillis) {
 		String summary = String.format(Locale.ROOT,
@@ -429,14 +444,19 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Reads a flag's unvoided rows directly, as FlagService cannot list a flag's patients. A voided row
-	 * must not count, or the flag is never raised again for that patient.
+	 * Reads a flag's unvoided rows by SQL, since FlagService cannot list a flag's patients, as a map of
+	 * patient id to message. A patient with more than one row maps to null, so that the rows are
+	 * rewritten as one. A voided row must not count, or the flag would never be raised again for that
+	 * patient.
 	 */
 	static Map<Integer, String> flaggedMessages(Flag flag) {
 		return flaggedMessages(flag, "");
 	}
 	
-	/** The flag's unvoided row for one patient, if it has one. */
+	/**
+	 * Reads the flag's unvoided row for one patient, as {@link #flaggedMessages(Flag)} reads every
+	 * patient's. The map is empty when the patient has no row.
+	 */
 	static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
 		return flaggedMessages(flag, " and patient_id = " + patientId);
 	}
@@ -460,8 +480,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Keeps one message, the first a custom evaluator supplies, since reconcile tracks one row per
-	 * patient; patientflags' PatientFlagTask writes a row for each message it is given.
+	 * Gives the message for the patient's flag row: the first message a custom evaluator supplied, or
+	 * else the flag's own message. Only one is kept because reconcile tracks one row per patient, while
+	 * the patientflags module's PatientFlagTask writes a row for each message it is given.
 	 */
 	@SuppressWarnings("unchecked")
 	private static String message(Flag flag, Integer patientId, Map<Object, Object> evaluationContext) {

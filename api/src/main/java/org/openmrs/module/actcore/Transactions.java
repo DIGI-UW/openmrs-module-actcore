@@ -24,8 +24,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Runs work in a Spring transaction from code that the module's services do not wrap, such as
- * advice classes and scheduled tasks.
+ * Helpers that run work in a Spring transaction, for code that no service of the module wraps in
+ * one, such as advice classes and scheduled tasks.
  */
 public final class Transactions {
 	
@@ -33,8 +33,9 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in a transaction of its own. After a commit the old transaction's resources are
-	 * still bound, so writing then needs one.
+	 * Runs the work in a new transaction of its own, suspending any transaction already in progress.
+	 * Code that runs after a commit needs this to write, because the committed transaction's resources
+	 * are still bound to the thread at that point.
 	 *
 	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
 	 *            propagates
@@ -51,11 +52,14 @@ public final class Transactions {
 		});
 	}
 	
-	/** Work run in a transaction that may throw anything, as an advice's proceed. */
+	/**
+	 * A piece of work for {@link Transactions#inTransaction(Work)} that may throw any exception,
+	 * checked ones included, as an advice's call to proceed does.
+	 */
 	public interface Work<T> {
 		
 		/**
-		 * Does the work.
+		 * Runs the work.
 		 *
 		 * @return the work's result
 		 * @throws Throwable whatever the work throws
@@ -64,8 +68,10 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in the current transaction, or in one of its own outside one, so no service call it
-	 * makes commits (and flushes the session) before it returns; an exception rolls it all back.
+	 * Runs the work in the current transaction, or in a new transaction when none is in progress. The
+	 * service calls the work makes therefore join that one transaction, so none of them commits or
+	 * flushes the session before the work returns, and an exception thrown by the work rolls all of it
+	 * back.
 	 *
 	 * @param work the work to run
 	 * @return what the work returns
@@ -94,7 +100,10 @@ public final class Transactions {
 		return Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class);
 	}
 	
-	/** Carries a checked exception out of the callback, which cannot declare one. */
+	/**
+	 * Wraps a checked exception so that it can leave the transaction callback, which cannot declare
+	 * one, and be unwrapped again outside it.
+	 */
 	private static final class Checked extends RuntimeException {
 		
 		private Checked(Throwable cause) {
@@ -103,8 +112,10 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work for the patient once the current transaction commits, or at once outside one, so a
-	 * failure cannot roll the save back; an owner, such as an advice class, runs it once per patient.
+	 * Runs the work for the patient once the current transaction commits, or at once when no
+	 * transaction is in progress, so that a failure in the work cannot roll back the save that
+	 * triggered it. Calls made with the same owner, such as an advice class, within one transaction run
+	 * the work once for each patient, however many times a patient is passed.
 	 *
 	 * @param owner what the work is registered under in the current transaction; a later call with the
 	 *            same owner adds its patient to that registration and its own work is not used
@@ -132,7 +143,8 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Holds one owner's patients until the transaction commits, then runs the owner's work for each.
+	 * Collects the patients that one owner registered during a transaction, and once the transaction
+	 * commits, runs the owner's work for each of them in the order they were first added.
 	 */
 	private static final class Pending extends TransactionSynchronizationAdapter {
 		

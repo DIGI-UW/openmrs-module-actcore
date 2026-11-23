@@ -32,7 +32,10 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-/** Serves the questions missing behind a patient's flag, from the flag's own SQL criteria. */
+/**
+ * Serves the gaps behind a patient's flag: the questions missing from the patient's encounters, as
+ * the flag's own SQL criteria report them.
+ */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class FlagGapController extends ActCoreRestController {
@@ -51,7 +54,8 @@ public class FlagGapController extends ActCoreRestController {
 	 *         user without Get Forms
 	 * @throws IllegalRequestException when the patient or flag is missing
 	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
-	 * @throws APIAuthenticationException when the user lacks Get Patients or View Patient Flags
+	 * @throws APIAuthenticationException when the user lacks Get Patients or View Patient Flags, or
+	 *             lacks Get Encounters or Get Concepts once the flag's criteria return a gap to look up
 	 */
 	@RequestMapping(value = "/gap", method = RequestMethod.GET)
 	@ResponseBody
@@ -85,8 +89,9 @@ public class FlagGapController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Null for a caller without Get Forms, whom webservices.rest 3.5.0 (unlike 2.40.0) would answer
-	 * with a placeholder that the JSON writer cannot serialize.
+	 * Gives the encounter's form as a reference, or null for a caller without Get Forms. For such a
+	 * caller, webservices.rest 3.5.0, unlike 2.40.0, would give a placeholder that the JSON writer
+	 * cannot serialize.
 	 */
 	private static Object form(Encounter encounter) {
 		if (!Context.hasPrivilege(PrivilegeConstants.GET_FORMS)) {

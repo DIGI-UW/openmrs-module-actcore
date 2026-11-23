@@ -30,91 +30,141 @@ import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.download.FormDownload;
 
 /**
- * Who opened which patient's record, from the audit log module's read audit, with a user's reads of
- * one patient within an hour of the first folded into one row.
+ * The read log behind the Logs page's Patients opened tab, which lists who opened which patient's
+ * record. It reads the audit log module's read audit, and folds a user's reads of one patient that
+ * fall within an hour of the first of them into one row.
  */
 public class ReadLog {
 	
-	/** The audit log module's. */
+	/**
+	 * The privilege needed to read the read log, which is the audit log module's privilege for reading
+	 * its read audit.
+	 */
 	public static final String VIEW_PRIVILEGE = "View Read Audit Logs";
 	
+	/**
+	 * How long after a row's first read, in milliseconds, a later read by the same user of the same
+	 * patient still joins that row.
+	 */
 	public static final long WINDOW_MILLIS = 60 * 60 * 1000L;
 	
 	static final int PATIENT_MATCHES = 100;
 	
 	/**
-	 * Ids per reads query; past ~200k ids MariaDB scans all of read_audit_entity_metadata for the
-	 * exists.
+	 * The span of read ids that one query fetches. Past about 200,000 ids, MariaDB scans the whole of
+	 * read_audit_entity_metadata for the query's exists clause.
 	 */
 	static final int READ_SPAN = 10000;
 	
 	/**
-	 * Entities whose reads are of patients' data even with no patient found, such as a search; the
-	 * query leaves out other reads of no patient, such as of encounter types.
+	 * The entities whose reads count as reads of patients' data even when no patient was found, as for
+	 * a search. The query leaves out reads of other entities that found no patient, such as reads of
+	 * encounter types.
 	 */
 	private static final Set<String> PATIENT_DATA = new HashSet<String>(Arrays.asList("Patient", "Person", "Encounter",
 	    "Obs", "Visit", "PatientProgram", "PatientState", "Condition", "Diagnosis", "Order", "DrugOrder", "TestOrder",
 	    "Allergy", "Relationship", "Cohort", "CohortMembership", "MedicationDispense", "PersonName", "PersonAddress",
 	    "PersonAttribute", "PatientIdentifier", "UnknownEntity"));
 	
-	/** Which reads to list, and which page of the rows. */
+	/**
+	 * The filters that choose which reads of patient data to list, and which page of the matching rows
+	 * to return.
+	 * <p>
+	 * A filter left null is not applied. {@code patient} matches a patient by uuid, or else searches by
+	 * ACT ID or name. {@code from} and {@code to} are both included, each as a whole day.
+	 * {@code startIndex} and {@code limit} pick the page, the limit defaulting to
+	 * {@link Rows#DEFAULT_LIMIT}.
+	 */
 	public static class Filter {
 		
+		/** The username, as the read audit recorded it, of the user whose reads to list. */
 		public String username;
 		
-		/** A patient uuid, or an ACT ID or name to search for. */
+		/**
+		 * The patient whose reads to list: a patient uuid, or else an identifier to match exactly or part
+		 * of a name to search for.
+		 */
 		public String patient;
 		
+		/** The first day whose reads to list. */
 		public LocalDate from;
 		
+		/** The last day whose reads to list. */
 		public LocalDate to;
 		
+		/** The index, from 0, of the first matching row to return. */
 		public int startIndex;
 		
+		/** The most rows to return. */
 		public int limit = Rows.DEFAULT_LIMIT;
 	}
 	
-	/** One page of the rows, and how many rows the filter matches in all. */
+	/** One page of the rows a filter matches, with how many rows it matches in all. */
 	public static class Page {
 		
+		/** The rows on the page, the row with the latest first read first. */
 		public final List<Row> results = new ArrayList<Row>();
 		
+		/** How many rows the filter matches across every page. */
 		public int totalCount;
 	}
 	
-	/** One read as the module recorded it. */
+	/** One read as the audit log module recorded it. */
 	public static class Read {
 		
+		/** When the read happened. */
 		public Date time;
 		
+		/** The name of the entity read, such as Patient or Encounter. */
 		public String entity;
 		
+		/**
+		 * What was read, as the page shows it, such as "the patient record", "2 encounters" or "a search: 4
+		 * patients", prefixed with "failed: " for a read that failed.
+		 */
 		public String description;
 	}
 	
-	/** A user's reads of one patient, or of one entity of no patient, within an hour of the first. */
+	/**
+	 * One row of the read log: a user's reads of one patient, or of one entity when the reads found no
+	 * single patient, that fall within {@link ReadLog#WINDOW_MILLIS} of the first of them.
+	 */
 	public static class Row {
 		
+		/** An id for the row, made of the user, the patient and the id of the row's first read. */
 		public String id;
 		
+		/** When the row's first read happened. */
 		public Date from;
 		
+		/** When the row's last read happened. */
 		public Date to;
 		
+		/** The user who read. */
 		public Names.Who user;
 		
+		/** The patient read, or null when the reads found no single patient. */
 		public Subject patient;
 		
+		/** The row's reads, oldest first. */
 		public final List<Read> reads = new ArrayList<Read>();
 		
-		/** The session's label, not its id. */
+		/**
+		 * A short label for the session the first read was made in, derived from the session id rather than
+		 * the id itself, or null when no session was recorded.
+		 */
 		public String sessionId;
 		
+		/** The IP address the first read came from. */
 		public String ip;
 		
+		/** The user agent of the browser that made the first read. */
 		public String userAgent;
 		
-		/** Null when the user has no clinics on their account or the patient has none. */
+		/**
+		 * Whether the user and the patient share a clinic. It is null when the user has no clinics on their
+		 * account or the patient has none recorded.
+		 */
 		public Boolean sameClinicAsUser;
 		
 		String username;
@@ -129,25 +179,30 @@ public class ReadLog {
 	/** The patient a row's reads are of, as the Logs page names them. */
 	public static class Subject {
 		
+		/** The patient's uuid. */
 		public String uuid;
 		
+		/** The patient's name, or the name the read audit recorded once the patient is purged. */
 		public String display;
 		
+		/** The patient's ACT ID, or null when they have none or are purged. */
 		public String actId;
 		
+		/** The name of the patient's primary care clinic, or null when none is recorded. */
 		public String primaryCareClinic;
 		
+		/** The name of the patient's cardiac clinic, or null when none is recorded. */
 		public String cardiacClinic;
 	}
 	
 	private final Names names = new Names();
 	
 	/**
-	 * Lists the reads of patients' data the filter matches, folded into rows, newest row first. The
-	 * caller checks {@link #VIEW_PRIVILEGE}.
+	 * Lists the reads of patients' data that the filter matches, folded into rows, the row with the
+	 * latest first read first. This method does not check a privilege, so the caller must check
+	 * {@link #VIEW_PRIVILEGE} first.
 	 *
-	 * @param filter the user, the patient, the days from and to, each inclusive and each optional, and
-	 *            the page
+	 * @param filter the filters that choose the reads and the page of rows to return
 	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
 	 *         its days
 	 * @throws Rows.TooMany when more than {@value #PATIENT_MATCHES} patients match the filter's patient
@@ -221,7 +276,8 @@ public class ReadLog {
 	}
 	
 	/**
-	 * A short label for a session, hashed because its id signs in as its user while the session lives.
+	 * Makes a short label for a session from a hash of its id. The id itself is never shown, because
+	 * anyone holding it could sign in as the session's user while the session lives.
 	 */
 	static String sessionLabel(String sessionId) {
 		if (StringUtils.isBlank(sessionId)) {
@@ -237,8 +293,9 @@ public class ReadLog {
 	}
 	
 	/**
-	 * Reads ordered by user and time, folded per patient, or per entity for reads of no single patient,
-	 * while each falls within the window of its row's first.
+	 * Folds reads, ordered by user and then by time, into rows. A user's reads of one patient share a
+	 * row, as do their reads of one entity that found no single patient, as long as each read falls
+	 * within {@link #WINDOW_MILLIS} of the row's first read.
 	 */
 	static List<Row> fold(List<Raw> reads) {
 		List<Row> rows = new ArrayList<Row>();
@@ -272,7 +329,10 @@ public class ReadLog {
 		return rows;
 	}
 	
-	/** One row of the reads query, kept as fields rather than a map while every span is read. */
+	/**
+	 * One row of the reads query, held as fields rather than as a map, to keep memory down while every
+	 * span of reads is held at once.
+	 */
 	static final class Raw {
 		
 		final long id;
@@ -318,7 +378,10 @@ public class ReadLog {
 		}
 	}
 	
-	/** "the patient record", "2 encounters", "a search: 4 patients". */
+	/**
+	 * Describes what a read found as the page shows it, such as "the patient record", "2 encounters" or
+	 * "a search: 4 patients", prefixed with "failed: " when the read failed.
+	 */
 	static String describe(String entity, int targets, int patients, boolean success) {
 		String noun = noun(entity);
 		String what;
@@ -410,8 +473,10 @@ public class ReadLog {
 	}
 	
 	/**
-	 * The given uuid, else the patients with the query as identifier or in a name; by SQL, as the audit
-	 * log module records a patient service search as reads of every patient found.
+	 * Finds the uuids of the patients a patient filter names: the query itself when it is a uuid, or
+	 * else the unvoided patients with the query as an identifier or within a name. It searches by SQL,
+	 * because the audit log module would record a search through the patient service as a read of every
+	 * patient found.
 	 */
 	private static List<String> patientUuids(String query) {
 		List<String> uuids = new ArrayList<String>();

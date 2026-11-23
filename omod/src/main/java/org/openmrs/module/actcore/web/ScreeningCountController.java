@@ -42,19 +42,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * A clinic's monthly screening counts, read and saved, and their sums over clinics and months for
- * the Dashboard; a site administrator works with the clinics on their account only.
+ * Serves the monthly screening counts: a clinic's counts for a month, read and saved on the
+ * Screening counts page, and their sums over clinics and months for the Dashboard. A site
+ * administrator works only with the clinics on their account.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
 public class ScreeningCountController extends ActCoreRestController {
 	
-	/** Opens the Screening counts page, where they are read. */
+	/** The privilege that opens the Screening counts page, where the counts are read. */
 	public static final String READ_PRIVILEGE = ActCorePrivileges.SCREENING_COUNTS;
 	
-	/** The Dashboard's, whose screening section reads them. */
+	/** The Dashboard's privilege, which lets its screening section read the sums. */
 	public static final String DASHBOARD_PRIVILEGE = ActCorePrivileges.DASHBOARD;
 	
+	/** The privilege to save a clinic's counts for a month. */
 	public static final String ENTER_PRIVILEGE = ActCorePrivileges.ENTER_SCREENING_COUNTS;
 	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
@@ -69,7 +71,8 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE},
 	 *             {@link #DASHBOARD_PRIVILEGE} and {@link #ENTER_PRIVILEGE}, or is a site administrator
 	 *             without the clinic on their account
-	 * @throws IllegalRequestException when the clinic or month is missing or not recognised
+	 * @throws IllegalRequestException when the clinic or month is blank or not recognised; a request
+	 *             without one of them is answered with 400 before this method runs
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -90,9 +93,10 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @return the month as saved, as {@link #get(String, String)} gives it
 	 * @throws APIAuthenticationException when the user lacks {@link #ENTER_PRIVILEGE}, or is a site
 	 *             administrator without the clinic on their account
-	 * @throws IllegalRequestException when the clinic, month or counts are missing, the clinic or month
-	 *             is not recognised, a count is not a whole number, or the counts or month are refused,
-	 *             saying why
+	 * @throws IllegalRequestException when the clinic or month is blank or not recognised, the counts
+	 *             are missing, a count is not a whole number, or the counts or month are refused,
+	 *             saying why; a request without the clinic or month is answered with 400 before this
+	 *             method runs
 	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
@@ -112,8 +116,8 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The sums from startMonth to endMonth, both included, by default the twelve months to this one, of
-	 * the clinics given or of every clinic.
+	 * Gets the sums of the counts from startMonth to endMonth, both included, of the clinics given or
+	 * of every clinic. Without months, the range is the twelve months up to and including this one.
 	 *
 	 * @param clinics the clinics' location uuids, or none for no clinic filter; a site administrator's
 	 *            are limited to the clinics on their account, which none stands for
@@ -177,8 +181,10 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Ids to sum: those given (a site administrator's own only, maybe none), or null for all. An
-	 * unknown uuid is a bad request unless it is on the site administrator's account.
+	 * Works out the location ids of the clinics to sum. They are the clinics given, which for a site
+	 * administrator are cut down to their own and may end up empty, or, without any given, every clinic
+	 * for most users, as null, and a site administrator's own clinics. A uuid that names no location is
+	 * a bad request, unless it is on the site administrator's account.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();
@@ -216,7 +222,10 @@ public class ScreeningCountController extends ActCoreRestController {
 		return ids;
 	}
 	
-	/** The clinic, which a site administrator must have on their account. */
+	/**
+	 * Gets the clinic by uuid, refusing a uuid that names no location, and refusing a site
+	 * administrator a clinic that is not on their account.
+	 */
 	private static Location clinicOf(String uuid) {
 		Location location = StringUtils.isBlank(uuid) ? null : location(uuid.trim());
 		if (location == null) {

@@ -17,7 +17,11 @@ import org.openmrs.scheduler.tasks.AbstractTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Recomputes every patient's prophylaxis adherence and next due date, daily and on demand. */
+/**
+ * The scheduled task that recomputes every patient's prophylaxis adherence and next due date. The
+ * scheduler runs it daily, and it can also be run on demand; a run that starts while another is in
+ * progress is skipped.
+ */
 public class AdherenceRefreshTask extends AbstractTask {
 	
 	private static final Logger log = LoggerFactory.getLogger(AdherenceRefreshTask.class);
@@ -48,8 +52,10 @@ public class AdherenceRefreshTask extends AbstractTask {
 	}
 	
 	/**
-	 * Recomputes every patient as of today for the flag refresh, whose overdue flag reads these rows.
-	 * Waits for a run already in progress rather than skipping, so the flags read finished rows.
+	 * Recomputes every patient's adherence rows as of today, for the patient flag refresh to call
+	 * before it evaluates the flags, since the overdue flag reads these rows. Unlike a scheduled run,
+	 * it waits for a run already in progress rather than skipping, so that the flags read finished
+	 * rows.
 	 */
 	public static void refreshBeforeFlags() {
 		RUNNING.lock();

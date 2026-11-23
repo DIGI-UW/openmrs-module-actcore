@@ -27,32 +27,45 @@ import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * How a log names what it lists, once per request, by SQL rather than the services whose reads the
- * audit log module records, so listing a log does not itself fill the read audit.
+ * Names the users, patients and metadata that a log lists, remembering each name for the life of
+ * the instance, so make one per request. It reads users, patients and rows by SQL rather than
+ * through the services whose reads the audit log module records, so that listing a log does not
+ * itself fill the read audit.
  */
 public class Names {
 	
-	/** A user, as the Users page shows one. */
+	/** A user as the Users page shows one. */
 	public static class Who {
 		
+		/** The user's uuid. */
 		public String uuid;
 		
+		/** The user's username, or their system ID when they have no username. */
 		public String username;
 		
+		/** The user's person name, or their username when the person has no name. */
 		public String display;
 		
+		/**
+		 * The user's organizational role, shortened as the Users page shows it, such as Clinician, or null
+		 * when they have none.
+		 */
 		public String role;
 	}
 	
-	/** A patient, by name and ACT ID. */
+	/** A patient as a log names them, by name and ACT ID. */
 	public static class Subject {
 		
+		/** The patient's person id. */
 		public Integer id;
 		
+		/** The patient's uuid. */
 		public String uuid;
 		
+		/** The patient's name, or their uuid when they have no name. */
 		public String display;
 		
+		/** The patient's ACT ID, or null when they have no identifier that can serve as one. */
 		public String actId;
 	}
 	
@@ -61,8 +74,8 @@ public class Names {
 	private List<String> identifyingTypes;
 	
 	/**
-	 * Users are read by SQL: the site administrator, who reads the logs, is limited by ACT Core's user
-	 * administration advice to the users of its clinics, and a log names everyone.
+	 * Gets a user by id, read by SQL: the site administrator, who reads the logs, is limited by ACT
+	 * Core's user administration advice to the users of its clinics, and a log names everyone.
 	 *
 	 * @param userId the user's id, or null
 	 * @return the user; null for a null id or one no user has
@@ -82,8 +95,8 @@ public class Names {
 	}
 	
 	/**
-	 * The id of the user with this username, or with this system ID and no username, as a log names
-	 * them; or null.
+	 * Gets the id of the user with this username, or of the user with this system ID and no username,
+	 * since a log names a user without a username by their system ID.
 	 *
 	 * @param username the username or system ID
 	 * @return the user's id, or null when no user has it
@@ -97,8 +110,8 @@ public class Names {
 	}
 	
 	/**
-	 * The ACT role is the organizational one, as the roles CSV names it: "Organizational: ACT
-	 * Clinician".
+	 * Reads the user that the where clause selects, with their name and their ACT role. The ACT role is
+	 * the organizational one, which the roles CSV names as in "Organizational: ACT Clinician".
 	 */
 	private static Who who(String where, Object param) {
 		List<Map<String, Object>> rows = Rows
@@ -139,7 +152,7 @@ public class Names {
 	}
 	
 	/**
-	 * Gets a patient by person id, by their name and ACT ID, voided or not.
+	 * Gets a patient by person id, with their name and ACT ID, whether or not the patient is voided.
 	 *
 	 * @param personId the patient's person id, or null
 	 * @return the patient; null for a null id or one no person has
@@ -152,7 +165,7 @@ public class Names {
 	}
 	
 	/**
-	 * Gets a patient by uuid, by their name and ACT ID, voided or not.
+	 * Gets a patient by uuid, with their name and ACT ID, whether or not the patient is voided.
 	 *
 	 * @param uuid the patient's uuid, or null
 	 * @return the patient; null for a null uuid or one no person has
@@ -178,8 +191,8 @@ public class Names {
 	}
 	
 	/**
-	 * The patient's preferred identifier, unless it identifies them, else the first that does not; as
-	 * the download.
+	 * Gets the patient's ACT ID as the download does: their preferred identifier unless its type
+	 * identifies them, or else the first identifier whose type does not. It is null when there is none.
 	 */
 	private String actId(int personId) {
 		if (identifyingTypes == null) {
@@ -196,7 +209,10 @@ public class Names {
 		return null;
 	}
 	
-	/** The full name from a names query's first row, or null. */
+	/**
+	 * Runs a query for person names and joins the given, middle and family names of its first row into
+	 * a full name. It is null when the query returns no row.
+	 */
 	static String personName(String sql, Object... params) {
 		List<Map<String, Object>> rows = Rows.select(sql, params);
 		if (rows.isEmpty()) {
@@ -268,7 +284,7 @@ public class Names {
 	}
 	
 	/**
-	 * The form's uuid and name, from its row; null once purged.
+	 * Gets the form's row, from which a log reads its uuid and name.
 	 *
 	 * @param formId the form's id, or null
 	 * @return the form's row, by column name; null for a null id or once the form is purged
@@ -278,8 +294,8 @@ public class Names {
 	}
 	
 	/**
-	 * The name users see for a metadata row, as {@link #shown(String, String, String)} gives it from
-	 * the row's uuid and name.
+	 * Gets the name users see for a metadata row, as {@link #shown(String, String, String)} gives it
+	 * from the row's uuid and name.
 	 *
 	 * @param type the metadata's type, such as Form or EncounterType
 	 * @param row the row, with uuid and name columns
@@ -290,8 +306,8 @@ public class Names {
 	}
 	
 	/**
-	 * The name users see for metadata of a type such as Form or EncounterType: its ui.i18n message, as
-	 * REST displays it, else its stored name.
+	 * Gets the name users see for metadata of a type such as Form or EncounterType. That is its ui.i18n
+	 * message, as REST displays it, or its stored name when it has no message.
 	 *
 	 * @param type the metadata's type, such as Form or EncounterType
 	 * @param uuid the metadata's uuid, or null
@@ -330,7 +346,8 @@ public class Names {
 	}
 	
 	/**
-	 * Runs a lookup with a proxy privilege, removed again after it.
+	 * Runs a lookup while holding a proxy privilege, which is removed again once the lookup returns or
+	 * throws.
 	 *
 	 * @param privilege the privilege to hold during the lookup
 	 * @param lookup the lookup
@@ -347,7 +364,7 @@ public class Names {
 	}
 	
 	/**
-	 * A row of a table by its id column, as it stands now; null once purged.
+	 * Gets a row of a table by its id column, as the row stands now.
 	 *
 	 * @param table the table, which must be one of ACT Core's own names and not a caller's input
 	 * @param idColumn the table's id column, likewise
@@ -373,7 +390,7 @@ public class Names {
 	}
 	
 	/**
-	 * A program workflow state, by its concept's name.
+	 * Gets the name of a program workflow state, which is its concept's name.
 	 *
 	 * @param stateId the state's id, or null
 	 * @return the concept's name; null for a null id or once the state is purged
@@ -395,8 +412,9 @@ public class Names {
 	}
 	
 	/**
-	 * A person attribute's value as a reader would see it: a location's or concept's name, else the
-	 * text.
+	 * Gives a person attribute's value as a reader would see it. A value holding the id of a location
+	 * or concept, as the attribute type's format says, becomes that location's or concept's name, and
+	 * any other value stays as it is.
 	 *
 	 * @param typeId the attribute type's id, or null
 	 * @param value the stored value
@@ -449,7 +467,8 @@ public class Names {
 	}
 	
 	/**
-	 * The date alone when the time is midnight, as a date question's answer is stored.
+	 * Formats a date alone when its time is midnight, as a date question's answer is stored, and as a
+	 * date and time otherwise.
 	 *
 	 * @param date the date, or null
 	 * @return the date as {@link #date(Date)} or {@link #dateTime(Date)} formats it, or null for a null

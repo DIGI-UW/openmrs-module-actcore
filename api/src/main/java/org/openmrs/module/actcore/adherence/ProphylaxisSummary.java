@@ -24,8 +24,10 @@ import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * A patient's prophylaxis as the chart shows it: the regimen in force, when the next dose is due,
- * how many injections were on time and the adherence, computed from the patient's saved forms.
+ * A patient's prophylaxis as the chart shows it, computed from the patient's saved forms at the
+ * time it is asked for. It holds the regimen in force, when the last dose was given and the next is
+ * due, how many recent injections were on time, the adherence, the injections recorded, and whether
+ * BPG is on hold.
  */
 public final class ProphylaxisSummary {
 	
@@ -68,7 +70,8 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Replays the patient's saved forms now, as the nightly refresh does, so a dose saved today counts.
+	 * Computes the patient's prophylaxis summary by replaying their saved forms now, as the nightly
+	 * refresh does, so that a dose saved today already counts.
 	 *
 	 * @param patient the patient
 	 * @param today the day to compute the summary as of
@@ -103,8 +106,10 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Null for an oral regimen whose supply end is unknown: nothing recorded says when it runs out, and
-	 * no first visit day is set (actcore.adherence.oralFirstDueDays).
+	 * Gives the status of the next dose: overdue, dueToday, dueSoon within seven days, or ok. It is
+	 * null when there is no due date, as for an oral regimen whose supply end is unknown because
+	 * nothing recorded says when it runs out and no first visit day is set in
+	 * actcore.adherence.oralFirstDueDays.
 	 */
 	private static String status(LocalDate nextDue, LocalDate today) {
 		if (nextDue == null) {
@@ -122,8 +127,10 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Every injection up to today, newest first, timed as ACT 2.0 timed them: against the previous
-	 * injection, even an untimed one, or its course's start.
+	 * Lists every injection given up to today, newest first, each marked on time or late as ACT 2.0
+	 * timed it. An injection is timed against the previous injection, even one that could not itself be
+	 * timed, or against the start of its course when it is the course's first. It is untimed when no
+	 * injection course was in force on its day.
 	 */
 	static List<Injection> timings(NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions,
 	        SortedSet<LocalDate> injections, LocalDate today) {
@@ -165,8 +172,10 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * The latest course begun and not stopped by the day in the consultation replay holds that day, the
-	 * first standing in before it; null, leaving the injection out, if that course is not an injection.
+	 * Finds the injection course in force on the day. It is the latest course begun and not stopped by
+	 * that day among those of the consultation in force on it, or of the first consultation when the
+	 * day comes before every consultation. It is null, leaving the injection untimed, when that course
+	 * is not an injection.
 	 */
 	private static Map.Entry<LocalDate, AdherenceReplay.Course> inForce(
 	        NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions, LocalDate day) {
@@ -187,7 +196,7 @@ public final class ProphylaxisSummary {
 		return regimen;
 	}
 	
-	/** BPG or Oral, or null without a regimen in force. */
+	/** Gets the regimen's type, BPG or Oral, or null without a regimen in force. */
 	public String getType() {
 		return type;
 	}
@@ -205,40 +214,49 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * overdue, dueToday, dueSoon, ok, none without a regimen in force, or null for an oral one whose
-	 * supply end is unknown.
+	 * Gets the status of the next dose: overdue, dueToday, dueSoon when it is due within seven days, or
+	 * ok. It is none without a regimen in force, and null for an oral regimen whose supply end is
+	 * unknown.
 	 */
 	public String getStatus() {
 		return status;
 	}
 	
-	/** Null for an oral regimen, which records an adherence estimate rather than injections. */
+	/**
+	 * Gets how many injections in the past six months were on time. It is null for an oral regimen,
+	 * which records an adherence estimate rather than injections, and without a regimen in force.
+	 */
 	public OnTime getOnTime() {
 		return onTime;
 	}
 	
 	/**
-	 * AdherenceCalculation's fraction, 12 months back for an injection regimen; null without a
-	 * prescription, or before the first injection or oral estimate is recorded.
+	 * Gets the adherence as a fraction, as {@link AdherenceCalculation} computes it over the past 365
+	 * days for an injection regimen. It is null without a prescription, and before the first injection
+	 * or oral estimate under the regimen is recorded.
 	 */
 	public Double getAdherence() {
 		return adherence;
 	}
 	
 	/**
-	 * Whether the patient is on BPG and a BPG Delivery form recorded anaphylaxis that no RHD
-	 * Consultation Visit has followed: no dose until a clinician reviews it.
+	 * Tells whether BPG is on hold for the patient. It is on hold when the patient is on BPG and a BPG
+	 * Delivery form recorded anaphylaxis that no RHD Consultation Visit has followed since, so that no
+	 * dose is given until a clinician reviews it.
 	 */
 	public boolean isBpgOnHold() {
 		return bpgOnHold;
 	}
 	
-	/** Every BPG injection recorded up to today, newest first, whatever the regimen in force now. */
+	/**
+	 * Gets every injection recorded up to today, newest first, whatever the regimen in force now. The
+	 * list is empty when none is recorded.
+	 */
 	public List<Injection> getInjections() {
 		return injections;
 	}
 	
-	/** One injection given, and whether it was on time. */
+	/** One injection given: the day it was given, and whether it was on time. */
 	public static final class Injection {
 		
 		private final LocalDate date;
@@ -254,13 +272,19 @@ public final class ProphylaxisSummary {
 			return date;
 		}
 		
-		/** Null when no injection course was in force on the day. */
+		/**
+		 * Tells whether the injection was on time. It is null when no injection course was in force on the
+		 * day, so the injection could not be timed.
+		 */
 		public Boolean getOnTime() {
 			return onTime;
 		}
 	}
 	
-	/** How many of the injections in the past months were on time, out of those timed. */
+	/**
+	 * How many of the injections given in the past six months were on time, out of those that could be
+	 * timed in that period.
+	 */
 	public static final class OnTime {
 		
 		private final int given;

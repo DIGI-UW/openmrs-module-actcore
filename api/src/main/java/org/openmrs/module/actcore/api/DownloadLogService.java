@@ -17,26 +17,37 @@ import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.download.DownloadLog;
 
-/** Records each download and lists them, as ACT 2.0's audit log did. */
+/**
+ * The service that records each download of patient data and lists the downloads recorded, as ACT
+ * 2.0's audit log did. The download endpoints record through it, and the Logs page's Downloads tab
+ * lists through it.
+ */
 public interface DownloadLogService extends OpenmrsService {
 	
 	/**
-	 * Records a download by the signed-in user, in a transaction of its own, so that a download that
-	 * cannot be recorded fails.
+	 * Records a download made by the signed-in user, dated now. The record is saved in a transaction of
+	 * its own, and the caller records before it hands the data over, so that a download that cannot be
+	 * recorded fails rather than going unrecorded.
 	 *
-	 * @param formId the form downloaded when the download held exactly one, or null otherwise
-	 * @param detail what the download held, as JSON
+	 * @param formId the id of the form downloaded when the download held exactly one form, or null
+	 *            otherwise, as for a download of several forms or a list the app made itself
+	 * @param detail what the download held, such as its forms, columns and filters, as JSON
+	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
+	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} nor
+	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}
 	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
 	void recordDownload(Integer formId, String detail);
 	
 	/**
-	 * Gets the downloads that match the filters, newest first.
+	 * Gets the downloads that match the filters, newest first. A filter left null is not applied.
 	 *
-	 * @param userId the user who downloaded, or null for every user
-	 * @param from the first day, or null for no lower bound
-	 * @param to the last day, included, or null for no upper bound
-	 * @return the matching downloads, an empty list when there are none
+	 * @param userId the id of the user who downloaded, or null for every user
+	 * @param from the first day to include, from its start, or null for no lower bound
+	 * @param to the last day to include, to its end, or null for no upper bound
+	 * @return the matching downloads; an empty list when there are none
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link DownloadLog#VIEW_PRIVILEGE}
 	 */
 	@Authorized(DownloadLog.VIEW_PRIVILEGE)
 	List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to);

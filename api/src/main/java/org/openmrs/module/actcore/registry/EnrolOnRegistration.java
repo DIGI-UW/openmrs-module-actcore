@@ -25,10 +25,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Advice on PatientService that enrols each newly registered patient in the RHD Registry, as ACT
- * 2.0 put every registered patient in the registry.
+ * 2.0 put every registered patient in the registry. Nothing is enrolled while the registry program
+ * is not configured.
  */
 public class EnrolOnRegistration implements MethodInterceptor {
 	
+	/** The name of the global property that holds the uuid of the RHD Registry program. */
 	public static final String PROGRAM_PROPERTY = "actcore.registryProgram";
 	
 	private static final Logger log = LoggerFactory.getLogger(EnrolOnRegistration.class);
@@ -47,7 +49,8 @@ public class EnrolOnRegistration implements MethodInterceptor {
 	}
 	
 	/**
-	 * Whether the program is the RHD Registry, by actcore.registryProgram.
+	 * Tells whether the program is the RHD Registry, by comparing its uuid with the one in
+	 * {@value #PROGRAM_PROPERTY}.
 	 *
 	 * @param program the program, or null
 	 * @return true when the program's uuid is the property's; false for a null program or when the

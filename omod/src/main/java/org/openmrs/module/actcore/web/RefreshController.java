@@ -28,13 +28,14 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Runs the patient flag refresh, adherence first, on demand, and says when it last finished.
+ * Runs the patient flag refresh on demand, refreshing adherence first, and says when the refresh
+ * last finished and whether it is running.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RefreshController extends ActCoreRestController {
 	
-	/** A user without it, other than a superuser, is refused. */
+	/** The privilege a user needs, unless they are a superuser, to see or run the refresh. */
 	public static final String PRIVILEGE = ActCorePrivileges.REFRESH_FLAGS;
 	
 	/**

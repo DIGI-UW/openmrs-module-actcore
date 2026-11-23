@@ -40,41 +40,47 @@ import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 
 /**
- * ACT 2.0's run charts, calculated when asked and never stored: one pass of the report
- * actcore.runCharts.report names, and a replay of BPG patients' histories to each point's day.
+ * Calculates ACT 2.0's run charts when they are asked for, without storing them. Each request
+ * evaluates the report that actcore.runCharts.report names once, and replays the histories of the
+ * patients on BPG to each point's day to count those who were adherent.
  */
 public class RunCharts {
 	
+	/** The name of the global property that holds the uuid of the run chart report. */
 	public static final String GP_REPORT = "actcore.runCharts.report";
 	
-	/** The report's column naming the clinic; empty for the row of every clinic. */
+	/** The report's column naming the clinic a row is of; it is empty in the row of every clinic. */
 	static final String CLINIC_COLUMN = "clinic_uuid";
 	
-	/** The report's column naming the day a row is as of. */
+	/** The report's column naming the day a row's figures are as of. */
 	static final String DATE_COLUMN = "point_date";
 	
 	/**
-	 * The report's column listing, separated by commas, the active patients on an in-force BPG regimen
-	 * as of the day, whose adherence the point replays.
+	 * The report's column that lists, separated by commas, the ids of the active patients on a BPG
+	 * regimen in force as of the day, whose adherence the point replays.
 	 */
 	static final String BPG_COLUMN = "bpg_patient_ids";
 	
 	/**
-	 * The report's count of the patients the list names: GROUP_CONCAT cuts a long list short without an
-	 * error, so a list that does not number its count is refused rather than read.
+	 * The report's column counting the patients that the BPG list names. GROUP_CONCAT cuts a long list
+	 * short without an error, so a row whose list does not hold that many ids is refused rather than
+	 * read.
 	 */
 	static final String BPG_COUNT_COLUMN = "active_registrants_on_bpg";
 	
-	/** The metric the report does not give: counted here from the BPG list and the replay. */
+	/**
+	 * The metric that the report does not give, which is counted here from the BPG list and the replay:
+	 * the patients on BPG whose adherence on the day was at least 80%.
+	 */
 	static final String ADHERENT = "active_registrants_adherent";
 	
-	/** ACT 2.0's runchart_record columns the report gives as numbers. */
+	/** The columns of ACT 2.0's runchart_record that the report gives as numbers. */
 	public static final List<String> COLUMNS = Collections.unmodifiableList(Arrays.asList("total_registrants",
 	    "active_registrants", "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
 	    "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
 	    "consultation_visits_with_intervention", "interventions_completed"));
 	
-	/** The report's columns that must hold a number in every row. */
+	/** The report's columns that must hold a number in each row of the clinic charted. */
 	private static final List<String> NUMBER_COLUMNS;
 	
 	static {
@@ -83,7 +89,10 @@ public class RunCharts {
 		NUMBER_COLUMNS = Collections.unmodifiableList(columns);
 	}
 	
-	/** The metrics ACT 2.0 charted as a percent, of the column given, as dashboard_query.py does. */
+	/**
+	 * The metrics ACT 2.0 charted as a percent, each mapped to the column it is a percent of, as ACT
+	 * 2.0's dashboard_query.py does.
+	 */
 	static final Map<String, String> PERCENT_OF;
 	
 	static {
@@ -96,19 +105,27 @@ public class RunCharts {
 		PERCENT_OF = Collections.unmodifiableMap(percentOf);
 	}
 	
-	/** ACT 2.0's eight run chart metrics; consultation_visit_total is only a denominator. */
+	/**
+	 * ACT 2.0's eight run chart metrics, in the order they are charted. consultation_visit_total is not
+	 * among them, as it serves only as a denominator.
+	 */
 	public static final List<String> METRICS = Collections.unmodifiableList(
 	    Arrays.asList("total_registrants", "active_registrants", "active_registrants_seen_last_7_months",
 	        "active_registrants_prescribed_prophylaxis", ADHERENT, "consultation_visits_with_echocardiogram_resulted",
 	        "consultation_visits_with_intervention", "interventions_completed"));
 	
-	/** The most points one request calculates; MariaDB stops a recursive query at 1000 iterations. */
+	/**
+	 * The most points one request may calculate, since MariaDB stops a recursive query at 1000
+	 * iterations.
+	 */
 	public static final int MOST_POINTS = 1000;
 	
-	/** The longest range, in days, charted in daily points. */
+	/** The longest range, in days, that may be charted in daily points. */
 	public static final int MOST_DAILY_DAYS = 92;
 	
-	/** How a range is cut into points: each point is the figure as of the last day of its period. */
+	/**
+	 * How a range is cut into points. Each point gives the figures as of the last day of its period.
+	 */
 	public enum Period {
 		
 		DAY,
@@ -116,7 +133,7 @@ public class RunCharts {
 		MONTH;
 		
 		/**
-		 * The period a request names, week when it names none.
+		 * Gets the period a request names, which is a week when it names none.
 		 *
 		 * @param name day, week or month, ignoring case, or blank
 		 * @return the period; WEEK for a blank name
@@ -134,7 +151,10 @@ public class RunCharts {
 			throw new IllegalArgumentException("points must be day, week or month");
 		}
 		
-		/** The last day of the period before the one holding the day, as the report's SQL steps. */
+		/**
+		 * Gets the last day of the period before the one holding the day, stepping back as the report's SQL
+		 * does. A week ends on a Sunday.
+		 */
 		LocalDate previous(LocalDate day) {
 			switch (this) {
 				case WEEK:
@@ -150,16 +170,22 @@ public class RunCharts {
 	/** One point of a metric's series. */
 	public static class Point {
 		
-		/** The day the figure is as of: the period's last day, or the range's end for the last period. */
+		/**
+		 * The day the figure is as of: the last day of the point's period, or the end of the range for the
+		 * last point.
+		 */
 		public final LocalDate date;
 		
-		/** The metric's total, or its percent rounded to one decimal; null for a percent of none. */
+		/**
+		 * The figure charted: the count for a count, or the percent rounded to one decimal for a percent.
+		 * It is null for a percent whose denominator is zero.
+		 */
 		public final Double value;
 		
-		/** A count's value, or a percent's numerator. */
+		/** The count for a count, or the numerator for a percent. */
 		public final Long count;
 		
-		/** A percent's denominator; null for a count. */
+		/** The denominator for a percent, or null for a count. */
 		public final Long total;
 		
 		Point(LocalDate date, Double value) {
@@ -175,8 +201,9 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The days the range's points are as of, earliest first: the end, then the last day of each earlier
-	 * period while it is not before the start. Refuses more than MOST_POINTS of them.
+	 * Gets the days that the range's points are as of, earliest first. The last point is the end of the
+	 * range, and each earlier point is the last day of an earlier period, back to the first such day
+	 * that is not before the start.
 	 *
 	 * @param start the range's first day
 	 * @param end the range's last day
@@ -197,8 +224,9 @@ public class RunCharts {
 	}
 	
 	/**
-	 * Every metric in points of the period, of a clinic or of every clinic when it is null, from one
-	 * evaluation of the report. A point the report gives the clinic no row for counts nobody.
+	 * Calculates every metric's points over the range, one point per period, for a clinic or for every
+	 * clinic, from one evaluation of the report. At a point where the report gives the clinic no row,
+	 * every count is zero and every percent is null.
 	 *
 	 * @param clinic the clinic, or null for every clinic
 	 * @param start the range's first day
@@ -234,8 +262,9 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The report's rows of the clinic, or of every clinic, by day. An undated, off-point or second row
-	 * of a day is refused, and so is a point with no row of every clinic.
+	 * Evaluates the report and returns its rows of the clinic, or of every clinic, by day. It refuses
+	 * the report's rows when one has no date, a date that is not a point, or no number in a number
+	 * column, when two rows of the clinic share a day, and when a point has no row of every clinic.
 	 */
 	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
 	        Set<LocalDate> days) {
@@ -281,7 +310,8 @@ public class RunCharts {
 	}
 	
 	/**
-	 * How many of each day's listed BPG patients were adherent on it, from one replay of each history.
+	 * Counts, for each day, how many of the BPG patients the day's row lists were adherent on that day,
+	 * replaying each patient's history once for all the days.
 	 */
 	private static Map<LocalDate, Long> adherentOf(Map<LocalDate, DataSetRow> rows, List<LocalDate> days) {
 		Map<LocalDate, Set<Integer>> listed = new HashMap<LocalDate, Set<Integer>>();
@@ -354,8 +384,8 @@ public class RunCharts {
 	}
 	
 	/**
-	 * The middle of the points' values, or the mean of the middle two, ignoring points with no value;
-	 * null with none.
+	 * Gets the median of the points' values: the middle value, or the mean of the middle two when there
+	 * is an even number of them. Points without a value are ignored.
 	 *
 	 * @param points the points
 	 * @return the median, or null when no point has a value

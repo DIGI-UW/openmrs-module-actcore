@@ -45,8 +45,9 @@ import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * A patient's steps for this visit, from the prototype's rules over their saved forms, ACT Core's
- * dose status and their flags, as the signed-in user may record them.
+ * Works out the steps the chart suggests for a patient at this visit. It applies the prototype's
+ * rules to the patient's saved forms, to ACT Core's dose status and to the patient's flags, and
+ * keeps the steps the signed-in user may take.
  */
 public class NextSteps {
 	
@@ -127,8 +128,9 @@ public class NextSteps {
 	}
 	
 	/**
-	 * The steps the signed-in user may take: to do before done, new before the rest, else in rule
-	 * order.
+	 * Gets the steps the signed-in user may take for the patient: the referrals, and the forms the user
+	 * may record. Steps still to do come before steps done, new steps before the rest, and otherwise
+	 * the steps keep the order of the rules. The patient's records are read with proxy privileges.
 	 *
 	 * @param patient the patient
 	 * @param today the day the steps are for
@@ -234,7 +236,10 @@ public class NextSteps {
 		}
 	}
 	
-	/** Whether the user is listed the step: a referral, or a form they may record. */
+	/**
+	 * Tells whether the user is shown the step, which is so for a referral and for a form the user may
+	 * record.
+	 */
 	private static boolean shown(String key, Set<String> enterable) {
 		return "refer".equals(key) || enterable.contains(key);
 	}
@@ -317,14 +322,20 @@ public class NextSteps {
 		}
 	}
 	
-	/** A trigger no consultation has reviewed, which a user who may not consult can only refer. */
+	/**
+	 * Notes a trigger that no consultation has reviewed, for a user who may not consult, who can only
+	 * refer the patient.
+	 */
 	private void addReferTrigger(boolean mayConsult, Encounter trigger, Review review) {
 		if (!mayConsult && trigger != null && review == Review.NONE) {
 			referTriggers.add(trigger);
 		}
 	}
 	
-	/** Since when the patient has had the flag raised, or null when no date is kept for it. */
+	/**
+	 * Gets when the flag was raised for the patient, or null when it is not raised or ACT Core keeps no
+	 * date for it.
+	 */
 	private Date raisedSince(String flagUuid) {
 		for (PatientFlag flag : Context.getService(FlagService.class).getPatientFlags(patient)) {
 			if (!flag.getVoided() && flag.getFlag() != null && flag.getFlag().getUuid().equals(flagUuid)) {
@@ -335,8 +346,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * Whether a referral was saved after the latest trigger and after the flag was raised, by when each
-	 * was saved, as an encounter's own date can be set to any day.
+	 * Tells whether a referral was saved after the latest trigger and after the flag was raised. It
+	 * compares when each encounter was saved rather than its own date, which can be set to any day.
 	 */
 	private boolean referralSentAfter(List<Encounter> triggers, Date flagSince) {
 		EncounterType type = types.get("refer");
@@ -360,7 +371,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * The encounter type that records the referral, for the referral step; null when none is mapped.
+	 * Gets the uuid of the encounter type that records the referral, for the referral step. It is null
+	 * for any other step, and when no encounter type is mapped to the referral.
 	 */
 	private String referralType(String key) {
 		return "refer".equals(key) && types.containsKey("refer") ? types.get("refer").getUuid() : null;
@@ -376,7 +388,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * A routine review past its date, which does not hold the dose back as a review of a trigger does.
+	 * Adds a consultation step when the routine cardiology review is past its date. Unlike a review of
+	 * a trigger, an overdue routine review does not hold the dose back.
 	 */
 	private void reviewOverdue() {
 		LocalDate due = NextConsultation.of(patient);
@@ -389,8 +402,10 @@ public class NextSteps {
 	}
 	
 	/**
-	 * Adds the trigger's new consultation or referral, done once this visit reviewed every trigger,
-	 * with the latest unreviewed trigger's reason in rule order, else the latest trigger's.
+	 * Adds the new consultation or referral that a trigger calls for, and returns how a consultation
+	 * reviewed the trigger, or null when there is no trigger. The step counts as done once this visit
+	 * has reviewed every trigger behind it. Its reason is the latest unreviewed trigger's reason, in
+	 * rule order, or else the latest trigger's.
 	 */
 	private Review review(boolean mayConsult, Encounter trigger, String reason, String referral) {
 		if (trigger == null) {
@@ -508,8 +523,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * The latest BPG form reporting anaphylaxis, even with a later BPG form: only a consultation
-	 * reviews it.
+	 * Finds the latest BPG form that reported anaphylaxis, even when a later BPG form follows it, since
+	 * only a consultation reviews an anaphylaxis. It is null when no BPG form reported one.
 	 */
 	private Encounter anaphylaxis() {
 		String anaphylaxis = property(GP_ANAPHYLAXIS);
@@ -527,8 +542,9 @@ public class NextSteps {
 	}
 	
 	/**
-	 * Whether a BPG form reported anaphylaxis, or an anaphylaxis answer sits in a prescription group
-	 * whose regimen is an injection: BPG is then not a switch to suggest.
+	 * Tells whether the patient has had anaphylaxis with BPG: a BPG form reported it, or an anaphylaxis
+	 * answer sits in a prescription group whose regimen is an injection. Switching to BPG is then not a
+	 * step to suggest.
 	 */
 	private boolean bpgAnaphylaxis() {
 		if (anaphylaxis() != null) {
@@ -554,7 +570,10 @@ public class NextSteps {
 		return false;
 	}
 	
-	/** On an oral regimen, the latest oral estimate's form, if the estimate is below the threshold. */
+	/**
+	 * Finds the form of the latest oral adherence estimate when the patient is on an oral regimen and
+	 * that estimate is below the threshold. It is null otherwise.
+	 */
 	private Encounter lowAdherence() {
 		String estimate = property(GP_ESTIMATE);
 		Obs latest = null;
@@ -571,8 +590,8 @@ public class NextSteps {
 	}
 	
 	/**
-	 * Whether a consultation after the trigger, by BY_DATE, was saved outside this visit, in it, or
-	 * not.
+	 * Tells how a consultation after the trigger, ordered by BY_DATE, reviewed it: in an encounter
+	 * outside this visit, in this visit, or not at all.
 	 */
 	private Review reviewOf(Encounter trigger) {
 		EncounterType consult = types.get("consult");
@@ -598,7 +617,11 @@ public class NextSteps {
 		return latest;
 	}
 	
-	/** A later rule's reason for the same form replaces an earlier one's. */
+	/**
+	 * Adds the step for the form with its reason, or updates the step when an earlier rule added it, so
+	 * that a later rule's reason replaces the earlier one's. A form whose encounter type is not mapped
+	 * gets no step.
+	 */
 	private void put(String key, String reason, boolean isNew) {
 		if (!types.containsKey(key)) {
 			return;
@@ -634,7 +657,10 @@ public class NextSteps {
 		return latest;
 	}
 	
-	/** The newest unretired form of the step's encounter type. */
+	/**
+	 * Gets the uuid of the newest unretired form of the step's encounter type, or null when there is
+	 * none.
+	 */
 	private String form(String key) {
 		EncounterType type = types.get(key);
 		Form newest = null;
@@ -666,7 +692,10 @@ public class NextSteps {
 		return NumberUtils.toInt(StringUtils.trimToEmpty(value), fallback);
 	}
 	
-	/** A global property of key:value pairs, separated by commas. */
+	/**
+	 * Reads a global property that lists key:value pairs separated by commas, as a map. A pair that is
+	 * not of that shape is skipped.
+	 */
 	private static Map<String, String> pairs(String name) {
 		AdministrationService admin = Context.getAdministrationService();
 		Map<String, String> pairs = new HashMap<String, String>();
@@ -711,14 +740,16 @@ public class NextSteps {
 		}
 	};
 	
-	/** Whether a consultation reviewed a finding, and whether it was in this visit. */
+	/**
+	 * How a consultation reviewed a finding: outside this visit, in this visit, or not at all.
+	 */
 	private enum Review {
 		BEFORE_THIS_VISIT,
 		THIS_VISIT,
 		NONE
 	}
 	
-	/** A step while the rules build it, before it is shown as a {@link NextStep}. */
+	/** A step as the rules build it up, before it is turned into a {@link NextStep}. */
 	private static final class Step {
 		
 		private final String key;

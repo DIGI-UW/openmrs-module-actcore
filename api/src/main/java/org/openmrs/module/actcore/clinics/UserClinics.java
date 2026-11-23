@@ -29,25 +29,35 @@ import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * The clinics on a user's account ({@value #PROPERTY}), and whether the signed-in user is an
- * administrator limited to them; the README describes both.
+ * Helpers that read the clinics on a user's account, kept in the {@value #PROPERTY} user property,
+ * and tell whether a user is an administrator limited to their clinics. The README describes both.
  */
 public final class UserClinics {
 	
-	/** The user property holding the user's clinics, as location uuids separated by commas. */
+	/**
+	 * The name of the user property that holds the user's clinics, as location uuids separated by
+	 * commas.
+	 */
 	public static final String PROPERTY = "actcore.clinics";
 	
-	/** Held by the instance and global administrators, who work with every clinic. */
+	/**
+	 * The privilege that lets a user who administers users work with every clinic. The instance and
+	 * global administrators hold it; an administrator of users without it is limited to their clinics.
+	 */
 	public static final String ALL_CLINICS_PRIVILEGE = ActCorePrivileges.ALL_CLINICS;
 	
-	/** The roles, by uuid, that an administrator limited to their clinics may give out. */
+	/**
+	 * The name of the global property that lists, by uuid and separated by commas, the roles that an
+	 * administrator limited to their clinics may give out.
+	 */
 	public static final String ASSIGNABLE_ROLES_PROPERTY = "actcore.users.siteAdministratorRoles";
 	
 	private UserClinics() {
 	}
 	
 	/**
-	 * The location uuids in a {@value #PROPERTY} value, in order and without blanks or repeats.
+	 * Parses a {@value #PROPERTY} value into its location uuids, keeping their order and dropping
+	 * blanks and repeats.
 	 *
 	 * @param value the property value, or null
 	 * @return the uuids, trimmed; empty when the value is null or blank
@@ -66,7 +76,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The clinics on the user's account, as they stand on the object, saved or not.
+	 * Gets the clinics on the user's account as they stand on the object, whether or not they have been
+	 * saved.
 	 *
 	 * @param user the user, or null
 	 * @return the clinics' location uuids; empty for a null user or one without the property
@@ -76,11 +87,12 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * Whether the user may add or edit users without {@value #ALL_CLINICS_PRIVILEGE}; never a super
-	 * user.
+	 * Tells whether the user is an administrator limited to their clinics: one who may add or edit
+	 * users but lacks {@value #ALL_CLINICS_PRIVILEGE}. A super user is not limited.
 	 *
 	 * @param user the user, or null
-	 * @return true for an administrator limited to their clinics; false for a null user
+	 * @return true for an administrator limited to their clinics; false for anyone else, a super user
+	 *         or a null user
 	 */
 	public static boolean isLimited(User user) {
 		if (user == null || user.isSuperUser()) {
@@ -92,7 +104,7 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * Whether the two sets of clinics have one in common.
+	 * Tells whether the two sets of clinics have at least one clinic in common.
 	 *
 	 * @param some one set of location uuids
 	 * @param others the other
@@ -108,7 +120,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The roles, by uuid, a limited administrator may give out; empty leaves roles to OpenMRS.
+	 * Gets the uuids of the roles that an administrator limited to their clinics may give out. An empty
+	 * set means ACT Core does not restrict the roles, and leaves them to OpenMRS's own checks.
 	 *
 	 * @return the role uuids in {@value #ASSIGNABLE_ROLES_PROPERTY}; empty when it is unset or blank
 	 */
@@ -117,10 +130,12 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The role uuids in a global property, read without flushing the session; empty when unset.
+	 * Reads the role uuids that a global property lists, by SQL, so that reading does not flush the
+	 * session.
 	 *
 	 * @param property the global property's name
-	 * @return the uuids, in order and without blanks or repeats
+	 * @return the uuids, in order and without blanks or repeats; empty when the property is unset or
+	 *         blank
 	 */
 	public static Set<String> rolesIn(String property) {
 		List<String> values = column("select property_value from global_property where property = ?", property);
@@ -128,7 +143,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The names of the roles with these uuids, for messages; a uuid with no role stays as it is.
+	 * Gets the names of the roles with these uuids, for use in messages. A uuid that no role has is
+	 * given as it is.
 	 *
 	 * @param uuids the role uuids
 	 * @return a name for each uuid, in the order given
@@ -143,7 +159,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The uuids of the user's roles on the object, saved or not.
+	 * Gets the uuids of the user's roles as they stand on the object, whether or not they have been
+	 * saved.
 	 *
 	 * @param user the user, or null
 	 * @return the uuids; empty for a null user or one without roles
@@ -159,7 +176,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The clinics saved on a user's account, read from the database rather than the edited object.
+	 * Gets the clinics saved on a user's account, read from the database rather than from an object
+	 * that may hold unsaved edits.
 	 *
 	 * @param userId the user's id, or null for a user not yet saved
 	 * @return the clinics' location uuids; empty for a null id or a user without the property
@@ -174,7 +192,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * The uuids of the roles saved on a user, read from the database rather than the edited object.
+	 * Gets the uuids of the roles saved on a user, read from the database rather than from an object
+	 * that may hold unsaved edits.
 	 *
 	 * @param userId the user's id, or null for a user not yet saved
 	 * @return the uuids; empty for a null id or a user without saved roles
@@ -187,7 +206,10 @@ public final class UserClinics {
 		        column("select r.uuid from user_role ur join role r on r.role = ur.role where ur.user_id = ?", userId));
 	}
 	
-	/** A query's first column over JDBC on the current session, which never flushes it. */
+	/**
+	 * Runs a query over JDBC on the current session's connection and returns the values of its first
+	 * column. Going through JDBC keeps Hibernate from flushing the session first.
+	 */
 	private static List<String> column(final String query, final Object... params) {
 		SessionFactory sessionFactory = Context.getRegisteredComponents(SessionFactory.class).get(0);
 		return sessionFactory.getCurrentSession().doReturningWork(new ReturningWork<List<String>>() {

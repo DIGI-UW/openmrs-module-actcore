@@ -22,13 +22,14 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 /**
- * Whether a patient's injection on a day was on time, as the last refresh found; written in bulk.
+ * Whether a patient's injection on a day was on time, as the latest adherence refresh found. The
+ * refresh writes these rows in bulk by SQL rather than through this entity.
  */
 @Entity
 @Table(name = AdherenceRefresh.TIMING_TABLE)
 public class InjectionTiming {
 	
-	/** The patient and the day of the injection, which identify a timing. */
+	/** The key of a timing: the patient and the day of the injection, which together identify it. */
 	@Embeddable
 	public static class Key implements Serializable {
 		

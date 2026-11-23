@@ -85,7 +85,10 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 		return summary;
 	}
 	
-	/** The entity property of a count column: school_screened is schoolScreened. */
+	/**
+	 * Converts a count column's name to the entity property that holds it, so that school_screened
+	 * becomes schoolScreened.
+	 */
 	private static String property(String column) {
 		String[] parts = column.split("_");
 		return parts[0] + StringUtils.capitalize(parts[1]);

@@ -26,7 +26,10 @@ import org.slf4j.LoggerFactory;
  */
 public class ReportDescriptorLoader {
 	
-	/** What {@link ReportDescriptorLoader#load()} did. */
+	/**
+	 * The outcome of {@link ReportDescriptorLoader#load()}: the descriptors were loaded, loading was
+	 * skipped because the property is false, or loading failed.
+	 */
 	public enum Outcome {
 		LOADED,
 		SKIPPED,
@@ -39,8 +42,9 @@ public class ReportDescriptorLoader {
 	}
 	
 	/**
-	 * Loads the descriptors unless the property says not to. A failure is logged, so the module still
-	 * starts.
+	 * Loads the report descriptors from the configuration directory, unless
+	 * reporting.loadReportsFromConfigurationAtStartup is false. A failure is logged rather than thrown,
+	 * so that the module still starts.
 	 *
 	 * @return LOADED, SKIPPED when the property is false, or FAILED when loading threw
 	 */

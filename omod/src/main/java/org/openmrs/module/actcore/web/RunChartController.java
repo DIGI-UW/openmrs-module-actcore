@@ -44,12 +44,14 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RunChartController extends ActCoreRestController {
 	
-	/** The Dashboard's own privilege, which the run charts sit on. */
+	/** The privilege needed to read the run charts, which is the Dashboard's own privilege. */
 	public static final String READ_PRIVILEGE = ActCorePrivileges.DASHBOARD;
 	
 	/**
-	 * The year to today in weeks unless the request says day or month, of a clinic or of every clinic;
-	 * every metric under metrics, and the named one, if any, under points and median too.
+	 * Gets the run charts of a clinic, or of every clinic, over a range that defaults to the year up to
+	 * today, in weekly points unless the request asks for daily or monthly ones. Every metric is given
+	 * under {@code metrics}, and the metric the request names, if any, is also given at the top level
+	 * as {@code points} and {@code median}.
 	 *
 	 * @param metric one of {@link RunCharts#METRICS} to give at the top level, or blank for none
 	 * @param clinic the clinic's location uuid, or blank for every clinic
@@ -114,8 +116,9 @@ public class RunChartController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Runs as the daemon user: loading the report definition needs Get Users (the reporting serializer
-	 * loads its creator), which the caller's Dashboard privilege need not come with.
+	 * Calculates the run charts as the daemon user. Loading the report definition needs Get Users,
+	 * since the reporting serializer loads its creator, and the caller's Dashboard privilege need not
+	 * come with it.
 	 */
 	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
 	        final LocalDate end, final RunCharts.Period period) {

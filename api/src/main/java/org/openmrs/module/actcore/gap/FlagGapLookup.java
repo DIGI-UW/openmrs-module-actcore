@@ -30,7 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Lists a SQL flag's gaps from its criteria's (patient_id, encounter uuid, question uuid) rows.
+ * Looks up the gaps behind a patient's flag, so the chart can say which questions to answer. It
+ * reruns a SQL flag's criteria for the one patient and reads each row they return as a patient_id,
+ * the uuid of the encounter missing an answer, and the uuid of the question missing.
  */
 public class FlagGapLookup {
 	
@@ -39,8 +41,9 @@ public class FlagGapLookup {
 	private static final Logger log = LoggerFactory.getLogger(FlagGapLookup.class);
 	
 	/**
-	 * Gets a flag by uuid for a user who holds View Patient Flags. Reading a flag definition takes Test
-	 * Flags, which a clinician who sees flags on the chart need not hold.
+	 * Gets a flag by uuid for a user who holds View Patient Flags. Reading a flag definition normally
+	 * takes Test Flags, which a clinician who sees flags on the chart need not hold, so this reads it
+	 * with that privilege as a proxy.
 	 *
 	 * @param uuid the flag's uuid
 	 * @return the flag, or null when none has the uuid
@@ -58,16 +61,18 @@ public class FlagGapLookup {
 	}
 	
 	/**
-	 * The gaps behind this flag for this patient in encounter date order, or null when the flag is not
-	 * a SQL flag with a patient column, the patient is voided, or no row of three columns comes back. A
-	 * row is left out when its encounter is voided, another patient's or one the user may not view, or
-	 * when its encounter or concept uuid names nothing.
+	 * Finds the gaps behind the flag for the patient, in the order of their encounters' dates. It
+	 * returns null when the flag is not a SQL flag whose criteria name a patient_id column, when the
+	 * patient is voided, or when the criteria return no row for the patient or rows of fewer than three
+	 * columns. A row is left out when either uuid is missing or names nothing, or when its encounter is
+	 * voided, belongs to another patient, or is one the user may not view.
 	 *
-	 * @param patient the patient
-	 * @param flag the flag
+	 * @param patient the patient whose gaps to find
+	 * @param flag the flag whose criteria to run
 	 * @return the gaps, oldest encounter first; empty when rows come back but each is left out, and
-	 *         null in the cases given
-	 * @throws APIAuthenticationException when the user lacks View Patient Flags
+	 *         null in the cases described
+	 * @throws APIAuthenticationException when the user lacks View Patient Flags, or lacks Get
+	 *             Encounters or Get Concepts once the criteria return a row with both uuids to look up
 	 */
 	public List<FlagGap> find(Patient patient, Flag flag) {
 		requireViewPatientFlags();
@@ -140,8 +145,8 @@ public class FlagGapLookup {
 	};
 	
 	/**
-	 * Throws the exception the platform's authorization advice throws, rather than the one
-	 * Context.requirePrivilege does.
+	 * Refuses a user without View Patient Flags, throwing the exception the platform's authorization
+	 * advice throws rather than the one Context.requirePrivilege does.
 	 */
 	private static void requireViewPatientFlags() {
 		if (!Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)) {

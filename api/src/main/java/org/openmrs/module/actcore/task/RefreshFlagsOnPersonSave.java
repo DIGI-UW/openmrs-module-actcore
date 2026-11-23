@@ -24,8 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Re-evaluates a patient's flags and flag lists once a save, void or unvoid of their person
- * commits; the adherence rows read encounters only, so they are left alone.
+ * Advice on PersonService and PatientService that re-evaluates a patient's flags and their place on
+ * the flag lists once the transaction that saves, voids or unvoids them commits. It leaves the
+ * adherence rows alone, since those are computed from encounters only.
  */
 public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 	
@@ -70,7 +71,11 @@ public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 		return result;
 	}
 	
-	/** A person who is not a patient, such as a user's or a provider's, has no flags to refresh. */
+	/**
+	 * Refreshes the flags of the person when they are a patient. A person who is not a patient, such as
+	 * a user's or a provider's person, has no flags to refresh. A failure is logged, and the save
+	 * stands.
+	 */
 	private void refresh(int personId) {
 		try {
 			if (!isPatient(personId)) {

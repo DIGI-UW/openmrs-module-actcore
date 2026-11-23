@@ -34,13 +34,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Mirrors each patient flag's live rows into a patient list that shares the flag's uuid and name.
- * Keying by uuid lets a list follow a rename and leaves hand-made cohorts of the same name alone.
+ * Mirrors each patient flag's current rows into a patient list, a cohort that shares the flag's
+ * uuid and name. Keying each list by the flag's uuid lets the list follow a rename of the flag, and
+ * leaves alone a hand-made cohort that happens to share its name.
  */
 public class FlagListSync {
 	
+	/**
+	 * The name of the global property that holds the tag a flag must carry to get a list. While it is
+	 * blank, every enabled and unretired flag gets one.
+	 */
 	public static final String TAG_PROPERTY = "actcore.listFlagTag";
 	
+	/**
+	 * The name of the global property that holds the name of the cohort type given to the lists. While
+	 * it is blank, the lists are of the System List type.
+	 */
 	public static final String COHORT_TYPE_PROPERTY = "actcore.listCohortType";
 	
 	private static final String DEFAULT_COHORT_TYPE = "System List";
@@ -53,7 +62,8 @@ public class FlagListSync {
 	private static final Logger log = LoggerFactory.getLogger(FlagListSync.class);
 	
 	/**
-	 * What a run of {@link #syncAll()} changed, so the scheduled task can say so in one line.
+	 * What a run of {@link #syncAll()} changed, and how many flags failed, so that the scheduled task
+	 * can report the run in one line.
 	 */
 	public static class Result {
 		
@@ -71,10 +81,11 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * Brings each flag's list into line: voids the lists of purged flags, creates, restores or renames
-	 * each listed flag's list, and sets each list's members to the patients the flag is raised for and
-	 * not dismissed. A flag must be enabled, unretired and carry {@value #TAG_PROPERTY}, when that is
-	 * set, to be listed. A flag whose list fails to sync is logged and counted, and the run goes on.
+	 * Brings every flag's list into line with the flag. It voids the lists of purged flags; creates,
+	 * restores or renames the list of each flag that should have one; and sets each list's members to
+	 * the patients the flag is raised for and not dismissed for. A flag has a list while it is enabled,
+	 * unretired and, when {@value #TAG_PROPERTY} is set, carries that tag. A flag whose list fails to
+	 * sync is logged and counted, and the run goes on with the next flag.
 	 *
 	 * @return what the run changed, and how many flags failed
 	 */
@@ -116,7 +127,7 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * Puts one patient on, or takes them off, the flag's list as their flag rows and dismissal now
+	 * Puts one patient on the flag's list, or takes them off it, as their flag rows and dismissal now
 	 * stand. Creating, renaming and retiring the list is left to {@link #syncAll()}.
 	 *
 	 * @param flagId the flag whose list to update; nothing happens when it or its list does not exist
@@ -259,7 +270,9 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * Started when the flag was raised, so time on the list survives patientflags rewriting the rows.
+	 * Adds the patient to the list, with a membership that starts when the flag was raised, or now when
+	 * no date is kept. Starting from the raised date keeps the patient's time on the list when the
+	 * patientflags module rewrites its rows.
 	 */
 	private static void addMember(CohortMemberService memberService, CohortM list, Patient patient, Date raisedSince) {
 		CohortMember member = new CohortMember();
@@ -328,7 +341,8 @@ public class FlagListSync {
 	}
 	
 	/**
-	 * The cohort module's CohortService only finds unvoided cohorts by uuid.
+	 * Tells whether a cohort with the flag's uuid exists in the table, voided or not. It reads by SQL
+	 * because the cohort module's CohortService finds only unvoided cohorts by uuid.
 	 */
 	private boolean listWasVoided(Flag flag) {
 		List<List<Object>> rows = Context.getAdministrationService()

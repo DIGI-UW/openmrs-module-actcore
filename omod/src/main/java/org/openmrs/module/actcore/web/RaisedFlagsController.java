@@ -43,8 +43,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
- * A patient's raised flags with the date each was raised and whether the user may dismiss it, and
- * dismissing one.
+ * Serves a patient's raised flags, each with the date it was raised and whether the user may
+ * dismiss it, and dismisses a flag for a patient.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/raisedflags")
@@ -122,7 +122,10 @@ public class RaisedFlagsController extends ActCoreRestController {
 		}
 	}
 	
-	/** Answers a dismissal made while the patient flag refresh runs with 409 Conflict. */
+	/**
+	 * Thrown when a dismissal is asked for while the patient flag refresh runs, which the REST layer
+	 * answers with 409 Conflict.
+	 */
 	@ResponseStatus(HttpStatus.CONFLICT)
 	static class RefreshRunning extends ResponseException {
 		

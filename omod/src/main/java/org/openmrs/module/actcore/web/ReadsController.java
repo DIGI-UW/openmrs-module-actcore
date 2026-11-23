@@ -28,12 +28,18 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-/** The Logs page's Patients opened tab: who read which patient's record, folded by the hour. */
+/**
+ * Serves the Logs page's Patients opened tab: who read which patient's record, with a user's reads
+ * of one patient within an hour folded into one row.
+ */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/reads")
 public class ReadsController extends ActCoreRestController {
 	
-	/** Shorter than the other logs' default, as every chart opened writes reads. */
+	/**
+	 * How many days back the log reads when the request gives no start date. It is shorter than the
+	 * other logs' default because every chart opened writes reads.
+	 */
 	static final int DEFAULT_DAYS = 30;
 	
 	/**

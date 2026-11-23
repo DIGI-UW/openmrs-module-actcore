@@ -24,18 +24,25 @@ import java.util.TreeMap;
 import org.hibernate.SessionFactory;
 import org.openmrs.api.context.Context;
 
-/** A query's rows over JDBC on the current session, each as a map of column name to value. */
+/**
+ * Helpers the logs use to run SQL over JDBC on the current session, reading each row as a map of
+ * column name to value, and to page the results.
+ */
 public final class Rows {
 	
-	/** A log page's size when the request gives none, and the most it may ask for. */
+	/** The number of entries a log page holds when the request does not say how many it wants. */
 	public static final int DEFAULT_LIMIT = 20;
 	
+	/** The most entries a log page holds, whatever the request asks for. */
 	public static final int MAX_LIMIT = 100;
 	
 	private Rows() {
 	}
 	
-	/** A filter too broad for one request to read; the endpoints answer it with 400. */
+	/**
+	 * Thrown when a log's filter is too broad for one request to read. The log endpoints answer it with
+	 * 400 and its message.
+	 */
 	public static class TooMany extends RuntimeException {
 		
 		public TooMany(String message) {
@@ -43,7 +50,10 @@ public final class Rows {
 		}
 	}
 	
-	/** The slice of a list a page shows: startIndex from 0, limit within the bounds. */
+	/**
+	 * Cuts out the slice of a list that one page shows. The start index counts from 0, and the limit
+	 * falls back to {@link #DEFAULT_LIMIT} below 1 and is capped at {@link #MAX_LIMIT}.
+	 */
 	static <T> List<T> page(List<T> all, int startIndex, int limit) {
 		int from = Math.min(Math.max(startIndex, 0), all.size());
 		int size = limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
@@ -51,8 +61,10 @@ public final class Rows {
 	}
 	
 	/**
-	 * Column names as the database returns them, so H2's upper case and MariaDB's declared case both
-	 * read.
+	 * Runs a query over JDBC on the current session and returns its rows, each as a map of column label
+	 * to value. The maps look columns up ignoring case, so code reads H2's upper-case names and
+	 * MariaDB's declared names alike, and date and datetime values come back as java.sql.Date and
+	 * Timestamp from both databases.
 	 */
 	static List<Map<String, Object>> select(final String sql, final Object... params) {
 		SessionFactory sessionFactory = Context.getRegisteredComponents(SessionFactory.class).get(0);
@@ -87,7 +99,7 @@ public final class Rows {
 		});
 	}
 	
-	/** "?, ?, ?" for an in-list of this many values. */
+	/** Builds the placeholders of an in-list for the values, such as "?, ?, ?" for three of them. */
 	static String placeholders(Collection<?> values) {
 		StringBuilder list = new StringBuilder();
 		for (int i = 0; i < values.size(); i++) {

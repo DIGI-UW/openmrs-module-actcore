@@ -33,22 +33,26 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The Logs page's Activity tab: what ACT's users changed, one entry per save, and each entry's
- * fields.
+ * Serves the Logs page's Activity tab: what ACT's users changed, one entry per save, and the fields
+ * each entry changed.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/activity")
 public class ActivityController extends ActCoreRestController {
 	
-	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
+	/**
+	 * How many days back a request with a kind filter but no start date reads. The span is short so
+	 * that such a request rarely reaches ActivityLog.MAX_CLASSIFIED.
+	 */
 	static final int KIND_DEFAULT_DAYS = 30;
 	
 	/**
 	 * Gets a page of what ACT's users changed, newest first.
 	 *
 	 * @param username the user to list, or blank for no user filter
-	 * @param startDate the first day as YYYY-MM-DD; blank for a default span before the end date or
-	 *            today, {@value #KIND_DEFAULT_DAYS} days with a kind
+	 * @param startDate the first day as YYYY-MM-DD; blank for a default span before the end date, or
+	 *            before today without one, which is {@value #KIND_DEFAULT_DAYS} days with a kind and
+	 *            {@value DownloadController#DEFAULT_MONTHS} months without
 	 * @param endDate the last day as YYYY-MM-DD; blank for no end
 	 * @param kind one of {@link ActivityLog#KINDS}, or blank for no kind filter
 	 * @param form the uuid of the form whose saves to list, or blank for no form filter

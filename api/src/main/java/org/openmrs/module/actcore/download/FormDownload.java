@@ -47,29 +47,48 @@ import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * ACT 2.0's Download: a row per saved form of a kind, or a row per patient across forms. A row
- * always keeps the ACT ID, as ACT 2.0 kept the registry id, then the patient fields chosen.
+ * Builds the tables behind ACT 2.0's Download, which exports saved forms as CSV. A table has either
+ * a row for each save of one form, or a row for each patient across several forms. Each row starts
+ * with the patient's ACT ID, as ACT 2.0's rows started with the registry id, followed by the
+ * patient fields chosen and then the form's columns.
+ * <p>
+ * A download without identifiers leaves out the patient fields, identifier types, attribute types
+ * and questions that identify the patient, as the global properties named here configure them.
  */
 public class FormDownload {
 	
-	/** The identifier types a row without identifiers leaves out, such as the National ID. */
+	/**
+	 * The name of the global property listing, by uuid, the identifier types that identify a patient,
+	 * such as the National ID. A download without identifiers leaves them out, and the ACT ID is never
+	 * taken from one of them.
+	 */
 	public static final String IDENTIFIER_TYPES_PROPERTY = "actcore.download.identifyingIdentifierTypes";
 	
-	/** The person attribute types a row without identifiers leaves out, such as the phones. */
+	/**
+	 * The name of the global property listing, by uuid, the person attribute types that identify a
+	 * patient, such as the phone numbers. Only a download with identifiers gives them.
+	 */
 	public static final String ATTRIBUTE_TYPES_PROPERTY = "actcore.download.identifyingAttributeTypes";
 	
-	/** The questions a download without identifiers leaves out, such as the Home Address. */
+	/**
+	 * The name of the global property listing, by uuid, the questions that identify a patient, such as
+	 * the Home Address. A download without identifiers leaves them out.
+	 */
 	public static final String CONCEPTS_PROPERTY = "actcore.download.identifyingConcepts";
 	
 	private static final int OBS_BATCH = 500;
 	
 	/**
-	 * The patient columns a request may choose, by key, with their labels; the ACT ID is always first.
-	 * identifiers and phones give a column per type the identifying properties name.
+	 * The patient fields a request may choose, as their keys mapped to their column labels, in the
+	 * order their columns take. The ACT ID is not among them, since every row starts with it. The
+	 * identifiers and phones fields each give a column per type that the identifying properties name.
 	 */
 	public static final Map<String, String> PATIENT_FIELDS = new LinkedHashMap<String, String>();
 	
-	/** The patient fields only an identified download gives. */
+	/**
+	 * The keys of the patient fields that identify the patient, which only a download with identifiers
+	 * gives.
+	 */
 	public static final List<String> IDENTIFYING_PATIENT_FIELDS = Arrays.asList("givenName", "familyName", "birthDate",
 	    "identifiers", "phones");
 	
@@ -83,37 +102,51 @@ public class FormDownload {
 		PATIENT_FIELDS.put("age", "Age");
 	}
 	
-	/** The CSV's header row and its rows. */
+	/**
+	 * A built download: the CSV's header row and its rows, with what was given and what was left out.
+	 */
 	public static class Table {
 		
+		/** The CSV's column headers, in order. */
 		public final List<String> headers = new ArrayList<String>();
 		
+		/** The CSV's rows, each a cell for each header, empty where there is no value. */
 		public final List<List<String>> rows = new ArrayList<List<String>>();
 		
-		/** The labels of the questions left out because they identify the patient. */
+		/**
+		 * The labels of the questions asked for that were left out because they identify the patient. A row
+		 * per patient prefixes each label with its form's name.
+		 */
 		public final List<String> withheld = new ArrayList<String>();
 		
-		/** The keys of the patient fields given, in their columns' order. */
+		/** The keys of the patient fields given, in the order of their columns. */
 		public final List<String> patient = new ArrayList<String>();
 		
-		/** The keys of the patient fields asked for and left out because they identify the patient. */
+		/**
+		 * The keys of the patient fields asked for that were left out because they identify the patient.
+		 */
 		public final List<String> withheldPatient = new ArrayList<String>();
 		
-		/** Whether a patient field or question that identifies the patient was given. */
+		/** Whether the download gave a patient field or a question that identifies the patient. */
 		public boolean identifiers;
 	}
 	
 	/**
-	 * A form and the questions chosen of it, under the name the columns of a row per patient give it.
+	 * A form chosen for a row per patient, with the questions chosen of it. The name heads the form's
+	 * groups of columns.
 	 */
 	public static class Choice {
 		
+		/** The form whose saves to give. */
 		public final Form form;
 		
+		/** The name that prefixes the form's column headers, followed by the number of the save. */
 		public final String name;
 		
+		/** The questions chosen of the form, a column each. */
 		public final List<Concept> concepts;
 		
+		/** Each question's column label, in the order of {@link #concepts}. */
 		public final List<String> labels;
 		
 		public Choice(Form form, String name, List<Concept> concepts, List<String> labels) {
@@ -125,16 +158,25 @@ public class FormDownload {
 	}
 	
 	/**
-	 * ACT 2.0's download filters, status and clinics, a null leaving one out. Make one per download: it
-	 * keeps each patient's answer.
+	 * The filters ACT 2.0's Download offered for choosing which patients' saves to give: their status
+	 * in the registry, their cardiac clinic and their primary care clinic. A filter left null is not
+	 * applied.
+	 * <p>
+	 * Make a new instance for each download, since it remembers each patient's result for as long as it
+	 * lives.
 	 */
 	public static class Filters {
 		
-		/** active, inactive or null. */
+		/**
+		 * The status to keep: active for a living patient whose latest RHD Registry enrolment is open,
+		 * inactive for anyone else, or null for both.
+		 */
 		public final String status;
 		
+		/** The cardiac clinic a patient must be recorded at, or null for any. */
 		public final Location cardiacClinic;
 		
+		/** The primary care clinic a patient must be recorded at, or null for any. */
 		public final Location primaryCareClinic;
 		
 		private Program registry;
@@ -149,7 +191,10 @@ public class FormDownload {
 			this.primaryCareClinic = primaryCareClinic;
 		}
 		
-		/** Decided once per patient, as each form's saves ask again and a status costs a query. */
+		/**
+		 * Tells whether the filters keep the patient. The answer is worked out once per patient and then
+		 * remembered, since each of the patient's saves asks again and working out a status costs a query.
+		 */
 		boolean matches(Patient patient) {
 			return kept.computeIfAbsent(patient.getPatientId(), id -> {
 				if (status != null && active(patient) != "active".equals(status)) {
@@ -160,7 +205,10 @@ public class FormDownload {
 			});
 		}
 		
-		/** The distro's Active: the latest RHD Registry enrolment open, and the person alive. */
+		/**
+		 * Tells whether the patient is active as the distribution defines it: alive, with their latest RHD
+		 * Registry enrolment still open.
+		 */
 		private boolean active(Patient patient) {
 			if (Boolean.TRUE.equals(patient.getDead())) {
 				return false;
@@ -201,8 +249,10 @@ public class FormDownload {
 	}
 	
 	/**
-	 * The forms between the days, either open, a column per chosen concept. Only an identified download
-	 * gives the names, birth date, ID numbers, phones and identifying questions.
+	 * Builds a table with a row for each save of the form between the days, for every patient, and a
+	 * column for each question chosen. Only a download with identifiers gives the names, birth date, ID
+	 * numbers, phone numbers and identifying questions; without them, the patient fields are sex and
+	 * age.
 	 *
 	 * @param form the form whose unvoided saves to list
 	 * @param asked the questions chosen, a column each
@@ -222,7 +272,9 @@ public class FormDownload {
 	}
 	
 	/**
-	 * As build, of the patients the filters keep.
+	 * Builds a table with a row for each save of the form between the days, as
+	 * {@link #build(Form, List, List, LocalDate, LocalDate, boolean, boolean)} does, but only for the
+	 * patients the filters keep.
 	 *
 	 * @param form the form whose unvoided saves to list
 	 * @param asked the questions chosen, a column each
@@ -243,7 +295,9 @@ public class FormDownload {
 	}
 	
 	/**
-	 * As build, with the patient fields chosen, or null for the default patientFields gives.
+	 * Builds a table with a row for each save of the form between the days, for the patients the
+	 * filters keep, giving the patient fields chosen. Without a choice, it gives every patient field
+	 * when the download has identifiers, and sex and age when it does not.
 	 *
 	 * @param form the form whose unvoided saves to list
 	 * @param asked the questions chosen, a column each
@@ -304,8 +358,10 @@ public class FormDownload {
 	}
 	
 	/**
-	 * ACT 2.0's row per patient: each chosen form's saves in the range as numbered columns, oldest
-	 * first, of the patients with at least one of them that the filters keep.
+	 * Builds a table with a row for each patient, as ACT 2.0's row per patient did. Each chosen form
+	 * gives numbered groups of columns, one group for each of a patient's saves between the days,
+	 * oldest first, as many groups as the patient with the most saves needs. The rows are of the
+	 * patients the filters keep who saved at least one of the forms in the range.
 	 *
 	 * @param choices the forms and the questions chosen of each
 	 * @param from the first day, or null for no start
@@ -324,7 +380,10 @@ public class FormDownload {
 	}
 	
 	/**
-	 * As buildPerPatient, with the patient fields chosen, or null for the default patientFields gives.
+	 * Builds a table with a row for each patient across the chosen forms, as
+	 * {@link #buildPerPatient(List, LocalDate, LocalDate, boolean, boolean, Filters)} does, giving the
+	 * patient fields chosen. Without a choice, it gives every patient field when the download has
+	 * identifiers, and sex and age when it does not.
 	 *
 	 * @param choices the forms and the questions chosen of each
 	 * @param from the first day, or null for no start
@@ -412,8 +471,10 @@ public class FormDownload {
 	}
 	
 	/**
-	 * Sets the patient fields given, in PATIENT_FIELDS's order, and whether one identifies. Without a
-	 * choice, those given before they could be chosen: every one when identified, else sex and age.
+	 * Records on the table which patient fields it gives, in the order of PATIENT_FIELDS, which it
+	 * withholds, and whether one it gives identifies the patient. Without a choice it gives the fields
+	 * given before they could be chosen: every field when the download has identifiers, and sex and age
+	 * when it does not.
 	 */
 	private static void patientFields(Table table, List<String> asked, boolean identified) {
 		for (String key : PATIENT_FIELDS.keySet()) {
@@ -499,7 +560,10 @@ public class FormDownload {
 		return encounters;
 	}
 	
-	/** The answers to the concepts, by encounter and concept, in the order they were saved. */
+	/**
+	 * Reads the answers to the concepts in the encounters, keyed by encounter id and then by concept
+	 * id, each list in the order the answers were saved. It reads the observations in batches.
+	 */
 	private static Map<Integer, Map<Integer, List<Obs>>> answers(List<Encounter> encounters, List<Concept> concepts) {
 		Map<Integer, Map<Integer, List<Obs>>> answers = new HashMap<Integer, Map<Integer, List<Obs>>>();
 		if (concepts.isEmpty()) {
@@ -519,7 +583,9 @@ public class FormDownload {
 	}
 	
 	/**
-	 * The patient's preferred identifier, unless it is an identifying one, else the first that is not.
+	 * Gets the patient's ACT ID: their preferred identifier unless its type identifies them, or else
+	 * the first active identifier whose type does not. It is empty when every identifier identifies
+	 * them.
 	 */
 	private static String actId(Patient patient, List<PatientIdentifierType> identifying) {
 		List<PatientIdentifier> identifiers = new ArrayList<PatientIdentifier>(patient.getActiveIdentifiers());
@@ -559,7 +625,11 @@ public class FormDownload {
 		return day == null ? null : Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant());
 	}
 	
-	/** The types are configuration, so the caller needs no privilege to read them. */
+	/**
+	 * Gets the identifier types that identify a patient, as the global property lists them. It reads
+	 * them with a proxy privilege, since the types are configuration and the caller needs no privilege
+	 * to read them.
+	 */
 	private static List<PatientIdentifierType> identifierTypes() {
 		List<PatientIdentifierType> types = new ArrayList<PatientIdentifierType>();
 		Context.addProxyPrivilege(PrivilegeConstants.GET_IDENTIFIER_TYPES);
@@ -589,7 +659,7 @@ public class FormDownload {
 	}
 	
 	/**
-	 * Reads a global property holding uuids separated by commas.
+	 * Reads a global property that lists uuids separated by commas.
 	 *
 	 * @param property the global property's name
 	 * @return the uuids, trimmed and in order, without blanks; empty when the property is unset

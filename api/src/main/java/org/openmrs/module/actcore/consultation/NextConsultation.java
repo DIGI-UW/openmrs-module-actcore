@@ -29,14 +29,22 @@ import org.openmrs.module.actcore.registry.EnrolOnRegistration;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * The patient's next cardiology review, as the registry report's next_consultation_date and the RHD
- * cardiology follow-up due flag read it: the latest Next Consultation Time Amount after its
- * encounter's date, in the Time Period recorded on the same encounter.
+ * Works out the date a patient's next cardiology review is due, as the registry report's
+ * next_consultation_date and the RHD cardiology follow-up due flag work it out. The date is the
+ * latest Next Consultation Time Amount, counted from its encounter's date in the Time Period
+ * recorded on the same encounter.
  */
 public final class NextConsultation {
 	
+	/**
+	 * The name of the global property that holds the uuid of the Next Consultation Time Amount concept.
+	 */
 	public static final String GP_AMOUNT = "actcore.consultation.nextAmountConcept";
 	
+	/**
+	 * The name of the global property that holds the uuid of the concept recording the Time Period that
+	 * the amount is counted in.
+	 */
 	public static final String GP_PERIOD = "actcore.consultation.nextPeriodConcept";
 	
 	private static final String DAYS = "1072AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -54,14 +62,18 @@ public final class NextConsultation {
 	}
 	
 	/**
-	 * Gets the date the patient's next cardiology review is due. The caller must hold Get Observations.
+	 * Gets the date the patient's next cardiology review is due. The caller must hold Get Observations
+	 * for a patient whose review date is read, while the configuration and the patient's enrolment are
+	 * read with proxy privileges.
 	 *
 	 * @param patient the patient
 	 * @return the due date; null for a patient not enrolled in the registry now or who has died, whose
 	 *         last review date is no longer anyone's to act on, or with no review date recorded, and
 	 *         null when the amount and period concepts are not configured or the period is not days,
 	 *         weeks, months or years
-	 * @throws org.openmrs.api.APIAuthenticationException when the caller lacks Get Observations
+	 * @throws org.openmrs.api.APIAuthenticationException when the caller lacks Get Observations, the
+	 *             amount and period concepts are configured, and the patient is alive and enrolled in
+	 *             the registry
 	 */
 	public static LocalDate of(Patient patient) {
 		Concept amount;
@@ -122,7 +134,10 @@ public final class NextConsultation {
 		return null;
 	}
 	
-	/** By encounter date, then the obs saved last, as the report orders them. */
+	/**
+	 * Tells whether observation a comes after observation b, ordering them by their encounters' dates
+	 * and then by which was saved last, as the report orders them.
+	 */
 	private static boolean later(Obs a, Obs b) {
 		int byDate = a.getEncounter().getEncounterDatetime().compareTo(b.getEncounter().getEncounterDatetime());
 		return byDate != 0 ? byDate > 0 : a.getObsId() > b.getObsId();

@@ -24,14 +24,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Recomputes a patient's adherence rows, then their flags, once an encounter of theirs is saved,
- * voided, unvoided or purged; patientflags' own pass may precede the commit.
+ * Advice on EncounterService that recomputes a patient's adherence rows, and then their flags, once
+ * the transaction that saves, voids, unvoids or purges one of their encounters commits. The flags
+ * are refreshed again here because the patientflags module's own pass may run before the commit,
+ * and so miss the change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	private static final Logger log = LoggerFactory.getLogger(RefreshAdherenceOnSave.class);
 	
-	/** A refresh longer than this is logged as a warning, as the save waits for it. */
+	/**
+	 * The time, in milliseconds, beyond which a patient's refresh is logged as a warning rather than at
+	 * debug level, since the save waits for the refresh to finish.
+	 */
 	static final long SLOW_MILLIS = 1000L;
 	
 	private static final Set<String> METHODS = new HashSet<String>(

@@ -19,7 +19,8 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 /**
- * A patient's prophylaxis adherence as the last refresh computed it; the refresh writes it in bulk.
+ * A patient's prophylaxis adherence and next due date, as the latest adherence refresh computed
+ * them. The refresh writes these rows in bulk by SQL rather than through this entity.
  */
 @Entity
 @Table(name = AdherenceRefresh.TABLE)

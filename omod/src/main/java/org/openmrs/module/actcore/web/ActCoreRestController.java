@@ -19,8 +19,9 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * The module's REST controllers: a parameter that is missing or of the wrong type is the caller's
- * error, which BaseRestController would answer as a server error.
+ * The base class of the module's REST controllers. It answers a request parameter that is missing
+ * or of the wrong type as the caller's error, with 400, where BaseRestController would answer it as
+ * a server error.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	

@@ -10,8 +10,9 @@
 package org.openmrs.module.actcore.nextsteps;
 
 /**
- * One thing to do for a patient at this visit: the form to open, why, and whether it is already
- * done.
+ * One step the chart suggests for a patient at this visit, such as a form to record. It says which
+ * form to open, why the step is suggested, and whether it is new, already done, on hold or a
+ * patient safety alert.
  */
 public class NextStep {
 	
@@ -60,7 +61,8 @@ public class NextStep {
 	}
 	
 	/**
-	 * The form's uuid, or null for a step no form records, such as Refer to clinician, or one on hold.
+	 * Gets the uuid of the form that records the step. It is null for a step that no form records, such
+	 * as Refer to clinician, and for a step on hold.
 	 */
 	public String getForm() {
 		return form;
@@ -75,8 +77,8 @@ public class NextStep {
 	}
 	
 	/**
-	 * Whether a finding still to act on raised this step: a new echo, or an unreviewed anaphylaxis or
-	 * low adherence.
+	 * Tells whether a finding that is still to be acted on raised the step, such as a new echo, or an
+	 * anaphylaxis or low adherence that no consultation has reviewed.
 	 */
 	public boolean isNew() {
 		return isNew;
@@ -87,24 +89,25 @@ public class NextStep {
 	}
 	
 	/**
-	 * Whether the step is listed only to say why it waits, such as a BPG held until a consultation
-	 * reviews an anaphylaxis: it has no form to record.
+	 * Tells whether the step is listed only to say why it waits, as for a BPG dose held until a
+	 * consultation reviews an anaphylaxis. A step on hold has no form to record.
 	 */
 	public boolean isOnHold() {
 		return onHold;
 	}
 	
 	/**
-	 * The uuid of the encounter type that records the referral, for a Refer to clinician step; null for
-	 * any other step, or when no type is mapped to the referral.
+	 * Gets the uuid of the encounter type that records the referral, for a Refer to clinician step. It
+	 * is null for any other step, and when no encounter type is mapped to the referral.
 	 */
 	public String getReferralType() {
 		return referralType;
 	}
 	
 	/**
-	 * Whether the step is a patient safety alert: the review of an anaphylaxis after BPG that no
-	 * consultation has reviewed, or the BPG it holds back.
+	 * Tells whether the step is a patient safety alert. The alerts are the review of an anaphylaxis
+	 * after BPG that no consultation has reviewed yet, and the BPG dose that the anaphylaxis holds
+	 * back.
 	 */
 	public boolean isAlert() {
 		return alert;
