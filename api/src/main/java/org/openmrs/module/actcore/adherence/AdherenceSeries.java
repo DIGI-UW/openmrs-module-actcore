@@ -10,13 +10,9 @@
 package org.openmrs.module.actcore.adherence;
 
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedSet;
-
-import org.openmrs.api.context.Context;
-import org.openmrs.util.PrivilegeConstants;
 
 /**
  * Replays patients' adherence as ACT 2.0 would have held it on past days. The replay runs in memory
@@ -30,28 +26,16 @@ public final class AdherenceSeries {
 	
 	/**
 	 * Gets the adherence each patient held on each of the days, keyed by patient id and then by day.
-	 * Each patient's history is read and replayed once for all the days. A day on which the patient
-	 * held no row, or a row without adherence, is absent from that patient's map.
+	 * Each patient's history is replayed once for all the days. A day on which the patient held no row,
+	 * or a row without adherence, is absent from that patient's map.
 	 *
-	 * @param patientIds the patients to replay
+	 * @param histories the histories of the patients to replay, by patient id
 	 * @param days the days to replay each patient on
-	 * @return each patient's adherence by day; empty when either argument is empty, and a patient with
-	 *         nothing recorded that the refresh reads is absent
+	 * @return each patient's adherence by day, for each patient with a history
 	 */
-	public static Map<Integer, Map<LocalDate, Double>> adherenceOn(Collection<Integer> patientIds,
+	static Map<Integer, Map<LocalDate, Double>> adherenceOn(Map<Integer, AdherenceReplay.History> histories,
 	        SortedSet<LocalDate> days) {
 		Map<Integer, Map<LocalDate, Double>> adherence = new HashMap<Integer, Map<LocalDate, Double>>();
-		if (patientIds.isEmpty() || days.isEmpty()) {
-			return adherence;
-		}
-		Map<Integer, AdherenceReplay.History> histories;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			histories = new AdherenceRefresh().read(Context.getAdministrationService(), patientIds);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
 		Integer oralFirstDueDays = AdherenceRefresh.oralFirstDueDays();
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
 			Map<LocalDate, Double> byDay = new HashMap<LocalDate, Double>();

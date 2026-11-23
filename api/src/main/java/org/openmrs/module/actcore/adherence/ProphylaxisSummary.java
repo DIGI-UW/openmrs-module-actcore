@@ -70,16 +70,16 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Computes the patient's prophylaxis summary by replaying their saved forms now, as the nightly
-	 * refresh does, so that a dose saved today already counts.
+	 * Computes the patient's prophylaxis summary by replaying their saved forms, as the nightly refresh
+	 * does, so that a dose saved today already counts.
 	 *
 	 * @param patient the patient
+	 * @param history the patient's history as it stands now, empty when nothing is recorded
 	 * @param today the day to compute the summary as of
 	 * @return the summary; without a regimen in force its status is none, it is not on hold, and its
 	 *         other values are null except the injections, which are still listed
 	 */
-	public static ProphylaxisSummary of(Patient patient, LocalDate today) {
-		AdherenceReplay.History history = new AdherenceRefresh().historyOf(patient.getPatientId());
+	static ProphylaxisSummary of(Patient patient, AdherenceReplay.History history, LocalDate today) {
 		AdherenceReplay.Row row = AdherenceReplay.replay(history, today, AdherenceRefresh.oralFirstDueDays());
 		List<Injection> injections = timings(history.prescriptions, history.injections, today);
 		if (row == null || row.interval == null) {

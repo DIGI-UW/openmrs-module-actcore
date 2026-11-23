@@ -30,7 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.adherence.AdherenceSeries;
+import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
@@ -323,7 +323,7 @@ public class RunCharts {
 		}
 		Map<Integer, Map<LocalDate, Double>> adherence = everyone.isEmpty()
 		        ? Collections.<Integer, Map<LocalDate, Double>> emptyMap()
-		        : AdherenceSeries.adherenceOn(everyone, new TreeSet<LocalDate>(days));
+		        : Context.getService(AdherenceService.class).getAdherenceOn(everyone, new TreeSet<LocalDate>(days));
 		Map<LocalDate, Long> adherent = new HashMap<LocalDate, Long>();
 		for (LocalDate day : days) {
 			long count = 0;

@@ -19,6 +19,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -42,9 +43,9 @@ public class ProphylaxisController extends ActCoreRestController {
 	 * doses and status, the on-time count, the adherence, the injections and whether BPG is on hold.
 	 *
 	 * @param patientUuid the patient's uuid
-	 * @return the summary, as {@link ProphylaxisSummary#of(Patient, LocalDate)} computes it; without a
-	 *         regimen in force its status is none, bpgOnHold is false, the injections are still listed,
-	 *         and its other values are null
+	 * @return the summary, as {@link AdherenceService#getProphylaxisSummary(Patient, LocalDate)}
+	 *         computes it; without a regimen in force its status is none, bpgOnHold is false, the
+	 *         injections are still listed, and its other values are null
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
 	 * @throws APIAuthenticationException when the user lacks Get Patients
@@ -62,7 +63,8 @@ public class ProphylaxisController extends ActCoreRestController {
 		}
 		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
 		
-		ProphylaxisSummary summary = ProphylaxisSummary.of(patient, LocalDate.now());
+		ProphylaxisSummary summary = Context.getService(AdherenceService.class).getProphylaxisSummary(patient,
+		    LocalDate.now());
 		ProphylaxisSummary.OnTime onTime = summary.getOnTime();
 		return new SimpleObject().add("regimen", summary.getRegimen()).add("type", summary.getType())
 		        .add("intervalDays", summary.getIntervalDays()).add("lastGiven", date(summary.getLastGiven()))

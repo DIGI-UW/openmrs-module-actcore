@@ -13,8 +13,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collections;
+import java.util.TreeSet;
 
 import org.junit.After;
 import org.junit.Before;
@@ -39,6 +41,8 @@ import org.openmrs.util.PrivilegeConstants;
 public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final YearMonth MONTH = YearMonth.of(2026, 9);
+	
+	private static final LocalDate TODAY = LocalDate.of(2026, 9, 15);
 	
 	private Location clinic;
 	
@@ -163,6 +167,30 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 			holding(PrivilegeConstants.GET_USERS,
 			    () -> refused(call, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS));
 		}
+	}
+	
+	@Test
+	public void adherenceService_shouldRefuseAUserWithoutTheAdherencePrivileges() {
+		AdherenceService service = Context.getService(AdherenceService.class);
+		assertNotNull(service);
+		refused(() -> service.refreshAll(TODAY), ActCorePrivileges.REFRESH_FLAGS);
+		refused(() -> service.getProphylaxisSummary(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+		refused(() -> service.getAdherenceOn(Collections.singleton(2), new TreeSet<LocalDate>(Collections.singleton(TODAY))),
+		    PrivilegeConstants.GET_OBS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getProphylaxisSummary(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+			refused(
+			    () -> service.getAdherenceOn(Collections.singleton(2), new TreeSet<LocalDate>(Collections.singleton(TODAY))),
+			    PrivilegeConstants.GET_OBS);
+		});
+		holding(PatientFlagsConstants.PRIV_TEST_FLAGS,
+		    () -> refused(() -> service.refreshAll(TODAY), ActCorePrivileges.REFRESH_FLAGS));
+	}
+	
+	@Test
+	public void refreshPatient_shouldRefuseACallerWhoIsNotSignedIn() {
+		Context.logout();
+		refusedSignedOut(() -> Context.getService(AdherenceService.class).refreshPatient(2, TODAY));
 	}
 	
 	@Test
