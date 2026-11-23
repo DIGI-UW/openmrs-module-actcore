@@ -44,6 +44,8 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.FlagGapService;
+import org.openmrs.module.actcore.api.impl.FlagGapServiceImpl;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
@@ -68,7 +70,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final String PASSWORD = "Gapreader123";
 	
-	private final FlagGapLookup lookup = new FlagGapLookup();
+	private FlagGapService lookup;
 	
 	private Flag flag;
 	
@@ -76,6 +78,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Before
 	public void setUp() {
+		lookup = Context.getService(FlagGapService.class);
 		flag = new Flag();
 		flag.setUuid(UUID.randomUUID().toString());
 		flag.setName("outcome missing");
@@ -91,7 +94,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		configure("select e.patient_id, e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else '" + CD4 + "' end"
 		        + " from encounter e where e.encounter_id in (3, 5)");
 		
-		List<FlagGap> gaps = lookup.find(patient(), flag);
+		List<FlagGap> gaps = lookup.getGaps(patient(), flag);
 		
 		assertEquals(2, gaps.size());
 		assertEquals(ENCOUNTER_3, gaps.get(0).getEncounter().getUuid());
@@ -113,7 +116,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		
 		Set<Integer> withGaps = new HashSet<Integer>();
 		for (Integer patientId : Arrays.asList(2, 6, 7, 8)) {
-			List<FlagGap> gaps = lookup.find(Context.getPatientService().getPatient(patientId), flag);
+			List<FlagGap> gaps = lookup.getGaps(Context.getPatientService().getPatient(patientId), flag);
 			if (gaps != null && !gaps.isEmpty()) {
 				withGaps.add(patientId);
 			} else {
@@ -132,7 +135,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		three.setEncounterDatetime(new GregorianCalendar(2009, Calendar.JANUARY, 1).getTime());
 		Context.getEncounterService().saveEncounter(three);
 		
-		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), encounterUuids(lookup.find(patient(), flag)));
+		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), encounterUuids(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -147,7 +150,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	public void rewritesCriteriaWrittenInCapitalsOverSeveralLinesWithATrailingSemicolon() {
 		configure("SELECT e.patient_id, e.uuid, '" + WEIGHT + "' FROM encounter e\nWHERE e.encounter_id = 3;");
 		
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -164,7 +167,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
 		Context.getEncounterService().voidEncounter(three, "test");
 		
-		assertEquals(new ArrayList<FlagGap>(), lookup.find(patient(), flag));
+		assertEquals(new ArrayList<FlagGap>(), lookup.getGaps(patient(), flag));
 	}
 	
 	@Test
@@ -173,14 +176,14 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		Patient patient = patient();
 		Context.getPatientService().voidPatient(patient, "test");
 		
-		assertNull(lookup.find(patient, flag));
+		assertNull(lookup.getGaps(patient, flag));
 	}
 	
 	@Test
 	public void returnsNullForAPatientTheCriteriaDoNotMatch() {
 		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 6");
 		
-		assertNull(lookup.find(patient(), flag));
+		assertNull(lookup.getGaps(patient(), flag));
 	}
 	
 	@Test
@@ -188,14 +191,14 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 3");
 		flag.setEvaluator(GroovyFlagEvaluator.class.getName());
 		
-		assertNull(lookup.find(patient(), flag));
+		assertNull(lookup.getGaps(patient(), flag));
 	}
 	
 	@Test
 	public void returnsNullForCriteriaWithoutAPatientColumn() {
 		configure("select patient_id, 'x', 'y' from patient where patient_id = " + PATIENT);
 		
-		assertNull(lookup.find(patient(), flag));
+		assertNull(lookup.getGaps(patient(), flag));
 	}
 	
 	@Test
@@ -215,7 +218,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		configure("select p.patient_id, e.uuid, '" + WEIGHT + "' from patient p join encounter e"
 		        + " on e.encounter_id in (3, 6) where p.patient_id > 0");
 		
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -224,7 +227,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		Encounter five = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_5);
 		Context.getEncounterService().voidEncounter(five, "test");
 		
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -232,7 +235,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		configure("select e.patient_id, e.uuid, case e.encounter_id when 3 then '" + WEIGHT + "' else 'not a concept' end"
 		        + " from encounter e where e.encounter_id in (3, 5)");
 		
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -298,7 +301,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		        + " case when e.encounter_id = 5 then null else '" + WEIGHT + "' end from encounter e"
 		        + " where e.encounter_id in (3, 4, 5)");
 		
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient(), flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient(), flag)));
 	}
 	
 	@Test
@@ -315,7 +318,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		authenticateWith("View Patient Flags", "Get Patients", "Get Encounters", "Get Concepts");
 		
 		assertEquals(flag.getFlagId(), lookup.getFlag(flag.getUuid()).getFlagId());
-		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.find(patient, flag)));
+		assertEquals(ENCOUNTER_3, onlyEncounter(lookup.getGaps(patient, flag)));
 	}
 	
 	@Test
@@ -329,7 +332,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		
 		authenticateWith("View Patient Flags", "Get Patients", "Get Encounters", "Get Concepts");
 		
-		assertEquals(ENCOUNTER_5, onlyEncounter(lookup.find(patient, flag)));
+		assertEquals(ENCOUNTER_5, onlyEncounter(lookup.getGaps(patient, flag)));
 	}
 	
 	@Test
@@ -345,7 +348,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		}
 		catch (APIAuthenticationException expected) {}
 		try {
-			lookup.find(patient, flag);
+			lookup.getGaps(patient, flag);
 			fail("expected the lookup to require View Patient Flags");
 		}
 		catch (APIAuthenticationException expected) {}
@@ -374,7 +377,7 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 		}
 		String looked;
 		try {
-			List<FlagGap> gaps = lookup.find(patient(), flag);
+			List<FlagGap> gaps = lookup.getGaps(patient(), flag);
 			looked = String.valueOf(gaps != null && !gaps.isEmpty());
 		}
 		catch (Exception e) {
@@ -405,13 +408,13 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 			}
 		};
 		appender.start();
-		Logger logger = (Logger) LogManager.getLogger(FlagGapLookup.class);
+		Logger logger = (Logger) LogManager.getLogger(FlagGapServiceImpl.class);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.WARN);
 		try {
-			found = lookup.find(patient(), flag);
+			found = lookup.getGaps(patient(), flag);
 		}
 		finally {
 			logger.removeAppender(appender);

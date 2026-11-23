@@ -15,10 +15,12 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.gap.FlagGap;
-import org.openmrs.module.actcore.gap.FlagGapLookup;
+import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -40,8 +42,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class FlagGapController extends ActCoreRestController {
 	
-	private final FlagGapLookup lookup = new FlagGapLookup();
-	
 	/**
 	 * Gets the gaps behind the flag for the patient: each one's encounter uuid and date, its form, and
 	 * the question missing.
@@ -49,7 +49,7 @@ public class FlagGapController extends ActCoreRestController {
 	 * @param patientUuid the patient's uuid
 	 * @param flagUuid the flag's uuid
 	 * @return {@code configured}, false when the look-up gives no answer for the flag, as
-	 *         {@link FlagGapLookup#find(Patient, Flag)} describes, and the gaps as {@code results},
+	 *         {@link FlagGapService#getGaps(Patient, Flag)} describes, and the gaps as {@code results},
 	 *         oldest encounter first and empty when configured is false; a gap's form is null for a
 	 *         user without Get Forms
 	 * @throws IllegalRequestException when the patient or flag is missing
@@ -69,12 +69,12 @@ public class FlagGapController extends ActCoreRestController {
 		if (patient == null) {
 			throw new ObjectNotFoundException();
 		}
-		Flag flag = lookup.getFlag(flagUuid);
+		Flag flag = flag(flagUuid);
 		if (flag == null) {
 			throw new ObjectNotFoundException();
 		}
 		
-		List<FlagGap> gaps = lookup.find(patient, flag);
+		List<FlagGap> gaps = Context.getService(FlagGapService.class).getGaps(patient, flag);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		if (gaps != null) {
 			for (FlagGap gap : gaps) {
@@ -87,6 +87,21 @@ public class FlagGapController extends ActCoreRestController {
 			}
 		}
 		return new SimpleObject().add("configured", gaps != null).add("results", results);
+	}
+	
+	/**
+	 * Gets a flag by uuid, refusing a user without View Patient Flags with the message these endpoints
+	 * gave before the look-up moved behind a service, whose message differs.
+	 *
+	 * @param uuid the flag's uuid
+	 * @return the flag, or null when none has the uuid
+	 * @throws APIAuthenticationException when the user lacks View Patient Flags
+	 */
+	static Flag flag(String uuid) {
+		if (!Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)) {
+			throw new APIAuthenticationException("Privilege required: " + PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		}
+		return Context.getService(FlagGapService.class).getFlag(uuid);
 	}
 	
 	/**

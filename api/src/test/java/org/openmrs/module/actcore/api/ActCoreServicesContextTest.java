@@ -214,6 +214,18 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void flagGapService_shouldRefuseAUserWhoMayNotViewFlags() {
+		FlagGapService service = Context.getService(FlagGapService.class);
+		assertNotNull(service);
+		refused(() -> service.getFlag("uuid"), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		refused(() -> service.getGaps(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getFlag("uuid"), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+			refused(() -> service.getGaps(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		});
+	}
+	
+	@Test
 	public void refreshPatient_shouldRefuseACallerWhoIsNotSignedIn() {
 		Context.logout();
 		refusedSignedOut(() -> Context.getService(AdherenceService.class).refreshPatient(2, TODAY));

@@ -22,7 +22,6 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.api.context.ContextAuthenticationException;
-import org.openmrs.module.actcore.gap.FlagGapLookup;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -108,7 +107,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 		if (StringUtils.isBlank(flagUuid)) {
 			throw new IllegalRequestException("The flag is required");
 		}
-		Flag flag = new FlagGapLookup().getFlag(flagUuid);
+		Flag flag = FlagGapController.flag(flagUuid);
 		if (flag == null) {
 			throw new ObjectNotFoundException();
 		}
