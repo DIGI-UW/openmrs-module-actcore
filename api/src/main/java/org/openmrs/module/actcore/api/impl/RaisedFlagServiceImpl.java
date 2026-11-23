@@ -32,11 +32,9 @@ import org.openmrs.module.patientflags.Tag;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.RaisedFlagService}. */
-@Transactional
 public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedFlagService {
 	
 	private static final Logger log = LoggerFactory.getLogger(RaisedFlagServiceImpl.class);
@@ -56,6 +54,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 * @see org.openmrs.module.actcore.api.RaisedFlagService#raise(Integer, Integer)
 	 */
 	@Override
+	@Transactional
 	public void raise(Integer flagId, Integer patientId) {
 		if (dao.isRaisable(flagId, patientId)) {
 			dao.saveRaisedFlag(new RaisedFlag(new RaisedFlag.Key(patientId, flagId), new Date()));
@@ -66,6 +65,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 * @see org.openmrs.module.actcore.api.RaisedFlagService#lower(Integer, Integer)
 	 */
 	@Override
+	@Transactional
 	public void lower(Integer flagId, Integer patientId) {
 		dao.deleteRaisedFlags(flagId, patientId);
 	}
@@ -74,6 +74,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 * @see org.openmrs.module.actcore.api.RaisedFlagService#lowerAll(Integer)
 	 */
 	@Override
+	@Transactional
 	public void lowerAll(Integer flagId) {
 		dao.deleteRaisedFlags(flagId, null);
 	}
@@ -146,8 +147,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 * @see org.openmrs.module.actcore.api.RaisedFlagService#dismiss(Patient, Flag)
 	 */
 	@Override
-	// Not REQUIRED: the dismissal would then join this transaction and roll back with a failing list sync.
-	@Transactional(propagation = Propagation.SUPPORTS)
+	// No @Transactional: REQUIRED undoes it on a failing sync; SUPPORTS flushes outside a tx.
 	public RaisedFlags.Dismissal dismiss(Patient patient, Flag flag) {
 		if (!carriesDismissTag(flag)) {
 			return RaisedFlags.Dismissal.NOT_DISMISSIBLE;

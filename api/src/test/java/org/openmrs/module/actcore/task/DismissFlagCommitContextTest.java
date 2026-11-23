@@ -15,10 +15,13 @@ import static org.junit.Assert.fail;
 
 import java.util.UUID;
 
+import org.hibernate.SessionFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
+import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -27,12 +30,16 @@ import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.springframework.aop.MethodBeforeAdvice;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * A flag dismissed outside any transaction, as a request dismisses it, whose list fails to update.
- * The dismissal commits before the list is updated, so the failure leaves it recorded.
+ * Flags dismissed outside any transaction, as a request dismisses them. The dismissal commits
+ * before the list is updated, so a failing update leaves it recorded, and a read during the
+ * dismissal that goes through the request's session does not fail it.
  */
 public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -42,6 +49,18 @@ public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest
 	private final MethodBeforeAdvice failListUpdate = (method, args, target) -> {
 		if (method.getName().equals("getFlag") && args.length == 1 && args[0] instanceof Integer) {
 			throw new IllegalStateException("list update failed");
+		}
+	};
+	
+	// Reads as core 2.8's getGlobalProperty does on a cache miss: through the session, in SUPPORTS.
+	private final MethodBeforeAdvice readThroughTheSession = (method, args, target) -> {
+		if (method.getName().equals("getGlobalProperty")) {
+			TransactionTemplate template = new TransactionTemplate(
+			        Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class));
+			template.setPropagationBehavior(TransactionDefinition.PROPAGATION_SUPPORTS);
+			template.setReadOnly(true);
+			template.execute(status -> Context.getRegisteredComponent("sessionFactory", SessionFactory.class)
+			        .getCurrentSession().get(GlobalProperty.class, (String) args[0]));
 		}
 	};
 	
@@ -83,10 +102,37 @@ public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest
 		assertTrue(raisedFlags.isDismissed(flag.getFlagId(), PATIENT));
 	}
 	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void dismiss_shouldDismissWhenItsGlobalPropertyIsReadThroughTheSession() {
+		FlagService flagService = Context.getService(FlagService.class);
+		flag = new Flag();
+		flag.setUuid(UUID.randomUUID().toString());
+		flag.setName("dismissed on a global property cache miss");
+		flag.setCriteria("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		flag.setEvaluator(SQLFlagEvaluator.class.getName());
+		flag.setMessage("dismissed");
+		flag.setEnabled(Boolean.TRUE);
+		flagService.saveFlag(flag);
+		Patient patient = Context.getPatientService().getPatient(PATIENT);
+		
+		Context.addAdvice(AdministrationService.class, readThroughTheSession);
+		RaisedFlags.Dismissal dismissal;
+		try {
+			dismissal = Context.getService(RaisedFlagService.class).dismiss(patient, flag);
+		}
+		finally {
+			Context.removeAdvice(AdministrationService.class, readThroughTheSession);
+		}
+		
+		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismissal);
+	}
+	
 	// Nothing rolls this test back.
 	@After
 	public void removeAdviceAndCommittedRows() {
 		Context.removeAdvice(FlagService.class, failListUpdate);
+		Context.removeAdvice(AdministrationService.class, readThroughTheSession);
 		Context.clearSession();
 		if (flag != null) {
 			Context.getAdministrationService().executeSQL(
