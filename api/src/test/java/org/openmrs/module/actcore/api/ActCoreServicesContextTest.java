@@ -237,6 +237,18 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void nextStepsService_shouldRefuseAUserWhoMayNotReadObservations() {
+		NextStepsService service = Context.getService(NextStepsService.class);
+		assertNotNull(service);
+		refused(() -> service.getNextSteps(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+		refused(() -> service.getNextConsultationDate(new Patient(2)), PrivilegeConstants.GET_OBS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getNextSteps(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+			refused(() -> service.getNextConsultationDate(new Patient(2)), PrivilegeConstants.GET_OBS);
+		});
+	}
+	
+	@Test
 	public void refreshPatient_shouldRefuseACallerWhoIsNotSignedIn() {
 		Context.logout();
 		refusedSignedOut(() -> Context.getService(AdherenceService.class).refreshPatient(2, TODAY));

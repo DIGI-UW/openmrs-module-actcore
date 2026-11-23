@@ -18,6 +18,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.api.NextStepsService;
 import org.openmrs.module.actcore.nextsteps.NextStep;
 import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -61,7 +62,7 @@ public class NextStepsController extends ActCoreRestController {
 		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
 		
 		List<SimpleObject> steps = new ArrayList<SimpleObject>();
-		for (NextStep step : NextSteps.of(patient, LocalDate.now())) {
+		for (NextStep step : Context.getService(NextStepsService.class).getNextSteps(patient, LocalDate.now())) {
 			steps.add(new SimpleObject().add("key", step.getKey()).add("form", step.getForm()).add("title", step.getTitle())
 			        .add("reason", step.getReason()).add("isNew", step.isNew()).add("done", step.isDone())
 			        .add("onHold", step.isOnHold()).add("referralType", step.getReferralType())

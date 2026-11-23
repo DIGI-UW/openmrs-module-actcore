@@ -219,4 +219,21 @@
             </list>
         </property>
     </bean>
+
+    <bean id="actcore.NextStepsService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.NextStepsServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.NextStepsService</value>
+                <ref bean="actcore.NextStepsService"/>
+            </list>
+        </property>
+    </bean>
 </beans>
