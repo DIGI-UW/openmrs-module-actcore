@@ -200,7 +200,7 @@ public class RaisedFlags {
 			}
 			recordDismissal(flag.getFlagId(), patient.getPatientId(), Context.getAuthenticatedUser().getUserId());
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
-			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
+			log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
 			    Context.getAuthenticatedUser().getUserId());
 			return Dismissal.DISMISSED;
 		}
