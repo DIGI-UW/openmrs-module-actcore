@@ -102,7 +102,8 @@ public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTe
 	@Test
 	public void savePatient_shouldEnrolANewPatientRegisteredByAUserWithoutProgramPrivileges() {
 		String[] registering = { PrivilegeConstants.ADD_PATIENTS, PrivilegeConstants.GET_PATIENTS,
-		        PrivilegeConstants.GET_IDENTIFIER_TYPES, PrivilegeConstants.GET_LOCATIONS };
+		        PrivilegeConstants.GET_IDENTIFIER_TYPES, PrivilegeConstants.GET_LOCATIONS,
+		        PrivilegeConstants.GET_GLOBAL_PROPERTIES };
 		Context.becomeUser("butch");
 		for (String privilege : registering) {
 			Context.addProxyPrivilege(privilege);

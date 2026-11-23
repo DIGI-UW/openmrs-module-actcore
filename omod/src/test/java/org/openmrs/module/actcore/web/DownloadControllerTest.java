@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -694,7 +695,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 				role = new Role("download caller " + username);
 			}
 			role.setPrivileges(new HashSet<>());
-			for (String name : privileges) {
+			for (String name : ArrayUtils.add(privileges, PrivilegeConstants.GET_GLOBAL_PROPERTIES)) {
 				Privilege privilege = users.getPrivilege(name);
 				role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
 			}

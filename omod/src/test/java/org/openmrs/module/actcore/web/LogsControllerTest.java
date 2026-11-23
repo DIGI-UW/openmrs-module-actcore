@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Person;
@@ -36,6 +37,7 @@ import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
+import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -63,7 +65,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesTheActivityToAUserWithoutViewAuditLogs() {
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("logreader", ReadLog.VIEW_PRIVILEGE);
 		for (Runnable call : new Runnable[] { () -> activity.getActivity(null, null, null, null, null, null, null, null),
 		        () -> activity.getDetails(10) }) {
 			try {
@@ -135,7 +137,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void listsTheReadsWithTheirCountForAUserWithViewReadAuditLogs() {
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("logreader", ReadLog.VIEW_PRIVILEGE);
 		
 		SimpleObject page = reads.getReads(null, null, null, null, null, null);
 		
@@ -186,7 +188,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '" + Timestamp.valueOf(LocalDate.now().atStartOfDay())
 		        + "', random_uuid() from system_range(1, 50001)");
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("logreader", ReadLog.VIEW_PRIVILEGE);
 		
 		SimpleObject page = reads.getReads("bulk", null, null, null, null, null);
 		
@@ -202,7 +204,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		UserService users = Context.getUserService();
 		Context.authenticate("admin", "test");
 		Role role = new Role("log reader " + UUID.randomUUID());
-		for (String name : privileges) {
+		for (String name : ArrayUtils.add(privileges, PrivilegeConstants.GET_GLOBAL_PROPERTIES)) {
 			Privilege privilege = users.getPrivilege(name);
 			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
 		}

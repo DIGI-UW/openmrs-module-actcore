@@ -167,7 +167,7 @@ public class ProphylaxisControllerTest extends BaseModuleWebContextSensitiveTest
 	
 	private void authenticateWith(String... privileges) {
 		UserService users = Context.getUserService();
-		Role role = new Role("prophylaxis reader " + UUID.randomUUID());
+		Role role = new Role("prophylaxis reader " + UUID.randomUUID().toString().substring(0, 8));
 		for (String name : privileges) {
 			Privilege privilege = users.getPrivilege(name);
 			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));

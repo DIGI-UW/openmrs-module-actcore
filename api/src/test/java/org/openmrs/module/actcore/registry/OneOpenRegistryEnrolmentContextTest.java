@@ -44,7 +44,8 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	        PrivilegeConstants.GET_VISITS, PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_PATIENT_PROGRAMS,
 	        PrivilegeConstants.ADD_PATIENT_PROGRAMS, PrivilegeConstants.GET_RELATIONSHIPS, PrivilegeConstants.GET_OBS,
 	        PrivilegeConstants.DELETE_PATIENTS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_PATIENT_COHORTS,
-	        PrivilegeConstants.EDIT_PERSONS, PrivilegeConstants.GET_PATIENTS };
+	        PrivilegeConstants.EDIT_PERSONS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_CONDITIONS,
+	        PrivilegeConstants.GET_MEDICATION_DISPENSE, PrivilegeConstants.GET_GLOBAL_PROPERTIES };
 	
 	private Program registry;
 	
@@ -266,11 +267,13 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 	public void savePatientProgram_shouldEnrolForAUserWithoutGetPatientPrograms() {
 		Context.becomeUser("butch");
 		Context.addProxyPrivilege(PrivilegeConstants.ADD_PATIENT_PROGRAMS);
+		Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 		try {
 			programs.savePatientProgram(enrolment(registry, null));
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.ADD_PATIENT_PROGRAMS);
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 			authenticate();
 		}
 		

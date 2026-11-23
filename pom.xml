@@ -29,10 +29,10 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <openmrsPlatformVersion>2.4.0</openmrsPlatformVersion>
+    <openmrsPlatformVersion>2.8.10</openmrsPlatformVersion>
     <patientflagsVersion>3.0.10</patientflagsVersion>
     <cohortVersion>3.7.3</cohortVersion>
-    <webservicesRestVersion>2.40.0</webservicesRestVersion>
+    <webservicesRestVersion>3.5.0</webservicesRestVersion>
     <reportingVersion>2.1.0</reportingVersion>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>

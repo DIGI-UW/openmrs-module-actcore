@@ -73,11 +73,11 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		siteAdmin = role("Organizational: ACT Site Administrator", null, PrivilegeConstants.EDIT_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_ROLES,
 		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.ADD_PERSONS, PrivilegeConstants.EDIT_PERSONS,
-		    PrivilegeConstants.EDIT_USER_PASSWORDS);
+		    PrivilegeConstants.EDIT_USER_PASSWORDS, PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 		instanceAdmin = role("Organizational: ACT Instance Administrator", null, PrivilegeConstants.EDIT_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_ROLES,
 		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.ADD_PERSONS, PrivilegeConstants.EDIT_PERSONS,
-		    UserClinics.ALL_CLINICS_PRIVILEGE);
+		    UserClinics.ALL_CLINICS_PRIVILEGE, PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 		siteAdminAtA = user("siteadmin", siteAdmin, CLINIC_A);
 		clinicianAtA = user("clinicianA", clinician, CLINIC_A);
 		clinicianAtB = user("clinicianB", clinician, CLINIC_B);

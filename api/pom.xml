@@ -50,6 +50,13 @@
       <version>0.3.0</version>
       <scope>test</scope>
     </dependency>
+    <!-- reporting's jackson-dataformat-yaml 2.9.8 cannot parse with core's snakeyaml 2; this is core's Jackson -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+      <version>2.19.1</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.openmrs.api</groupId>
       <artifactId>openmrs-api</artifactId>

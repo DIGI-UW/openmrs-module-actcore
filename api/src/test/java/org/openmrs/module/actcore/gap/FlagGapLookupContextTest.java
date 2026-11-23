@@ -129,11 +129,11 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void sortsTheGapsByEncounterDate() {
 		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id in (3, 4, 5)");
-		Encounter three = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_3);
-		three.setEncounterDatetime(new GregorianCalendar(2009, Calendar.JANUARY, 1).getTime());
-		Context.getEncounterService().saveEncounter(three);
+		Encounter five = Context.getEncounterService().getEncounterByUuid(ENCOUNTER_5);
+		five.setEncounterDatetime(new GregorianCalendar(2008, Calendar.JULY, 1).getTime());
+		Context.getEncounterService().saveEncounter(five);
 		
-		assertEquals(Arrays.asList(ENCOUNTER_4, ENCOUNTER_5, ENCOUNTER_3), encounterUuids(lookup.find(patient(), flag)));
+		assertEquals(Arrays.asList(ENCOUNTER_5, ENCOUNTER_3, ENCOUNTER_4), encounterUuids(lookup.find(patient(), flag)));
 	}
 	
 	@Test

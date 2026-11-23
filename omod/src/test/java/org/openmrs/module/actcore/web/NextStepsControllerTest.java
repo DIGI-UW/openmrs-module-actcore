@@ -96,7 +96,7 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void refusesAUserWhoMayNotSeeObservations() {
 		UserService users = Context.getUserService();
-		Role role = new Role("next steps reader " + UUID.randomUUID());
+		Role role = new Role("next steps reader " + UUID.randomUUID().toString().substring(0, 8));
 		Privilege privilege = users.getPrivilege("Get Patients");
 		role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege("Get Patients")));
 		users.saveRole(role);

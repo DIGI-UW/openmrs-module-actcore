@@ -91,7 +91,7 @@ public class ModuleStartupOrderTest {
 	
 	private static Module standIn(String packageName, String... awareOf) {
 		Module module = new Module(packageName, packageName.substring(packageName.lastIndexOf('.') + 1), packageName, "", "",
-		        "1.0.0");
+		        "1.0.0", "1.6");
 		module.setRequiredModulesMap(new HashMap<String, String>());
 		Map<String, String> aware = new HashMap<String, String>();
 		for (String each : awareOf) {

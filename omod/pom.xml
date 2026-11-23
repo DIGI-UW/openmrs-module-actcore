@@ -70,6 +70,13 @@
       <version>0.3.0</version>
       <scope>test</scope>
     </dependency>
+    <!-- reporting's jackson-dataformat-yaml 2.9.8 cannot parse with core's snakeyaml 2; this is core's Jackson -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+      <version>2.19.1</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.openmrs.api</groupId>
       <artifactId>openmrs-api</artifactId>
@@ -92,37 +99,7 @@
     <!-- the REST resources, so the controller's REF representations resolve under test -->
     <dependency>
       <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.8</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.9</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.10</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.11</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.12</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.0</artifactId>
+      <artifactId>webservices.rest-omod</artifactId>
       <version>${webservicesRestVersion}</version>
       <scope>test</scope>
     </dependency>
@@ -130,30 +107,6 @@
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
       <version>3.0.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.1</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.2</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.3</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.4</artifactId>
-      <version>${webservicesRestVersion}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

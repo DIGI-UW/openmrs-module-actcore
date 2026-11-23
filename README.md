@@ -59,7 +59,7 @@ parentheses, and its message should not use `${n}` placeholders.
 
 ## Requirements
 
-OpenMRS platform 2.4.0+, patientflags 3.0.10, cohort 3.7.3, webservices.rest 2.40.0 and reporting 2.1.0.
+OpenMRS platform 2.8.10+, patientflags 3.0.10, cohort 3.7.3, webservices.rest 3.5.0 and reporting 2.1.0.
 The module starts after Initializer, so stopping Initializer stops it too.
 
 ## Configuration

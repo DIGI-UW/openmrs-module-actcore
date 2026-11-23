@@ -28,11 +28,13 @@ import org.openmrs.Person;
 import org.openmrs.PersonAttribute;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.PersonName;
+import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 
 public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -184,7 +186,10 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		person.setGender("F");
 		User reader = new User(person);
 		reader.setUsername("reader");
-		reader.addRole(Context.getUserService().saveRole(new Role("no privileges")));
+		Role role = new Role("global properties only");
+		role.addPrivilege(Context.getUserService().savePrivilege(
+		    new Privilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES, PrivilegeConstants.GET_GLOBAL_PROPERTIES)));
+		reader.addRole(Context.getUserService().saveRole(role));
 		Context.getUserService().createUser(reader, "Reader123");
 		Context.logout();
 		Context.authenticate("reader", "Reader123");

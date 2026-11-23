@@ -45,6 +45,7 @@ import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 
 public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -334,7 +335,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		matching(true);
 		runFullRefresh();
 		Patient patient = patient();
-		User user = authenticateWith(RaisedFlags.DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		User user = authenticateWith(RaisedFlags.DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS,
+		    PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 		
 		assertTrue(RaisedFlags.mayDismiss(flag));
 		assertEquals(RaisedFlags.Dismissal.DISMISSED, RaisedFlags.dismiss(patient, flag));
