@@ -24,7 +24,7 @@ public interface DownloadLogService extends OpenmrsService {
 	 * Records a download by the signed-in user, in a transaction of its own, so that a download that
 	 * cannot be recorded fails.
 	 *
-	 * @param formId the form downloaded, or null when the download held several forms
+	 * @param formId the form downloaded when the download held exactly one, or null otherwise
 	 * @param detail what the download held, as JSON
 	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
