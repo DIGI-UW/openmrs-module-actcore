@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.cohort.CohortAttribute;
 import org.openmrs.module.cohort.CohortAttributeType;
 import org.openmrs.module.cohort.CohortM;
@@ -143,7 +144,7 @@ public class FlagListSync {
 		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
 		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY))
 		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId)
-		        && !RaisedFlags.isDismissed(flagId, patientId);
+		        && !Context.getService(RaisedFlagService.class).isDismissed(flagId, patientId);
 		
 		CohortMemberService memberService = Context.getService(CohortMemberService.class);
 		CohortMember member = null;
@@ -158,7 +159,8 @@ public class FlagListSync {
 		}
 		
 		if (listed && member == null) {
-			addMember(memberService, list, patient, RaisedFlags.raisedSinceByFlag(patientId).get(flagId));
+			addMember(memberService, list, patient,
+			    Context.getService(RaisedFlagService.class).getRaisedSinceByFlag(patientId).get(flagId));
 			log.debug("List '{}': patient {} added", list.getName(), patientId);
 		} else if (!listed && member != null) {
 			endMember(memberService, member);
@@ -233,12 +235,13 @@ public class FlagListSync {
 			mark(cohortService, list, flag);
 		}
 		
+		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		Set<Integer> flagged = new HashSet<Integer>();
 		if (listed) {
 			flagged.addAll(PatientFlagRefreshTask.flaggedMessages(flag).keySet());
-			flagged.removeAll(RaisedFlags.dismissedPatients(flag.getFlagId()));
+			flagged.removeAll(raisedFlags.getDismissedPatients(flag.getFlagId()));
 		}
-		setMembers(list, flagged, RaisedFlags.raisedSinceByPatient(flag.getFlagId()), result);
+		setMembers(list, flagged, raisedFlags.getRaisedSinceByPatient(flag.getFlagId()), result);
 	}
 	
 	private void setMembers(CohortM list, Set<Integer> flagged, Map<Integer, Date> raisedSince, Result result) {

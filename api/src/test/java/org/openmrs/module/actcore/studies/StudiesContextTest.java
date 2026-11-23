@@ -49,6 +49,7 @@ import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
@@ -56,8 +57,6 @@ import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.springframework.aop.framework.ProxyFactory;
 
 public class StudiesContextTest extends BaseModuleContextSensitiveTest {
-	
-	private final Studies studies = new Studies();
 	
 	private final OneOpenRegistryEnrolment guard = new OneOpenRegistryEnrolment();
 	
@@ -100,7 +99,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void create_shouldGiveTheStudyACopyOfTheTemplatesUnretiredStates() {
-		Program study = studies.create("  ARC  ");
+		Program study = studies().createStudy("  ARC  ");
 		
 		assertEquals("ARC", study.getName());
 		assertEquals("ARC (research study)", study.getConcept().getName().getName());
@@ -117,56 +116,71 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void getStudies_shouldListStudiesByNameAndLeaveOutTheTemplateAndOtherPrograms() {
-		studies.create("Miller");
-		studies.create("ARC");
+		studies().createStudy("Miller");
+		studies().createStudy("ARC");
 		
-		List<String> names = studies.getStudies().stream().map(Program::getName).collect(Collectors.toList());
+		List<String> names = studies().getStudies().stream().map(Program::getName).collect(Collectors.toList());
 		
 		assertEquals(2, names.size());
 		assertEquals("ARC", names.get(0));
 		assertEquals("Miller", names.get(1));
-		assertFalse(studies.isStudy(template));
-		assertFalse(studies.isStudy(Context.getProgramWorkflowService().getProgram(1)));
+		assertFalse(studies().isStudy(template));
+		assertFalse(studies().isStudy(Context.getProgramWorkflowService().getProgram(1)));
+	}
+	
+	@Test
+	public void getStudyByUuid_shouldFindAnUnretiredStudyButNotTheTemplateAnotherProgramOrARetiredStudy() {
+		Program study = studies().createStudy("ARC");
+		
+		assertEquals(study, studies().getStudyByUuid(study.getUuid()));
+		assertNull(studies().getStudyByUuid(template.getUuid()));
+		assertNull(studies().getStudyByUuid(Context.getProgramWorkflowService().getProgram(1).getUuid()));
+		assertNull(studies().getStudyByUuid("no such uuid"));
+		// Not retireProgram, which retires the workflows too, so isStudy alone would leave the study out.
+		study.setRetired(true);
+		study.setRetireReason("ended");
+		Context.getProgramWorkflowService().saveProgram(study);
+		assertNull(studies().getStudyByUuid(study.getUuid()));
 	}
 	
 	@Test
 	public void rename_shouldRenameTheProgramAndItsConceptAndFreeTheOldName() {
-		Program study = studies.create("Stage Study 1");
+		Program study = studies().createStudy("Stage Study 1");
 		
-		studies.rename(study, "Stage Study One");
+		studies().renameStudy(study, "Stage Study One");
 		
 		assertEquals("Stage Study One", study.getName());
 		assertEquals("Stage Study One (research study)", study.getConcept().getName().getName());
-		assertEquals("Stage Study 1", studies.create("Stage Study 1").getName());
+		assertEquals("Stage Study 1", studies().createStudy("Stage Study 1").getName());
 	}
 	
 	@Test
 	public void create_shouldRefuseANameAStudyAlreadyHasButNotOneAnotherConceptHas() {
-		studies.create("ARC");
+		studies().createStudy("ARC");
 		concept("Miller");
 		
 		for (String name : new String[] { "arc", " " }) {
 			try {
-				studies.create(name);
+				studies().createStudy(name);
 				fail("created a study named " + name);
 			}
 			catch (ValidationException expected) {}
 		}
-		assertEquals(1, studies.getStudies().size());
-		assertEquals("Miller", studies.create("Miller").getName());
+		assertEquals(1, studies().getStudies().size());
+		assertEquals("Miller", studies().createStudy("Miller").getName());
 	}
 	
 	@Test
 	public void isStudy_shouldBeFalseForEveryProgramWithoutATemplate() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(Studies.TEMPLATE_PROPERTY, ""));
 		
-		assertFalse(studies.isStudy(study));
+		assertFalse(studies().isStudy(study));
 	}
 	
 	@Test
 	public void savePatientProgram_shouldRefuseASecondOpenEnrolmentInTheSameStudy() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new OneOpenRegistryEnrolment());
@@ -181,12 +195,12 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("already enrolled in ARC"));
 		}
-		programs.savePatientProgram(enrolment(patient, studies.create("Miller")));
+		programs.savePatientProgram(enrolment(patient, studies().createStudy("Miller")));
 	}
 	
 	@Test
 	public void savePatientProgram_shouldStartAStudyEnrolmentWithoutAStatusInTheInitialOneFromItsEnrolmentDate() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentStatus());
@@ -220,7 +234,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseANewStudyEnrolmentUntilConsentOptInAndStudyIdAreRecorded() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		Concept yes = concept("Agreed");
 		Concept no = concept("Declined");
 		PersonAttributeType consent = attributeType("Consent Given");
@@ -262,7 +276,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseAnOpenStudyEnrolmentEditedToHaveNoStudyIdButLetACompletedOneGo() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProgramAttributeType studyId = new ProgramAttributeType();
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
@@ -291,7 +305,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldLetAnEditKeepOpenAStudyEnrolmentStoredWithoutAStudyId() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProgramAttributeType studyId = new ProgramAttributeType();
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
@@ -315,7 +329,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseReopeningACompletedStudyEnrolmentWithoutAStudyId() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProgramAttributeType studyId = new ProgramAttributeType();
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
@@ -352,7 +366,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldNotHoldAnEditToConsentTheOptInOrBeingAlive() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		Concept yes = concept("Agreed");
 		Concept no = concept("Declined");
 		PersonAttributeType consent = attributeType("Consent Given");
@@ -384,8 +398,8 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseMovingAnEnrolmentIntoOrOutOfAStudy() {
-		Program study = studies.create("ARC");
-		Program other = studies.create("Miller");
+		Program study = studies().createStudy("ARC");
+		Program other = studies().createStudy("Miller");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -412,7 +426,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseMovingAnEnrolmentIntoAStudyThroughTheModulesAdviceChain() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram elsewhere = enrolment(patient, Context.getProgramWorkflowService().getProgram(1));
@@ -426,7 +440,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatientProgram_shouldRefuseANewStudyEnrolmentForAPatientWhoDied() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -440,8 +454,8 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePerson_shouldEndOpenStudyEnrolmentsOfAPatientWhoDiedInInactiveDeathOnTheirDeathDate() {
-		Program arc = studies.create("ARC");
-		Program miller = studies.create("Miller");
+		Program arc = studies().createStudy("ARC");
+		Program miller = studies().createStudy("Miller");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		ProgramWorkflowService programs = Context.getProgramWorkflowService();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -478,17 +492,17 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		String longest = StringUtils.repeat("A", 50);
 		
 		try {
-			studies.create(longest + "B");
+			studies().createStudy(longest + "B");
 			fail("created a study whose name the program table cannot hold");
 		}
 		catch (ValidationException expected) {}
 		assertNull(Context.getConceptService().getConceptByName(longest + "B (research study)"));
-		assertEquals(longest, studies.create(longest).getName());
+		assertEquals(longest, studies().createStudy(longest).getName());
 	}
 	
 	@Test
 	public void savePatientProgram_shouldAcceptACompletedStudyEnrolmentForAPatientWhoDied() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		patient.setDead(true);
@@ -504,7 +518,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void mergePatients_shouldFoldTheDuplicatesOpenEnrolmentsInAStudyIntoOne() throws Exception {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		adviseAsTheModuleDoes();
 		Patient preferred = Context.getPatientService().getPatient(2);
 		Context.getProgramWorkflowService().savePatientProgram(enrolment(preferred, study));
@@ -520,7 +534,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void mergePatients_shouldCopyAStudyEnrolmentThoughTheCopyHasNoStudyId() throws Exception {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProgramAttributeType studyId = new ProgramAttributeType();
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
@@ -543,7 +557,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePerson_shouldEndBothOfTwoOverlappingOpenEnrolmentsInAStudy() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		Patient patient = Context.getPatientService().getPatient(2);
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
@@ -567,7 +581,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndOpenStudyEnrolmentsOfAPatientWhoDied() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -587,7 +601,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndAgainAReopenedStudyEnrolmentOfAPatientWhoDied() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -612,7 +626,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldRecordDeathOnTheWithdrawalOfAReopenedEnrolmentWhenItDiedBefore() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -631,7 +645,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldRecordDeathOnTheEndOfAReopenedEnrolmentCompletedByDateWhenItDiedBefore() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -650,7 +664,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldCompleteAReopenedEnrolmentAlreadyInDeathNoEarlierThanThatDeath() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -668,7 +682,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndAStudyEnrolmentNoEarlierThanAnEndedStatusInAnotherWorkflow() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		ProgramWorkflowState control = addArmWorkflow(study);
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
@@ -687,7 +701,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldRecordDeathOnTheDeathDateWhenItFollowsTheWithdrawalOfAReopenedEnrolment() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -706,7 +720,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldDateTheDeathOfAPatientWhoDiedWithoutRegardToVoidedStatuses() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -730,7 +744,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathStartsWithItsWithdrawal() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -752,7 +766,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathSharesADayWithAnotherStatusInEitherOrder() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		Date day = DateUtils.truncate(daysAgo(5), Calendar.DATE);
 		PatientProgram activeFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(2), study, day, false);
@@ -821,7 +835,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void mergePatients_shouldEndTheStudyEnrolmentsAPatientWhoDiedGainsFromTheDuplicate() throws Exception {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
@@ -875,7 +889,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void mergePatients_shouldFoldOverlappingStudyEnrolmentsIntoOneEndedOnThePreferredPatientsDeath()
 	        throws Exception {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
@@ -904,7 +918,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void savePatient_shouldEndOpenEnrolmentsInARetiredStudyOfAPatientWhoDied() {
-		Program study = studies.create("ARC");
+		Program study = studies().createStudy("ARC");
 		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
@@ -923,6 +937,10 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertNotNull(open.getDateCompleted());
 		assertEquals("Inactive - Death", current(open).getState().getConcept().getName().getName());
+	}
+	
+	private static StudyService studies() {
+		return Context.getService(StudyService.class);
 	}
 	
 	private static ProgramWorkflowState state(Program study, String name) {

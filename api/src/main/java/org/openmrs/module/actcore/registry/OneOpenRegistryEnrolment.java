@@ -25,7 +25,7 @@ import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.studies.Studies;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
@@ -158,7 +158,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		if (program == null) {
 			return false;
 		}
-		return EnrolOnRegistration.isRegistry(program) || new Studies().isStudy(program);
+		return EnrolOnRegistration.isRegistry(program) || Context.getService(StudyService.class).isStudy(program);
 	}
 	
 	/**

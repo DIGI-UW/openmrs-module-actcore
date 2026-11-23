@@ -37,8 +37,8 @@ import org.openmrs.Visit;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.consultation.NextConsultation;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -339,7 +339,8 @@ public class NextSteps {
 	private Date raisedSince(String flagUuid) {
 		for (PatientFlag flag : Context.getService(FlagService.class).getPatientFlags(patient)) {
 			if (!flag.getVoided() && flag.getFlag() != null && flag.getFlag().getUuid().equals(flagUuid)) {
-				return RaisedFlags.raisedSinceByFlag(patient.getPatientId()).get(flag.getFlag().getFlagId());
+				return Context.getService(RaisedFlagService.class).getRaisedSinceByFlag(patient.getPatientId())
+				        .get(flag.getFlag().getFlagId());
 			}
 		}
 		return null;
