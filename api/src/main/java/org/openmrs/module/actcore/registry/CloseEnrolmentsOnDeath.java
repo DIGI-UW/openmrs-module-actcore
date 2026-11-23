@@ -26,7 +26,7 @@ import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.studies.Studies;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -176,7 +176,8 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		if (EnrolOnRegistration.isRegistry(program)) {
 			return REGISTRY_DEATH_STATE_PROPERTY;
 		}
-		return program != null && new Studies().isStudy(program) ? STUDY_DEATH_STATE_PROPERTY : null;
+		return program != null && Context.getService(StudyService.class).isStudy(program) ? STUDY_DEATH_STATE_PROPERTY
+		        : null;
 	}
 	
 	private static List<Integer> programsWithADeathState() {

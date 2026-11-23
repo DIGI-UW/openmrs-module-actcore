@@ -9,34 +9,13 @@
  */
 package org.openmrs.module.actcore.task;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.hibernate.FlushMode;
-import org.openmrs.Patient;
-import org.openmrs.api.APIAuthenticationException;
-import org.openmrs.api.APIException;
-import org.openmrs.api.context.Context;
-import org.openmrs.api.db.hibernate.DbSession;
-import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.Transactions;
-import org.openmrs.module.patientflags.Flag;
-import org.openmrs.module.patientflags.PatientFlagsConstants;
-import org.openmrs.module.patientflags.Tag;
-import org.openmrs.util.PrivilegeConstants;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * Keeps the date each flag was raised for each patient, and the flag's dismissal, and dismisses
- * flags. ACT Core keeps these in tables of its own because the patientflags module recreates its
- * own rows on every save, so neither the date_created of its row nor a voided row outlives the next
- * save.
+ * The tables, settings and outcomes of {@link org.openmrs.module.actcore.api.RaisedFlagService},
+ * which keeps the date each flag was raised for each patient, and the flag's dismissal. ACT Core
+ * keeps these in tables of its own because the patientflags module recreates its own rows on every
+ * save, so neither the date_created of its row nor a voided row outlives the next save.
  */
 public class RaisedFlags {
 	
@@ -61,224 +40,17 @@ public class RaisedFlags {
 	 */
 	public static final String DISMISS_TAG_PROPERTY = "actcore.dismissFlagTag";
 	
-	private static final Logger log = LoggerFactory.getLogger(RaisedFlags.class);
-	
-	private static final String[] DISMISS_PRIVILEGES = { PatientFlagsConstants.PRIV_TEST_FLAGS,
-	        PrivilegeConstants.SQL_LEVEL_ACCESS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_GLOBAL_PROPERTIES,
-	        "View Cohorts In Cohort Module", "Edit Cohorts in Cohort Module" };
-	
 	/**
-	 * The outcome of {@link RaisedFlags#dismiss(Patient, Flag)}: the flag was dismissed, it is not
-	 * raised for the patient now, it may not be dismissed, or the full refresh is running.
+	 * The outcome of a dismissal: the flag was dismissed, it is not raised for the patient now, it may
+	 * not be dismissed, or the full refresh is running.
+	 *
+	 * @see org.openmrs.module.actcore.api.RaisedFlagService#dismiss(org.openmrs.Patient,
+	 *      org.openmrs.module.patientflags.Flag)
 	 */
 	public enum Dismissal {
 		DISMISSED,
 		NOT_RAISED,
 		NOT_DISMISSIBLE,
 		REFRESH_RUNNING
-	}
-	
-	/**
-	 * Records the flag as raised for the patient from now, unless it is already recorded as raised or
-	 * the patient does not exist.
-	 */
-	static void raise(int flagId, int patientId) {
-		inTransaction(() -> {
-			// A query, as a raised flag the session holds may since have been lowered by a bulk delete.
-			long absent = (Long) session()
-			        .createQuery("select count(*) from Patient p where p.patientId = :patient and not exists"
-			                + " (select 1 from RaisedFlag r where r.key.patientId = :patient and r.key.flagId = :flag)")
-			        .setParameter("patient", patientId).setParameter("flag", flagId).setHibernateFlushMode(FlushMode.MANUAL)
-			        .uniqueResult();
-			if (absent > 0) {
-				RaisedFlag raised = new RaisedFlag(new RaisedFlag.Key(patientId, flagId), new Date());
-				session().save(raised);
-				// Out of the session, or every later commit of the full refresh dirty-checks it.
-				session().flush();
-				session().evict(raised);
-			}
-			return null;
-		});
-	}
-	
-	static void lower(int flagId, int patientId) {
-		inTransaction(
-		    () -> session().createQuery("delete from RaisedFlag where key.flagId = :flag and key.patientId = :patient")
-		            .setParameter("flag", flagId).setParameter("patient", patientId).executeUpdate());
-	}
-	
-	static void lowerAll(int flagId) {
-		inTransaction(() -> session().createQuery("delete from RaisedFlag where key.flagId = :flag")
-		        .setParameter("flag", flagId).executeUpdate());
-	}
-	
-	static Set<Integer> raisedPatients(int flagId) {
-		return ids("select key.patientId from RaisedFlag where key.flagId = :id", flagId);
-	}
-	
-	static Set<Integer> dismissedPatients(int flagId) {
-		return ids("select key.patientId from RaisedFlag where key.flagId = :id and dateDismissed is not null", flagId);
-	}
-	
-	static boolean isDismissed(int flagId, int patientId) {
-		return dismissedFlags(patientId).contains(flagId);
-	}
-	
-	/**
-	 * Gets the ids of the flags dismissed for the patient that are still recorded as raised.
-	 *
-	 * @param patientId the patient
-	 * @return the ids of the flags dismissed and still raised for the patient; empty when there are
-	 *         none
-	 */
-	public static Set<Integer> dismissedFlags(int patientId) {
-		return ids("select key.flagId from RaisedFlag where key.patientId = :id and dateDismissed is not null", patientId);
-	}
-	
-	/** Gets when the flag was raised for each of its patients, keyed by patient id. */
-	static Map<Integer, Date> raisedSinceByPatient(int flagId) {
-		return dates("select key.patientId, raisedSince from RaisedFlag where key.flagId = :id", flagId);
-	}
-	
-	/**
-	 * Gets when each of the patient's raised flags was raised, keyed by flag id.
-	 *
-	 * @param patientId the patient
-	 * @return the date each raised flag was raised, by flag id; empty when none is raised
-	 */
-	public static Map<Integer, Date> raisedSinceByFlag(int patientId) {
-		return dates("select key.flagId, raisedSince from RaisedFlag where key.patientId = :id", patientId);
-	}
-	
-	/**
-	 * Tells whether the signed-in user may dismiss this flag. They may when they hold
-	 * {@link #DISMISS_PRIVILEGE} and View Patient Flags, and the flag carries the tag that
-	 * {@value #DISMISS_TAG_PROPERTY} names, or that property is blank.
-	 *
-	 * @param flag the flag
-	 * @return true when the user may dismiss the flag, whether or not it is raised for anyone
-	 */
-	public static boolean mayDismiss(Flag flag) {
-		return Context.hasPrivilege(DISMISS_PRIVILEGE) && Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)
-		        && carriesDismissTag(flag);
-	}
-	
-	/**
-	 * Dismisses the flag for the patient, which hides it wherever ACT reads flags until ACT Core finds
-	 * that the flag has stopped matching the patient. A flag can be dismissed only while it matches the
-	 * patient, and not while the full refresh runs, which would undo the dismissal.
-	 *
-	 * @param patient the patient the flag is raised for
-	 * @param flag the flag to dismiss
-	 * @return DISMISSED, also when it was already dismissed; NOT_DISMISSIBLE when it lacks the dismiss
-	 *         tag; REFRESH_RUNNING while the full refresh runs; NOT_RAISED when the patient is voided,
-	 *         the flag is disabled or retired, or it does not match the patient now
-	 * @throws APIAuthenticationException when the user lacks {@link #DISMISS_PRIVILEGE} or View Patient
-	 *             Flags
-	 */
-	public static Dismissal dismiss(Patient patient, Flag flag) {
-		for (String privilege : new String[] { DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS }) {
-			if (!Context.hasPrivilege(privilege)) {
-				throw new APIAuthenticationException("Privilege required: " + privilege);
-			}
-		}
-		if (!carriesDismissTag(flag)) {
-			return Dismissal.NOT_DISMISSIBLE;
-		}
-		// Not waited on: the full refresh holds it for minutes, and would undo the dismissal.
-		if (!PatientFlagRefreshTask.ROWS.readLock().tryLock()) {
-			return Dismissal.REFRESH_RUNNING;
-		}
-		for (String privilege : DISMISS_PRIVILEGES) {
-			Context.addProxyPrivilege(privilege);
-		}
-		try {
-			if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
-			        || Boolean.TRUE.equals(flag.getRetired())
-			        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
-				return Dismissal.NOT_RAISED;
-			}
-			recordDismissal(flag.getFlagId(), patient.getPatientId(), Context.getAuthenticatedUser().getUserId());
-			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
-			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(),
-			    Context.getAuthenticatedUser().getUserId());
-			return Dismissal.DISMISSED;
-		}
-		finally {
-			for (String privilege : DISMISS_PRIVILEGES) {
-				Context.removeProxyPrivilege(privilege);
-			}
-			PatientFlagRefreshTask.ROWS.readLock().unlock();
-		}
-	}
-	
-	private static boolean carriesDismissTag(Flag flag) {
-		String tag = Context.getAdministrationService().getGlobalProperty(DISMISS_TAG_PROPERTY);
-		if (tag == null || tag.trim().isEmpty()) {
-			return true;
-		}
-		if (flag.getTags() != null) {
-			for (Tag candidate : flag.getTags()) {
-				if (tag.trim().equalsIgnoreCase(candidate.getName())) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-	
-	// The list sync runs after this commits, so a failing sync leaves the dismissal recorded.
-	private static void recordDismissal(int flagId, int patientId, Integer userId) {
-		raise(flagId, patientId);
-		inTransaction(() -> {
-			Date now = new Date();
-			int dismissed = session()
-			        .createQuery("update RaisedFlag set dismissedBy = :user, dateDismissed = :now"
-			                + " where key.flagId = :flag and key.patientId = :patient and dateDismissed is null")
-			        .setParameter("user", userId).setParameter("now", now).setParameter("flag", flagId)
-			        .setParameter("patient", patientId).executeUpdate();
-			if (dismissed > 0) {
-				session().save(new FlagDismissal(patientId, flagId, userId, now));
-			}
-			return null;
-		});
-	}
-	
-	private static Set<Integer> ids(String hql, int id) {
-		Set<Integer> ids = new HashSet<Integer>();
-		for (Object value : list(hql, id)) {
-			ids.add((Integer) value);
-		}
-		return ids;
-	}
-	
-	private static Map<Integer, Date> dates(String hql, int id) {
-		Map<Integer, Date> dates = new HashMap<Integer, Date>();
-		for (Object row : list(hql, id)) {
-			dates.put((Integer) ((Object[]) row)[0], (Date) ((Object[]) row)[1]);
-		}
-		return dates;
-	}
-	
-	private static List<?> list(String hql, int id) {
-		// RaisedFlag changes only by bulk HQL or raise()'s flushed save, so a read need not dirty-check.
-		return inTransaction(
-		    () -> session().createQuery(hql).setParameter("id", id).setHibernateFlushMode(FlushMode.MANUAL).list());
-	}
-	
-	private static <T> T inTransaction(Transactions.Work<T> work) {
-		try {
-			return Transactions.inTransaction(work);
-		}
-		catch (RuntimeException e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException("Could not read or write the raised flags", e);
-		}
-	}
-	
-	private static DbSession session() {
-		return Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession();
 	}
 }

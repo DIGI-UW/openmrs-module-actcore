@@ -15,6 +15,8 @@ import org.openmrs.PatientProgram;
 import org.openmrs.PatientState;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.StudyService;
 
 /**
  * Advice on ProgramWorkflowService that gives a study enrolment saved without a status its study's
@@ -36,7 +38,7 @@ public class StudyEnrolmentStatus implements MethodInterceptor {
 	
 	private static void startInInitialStatus(PatientProgram enrolment) {
 		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getDateEnrolled() == null
-		        || !new Studies().isStudy(enrolment.getProgram())) {
+		        || !Context.getService(StudyService.class).isStudy(enrolment.getProgram())) {
 			return;
 		}
 		for (PatientState state : enrolment.getStates()) {

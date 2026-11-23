@@ -17,6 +17,8 @@ import java.util.Set;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 
@@ -40,7 +42,8 @@ public class HideDismissedFlags implements MethodInterceptor {
 		        || args.length == 0 || !(args[0] instanceof Patient) || ((Patient) args[0]).getPatientId() == null) {
 			return result;
 		}
-		Set<Integer> dismissed = RaisedFlags.dismissedFlags(((Patient) args[0]).getPatientId());
+		Set<Integer> dismissed = Context.getService(RaisedFlagService.class)
+		        .getDismissedFlags(((Patient) args[0]).getPatientId());
 		if (dismissed.isEmpty()) {
 			return result;
 		}

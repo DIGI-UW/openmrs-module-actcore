@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,6 +36,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
@@ -87,13 +89,13 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void raisesAFlagAgainAfterLoweringItInTheSameSession() {
-		RaisedFlags.raise(flag.getFlagId(), PATIENT);
-		RaisedFlags.raise(flag.getFlagId(), PATIENT);
-		RaisedFlags.lower(flag.getFlagId(), PATIENT);
+		raisedFlags().raise(flag.getFlagId(), PATIENT);
+		raisedFlags().raise(flag.getFlagId(), PATIENT);
+		raisedFlags().lower(flag.getFlagId(), PATIENT);
 		
-		RaisedFlags.raise(flag.getFlagId(), PATIENT);
+		raisedFlags().raise(flag.getFlagId(), PATIENT);
 		
-		assertTrue(RaisedFlags.raisedPatients(flag.getFlagId()).contains(PATIENT));
+		assertTrue(raisedFlags().getRaisedPatients(flag.getFlagId()).contains(PATIENT));
 	}
 	
 	@Test
@@ -235,6 +237,28 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void hidesADismissedFlagWithoutCallingFlagServiceAgain() {
+		matching(true);
+		runFullRefresh();
+		dismiss();
+		Patient patient = patient();
+		List<String> calls = new ArrayList<String>();
+		MethodInterceptor counting = invocation -> {
+			calls.add(invocation.getMethod().getName());
+			return invocation.proceed();
+		};
+		Context.addAdvice(FlagService.class, counting);
+		try {
+			assertEquals(0, flagService.getPatientFlags(patient).size());
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, counting);
+		}
+		
+		assertEquals(Collections.singletonList("getPatientFlags"), calls);
+	}
+	
+	@Test
 	public void refusesADismissalWhileTheFullRefreshHoldsTheRows() throws InterruptedException {
 		matching(true);
 		runFullRefresh();
@@ -282,8 +306,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Flag untagged = saveFlag("risk", null);
 		runFullRefresh();
 		
-		assertEquals(RaisedFlags.Dismissal.NOT_DISMISSIBLE, RaisedFlags.dismiss(patient(), untagged));
-		assertTrue(!RaisedFlags.mayDismiss(untagged));
+		assertEquals(RaisedFlags.Dismissal.NOT_DISMISSIBLE, raisedFlags().dismiss(patient(), untagged));
+		assertTrue(!raisedFlags().mayDismiss(untagged));
 	}
 	
 	@Test
@@ -293,7 +317,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Flag untagged = saveFlag("risk", null);
 		runFullRefresh();
 		
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, RaisedFlags.dismiss(patient(), untagged));
+		assertEquals(RaisedFlags.Dismissal.DISMISSED, raisedFlags().dismiss(patient(), untagged));
 	}
 	
 	@Test
@@ -336,8 +360,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Patient patient = patient();
 		User user = authenticateWith(RaisedFlags.DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		
-		assertTrue(RaisedFlags.mayDismiss(flag));
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, RaisedFlags.dismiss(patient, flag));
+		assertTrue(raisedFlags().mayDismiss(flag));
+		assertEquals(RaisedFlags.Dismissal.DISMISSED, raisedFlags().dismiss(patient, flag));
 		
 		Context.logout();
 		authenticate();
@@ -352,9 +376,9 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Patient patient = patient();
 		authenticateWith(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		
-		assertTrue(!RaisedFlags.mayDismiss(flag));
+		assertTrue(!raisedFlags().mayDismiss(flag));
 		try {
-			RaisedFlags.dismiss(patient, flag);
+			raisedFlags().dismiss(patient, flag);
 			fail("expected the dismissal to be refused");
 		}
 		catch (APIAuthenticationException e) {
@@ -362,8 +386,12 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 	
+	private static RaisedFlagService raisedFlags() {
+		return Context.getService(RaisedFlagService.class);
+	}
+	
 	private RaisedFlags.Dismissal dismiss() {
-		RaisedFlags.Dismissal dismissal = RaisedFlags.dismiss(patient(), flagService.getFlag(flag.getFlagId()));
+		RaisedFlags.Dismissal dismissal = raisedFlags().dismiss(patient(), flagService.getFlag(flag.getFlagId()));
 		Context.flushSession();
 		return dismissal;
 	}

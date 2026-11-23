@@ -64,4 +64,50 @@
             </list>
         </property>
     </bean>
+
+    <bean id="actcore.RaisedFlagService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.RaisedFlagServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateRaisedFlagDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.RaisedFlagService</value>
+                <ref bean="actcore.RaisedFlagService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.StudyService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.StudyServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateStudyDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.StudyService</value>
+                <ref bean="actcore.StudyService"/>
+            </list>
+        </property>
+    </bean>
 </beans>

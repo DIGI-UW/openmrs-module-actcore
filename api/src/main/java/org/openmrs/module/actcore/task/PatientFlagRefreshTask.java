@@ -28,6 +28,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -66,7 +67,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * time as a patient's refresh or a dismissal does. Each patient's refresh and each dismissal hold
 	 * it shared, and the full refresh holds it alone.
 	 */
-	static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
+	public static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
 	// Patients saved while the full refresh held the rows, refreshed once it lets go.
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
@@ -268,14 +269,15 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		        && Boolean.TRUE.equals(flag.eval(patient, evaluationContext));
 		Map<Integer, String> alreadyFlagged = flaggedMessages(flag, patientId);
 		
+		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		if (!matches) {
 			if (alreadyFlagged.containsKey(patientId)) {
 				flagService.deletePatientFlagForPatient(patient, flag);
 			}
-			RaisedFlags.lower(flagId, patientId);
+			raisedFlags.lower(flagId, patientId);
 			return;
 		}
-		RaisedFlags.raise(flagId, patientId);
+		raisedFlags.raise(flagId, patientId);
 		String message = message(flag, patientId, evaluationContext);
 		if (!alreadyFlagged.containsKey(patientId)) {
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
@@ -337,7 +339,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 */
 	private static void lowerAll(Flag flag) {
 		try {
-			RaisedFlags.lowerAll(flag.getFlagId());
+			Context.getService(RaisedFlagService.class).lowerAll(flag.getFlagId());
 		}
 		catch (RuntimeException e) {
 			log.error("Could not clear when flag '{}' was raised", flag.getName(), e);
@@ -415,15 +417,16 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	}
 	
 	void trackRaised(Flag flag, Set<Integer> matching) {
-		Set<Integer> alreadyRaised = RaisedFlags.raisedPatients(flag.getFlagId());
+		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
+		Set<Integer> alreadyRaised = raisedFlags.getRaisedPatients(flag.getFlagId());
 		for (Integer patientId : alreadyRaised) {
 			if (!matching.contains(patientId)) {
-				RaisedFlags.lower(flag.getFlagId(), patientId);
+				raisedFlags.lower(flag.getFlagId(), patientId);
 			}
 		}
 		for (Integer patientId : matching) {
 			if (!alreadyRaised.contains(patientId)) {
-				RaisedFlags.raise(flag.getFlagId(), patientId);
+				raisedFlags.raise(flag.getFlagId(), patientId);
 			}
 		}
 	}

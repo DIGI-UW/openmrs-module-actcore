@@ -20,6 +20,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.gap.FlagGapLookup;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
@@ -68,7 +69,8 @@ public class RaisedFlagsController extends ActCoreRestController {
 			throw new APIAuthenticationException("Privilege required: " + PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		}
 		Patient patient = patient(patientUuid);
-		Map<Integer, Date> raisedSince = RaisedFlags.raisedSinceByFlag(patient.getPatientId());
+		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
+		Map<Integer, Date> raisedSince = raisedFlags.getRaisedSinceByFlag(patient.getPatientId());
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		Set<Integer> seen = new HashSet<Integer>();
 		for (PatientFlag row : Context.getService(FlagService.class).getPatientFlags(patient)) {
@@ -80,13 +82,13 @@ public class RaisedFlagsController extends ActCoreRestController {
 			results.add(new SimpleObject().add("flag", flag.getUuid()).add("display", flag.getName())
 			        .add("raisedSince",
 			            since == null ? null : ConversionUtil.convertToRepresentation(since, Representation.REF))
-			        .add("dismissible", RaisedFlags.mayDismiss(flag)));
+			        .add("dismissible", raisedFlags.mayDismiss(flag)));
 		}
 		return new SimpleObject().add("results", results);
 	}
 	
 	/**
-	 * Dismisses a raised flag for the patient, as {@link RaisedFlags#dismiss} does.
+	 * Dismisses a raised flag for the patient, as {@link RaisedFlagService#dismiss} does.
 	 *
 	 * @param body the request body, holding the patient's uuid as {@code patient} and the flag's as
 	 *            {@code flag}
@@ -110,7 +112,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 		if (flag == null) {
 			throw new ObjectNotFoundException();
 		}
-		switch (RaisedFlags.dismiss(patient, flag)) {
+		switch (Context.getService(RaisedFlagService.class).dismiss(patient, flag)) {
 			case NOT_DISMISSIBLE:
 				throw new IllegalRequestException("The flag '" + flag.getName() + "' cannot be dismissed");
 			case NOT_RAISED:

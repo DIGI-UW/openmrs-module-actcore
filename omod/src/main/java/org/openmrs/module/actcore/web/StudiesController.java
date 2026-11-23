@@ -22,7 +22,7 @@ import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.studies.Studies;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -45,8 +45,6 @@ public class StudiesController extends ActCoreRestController {
 	/** The privilege a user needs, unless they are a superuser, to create or rename a study. */
 	public static final String MANAGE_PRIVILEGE = ActCorePrivileges.MANAGE_STUDIES;
 	
-	private final Studies studies = new Studies();
-	
 	/**
 	 * Gets the studies that are not retired, by name, each with its uuid, name and Study status states,
 	 * the initial states first.
@@ -60,14 +58,14 @@ public class StudiesController extends ActCoreRestController {
 	public SimpleObject getStudies() {
 		requirePrivilege(PrivilegeConstants.GET_PROGRAMS);
 		List<SimpleObject> results = new ArrayList<>();
-		for (Program study : studies.getStudies()) {
+		for (Program study : Context.getService(StudyService.class).getStudies()) {
 			results.add(toJson(study));
 		}
 		return new SimpleObject().add("results", results);
 	}
 	
 	/**
-	 * Creates a study, as {@link Studies#create(String)} does.
+	 * Creates a study, as {@link StudyService#createStudy(String)} does.
 	 *
 	 * @param body the request body, holding the study's name as {@code name}
 	 * @return the new study, with its uuid, name and states
@@ -79,11 +77,11 @@ public class StudiesController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
 		requirePrivilege(MANAGE_PRIVILEGE);
-		return toJson(studies.create(name(body)));
+		return toJson(Context.getService(StudyService.class).createStudy(name(body)));
 	}
 	
 	/**
-	 * Renames a study, as {@link Studies#rename(Program, String)} does.
+	 * Renames a study, as {@link StudyService#renameStudy(Program, String)} does.
 	 *
 	 * @param uuid the study's uuid
 	 * @param body the request body, holding the new name as {@code name}
@@ -97,9 +95,10 @@ public class StudiesController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
 		requirePrivilege(MANAGE_PRIVILEGE);
+		StudyService studies = Context.getService(StudyService.class);
 		Program study = studies.getStudies().stream().filter(p -> p.getUuid().equals(uuid)).findFirst()
 		        .orElseThrow(ObjectNotFoundException::new);
-		return toJson(studies.rename(study, name(body)));
+		return toJson(studies.renameStudy(study, name(body)));
 	}
 	
 	private static String name(Map<String, Object> body) {
