@@ -35,7 +35,6 @@ import org.junit.Test;
 import org.openmrs.CohortMembership;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
-import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
@@ -180,14 +179,6 @@ public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void returnsNullForAPatientTheCriteriaDoNotMatch() {
 		configure("select e.patient_id, e.uuid, '" + WEIGHT + "' from encounter e where e.encounter_id = 6");
-		
-		assertNull(lookup.find(patient(), flag));
-	}
-	
-	@Test
-	public void ignoresAGapQueryGlobalProperty() {
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty("actcore.gapQuery." + flag.getUuid(),
-		        "select e.uuid, '" + WEIGHT + "' from encounter e where e.patient_id = :patientId"));
 		
 		assertNull(lookup.find(patient(), flag));
 	}

@@ -27,10 +27,10 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.runchart.RunCharts;
@@ -169,7 +169,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 			controller.get("active_registrants", null, null, null, null);
 			fail("expected the request to be refused");
 		}
-		catch (APIAuthenticationException e) {
+		catch (ContextAuthenticationException e) {
 			assertTrue(e.getMessage().contains(RunChartController.READ_PRIVILEGE));
 		}
 	}

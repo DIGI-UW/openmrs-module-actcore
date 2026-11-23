@@ -168,7 +168,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			Integer userId = Context.getAuthenticatedUser().getUserId();
 			recordDismissal(flag.getFlagId(), patient.getPatientId(), userId);
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
-			log.info("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(), userId);
+			log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(), userId);
 			return RaisedFlags.Dismissal.DISMISSED;
 		}
 		finally {

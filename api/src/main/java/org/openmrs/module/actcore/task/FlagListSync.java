@@ -161,10 +161,10 @@ public class FlagListSync {
 		if (listed && member == null) {
 			addMember(memberService, list, patient,
 			    Context.getService(RaisedFlagService.class).getRaisedSinceByFlag(patientId).get(flagId));
-			log.info("List '{}': patient {} added", list.getName(), patientId);
+			log.debug("List '{}': patient {} added", list.getName(), patientId);
 		} else if (!listed && member != null) {
 			endMember(memberService, member);
-			log.info("List '{}': patient {} ended", list.getName(), patientId);
+			log.debug("List '{}': patient {} ended", list.getName(), patientId);
 		}
 	}
 	

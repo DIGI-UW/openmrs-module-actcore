@@ -21,6 +21,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.gap.FlagGapLookup;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
@@ -58,16 +59,15 @@ public class RaisedFlagsController extends ActCoreRestController {
 	 * @param patientUuid the patient's uuid
 	 * @return the flags as {@code results}, one per flag, empty when none is shown; a flag's
 	 *         raisedSince is null when ACT Core has no date for it
-	 * @throws APIAuthenticationException when the user lacks View Patient Flags or Get Patients
+	 * @throws ContextAuthenticationException when the user lacks View Patient Flags
+	 * @throws APIAuthenticationException when the user lacks Get Patients
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getRaisedFlags(@RequestParam(value = "patient", required = false) String patientUuid) {
-		if (!Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)) {
-			throw new APIAuthenticationException("Privilege required: " + PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
-		}
+		Context.requirePrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		Patient patient = patient(patientUuid);
 		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		Map<Integer, Date> raisedSince = raisedFlags.getRaisedSinceByFlag(patient.getPatientId());
