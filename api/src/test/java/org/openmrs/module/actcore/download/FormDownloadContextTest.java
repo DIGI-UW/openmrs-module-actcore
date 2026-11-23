@@ -250,6 +250,11 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		FormDownload.PATIENT_FIELDS.put("address", "Address");
 	}
 	
+	@Test(expected = UnsupportedOperationException.class)
+	public void identifyingPatientFields_shouldNotBeChangeable() {
+		FormDownload.IDENTIFYING_PATIENT_FIELDS.set(0, "sex");
+	}
+	
 	@Test
 	public void buildPerPatient_shouldGiveARowPerPatientWithEachFormNumberedOldestFirst() {
 		Form consult = otherForm("RHD Consultation Visit");

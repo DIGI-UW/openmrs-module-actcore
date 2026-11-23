@@ -89,8 +89,8 @@ public class FormDownload {
 	 * The keys of the patient fields that identify the patient, which only a download with identifiers
 	 * gives.
 	 */
-	public static final List<String> IDENTIFYING_PATIENT_FIELDS = Arrays.asList("givenName", "familyName", "birthDate",
-	    "identifiers", "phones");
+	public static final List<String> IDENTIFYING_PATIENT_FIELDS = Collections
+	        .unmodifiableList(Arrays.asList("givenName", "familyName", "birthDate", "identifiers", "phones"));
 	
 	static {
 		Map<String, String> fields = new LinkedHashMap<String, String>();
