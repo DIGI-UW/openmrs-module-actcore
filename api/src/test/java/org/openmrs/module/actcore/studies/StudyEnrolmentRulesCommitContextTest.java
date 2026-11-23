@@ -86,6 +86,27 @@ public class StudyEnrolmentRulesCommitContextTest extends BaseModuleContextSensi
 		assertNotNull(programs().getPatientProgramByUuid(enrolment.getUuid()).getDateCompleted());
 	}
 	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void savePatientProgram_shouldLetThroughAnOpenEnrolmentSavedWithOnlyAVoidedStudyId() {
+		PatientProgram enrolment = enrolledWithAStudyId();
+		sql("update patient_program_attribute set voided = true, voided_by = 1, date_voided = now(),"
+		        + " void_reason = 'removed' where uuid = '" + attributeUuid(enrolment) + "'");
+		Context.clearSession();
+		
+		programs().savePatientProgram(programs().getPatientProgramByUuid(enrolment.getUuid()));
+	}
+	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void savePatientProgram_shouldLetThroughAnOpenEnrolmentSavedWithABlankStudyId() {
+		PatientProgram enrolment = enrolledWithAStudyId();
+		sql("update patient_program_attribute set value_reference = ' ' where uuid = '" + attributeUuid(enrolment) + "'");
+		Context.clearSession();
+		
+		programs().savePatientProgram(programs().getPatientProgramByUuid(enrolment.getUuid()));
+	}
+	
 	private PatientProgram enrolledWithAStudyId() {
 		studyId = new ProgramAttributeType();
 		studyId.setName("Study Participant ID");
