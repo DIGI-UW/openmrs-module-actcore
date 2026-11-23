@@ -45,7 +45,7 @@ public class NextStepsDefaultsUpgradeTest {
 	
 	@Test
 	public void upgradeAddsReferOnlyToTheDefaultsBeforeIt() throws Exception {
-		Document liquibase = parse("target/classes/liquibase.xml");
+		Document liquibase = parse("../api/src/main/resources/liquibase.xml");
 		
 		assertEquals(DEFAULT_BEFORE_REFER + "," + REFER,
 		    xpath.evaluate(REFER_CHANGESET + "[1]/column[@name='property_value']/@value", liquibase));
@@ -67,7 +67,7 @@ public class NextStepsDefaultsUpgradeTest {
 	
 	@Test
 	public void upgradeAddsPatientInformationOnlyToTheEarlierEncounterTypesDefault() throws Exception {
-		Document liquibase = parse("target/classes/liquibase.xml");
+		Document liquibase = parse("../api/src/main/resources/liquibase.xml");
 		
 		assertEquals(EARLIER_DEFAULT + "," + PATIENT_INFO,
 		    xpath.evaluate(CHANGESET + "/column[@name='property_value']/@value", liquibase));

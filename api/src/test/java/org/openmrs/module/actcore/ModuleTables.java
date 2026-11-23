@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import liquibase.Contexts;
+import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.DatabaseUpdater;
 
@@ -34,8 +35,10 @@ public final class ModuleTables {
 	public static void create() {
 		ClassLoader loader = ModuleTables.class.getClassLoader();
 		URL changelog = loader.getResource(CHANGELOG);
+		String activator = ActCoreActivator.class.getName().replace('.', '/') + ".class";
+		String apiRoot = StringUtils.removeEnd(String.valueOf(loader.getResource(activator)), activator);
 		// patientflags, cohort and reporting jars each carry a liquibase.xml; this module's must come first.
-		if (changelog == null || !"file".equals(changelog.getProtocol())) {
+		if (changelog == null || !changelog.toString().equals(apiRoot + CHANGELOG)) {
 			throw new IllegalStateException(
 			        "The module's " + CHANGELOG + " is not first on the test classpath: " + changelog);
 		}
