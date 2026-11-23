@@ -12,15 +12,18 @@ package org.openmrs.module.actcore.logs;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.Statement;
+import java.util.List;
 
 import org.apache.commons.io.IOUtils;
+import org.hibernate.SessionFactory;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 
 /**
- * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
- * not create, and empties them.
+ * Makes the module's tables and the audit log module's tables of audit-tables.sql, which the test
+ * context does not create, and empties them along with the Envers audit tables.
  */
 public final class AuditTables {
 	
@@ -37,6 +40,18 @@ public final class AuditTables {
 					Context.getAdministrationService().executeSQL("delete from " + table, false);
 				}
 			}
+			Context.getRegisteredComponents(SessionFactory.class).get(0).getCurrentSession().doWork(connection -> {
+				try (Statement statement = connection.createStatement()) {
+					statement.execute("set referential_integrity false");
+					for (List<Object> table : Context.getAdministrationService().executeSQL(
+					    "select table_name from information_schema.tables where table_name like '%\\_AUD' escape '\\'"
+					            + " or table_name = 'REVISION_ENTITY'",
+					    true)) {
+						statement.execute("delete from " + table.get(0));
+					}
+					statement.execute("set referential_integrity true");
+				}
+			});
 		});
 	}
 	
