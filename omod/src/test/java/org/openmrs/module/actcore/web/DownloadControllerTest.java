@@ -44,6 +44,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
@@ -269,7 +270,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			controller.getDownloads(null, null, null, null, null, null, null);
 			fail("expected the downloads to be refused");
 		}
-		catch (APIAuthenticationException e) {
+		catch (ContextAuthenticationException e) {
 			assertTrue(e.getMessage().contains(DownloadLog.VIEW_PRIVILEGE));
 		}
 	}

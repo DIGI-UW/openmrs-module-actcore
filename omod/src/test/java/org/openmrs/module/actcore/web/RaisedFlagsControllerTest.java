@@ -34,8 +34,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.task.HideDismissedFlags;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
@@ -179,7 +179,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		controller.dismiss(body(PATIENT_7, UUID.randomUUID().toString()));
 	}
 	
-	@Test(expected = APIAuthenticationException.class)
+	@Test(expected = ContextAuthenticationException.class)
 	public void refusesAUserWhoMayNotSeeFlags() {
 		Context.logout();
 		

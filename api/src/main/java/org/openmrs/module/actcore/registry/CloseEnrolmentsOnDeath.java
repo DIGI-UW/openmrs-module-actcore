@@ -87,7 +87,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		List<List<Object>> rows;
 		try {
 			rows = Context.getAdministrationService().executeSQL("select distinct pp.patient_id from patient_program pp"
-			        + " join person p on p.person_id = pp.patient_id where p.dead = 1 and p.voided = 0 and pp.voided = 0"
+			        + " join person p on p.person_id = pp.patient_id where p.dead = true and p.voided = false and pp.voided = false"
 			        + " and pp.date_completed is null and pp.program_id in ("
 			        + programIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")",
 			    true);

@@ -27,9 +27,9 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.AuditTables;
 import org.openmrs.module.actcore.logs.ReadLog;
@@ -70,7 +70,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 				call.run();
 				fail("expected the activity to be refused");
 			}
-			catch (APIAuthenticationException e) {
+			catch (ContextAuthenticationException e) {
 				assertTrue(e.getMessage().contains(ActivityLog.VIEW_PRIVILEGE));
 			}
 		}
@@ -128,7 +128,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 			reads.getReads(null, null, null, null, null, null);
 			fail("expected the reads to be refused");
 		}
-		catch (APIAuthenticationException e) {
+		catch (ContextAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ReadLog.VIEW_PRIVILEGE));
 		}
 	}

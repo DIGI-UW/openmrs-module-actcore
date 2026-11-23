@@ -17,6 +17,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.nextsteps.NextStep;
 import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -44,7 +45,8 @@ public class NextStepsController extends ActCoreRestController {
 	 *         whether it is new, done, on hold or an alert
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
-	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
+	 * @throws APIAuthenticationException when the user lacks Get Patients
+	 * @throws ContextAuthenticationException when the user lacks Get Observations
 	 */
 	@RequestMapping(value = "/nextsteps", method = RequestMethod.GET)
 	@ResponseBody
@@ -56,10 +58,7 @@ public class NextStepsController extends ActCoreRestController {
 		if (patient == null) {
 			throw new ObjectNotFoundException();
 		}
-		// Thrown here: the REST layer answers requirePrivilege's exception with a 500.
-		if (!Context.hasPrivilege(PrivilegeConstants.GET_OBS)) {
-			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_OBS);
-		}
+		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
 		
 		List<SimpleObject> steps = new ArrayList<SimpleObject>();
 		for (NextStep step : NextSteps.of(patient, LocalDate.now())) {

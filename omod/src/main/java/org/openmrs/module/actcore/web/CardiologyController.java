@@ -15,6 +15,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -40,7 +41,8 @@ public class CardiologyController extends ActCoreRestController {
 	 *         {@link org.openmrs.module.actcore.consultation.NextConsultation#of(Patient)} gives none
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
-	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
+	 * @throws APIAuthenticationException when the user lacks Get Patients
+	 * @throws ContextAuthenticationException when the user lacks Get Observations
 	 */
 	@RequestMapping(value = "/cardiology", method = RequestMethod.GET)
 	@ResponseBody
@@ -52,10 +54,7 @@ public class CardiologyController extends ActCoreRestController {
 		if (patient == null) {
 			throw new ObjectNotFoundException();
 		}
-		// Thrown here rather than by requirePrivilege, whose exception the REST layer answers with a 500.
-		if (!Context.hasPrivilege(PrivilegeConstants.GET_OBS)) {
-			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_OBS);
-		}
+		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
 		
 		LocalDate nextDue = NextConsultation.of(patient);
 		return new SimpleObject().add("nextDue", nextDue == null ? null : nextDue.toString());
