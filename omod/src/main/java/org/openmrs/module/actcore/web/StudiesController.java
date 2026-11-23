@@ -96,8 +96,10 @@ public class StudiesController extends ActCoreRestController {
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
 		requirePrivilege(MANAGE_PRIVILEGE);
 		StudyService studies = Context.getService(StudyService.class);
-		Program study = studies.getStudies().stream().filter(p -> p.getUuid().equals(uuid)).findFirst()
-		        .orElseThrow(ObjectNotFoundException::new);
+		Program study = studies.getStudyByUuid(uuid);
+		if (study == null) {
+			throw new ObjectNotFoundException();
+		}
 		return toJson(studies.renameStudy(study, name(body)));
 	}
 	

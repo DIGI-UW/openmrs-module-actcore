@@ -41,6 +41,20 @@ public interface StudyService extends OpenmrsService {
 	List<Program> getStudies();
 	
 	/**
+	 * Gets the study with the uuid when it is not retired. It needs either privilege, so that a user
+	 * who may manage studies can find the study they rename without also holding Get Programs.
+	 *
+	 * @param uuid the study's uuid
+	 * @return the study; null when no program has the uuid, or the program is retired or not a study
+	 * @throws org.openmrs.api.APIException when {@value Studies#TEMPLATE_PROPERTY} names no program
+	 *             with a workflow
+	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
+	 *             {@link PrivilegeConstants#GET_PROGRAMS} nor {@link ActCorePrivileges#MANAGE_STUDIES}
+	 */
+	@Authorized({ PrivilegeConstants.GET_PROGRAMS, ActCorePrivileges.MANAGE_STUDIES })
+	Program getStudyByUuid(String uuid);
+	
+	/**
 	 * Tells whether the program is a study, whether retired or not. A study is a program other than the
 	 * template that has an unretired workflow on one of the template's workflow concepts. While no
 	 * template is configured, no program is a study, so enrolling keeps working. It needs no privilege

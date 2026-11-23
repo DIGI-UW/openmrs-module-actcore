@@ -76,6 +76,19 @@ public class StudyServiceImpl extends BaseOpenmrsService implements StudyService
 	}
 	
 	/**
+	 * @see org.openmrs.module.actcore.api.StudyService#getStudyByUuid(String)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public Program getStudyByUuid(String uuid) {
+		return withPrivileges(() -> {
+			Program template = template();
+			Program program = Context.getProgramWorkflowService().getProgramByUuid(uuid);
+			return program != null && !program.getRetired() && isStudy(program, template) ? program : null;
+		});
+	}
+	
+	/**
 	 * @see org.openmrs.module.actcore.api.StudyService#isStudy(Program)
 	 */
 	@Override

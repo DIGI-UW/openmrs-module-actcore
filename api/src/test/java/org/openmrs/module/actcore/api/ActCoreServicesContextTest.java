@@ -135,6 +135,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		StudyService service = Context.getService(StudyService.class);
 		assertNotNull(service);
 		refused(() -> service.getStudies(), PrivilegeConstants.GET_PROGRAMS);
+		refused(() -> service.getStudyByUuid("uuid"), PrivilegeConstants.GET_PROGRAMS, ActCorePrivileges.MANAGE_STUDIES);
 		refused(() -> service.createStudy("ARC"), ActCorePrivileges.MANAGE_STUDIES);
 		refused(() -> service.renameStudy(new Program(1), "ARC"), ActCorePrivileges.MANAGE_STUDIES);
 		refused(() -> service.getSavedProgram(new PatientProgram(1)), PrivilegeConstants.EDIT_PATIENT_PROGRAMS);

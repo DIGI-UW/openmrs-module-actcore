@@ -146,6 +146,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 * @see org.openmrs.module.actcore.api.RaisedFlagService#dismiss(Patient, Flag)
 	 */
 	@Override
+	// Not REQUIRED: the dismissal would then join this transaction and roll back with a failing list sync.
 	@Transactional(propagation = Propagation.SUPPORTS)
 	public RaisedFlags.Dismissal dismiss(Patient patient, Flag flag) {
 		if (!carriesDismissTag(flag)) {

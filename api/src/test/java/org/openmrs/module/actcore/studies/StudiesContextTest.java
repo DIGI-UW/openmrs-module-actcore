@@ -129,6 +129,21 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void getStudyByUuid_shouldFindAnUnretiredStudyButNotTheTemplateAnotherProgramOrARetiredStudy() {
+		Program study = studies().createStudy("ARC");
+		
+		assertEquals(study, studies().getStudyByUuid(study.getUuid()));
+		assertNull(studies().getStudyByUuid(template.getUuid()));
+		assertNull(studies().getStudyByUuid(Context.getProgramWorkflowService().getProgram(1).getUuid()));
+		assertNull(studies().getStudyByUuid("no such uuid"));
+		// Not retireProgram, which retires the workflows too, so isStudy alone would leave the study out.
+		study.setRetired(true);
+		study.setRetireReason("ended");
+		Context.getProgramWorkflowService().saveProgram(study);
+		assertNull(studies().getStudyByUuid(study.getUuid()));
+	}
+	
+	@Test
 	public void rename_shouldRenameTheProgramAndItsConceptAndFreeTheOldName() {
 		Program study = studies().createStudy("Stage Study 1");
 		
