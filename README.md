@@ -17,7 +17,7 @@ Its screens are in [openmrs-esm-act-app](https://github.com/DIGI-UW/openmrs-esm-
 | Research studies | Studies as programs, and the consent and death rules on study enrolment |
 | Data downloads | Saved forms as rows, with identifiers withheld unless allowed, and a log of every download |
 | Logs | What users changed and which patients they opened |
-| Users and clinics | Limits site administrators to their own clinics' users, and lets administrators give the ACT roles |
+| Users and clinics | Limits site administrators to their own clinics' users |
 | Reports | Loads the distro's report descriptors at startup |
 
 The flag rules themselves are not in this module: they are SQL patient flags in the distro's configuration.
@@ -75,7 +75,7 @@ description, is in [`omod/src/main/resources/config.xml`](omod/src/main/resource
 | `actcore.runCharts.*` | The run chart report |
 | `actcore.studies.*`, `actcore.studyTemplateProgram` | Study consent, opt-in and status rules |
 | `actcore.download.*` | What counts as identifying in a download |
-| `actcore.users.*` | The roles each administrator may give |
+| `actcore.users.siteAdministratorRoles` | The roles a site administrator may give |
 
 ## Privileges
 

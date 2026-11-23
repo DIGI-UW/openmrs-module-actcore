@@ -37,7 +37,6 @@ import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.actcore.studies.StudyEnrolmentStatus;
 import org.openmrs.module.actcore.task.HideDismissedFlags;
-import org.openmrs.module.actcore.users.AdministratorRoleAssignment;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.w3c.dom.NodeList;
 
@@ -56,11 +55,6 @@ public class AdviceRegistrationTest {
 	@Test
 	public void configRegistersTheClinicLimitOnUserService() throws Exception {
 		assertEquals(points(UserService.class), pointsOf(ClinicScopedUserAdministration.class));
-	}
-	
-	@Test
-	public void configRegistersTheAdministratorRoleAssignmentOnUserService() throws Exception {
-		assertEquals(points(UserService.class), pointsOf(AdministratorRoleAssignment.class));
 	}
 	
 	@Test

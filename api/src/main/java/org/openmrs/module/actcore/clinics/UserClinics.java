@@ -137,7 +137,7 @@ public final class UserClinics {
 	 * @return the uuids, in order and without blanks or repeats; empty when the property is unset or
 	 *         blank
 	 */
-	public static Set<String> rolesIn(String property) {
+	private static Set<String> rolesIn(String property) {
 		List<String> values = column("select property_value from global_property where property = ?", property);
 		return parse(values.isEmpty() ? null : values.get(0));
 	}
