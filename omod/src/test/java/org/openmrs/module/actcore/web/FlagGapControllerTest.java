@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.web;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -27,6 +28,7 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.patientflags.Flag;
@@ -108,6 +110,19 @@ public class FlagGapControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(((List<?>) response.get("results")).isEmpty());
 	}
 	
+	@Test
+	public void refusesAUserWithoutViewPatientFlagsNamingThePrivilege() {
+		authenticateWith("Get Patients");
+		
+		try {
+			controller.getGaps(PATIENT_7, flag.getUuid());
+			fail();
+		}
+		catch (APIAuthenticationException e) {
+			assertEquals("Privilege required: View Patient Flags", e.getMessage());
+		}
+	}
+	
 	@Test(expected = IllegalRequestException.class)
 	public void requiresThePatient() {
 		controller.getGaps(null, flag.getUuid());
@@ -133,7 +148,7 @@ public class FlagGapControllerTest extends BaseModuleWebContextSensitiveTest {
 		Context.getService(FlagService.class).saveFlag(flag);
 	}
 	
-	private void authenticateWith(String... privileges) {
+	static void authenticateWith(String... privileges) {
 		UserService users = Context.getUserService();
 		Role role = new Role("gap reader " + UUID.randomUUID());
 		for (String name : privileges) {

@@ -90,8 +90,9 @@ public class FlagGapController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Gets a flag by uuid, refusing a user without View Patient Flags with the message these endpoints
-	 * gave before the look-up moved behind a service, whose message differs.
+	 * Gets a flag by uuid for the gap and dismiss endpoints, refusing a user without View Patient Flags
+	 * with "Privilege required: View Patient Flags", the message those endpoints answer, rather than
+	 * core's "Privileges required".
 	 *
 	 * @param uuid the flag's uuid
 	 * @return the flag, or null when none has the uuid

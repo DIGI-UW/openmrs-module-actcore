@@ -34,6 +34,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ModuleTables;
@@ -177,6 +178,20 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	@Test(expected = ObjectNotFoundException.class)
 	public void answersNotFoundForAnUnknownFlag() {
 		controller.dismiss(body(PATIENT_7, UUID.randomUUID().toString()));
+	}
+	
+	@Test
+	public void refusesToDismissForAUserWithoutViewPatientFlagsNamingThePrivilege() {
+		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), null);
+		FlagGapControllerTest.authenticateWith("Get Patients");
+		
+		try {
+			controller.dismiss(body(PATIENT_7, missing.getUuid()));
+			fail();
+		}
+		catch (APIAuthenticationException e) {
+			assertEquals("Privilege required: View Patient Flags", e.getMessage());
+		}
 	}
 	
 	@Test(expected = ContextAuthenticationException.class)

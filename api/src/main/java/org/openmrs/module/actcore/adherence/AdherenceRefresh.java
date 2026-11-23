@@ -268,7 +268,7 @@ public class AdherenceRefresh {
 		if (patientIds != null && patientIds.isEmpty()) {
 			return histories;
 		}
-		// The full refresh reads outside a transaction, and the DAO needs one for its session.
+		// One transaction gives the four reads one snapshot, and a session on a thread with none bound.
 		return inTransaction(() -> {
 			AdministrationService admin = Context.getAdministrationService();
 			readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS), patientIds,

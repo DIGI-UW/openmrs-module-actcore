@@ -52,7 +52,7 @@ import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
-public class FlagGapLookupContextTest extends BaseModuleContextSensitiveTest {
+public class FlagGapServiceContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final int PATIENT = 7;
 	
