@@ -9,8 +9,11 @@
  */
 package org.openmrs.module.actcore.web;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -20,8 +23,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 /**
  * The base class of the module's REST controllers. It answers a request parameter that is missing
- * or of the wrong type as the caller's error, with 400, where BaseRestController would answer it as
- * a server error.
+ * or of the wrong type with 400, and a privilege that
+ * {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401 or 403, as for
+ * an {@link APIAuthenticationException}. BaseRestController would answer both with 500.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
@@ -46,5 +50,23 @@ public abstract class ActCoreRestController extends BaseRestController {
 		}
 		// No stack trace or code: the caller sent the request wrong, and the server has nothing to show.
 		return new SimpleObject().add("error", new SimpleObject().add("message", message));
+	}
+	
+	/**
+	 * Answers the {@link ContextAuthenticationException} that
+	 * {@link org.openmrs.api.context.Context#requirePrivilege(String)} throws as BaseRestController
+	 * answers an {@link APIAuthenticationException}: 401 when no user is logged in, else 403.
+	 *
+	 * @param e the ContextAuthenticationException
+	 * @param request the request
+	 * @param response the response, whose status is set to 401 or 403
+	 * @return an {@code error} holding the {@code message} and the exception's detail
+	 * @throws Exception if BaseRestController's handler fails
+	 */
+	@ExceptionHandler(ContextAuthenticationException.class)
+	@ResponseBody
+	public SimpleObject privilegeRequiredHandler(ContextAuthenticationException e, HttpServletRequest request,
+	        HttpServletResponse response) throws Exception {
+		return apiAuthenticationExceptionHandler(e, request, response);
 	}
 }

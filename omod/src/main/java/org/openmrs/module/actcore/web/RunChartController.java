@@ -18,9 +18,9 @@ import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
@@ -60,7 +60,7 @@ public class RunChartController extends ActCoreRestController {
 	 * @param points day, week or month; blank for week
 	 * @return the range, the period and each metric's points and median, with the named metric's too; a
 	 *         median is null when no point has a value
-	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link #READ_PRIVILEGE}
 	 * @throws IllegalRequestException when the metric, a date, the points or the clinic is not
 	 *             recognised, the start is after the end, a daily range is longer than
 	 *             {@link RunCharts#MOST_DAILY_DAYS} days, or the range has more than
@@ -74,7 +74,7 @@ public class RunChartController extends ActCoreRestController {
 	        @RequestParam(value = "startDate", required = false) String startDate,
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "points", required = false) String points) {
-		requirePrivilege(READ_PRIVILEGE);
+		Context.requirePrivilege(READ_PRIVILEGE);
 		if (StringUtils.isNotBlank(metric) && !RunCharts.METRICS.contains(metric)) {
 			throw new IllegalRequestException("metric must be one of " + RunCharts.METRICS);
 		}
@@ -183,11 +183,5 @@ public class RunChartController extends ActCoreRestController {
 			throw new IllegalRequestException("No location has the uuid " + uuid);
 		}
 		return location;
-	}
-	
-	private static void requirePrivilege(String privilege) {
-		if (!Context.hasPrivilege(privilege)) {
-			throw new APIAuthenticationException("Privilege required: " + privilege);
-		}
 	}
 }

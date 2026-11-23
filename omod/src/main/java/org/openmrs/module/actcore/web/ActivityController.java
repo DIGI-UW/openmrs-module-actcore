@@ -15,8 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.Names;
 import org.openmrs.module.actcore.logs.Rows;
@@ -61,7 +61,7 @@ public class ActivityController extends ActCoreRestController {
 	 * @param limit the most entries to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
 	 *            {@link Rows#DEFAULT_LIMIT}
 	 * @return the entries as {@code results}, with {@code totalCount} and the days read
-	 * @throws APIAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
 	 * @throws IllegalRequestException when the kind or a date is not recognised, the start is after the
 	 *             end, or a kind filter has too many changes to sort
 	 */
@@ -75,7 +75,7 @@ public class ActivityController extends ActCoreRestController {
 	        @RequestParam(value = "patient", required = false) String patient,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		requireViewPrivilege();
+		Context.requirePrivilege(ActivityLog.VIEW_PRIVILEGE);
 		ActivityLog.Filter filter = new ActivityLog.Filter();
 		filter.username = StringUtils.trimToNull(username);
 		filter.kind = StringUtils.trimToNull(kind);
@@ -114,13 +114,13 @@ public class ActivityController extends ActCoreRestController {
 	 *
 	 * @param revisionId the entry's revision id
 	 * @return the revision id, the fields and the void reason, null when there is none
-	 * @throws APIAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
 	 * @throws ObjectNotFoundException when the log has no entry for the revision
 	 */
 	@RequestMapping(value = "/{revisionId}", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {
-		requireViewPrivilege();
+		Context.requirePrivilege(ActivityLog.VIEW_PRIVILEGE);
 		ActivityLog.Details details = new ActivityLog().details(revisionId);
 		if (details == null) {
 			throw new ObjectNotFoundException();
@@ -132,12 +132,6 @@ public class ActivityController extends ActCoreRestController {
 		}
 		return new SimpleObject().add("revisionId", details.revisionId).add("fields", fields).add("voidReason",
 		    details.voidReason);
-	}
-	
-	static void requireViewPrivilege() {
-		if (!Context.hasPrivilege(ActivityLog.VIEW_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + ActivityLog.VIEW_PRIVILEGE);
-		}
 	}
 	
 	static SimpleObject who(Names.Who who) {

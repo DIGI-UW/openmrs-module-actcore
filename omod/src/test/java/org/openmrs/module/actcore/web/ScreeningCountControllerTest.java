@@ -29,6 +29,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
@@ -107,7 +108,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 			controller.save(CLINIC_A, "2026-08", body(40, null));
 			fail("expected the save to be refused");
 		}
-		catch (APIAuthenticationException e) {
+		catch (ContextAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ScreeningCountController.ENTER_PRIVILEGE));
 		}
 	}

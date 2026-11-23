@@ -10,9 +10,9 @@
 package org.openmrs.module.actcore.web;
 
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
@@ -43,12 +43,12 @@ public class RefreshController extends ActCoreRestController {
 	 *
 	 * @return {@code lastRefreshed}, an ISO-8601 instant or null before the first run finishes, and
 	 *         {@code running}
-	 * @throws APIAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link #PRIVILEGE}
 	 */
 	@RequestMapping(value = "/refresh", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStatus() {
-		requirePrivilege();
+		Context.requirePrivilege(PRIVILEGE);
 		return status();
 	}
 	
@@ -60,14 +60,14 @@ public class RefreshController extends ActCoreRestController {
 	 * @return the status, as {@link #getStatus()} gives it, with {@code refreshed}, false when another
 	 *         run was in progress; after a run, also how many flags and lists failed and whether the
 	 *         adherence refresh failed
-	 * @throws APIAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link #PRIVILEGE}
 	 * @throws APIException when the module has not started or the refresh throws
 	 */
 	// JSON only: another site's page can post a form here with the user's cookie, but not JSON.
 	@RequestMapping(value = "/refresh", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public SimpleObject refresh() {
-		requirePrivilege();
+		Context.requirePrivilege(PRIVILEGE);
 		DaemonToken token = ActCoreActivator.getDaemonToken();
 		if (token == null) {
 			throw new APIException("ACT Core has not started, so it cannot run the refresh");
@@ -109,11 +109,5 @@ public class RefreshController extends ActCoreRestController {
 		}
 		return new SimpleObject().add("lastRefreshed", StringUtils.defaultIfBlank(lastFinished, null)).add("running",
 		    PatientFlagRefreshTask.isRunning());
-	}
-	
-	private static void requirePrivilege() {
-		if (!Context.hasPrivilege(PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + PRIVILEGE);
-		}
 	}
 }
