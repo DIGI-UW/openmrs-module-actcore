@@ -15,14 +15,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Locale;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -38,6 +32,8 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.nextsteps.NextSteps;
+import org.openmrs.module.actcore.nextsteps.StepReason;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -132,21 +128,12 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void hasAnEnglishMessageForEveryCodeTheStepsUse() throws Exception {
-		String rules = new String(
-		        Files.readAllBytes(Paths.get("../api/src/main/java/org/openmrs/module/actcore/nextsteps/NextSteps.java")),
-		        StandardCharsets.UTF_8);
-		Set<String> codes = new TreeSet<String>();
-		Matcher reason = Pattern.compile("StepReason\\.of\\(([^()]*(?:\\([^()]*\\)[^()]*)*)\\)").matcher(rules);
-		while (reason.find()) {
-			Matcher literal = Pattern.compile("\"(\\w+)\"").matcher(reason.group(1));
-			while (literal.find()) {
-				codes.add(NextStepsController.REASON_PREFIX + literal.group(1));
-			}
+	public void hasAnEnglishMessageForEveryCodeTheStepsUse() {
+		List<String> codes = new ArrayList<String>();
+		for (StepReason.Code reason : StepReason.Code.values()) {
+			codes.add(NextStepsController.REASON_PREFIX + reason.getCode());
 		}
-		assertTrue(codes.toString(), codes.size() > 20);
-		for (String key : Arrays.asList("bpg", "oral", "consult", "echo", "procedures", "inr", "patientInfo", "pregnancy",
-		    "refer")) {
+		for (String key : NextSteps.KEYS) {
 			codes.add("actcore.nextStep.title." + key);
 		}
 		Object[] sample = { "7", "01-Oct-2026" };

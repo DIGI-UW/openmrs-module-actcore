@@ -1352,6 +1352,22 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
+	public void of_shouldListTheFormsSavedThisVisitInTheOrderOfTheForms() {
+		echoed(at(30));
+		startVisit();
+		for (EncounterType type : new EncounterType[] { pregnancy, patientInfo, inr, procedures, consult, oral }) {
+			inVisit(type, 0);
+		}
+		
+		List<NextStep> steps = steps();
+		
+		assertEquals("oral|consult|procedures|inr|patientInfo|pregnancy", keys(steps));
+		for (NextStep step : steps) {
+			assertEquals("Entered this visit", text(step.getReason()));
+		}
+	}
+	
+	@Test
 	public void of_shouldGiveANewConsultationForOralAdherenceBelowEightyPercent() {
 		prescribe(encounter(7, 60), oralPenicillin, 60, null);
 		estimate(encounterOf(oral, 10), 50);
@@ -2001,7 +2017,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	private List<NextStep> steps() {
-		return NextSteps.of(patient, TODAY);
+		List<NextStep> steps = NextSteps.of(patient, TODAY);
+		for (NextStep step : steps) {
+			assertTrue(step.getKey() + " is missing from NextSteps.KEYS", NextSteps.KEYS.contains(step.getKey()));
+		}
+		return steps;
 	}
 	
 	private NextStep referStep() {

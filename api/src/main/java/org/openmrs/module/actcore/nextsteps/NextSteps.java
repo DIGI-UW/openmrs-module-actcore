@@ -36,6 +36,7 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.consultation.NextConsultation;
+import org.openmrs.module.actcore.nextsteps.StepReason.Code;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -75,18 +76,30 @@ public class NextSteps {
 	
 	static final String GP_INJECTION_INTERVALS = "actcore.adherence.injectionIntervals";
 	
-	private static final StepReason ANAPHYLAXIS_REVIEW = StepReason.of("anaphylaxisReview");
+	private static final StepReason ANAPHYLAXIS_REVIEW = StepReason.of(Code.ANAPHYLAXIS_REVIEW);
 	
-	private static final StepReason ANAPHYLAXIS_REFERRAL = StepReason.of("anaphylaxisReferral");
+	private static final StepReason ANAPHYLAXIS_REFERRAL = StepReason.of(Code.ANAPHYLAXIS_REFERRAL);
 	
-	private static final StepReason ENTERED_THIS_VISIT = StepReason.of("enteredThisVisit");
+	private static final StepReason ENTERED_THIS_VISIT = StepReason.of(Code.ENTERED_THIS_VISIT);
 	
 	/**
 	 * The keys of the steps a form records, each titled by its message
-	 * {@code actcore.nextStep.title.<key>}.
+	 * {@code actcore.nextStep.title.<key>}. The forms saved at this visit that no rule asked for are
+	 * listed in this order.
 	 */
 	private static final List<String> FORM_KEYS = Collections.unmodifiableList(
 	    Arrays.asList("bpg", "oral", "consult", "echo", "procedures", "inr", "patientInfo", "pregnancy"));
+	
+	/**
+	 * The keys a step can have: the keys of the steps a form records, then {@code refer} for Refer to
+	 * clinician. Each names the step's title message {@code actcore.nextStep.title.<key>}.
+	 */
+	public static final List<String> KEYS;
+	static {
+		List<String> keys = new ArrayList<String>(FORM_KEYS);
+		keys.add("refer");
+		KEYS = Collections.unmodifiableList(keys);
+	}
 	
 	private static final List<String> READS = Arrays.asList(PrivilegeConstants.GET_ENCOUNTERS, PrivilegeConstants.GET_VISITS,
 	    PrivilegeConstants.GET_FORMS, PrivilegeConstants.GET_ENCOUNTER_TYPES, PrivilegeConstants.GET_OBS,
@@ -244,14 +257,14 @@ public class NextSteps {
 		
 		dose();
 		if (latest("patientInfo") == null) {
-			put("patientInfo", StepReason.of("patientInfoNotRecorded"), false);
+			put("patientInfo", StepReason.of(Code.PATIENT_INFO_NOT_RECORDED), false);
 		}
 		if (flags.contains(flagKeys.get("notPrescribed"))) {
 			if (mayConsult) {
-				put("consult", StepReason.of("notPrescribed"), false);
+				put("consult", StepReason.of(Code.NOT_PRESCRIBED), false);
 			} else if (types.containsKey("consult")) {
-				steps.put("refer",
-				    new Step("refer", StepReason.of("notPrescribedReferral"), false, savedThisVisit.contains("consult")));
+				steps.put("refer", new Step("refer", StepReason.of(Code.NOT_PRESCRIBED_REFERRAL), false,
+				        savedThisVisit.contains("consult")));
 				if (latest("consult") != null) {
 					referTriggers.add(latest("consult"));
 				}
@@ -262,24 +275,26 @@ public class NextSteps {
 			reviewOverdue();
 		}
 		if ("F".equals(patient.getGender()) && flags.contains(flagKeys.get("deliveryOverdue"))) {
-			put("pregnancy", StepReason.of("deliveryOverdue"), false);
+			put("pregnancy", StepReason.of(Code.DELIVERY_OVERDUE), false);
 		}
 		echo();
 		if (flags.contains(flagKeys.get("followUp"))) {
-			put("procedures", StepReason.of("followUpDue"), false);
+			put("procedures", StepReason.of(Code.FOLLOW_UP_DUE), false);
 		}
 		if (flags.contains(flagKeys.get("inr"))) {
 			put("inr", inrReason(), false);
 		}
-		review(mayConsult, savedThisVisit.contains("echo") ? latest("echo") : null, StepReason.of("reviewEcho"), null);
+		review(mayConsult, savedThisVisit.contains("echo") ? latest("echo") : null, StepReason.of(Code.REVIEW_ECHO), null);
 		Encounter anaphylaxisTrigger = anaphylaxis();
 		Review anaphylaxis = review(mayConsult, anaphylaxisTrigger, ANAPHYLAXIS_REVIEW, ANAPHYLAXIS_REFERRAL);
 		addReferTrigger(mayConsult, anaphylaxisTrigger, anaphylaxis);
 		int below = threshold(GP_ADHERENCE_BELOW, 80);
 		Encounter lowEstimate = lowAdherence();
-		StepReason lowReview = StepReason.of("lowAdherenceReview", below);
-		addReferTrigger(mayConsult, lowEstimate, review(mayConsult, lowEstimate,
-		    lowEstimate != null && bpgAnaphylaxis() ? lowReview : StepReason.of("lowAdherenceSwitch", below), lowReview));
+		StepReason lowReview = StepReason.of(Code.LOW_ADHERENCE_REVIEW, below);
+		addReferTrigger(mayConsult, lowEstimate,
+		    review(mayConsult, lowEstimate,
+		        lowEstimate != null && bpgAnaphylaxis() ? lowReview : StepReason.of(Code.LOW_ADHERENCE_SWITCH, below),
+		        lowReview));
 		// What was recorded at this visit is shown done, even when no rule asked for it.
 		for (String key : FORM_KEYS) {
 			if (savedThisVisit.contains(key) && !steps.containsKey(key) && !"bpg".equals(key)) {
@@ -288,7 +303,7 @@ public class NextSteps {
 		}
 		Step bpg = steps.get("bpg");
 		if (anaphylaxis == Review.NONE && bpg != null && !bpg.done) {
-			bpg.reason = StepReason.of(mayConsult ? "onHoldConsult" : "onHoldReview");
+			bpg.reason = StepReason.of(mayConsult ? Code.ON_HOLD_CONSULT : Code.ON_HOLD_REVIEW);
 			bpg.onHold = true;
 			bpg.alert = true;
 		}
@@ -385,7 +400,7 @@ public class NextSteps {
 	private void reviewOverdue() {
 		LocalDate due = NextConsultation.of(patient);
 		if (due != null && due.isBefore(today)) {
-			put("consult", StepReason.of("overdue", due), false);
+			put("consult", StepReason.of(Code.OVERDUE, due), false);
 			if (steps.containsKey("consult")) {
 				steps.get("consult").routine = true;
 			}
@@ -435,11 +450,11 @@ public class NextSteps {
 		if (due != null) {
 			long days = ChronoUnit.DAYS.between(today, due);
 			if (days < 0) {
-				reason = StepReason.of("overdue", due);
+				reason = StepReason.of(Code.OVERDUE, due);
 			} else if (days == 0) {
-				reason = StepReason.of("dueToday");
+				reason = StepReason.of(Code.DUE_TODAY);
 			} else if (days <= threshold(GP_DOSE_WITHIN_DAYS, 2)) {
-				reason = days == 1 ? StepReason.of("dueTomorrow") : StepReason.of("dueInDays", days);
+				reason = days == 1 ? StepReason.of(Code.DUE_TOMORROW) : StepReason.of(Code.DUE_IN_DAYS, days);
 			}
 		}
 		boolean done = "bpg".equals(key) ? injectionThisVisit() : savedThisVisit.contains("oral");
@@ -488,9 +503,9 @@ public class NextSteps {
 		if (savedThisVisit.contains("echo")) {
 			put("echo", ENTERED_THIS_VISIT, false);
 		} else if (last == null) {
-			put("echo", StepReason.of("noEcho"), false);
+			put("echo", StepReason.of(Code.NO_ECHO), false);
 		} else if (last.isBefore(today.minusMonths(threshold(GP_ECHO_MONTHS, 12)))) {
-			put("echo", StepReason.of("echoOverdue", threshold(GP_ECHO_MONTHS, 12), last), false);
+			put("echo", StepReason.of(Code.ECHO_OVERDUE, threshold(GP_ECHO_MONTHS, 12), last), false);
 		}
 	}
 	
@@ -506,10 +521,10 @@ public class NextSteps {
 			}
 		}
 		if (latest == null) {
-			return StepReason.of("inrDue");
+			return StepReason.of(Code.INR_DUE);
 		}
 		LocalDate due = day(latest.getValueDatetime());
-		return StepReason.of(due.isBefore(today) ? "inrOverdue" : "inrDueOn", due);
+		return StepReason.of(due.isBefore(today) ? Code.INR_OVERDUE : Code.INR_DUE_ON, due);
 	}
 	
 	/**
@@ -770,7 +785,7 @@ public class NextSteps {
 			boolean shownDone = done || referred;
 			// A step on hold names no form, so it offers nothing to record.
 			return new NextStep(key, "refer".equals(key) || onHold ? null : form,
-			        referred && !done ? StepReason.of("referralSent") : reason, isNew && !shownDone, shownDone, onHold,
+			        referred && !done ? StepReason.of(Code.REFERRAL_SENT) : reason, isNew && !shownDone, shownDone, onHold,
 			        referralType, alert && !shownDone);
 		}
 	}

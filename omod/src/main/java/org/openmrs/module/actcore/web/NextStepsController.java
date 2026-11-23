@@ -42,7 +42,10 @@ public class NextStepsController extends ActCoreRestController {
 	/** The prefix of a reason's message code; the rest is {@link StepReason#getCode()}. */
 	static final String REASON_PREFIX = "actcore.nextStep.reason.";
 	
-	/** How a date in a reason's English text is written, as ACT 2.0 wrote it. */
+	/**
+	 * The format of a date in a reason's text: dd-MMM-yyyy with English month names whatever the user's
+	 * locale, as ACT 2.0 wrote it.
+	 */
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
 	
 	/**
@@ -92,7 +95,8 @@ public class NextStepsController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Formats a reason's values for its English text: a date as dd-MMM-yyyy, anything else as written.
+	 * Formats a reason's values for its text in the user's locale: a date as dd-MMM-yyyy with English
+	 * month names whatever the locale, as ACT 2.0 wrote it, and anything else as written.
 	 *
 	 * @param args the reason's values
 	 * @return the values as text, in order
