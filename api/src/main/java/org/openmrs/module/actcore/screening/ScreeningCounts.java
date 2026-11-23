@@ -17,20 +17,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ACT 2.0's monthly screening counts: per clinic and month, for each setting, the people screened,
- * their age groups, the females and the positives, kept in actcore_screening_count.
+ * The shape of ACT 2.0's monthly screening counts. For each clinic and month, and for each setting
+ * where people were screened, the counts record the people screened, how many were children,
+ * adolescents and adults, how many were female, and how many screened positive. They are kept in
+ * actcore_screening_count.
  */
 public class ScreeningCounts {
 	
+	/** The table that holds the screening counts, one row per saved clinic month. */
 	public static final String TABLE = "actcore_screening_count";
 	
+	/** The settings where people are screened, in the order their columns take. */
 	public static final List<String> SETTINGS = Collections
 	        .unmodifiableList(Arrays.asList("school", "community", "facility"));
 	
+	/** The figures counted for each setting, in the order their columns take. */
 	public static final List<String> METRICS = Collections
 	        .unmodifiableList(Arrays.asList("screened", "children", "adolescents", "adults", "females", "positive"));
 	
-	/** The table's count columns, setting_metric, in the order of SETTINGS and then METRICS. */
+	/**
+	 * The table's count columns, each named setting_metric, such as school_screened, in the order of
+	 * {@link #SETTINGS} and then of {@link #METRICS}.
+	 */
 	public static final List<String> COLUMNS;
 	
 	static {
@@ -43,30 +51,43 @@ public class ScreeningCounts {
 		COLUMNS = Collections.unmodifiableList(columns);
 	}
 	
+	/** The most characters a month's notes may hold, after trimming. */
 	public static final int NOTES_LENGTH = 1000;
 	
+	/** The void reason given to a month's counts when a later save of the month replaces them. */
 	public static final String REPLACED_REASON = "Replaced by a later save of the month";
 	
+	/** One clinic's counts and notes for one month, as the Screening counts page shows them. */
 	public static class Month {
 		
-		/** Whether the month has been saved; one that has not is all zeros. */
+		/**
+		 * Whether counts have been saved for the month. A month that has not been saved has every count at
+		 * zero.
+		 */
 		public boolean saved;
 		
-		/** Every column's count. */
+		/** Each column's count, keyed by the column's name. */
 		public Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
 		
+		/** The notes saved with the counts, or null when there are none. */
 		public String notes;
 	}
 	
+	/** The sums of the counts of the clinic months saved in a range. */
 	public static class Summary {
 		
 		/** How many clinic months were saved in the range. */
 		public int months;
 		
-		/** Every column's sum. */
+		/** Each column's sum, keyed by the column's name. */
 		public Map<String, Long> sums = new LinkedHashMap<String, Long>();
 		
-		/** A metric summed over the settings. */
+		/**
+		 * Sums a metric over every setting.
+		 *
+		 * @param metric one of {@link ScreeningCounts#METRICS}
+		 * @return the metric's sum over {@link ScreeningCounts#SETTINGS}
+		 */
 		public Long total(String metric) {
 			long total = 0;
 			for (String setting : SETTINGS) {
@@ -75,14 +96,30 @@ public class ScreeningCounts {
 			return total;
 		}
 		
+		/**
+		 * Gets how many people were screened across every setting.
+		 *
+		 * @return the sum of the settings' screened counts
+		 */
 		public Long screened() {
 			return total("screened");
 		}
 		
+		/**
+		 * Gets how many people screened positive across every setting.
+		 *
+		 * @return the sum of the settings' positive counts
+		 */
 		public Long positive() {
 			return total("positive");
 		}
 		
+		/**
+		 * Gets how many people screened negative across every setting, which is everyone screened who did
+		 * not screen positive.
+		 *
+		 * @return the people screened less those positive
+		 */
 		public Long negative() {
 			return screened() - positive();
 		}

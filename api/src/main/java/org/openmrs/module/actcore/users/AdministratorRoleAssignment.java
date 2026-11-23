@@ -31,26 +31,37 @@ import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
 
 /**
- * Lets the instance and global administrators give the roles configured for them, which OpenMRS
- * would refuse for the clinical privileges they lack; the README describes the rules.
+ * Advice on UserService that lets the instance and global administrators give out the roles
+ * configured for them. OpenMRS would otherwise refuse, because the roles carry clinical privileges
+ * that the administrators themselves lack. The README describes the rules.
  */
 public class AdministratorRoleAssignment implements MethodInterceptor {
 	
-	/** The instance administrator role, by uuid. */
+	/** The uuid of the instance administrator role. */
 	public static final String INSTANCE_ADMINISTRATOR_ROLE = "07a7affa-b7de-46d9-9faa-aac4ef2eccba";
 	
-	/** The global administrator role, by uuid. */
+	/** The uuid of the global administrator role. */
 	public static final String GLOBAL_ADMINISTRATOR_ROLE = "c95f35f4-0422-46a3-a593-a6615fab90bc";
 	
-	/** The roles, by uuid, an instance administrator may give out. */
+	/**
+	 * The name of the global property that lists, by uuid and separated by commas, the roles an
+	 * instance administrator may give out.
+	 */
 	public static final String INSTANCE_ROLES_PROPERTY = "actcore.users.instanceAdministratorRoles";
 	
-	/** The roles, by uuid, a global administrator may give out. */
+	/**
+	 * The name of the global property that lists, by uuid and separated by commas, the roles a global
+	 * administrator may give out.
+	 */
 	public static final String GLOBAL_ROLES_PROPERTY = "actcore.users.globalAdministratorRoles";
 	
-	/** Core's retire and unretire save the user through the service itself, so they are named too. */
+	/**
+	 * The names of the UserService methods that save a user. Core's retire and unretire save the user
+	 * through the service itself, so they are listed too.
+	 */
 	private static final List<String> SAVES = Arrays.asList("saveUser", "createUser", "retireUser", "unretireUser");
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();
@@ -75,8 +86,9 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	}
 	
 	/**
-	 * Whether the administrator may give out every role the user has, now or already, and may add or
-	 * edit users; anyone else, an administrator's own account and System Developer are left to OpenMRS.
+	 * Tells whether the administrator may add or edit the user and give out every role the user has,
+	 * both on the object and as saved. Saves by anyone else, of the administrator's own account, and of
+	 * a user holding System Developer are left to OpenMRS's own checks.
 	 */
 	private static boolean mayGiveTheRolesOf(User me, User user) {
 		Set<String> grantable = grantableBy(me);
@@ -100,7 +112,10 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 		return false;
 	}
 	
-	/** The roles the administrator may give out, from the property of each administrator role held. */
+	/**
+	 * Gets the uuids of the roles the administrator may give out, read from the property of each
+	 * administrator role they hold.
+	 */
 	private static Set<String> grantableBy(User me) {
 		Set<String> grantable = new HashSet<String>();
 		Set<String> held = new HashSet<String>();
@@ -117,8 +132,9 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	}
 	
 	/**
-	 * The caller's own context, also holding the privileges of the roles being saved. It is set on this
-	 * thread only for the save, so no other request of the session sees them.
+	 * The caller's own user context, which also holds the privileges of the roles being saved. It is
+	 * set on this thread only for the save, so that no other request of the session sees those
+	 * privileges.
 	 */
 	private static final class HoldingTheRolesOf extends UserContext {
 		
@@ -138,86 +154,103 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 			}
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#hasPrivilege(String) */
 		@Override
 		public boolean hasPrivilege(String privilege) {
 			return own.hasPrivilege(privilege) || privileges.contains(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#authenticate(org.openmrs.api.context.Credentials) */
 		@Override
 		public Authenticated authenticate(Credentials credentials) throws ContextAuthenticationException {
 			return own.authenticate(credentials);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#refreshAuthenticatedUser() */
 		@Override
 		public void refreshAuthenticatedUser() {
 			own.refreshAuthenticatedUser();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#becomeUser(String) */
 		@Override
 		public User becomeUser(String systemId) throws ContextAuthenticationException {
 			return own.becomeUser(systemId);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAuthenticatedUser() */
 		@Override
 		public User getAuthenticatedUser() {
 			return own.getAuthenticatedUser();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#isAuthenticated() */
 		@Override
 		public boolean isAuthenticated() {
 			return own.isAuthenticated();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#logout() */
 		@Override
 		public void logout() {
 			own.logout();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#addProxyPrivilege(String) */
 		@Override
 		public void addProxyPrivilege(String privilege) {
 			own.addProxyPrivilege(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#removeProxyPrivilege(String) */
 		@Override
 		public void removeProxyPrivilege(String privilege) {
 			own.removeProxyPrivilege(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocale(java.util.Locale) */
 		@Override
 		public void setLocale(Locale locale) {
 			own.setLocale(locale);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocale() */
 		@Override
 		public Locale getLocale() {
 			return own.getLocale();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAllRoles() */
 		@Override
 		public Set<Role> getAllRoles() throws Exception {
 			return own.getAllRoles();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAllRoles(org.openmrs.User) */
 		@Override
 		public Set<Role> getAllRoles(User user) throws Exception {
 			return own.getAllRoles(user);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocationId() */
 		@Override
 		public Integer getLocationId() {
 			return own.getLocationId();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocationId(Integer) */
 		@Override
 		public void setLocationId(Integer locationId) {
 			own.setLocationId(locationId);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocation() */
 		@Override
 		public Location getLocation() {
 			return own.getLocation();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocation(org.openmrs.Location) */
 		@Override
 		public void setLocation(Location location) {
 			own.setLocation(location);

@@ -49,20 +49,28 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * ACT 2.0's Download, each recorded in the download log, under ACT Core's download privileges.
- * Identifiers only with IDENTIFIERS_PRIVILEGE; a research download is never identified.
+ * Serves ACT 2.0's Download, which exports saved forms as CSV, and the download log. Every download
+ * is recorded in the download log before its data is returned. A download gives the patient fields
+ * and questions that identify a patient only to a user who also holds IDENTIFIERS_PRIVILEGE, and a
+ * research download never gives them.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/download")
 public class DownloadController extends ActCoreRestController {
 	
-	/** Download any patient's forms, without identifiers. */
+	/** The privilege to download the forms of any patient, without what identifies them. */
 	public static final String DOWNLOAD_PRIVILEGE = ActCorePrivileges.DOWNLOAD_DATA;
 	
-	/** With DOWNLOAD_PRIVILEGE, also give what identifies the patient, as FormDownload lists it. */
+	/**
+	 * The privilege that, held with DOWNLOAD_PRIVILEGE, lets a download also give what identifies the
+	 * patient, as FormDownload configures it.
+	 */
 	public static final String IDENTIFIERS_PRIVILEGE = ActCorePrivileges.DOWNLOAD_IDENTIFIERS;
 	
-	/** Without DOWNLOAD_PRIVILEGE, download only the forms of patients who opted in to research. */
+	/**
+	 * The privilege that lets a user without DOWNLOAD_PRIVILEGE download the forms of the patients who
+	 * opted in to research, without what identifies them.
+	 */
 	public static final String RESEARCH_PRIVILEGE = ActCorePrivileges.DOWNLOAD_RESEARCH_DATA;
 	
 	static final int MAX_LABEL = 255;
@@ -73,13 +81,21 @@ public class DownloadController extends ActCoreRestController {
 	
 	static final int MAX_COLUMNS = 200;
 	
-	/** MariaDB's TEXT, the log's detail column, which refuses a longer value. */
+	/**
+	 * The most bytes the download log's detail column holds, which is the size of MariaDB's TEXT. A
+	 * longer record is refused.
+	 */
 	static final int MAX_DETAIL_BYTES = 65535;
 	
-	/** How far back a log without its own default reaches when the request gives no start date. */
+	/**
+	 * How many months back a log reads when the request gives no start date, unless the log has a
+	 * default of its own.
+	 */
 	static final int DEFAULT_MONTHS = 12;
 	
-	/** The Logs page's tabs as it names them, by the key the app records a tab's CSV under. */
+	/**
+	 * The names the Logs page gives its tabs, keyed by the name the app records a tab's CSV under.
+	 */
 	static final Map<String, String> LOG_TABS = new LinkedHashMap<String, String>();
 	
 	static {
@@ -89,6 +105,27 @@ public class DownloadController extends ActCoreRestController {
 		LOG_TABS.put("signIns", "Sign-ins");
 	}
 	
+	/**
+	 * Gets the CSV of the forms asked for and records the download: a row per save of one form, or a
+	 * row per patient across several forms or when asked. Without {@link #DOWNLOAD_PRIVILEGE} it is of
+	 * the patients who opted in to research.
+	 *
+	 * @param body the request body: {@code forms}, each a form uuid and its chosen fields, or one
+	 *            {@code form} and its {@code fields}; and optionally {@code rowPerPatient},
+	 *            {@code status}, {@code cardiacClinic}, {@code primaryCareClinic}, {@code startDate},
+	 *            {@code endDate} and the {@code patient} fields
+	 * @return the headers and rows, whether identifiers were given, whether it is research only, and
+	 *         the labels of the fields withheld
+	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
+	 *             {@link #RESEARCH_PRIVILEGE}; lacks Get Forms, Get Concepts, Get Encounters or Get
+	 *             Observations, which the forms and their answers are read with; or, with a status
+	 *             filter, lacks Get Patient Programs
+	 * @throws ObjectNotFoundException when a form is missing or no form has its uuid
+	 * @throws IllegalRequestException when no form is asked for, a form is asked for twice or has no
+	 *             field, a field, status, clinic, date or patient field is not recognised, the start is
+	 *             after the end, or the record of the download would be too long
+	 * @throws JsonProcessingException when the record of the download cannot be written as JSON
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject download(@RequestBody Map<String, Object> body) throws JsonProcessingException {
@@ -160,7 +197,24 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The downloads matching the filters, newest first, for a user who may read the audit log's reads.
+	 * Gets a page of the downloads recorded that match the filters, newest first, for a user who may
+	 * read the audit log's reads.
+	 *
+	 * @param username the user whose downloads to list, or blank for no user filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_MONTHS} months before
+	 *            the end date or today
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
+	 * @param identifiers with, without or research, or null for no identifiers filter
+	 * @param startIndex the first download to give, from 0; null for 0
+	 * @param limit the most downloads to give, capped at {@value #MAX_LIMIT}; null or below 1 for
+	 *            {@value #DEFAULT_LIMIT}
+	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
+	 *         no user has the username or no form has the uuid
+	 * @throws APIAuthenticationException when the user lacks {@link DownloadLog#VIEW_PRIVILEGE}
+	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
+	 *             after the end
+	 * @throws IOException when a recorded download's detail cannot be read as JSON
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -225,8 +279,18 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. Recorded before the
-	 * app writes the file, which it does not when this fails.
+	 * Records a download of a CSV that the app made itself: the registry list, a worklist or a Logs
+	 * tab. The app records it before writing the file, and does not write the file when this fails.
+	 *
+	 * @param body the request body: the {@code list}, as registry, worklist:&lt;name&gt; or
+	 *            logs:&lt;tab&gt;, its {@code columns}, and optionally the number of {@code rows},
+	 *            whether it holds {@code identifiers} and its {@code filters}
+	 * @return {@code recorded} true
+	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
+	 *             {@link #RESEARCH_PRIVILEGE}
+	 * @throws IllegalRequestException when the list or columns are missing, there are more than
+	 *             {@value #MAX_COLUMNS} columns, or the record would be too long
+	 * @throws JsonProcessingException when the record cannot be written as JSON
 	 */
 	@RequestMapping(value = "/record", method = RequestMethod.POST)
 	@ResponseBody
@@ -265,8 +329,9 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The forms asked for, each with its chosen fields: forms [{form, fields}], or one form and its
-	 * fields.
+	 * Reads the forms a download asks for, each with its chosen fields. The body gives them either as
+	 * {@code forms}, a list of form and fields pairs, or as one {@code form} with its {@code fields}. A
+	 * field asked for twice in one form is kept once.
 	 */
 	private static List<FormDownload.Choice> choices(Map<String, Object> body) {
 		List<?> asked = body == null ? null
@@ -312,7 +377,10 @@ public class DownloadController extends ActCoreRestController {
 		return choices;
 	}
 	
-	/** The patient fields asked for, by FormDownload.PATIENT_FIELDS's keys, or null when not asked. */
+	/**
+	 * Reads the patient fields a download asks for, as keys of FormDownload.PATIENT_FIELDS. It is null
+	 * when the request does not say, which leaves the default fields to FormDownload.
+	 */
 	private static List<String> patient(Object asked) {
 		if (asked == null) {
 			return null;
@@ -345,8 +413,8 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The uuids of the forms a download recorded, empty for a list or an entry from before they were
-	 * recorded.
+	 * Gets the uuids of the forms a recorded download held. The list is empty for a list the app made
+	 * itself, and for an entry recorded before the forms were.
 	 */
 	private static List<String> formsOf(Map<?, ?> detail) {
 		List<String> uuids = new ArrayList<String>();
@@ -369,7 +437,11 @@ public class DownloadController extends ActCoreRestController {
 		Context.getService(DownloadLogService.class).recordDownload(formId, json);
 	}
 	
-	/** with, without or research, as the identifiers filter names what a download held. */
+	/**
+	 * Tells what a recorded download held, in the identifiers filter's terms. It is "research" for a
+	 * download of research data only, "with" for any other download that gave identifiers, and
+	 * "without" for the rest, a download with no detail recorded among them.
+	 */
 	private static String identifiersOf(Map<?, ?> detail) {
 		if (detail == null) {
 			return "without";
@@ -380,7 +452,10 @@ public class DownloadController extends ActCoreRestController {
 		return Boolean.TRUE.equals(detail.get("identifiers")) ? "with" : "without";
 	}
 	
-	/** The list a recorded CSV was of, named as the Logs page shows it. */
+	/**
+	 * Names the list that a recorded CSV was of, as the Logs page shows it, with its kind: registry,
+	 * worklist, logs or other.
+	 */
 	static SimpleObject list(String list) {
 		if (list.equals("registry")) {
 			return new SimpleObject().add("name", "Registry list").add("kind", "registry");
@@ -403,8 +478,9 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The start date the log reads from: the one given, else {@code back} before the end date or today,
-	 * so a request without dates does not read the whole log.
+	 * Works out the first day a log reads: the start date given, or else the span {@code back} before
+	 * the end date, or before today without one, so that a request without dates does not read the
+	 * whole log. A start after the end is refused.
 	 */
 	static LocalDate from(String startDate, LocalDate to, Period back) {
 		LocalDate from = date(startDate);

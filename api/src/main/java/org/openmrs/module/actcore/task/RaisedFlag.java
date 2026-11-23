@@ -21,11 +21,15 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
-/** A patient's raised flag, since when, and who dismissed it, as {@link RaisedFlags} keeps it. */
+/**
+ * A flag raised for a patient, as {@link RaisedFlags} keeps it: since when it has been raised, and,
+ * once it is dismissed, who dismissed it and when.
+ */
 @Entity
 @Table(name = RaisedFlags.TABLE)
 public class RaisedFlag {
 	
+	/** The key of a raised flag: the patient and the flag, which together identify it. */
 	@Embeddable
 	public static class Key implements Serializable {
 		
@@ -51,12 +55,14 @@ public class RaisedFlag {
 			return flagId;
 		}
 		
+		/** @see Object#equals(Object) */
 		@Override
 		public boolean equals(Object other) {
 			return other instanceof Key && Objects.equals(patientId, ((Key) other).patientId)
 			        && Objects.equals(flagId, ((Key) other).flagId);
 		}
 		
+		/** @see Object#hashCode() */
 		@Override
 		public int hashCode() {
 			return Objects.hash(patientId, flagId);

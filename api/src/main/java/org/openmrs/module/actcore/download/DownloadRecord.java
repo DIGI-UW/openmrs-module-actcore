@@ -22,7 +22,11 @@ import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsObject;
 
-/** One download, as {@link org.openmrs.module.actcore.api.DownloadLogService} records it. */
+/**
+ * One recorded download, as {@link org.openmrs.module.actcore.api.DownloadLogService} saves it: the
+ * user who downloaded, the form downloaded when the download held exactly one, what the download
+ * held as JSON, and when it was recorded.
+ */
 @Entity
 @Table(name = DownloadLog.TABLE)
 public class DownloadRecord extends BaseOpenmrsObject {
@@ -56,11 +60,13 @@ public class DownloadRecord extends BaseOpenmrsObject {
 		this.dateCreated = dateCreated;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return downloadId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		downloadId = id;

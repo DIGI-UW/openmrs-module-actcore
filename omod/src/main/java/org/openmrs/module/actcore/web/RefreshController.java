@@ -28,15 +28,23 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Runs the patient flag refresh, adherence first, on demand, and says when it last finished.
+ * Runs the patient flag refresh on demand, refreshing adherence first, and says when the refresh
+ * last finished and whether it is running.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RefreshController extends ActCoreRestController {
 	
-	/** A user without it, other than a superuser, is refused. */
+	/** The privilege a user needs, unless they are a superuser, to see or run the refresh. */
 	public static final String PRIVILEGE = ActCorePrivileges.REFRESH_FLAGS;
 	
+	/**
+	 * Gets when the refresh last finished and whether it is running now.
+	 *
+	 * @return {@code lastRefreshed}, an ISO-8601 instant or null before the first run finishes, and
+	 *         {@code running}
+	 * @throws APIAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 */
 	@RequestMapping(value = "/refresh", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStatus() {
@@ -45,8 +53,15 @@ public class RefreshController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Runs as the scheduler's daemon user, as the nightly run does: the refresh reads and writes far
-	 * more than the caller's own privileges allow, and on their request it would fail flag by flag.
+	 * Runs the refresh now and waits for it, unless a run is already in progress. Runs as the
+	 * scheduler's daemon user, as the nightly run does: the refresh reads and writes far more than the
+	 * caller's own privileges allow, and on their request it would fail flag by flag.
+	 *
+	 * @return the status, as {@link #getStatus()} gives it, with {@code refreshed}, false when another
+	 *         run was in progress; after a run, also how many flags and lists failed and whether the
+	 *         adherence refresh failed
+	 * @throws APIAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 * @throws APIException when the module has not started or the refresh throws
 	 */
 	// JSON only: another site's page can post a form here with the user's cookie, but not JSON.
 	@RequestMapping(value = "/refresh", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)

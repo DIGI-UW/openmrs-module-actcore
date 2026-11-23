@@ -32,12 +32,32 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+/**
+ * Serves the gaps behind a patient's flag: the questions missing from the patient's encounters, as
+ * the flag's own SQL criteria report them.
+ */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class FlagGapController extends ActCoreRestController {
 	
 	private final FlagGapLookup lookup = new FlagGapLookup();
 	
+	/**
+	 * Gets the gaps behind the flag for the patient: each one's encounter uuid and date, its form, and
+	 * the question missing.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @param flagUuid the flag's uuid
+	 * @return {@code configured}, false when the look-up gives no answer for the flag, as
+	 *         {@link FlagGapLookup#find(Patient, Flag)} describes, and the gaps as {@code results},
+	 *         oldest encounter first and empty when configured is false; a gap's form is null for a
+	 *         user without Get Forms
+	 * @throws IllegalRequestException when the patient or flag is missing
+	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Patients or View
+	 *             Patient Flags, or lacks Get Encounters or Get Concepts once the flag's criteria
+	 *             return a gap to look up
+	 */
 	@RequestMapping(value = "/gap", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getGaps(@RequestParam(value = "patient", required = false) String patientUuid,
@@ -70,8 +90,9 @@ public class FlagGapController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Null for a caller without Get Forms, whom webservices.rest 3.5.0 (unlike 2.40.0) would answer
-	 * with a placeholder that the JSON writer cannot serialize.
+	 * Gives the encounter's form as a reference, or null for a caller without Get Forms. For such a
+	 * caller, webservices.rest 3.5.0, unlike 2.40.0, would give a placeholder that the JSON writer
+	 * cannot serialize.
 	 */
 	private static Object form(Encounter encounter) {
 		if (!Context.hasPrivilege(PrivilegeConstants.GET_FORMS)) {

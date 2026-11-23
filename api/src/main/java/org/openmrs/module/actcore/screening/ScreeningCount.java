@@ -25,8 +25,9 @@ import javax.persistence.TemporalType;
 import org.openmrs.BaseOpenmrsData;
 
 /**
- * A clinic's screening counts for a month: a count field per column of
- * {@link ScreeningCounts#COLUMNS}, which {@link #getCounts()} keys by column name.
+ * One saved set of a clinic's screening counts for a month, with a count field for each column of
+ * {@link ScreeningCounts#COLUMNS}, which {@link #getCounts()} returns keyed by column name. A later
+ * save of the month voids this one rather than changing it.
  */
 @Entity
 @Table(name = ScreeningCounts.TABLE)
@@ -111,7 +112,9 @@ public class ScreeningCount extends BaseOpenmrsData {
 		this.notes = notes;
 	}
 	
-	/** Every count by its column name, in the order of {@link ScreeningCounts#COLUMNS}. */
+	/**
+	 * Gets every count keyed by its column name, in the order of {@link ScreeningCounts#COLUMNS}.
+	 */
 	public Map<String, Integer> getCounts() {
 		Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
 		counts.put("school_screened", schoolScreened);
@@ -156,11 +159,13 @@ public class ScreeningCount extends BaseOpenmrsData {
 		facilityPositive = counts.get("facility_positive");
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return screeningCountId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		screeningCountId = id;

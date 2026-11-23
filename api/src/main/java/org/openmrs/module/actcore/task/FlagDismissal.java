@@ -22,7 +22,10 @@ import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsObject;
 
-/** One dismissal of a patient's flag, kept after the flag lowers or is purged. */
+/**
+ * One dismissal of a patient's flag: who dismissed which flag for which patient, and when. A
+ * dismissal is kept after the flag lowers for the patient, and after the flag is purged.
+ */
 @Entity
 @Table(name = RaisedFlags.DISMISSAL_TABLE)
 public class FlagDismissal extends BaseOpenmrsObject {
@@ -55,11 +58,13 @@ public class FlagDismissal extends BaseOpenmrsObject {
 		this.dateDismissed = dateDismissed;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return dismissalId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		dismissalId = id;

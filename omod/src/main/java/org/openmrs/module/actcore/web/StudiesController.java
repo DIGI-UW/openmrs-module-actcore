@@ -35,19 +35,26 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Lists the research studies with their Study status states, and creates and renames them.
+ * Serves the research studies: lists them with their Study status states, and creates and renames
+ * them.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/studies")
 public class StudiesController extends ActCoreRestController {
 	
-	/**
-	 * A user without it, other than a superuser, cannot change studies.
-	 */
+	/** The privilege a user needs, unless they are a superuser, to create or rename a study. */
 	public static final String MANAGE_PRIVILEGE = ActCorePrivileges.MANAGE_STUDIES;
 	
 	private final Studies studies = new Studies();
 	
+	/**
+	 * Gets the studies that are not retired, by name, each with its uuid, name and Study status states,
+	 * the initial states first.
+	 *
+	 * @return the studies as {@code results}; empty when there are none
+	 * @throws APIAuthenticationException when the user lacks Get Programs
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStudies() {
@@ -59,6 +66,15 @@ public class StudiesController extends ActCoreRestController {
 		return new SimpleObject().add("results", results);
 	}
 	
+	/**
+	 * Creates a study, as {@link Studies#create(String)} does.
+	 *
+	 * @param body the request body, holding the study's name as {@code name}
+	 * @return the new study, with its uuid, name and states
+	 * @throws APIAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
@@ -66,6 +82,17 @@ public class StudiesController extends ActCoreRestController {
 		return toJson(studies.create(name(body)));
 	}
 	
+	/**
+	 * Renames a study, as {@link Studies#rename(Program, String)} does.
+	 *
+	 * @param uuid the study's uuid
+	 * @param body the request body, holding the new name as {@code name}
+	 * @return the renamed study, with its uuid, name and states
+	 * @throws APIAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws ObjectNotFoundException when no unretired study has the uuid
+	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(value = "/{uuid}", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
@@ -97,7 +124,10 @@ public class StudiesController extends ActCoreRestController {
 		return new SimpleObject().add("uuid", study.getUuid()).add("name", study.getName()).add("states", states);
 	}
 	
-	/** The short name where there is one, as "Active" for Active (study status). */
+	/**
+	 * Gives a state's label: its concept's short name in the user's locale when it has one, such as
+	 * "Active" for Active (study status), or else its concept's name.
+	 */
 	private static String label(Concept concept) {
 		ConceptName shortName = concept.getShortNameInLocale(Context.getLocale());
 		return shortName != null ? shortName.getName() : concept.getName().getName();

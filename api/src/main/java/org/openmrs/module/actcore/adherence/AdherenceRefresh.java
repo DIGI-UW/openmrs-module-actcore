@@ -40,16 +40,22 @@ import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Recomputes every patient's adherence and next due date into actcore_prophylaxis_adherence, and
- * each injection's timing into actcore_injection_timing.
+ * The adherence refresh, which recomputes patients' prophylaxis adherence and next due date into
+ * actcore_prophylaxis_adherence, and whether each of their injections was on time into
+ * actcore_injection_timing. It runs for every patient on a schedule, and for one patient when a
+ * form of theirs is saved.
  */
 public class AdherenceRefresh {
 	
+	/**
+	 * The table holding one row per patient with a prescription: their regimen, adherence, last
+	 * injection and next due date, as the latest refresh computed them.
+	 */
 	public static final String TABLE = "actcore_prophylaxis_adherence";
 	
 	/**
-	 * Each injection timed as the chart times it, for reports that count on-time injections over a
-	 * period.
+	 * The table holding whether each injection was on time, timed as the chart times it, for reports
+	 * that count on-time injections over a period.
 	 */
 	public static final String TIMING_TABLE = "actcore_injection_timing";
 	
@@ -84,8 +90,10 @@ public class AdherenceRefresh {
 	private static final Logger log = LoggerFactory.getLogger(AdherenceRefresh.class);
 	
 	/**
-	 * Held shared by each patient's refresh and alone by the full refresh, which reads every patient
-	 * before it rewrites them all, so a row written in between would be put back as it was.
+	 * The lock that keeps a refresh of one patient from writing while the full refresh runs. Each
+	 * patient's refresh holds it shared, and the full refresh holds it alone, because the full refresh
+	 * reads every patient before it rewrites them all, so a row written in between would be put back as
+	 * it was.
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
@@ -106,8 +114,14 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Recomputes every row and returns how many patients now have one. Run it outside a transaction:
-	 * one commits after the unlock, and the deferred patients are refreshed from its stale snapshot.
+	 * Recomputes the rows of every patient and returns how many patients now have one, then refreshes
+	 * the patients whose own refresh was left to this run because it was running.
+	 * <p>
+	 * Call it outside a transaction. Inside one, the rewrite would commit only after the lock is
+	 * released, and the deferred patients would be refreshed from a snapshot that does not yet hold it.
+	 *
+	 * @param today the day to compute adherence and due dates as of
+	 * @return the number of patients written a row, 0 when none has a prescription
 	 */
 	public int refreshAll(LocalDate today) {
 		ROWS.writeLock().lock();
@@ -137,8 +151,12 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Recomputes one patient's rows, so the registry shows a saved form at once; while a full refresh
-	 * runs, it is left to that run, which then refreshes the patient and their flags.
+	 * Recomputes one patient's rows, so that the registry reflects a saved form at once rather than
+	 * after the next full refresh. While a full refresh is running, the patient is left to that run,
+	 * which refreshes the patient and their flags once it has finished.
+	 *
+	 * @param patientId the patient to recompute
+	 * @param today the day to compute adherence and due dates as of
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
 		if (!ROWS.readLock().tryLock()) {
@@ -168,7 +186,10 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** One patient's history, read now through the same queries the nightly refresh runs. */
+	/**
+	 * Reads one patient's history as it stands now, through the same queries the full refresh runs. The
+	 * history is empty when nothing the refresh reads is recorded for the patient.
+	 */
 	AdherenceReplay.History historyOf(int patientId) {
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
@@ -188,7 +209,10 @@ public class AdherenceRefresh {
 		return rows.size();
 	}
 	
-	/** Each history's row and injection timings, as SQL value lists. */
+	/**
+	 * Computes each history's adherence row and injection timings and adds them to the lists given, as
+	 * SQL value lists ready to insert. A patient without a prescription gets neither.
+	 */
 	private void compute(Map<Integer, AdherenceReplay.History> histories, LocalDate today, List<String> rows,
 	        List<String> timings) {
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
@@ -213,12 +237,18 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** Every patient's history, or only that of the patient given. */
+	/**
+	 * Reads the history of the patient given, or of every patient when the id is null, keyed by patient
+	 * id.
+	 */
 	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
 		return read(admin, patientId == null ? null : Collections.singletonList(patientId));
 	}
 	
-	/** The histories of the patients given, or of every patient when null. */
+	/**
+	 * Reads the histories of the patients given, or of every patient when the collection is null, keyed
+	 * by patient id. An empty collection reads nothing.
+	 */
 	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Collection<Integer> patientIds) {
 		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
 		if (patientIds != null && patientIds.isEmpty()) {
@@ -237,8 +267,9 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Replaces the rows of both tables that the where clause selects, every row when it is empty, in
-	 * one transaction, so no run leaves them empty or part filled.
+	 * Replaces the rows of both tables that the where clause selects with the rows given, in one
+	 * transaction, so that a run cannot leave either table empty or partly filled. An empty where
+	 * clause replaces every row.
 	 */
 	private void rewrite(final AdministrationService admin, final String where, final List<String> rows,
 	        final List<String> timings) {
@@ -275,8 +306,10 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Each consultation's prescriptions, by its date, without the stopped ones, the first of a start
-	 * date kept; and its courses, stopped ones too.
+	 * Reads each consultation's prescriptions into the histories, keyed by the consultation's date.
+	 * When two consultations share a date, the first one is kept, as ACT 2.0 kept it. A consultation's
+	 * prescriptions leave out the stopped ones, keeping the first of each start date, while its courses
+	 * include the stopped ones too.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, Set<String> noProphylaxis,
 	        String patientFilter, Map<Integer, AdherenceReplay.History> histories) {
@@ -345,9 +378,9 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Each oral adherence form, by its Date of Adherence Estimate, else its encounter's date, as a BPG
-	 * form counts by its injection date; one saved without an estimate still counts, as ACT 2.0 counted
-	 * it.
+	 * Reads each oral adherence form into the histories, dated by its Date of Adherence Estimate, or by
+	 * its encounter's date when it has none, just as a BPG form counts by its injection date. A form
+	 * saved without an estimate is still read, as ACT 2.0 counted it.
 	 */
 	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
@@ -377,8 +410,9 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Each consultation's date and how it says injections are entered: ACT 2.0 read that from the
-	 * latest consultation alone, so one that leaves it blank means continuous entry.
+	 * Reads each consultation's date into the histories, with the number of days between batches that
+	 * it records for how injections are entered. ACT 2.0 read that answer from the latest consultation
+	 * alone, so a consultation that leaves it blank is read as continuous entry, recorded as 0.
 	 */
 	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals, String patientFilter,
 	        Map<Integer, AdherenceReplay.History> histories) {
@@ -400,12 +434,18 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/** The concept_id of the concept the global property names by uuid, as a subquery. */
+	/**
+	 * Builds a SQL subquery that selects the concept_id of the concept the global property names by
+	 * uuid.
+	 */
 	private String concept(AdministrationService admin, String property) {
 		return "(select concept_id from concept where uuid = '" + uuid(admin.getGlobalProperty(property), property) + "')";
 	}
 	
-	/** A global property of uuid:days pairs, separated by commas. */
+	/**
+	 * Reads a global property that lists uuid:days pairs separated by commas, as a map of each uuid to
+	 * its days. A blank property gives an empty map, and a malformed one throws.
+	 */
 	private Map<String, Integer> daysByUuid(AdministrationService admin, String property) {
 		Map<String, Integer> days = new HashMap<String, Integer>();
 		for (String pair : StringUtils.split(StringUtils.defaultString(admin.getGlobalProperty(property)), ',')) {
@@ -419,14 +459,20 @@ public class AdherenceRefresh {
 	}
 	
 	/**
-	 * Days after an oral regimen starts that its first oral visit is due while none is recorded, or
-	 * null when the property is blank, which gives such a regimen no due date.
+	 * Gets the number of days after an oral regimen starts that its first oral visit is due, while no
+	 * oral adherence entry has been recorded under it. It is null when
+	 * actcore.adherence.oralFirstDueDays is blank, which gives such a regimen no first-visit due date;
+	 * it then takes its due date from the latest estimate recorded under an earlier oral course in the
+	 * past year, or has none.
 	 */
 	static Integer oralFirstDueDays() {
 		return days(Context.getAdministrationService(), GP_ORAL_FIRST_DUE);
 	}
 	
-	/** A global property holding a number of days, or null when blank. */
+	/**
+	 * Reads a global property that holds a number of days. It gives null when the property is blank,
+	 * and throws when it holds anything other than a number.
+	 */
 	private static Integer days(AdministrationService admin, String property) {
 		String value = StringUtils.trimToNull(admin.getGlobalProperty(property));
 		if (value == null) {
@@ -438,7 +484,10 @@ public class AdherenceRefresh {
 		return Integer.valueOf(value);
 	}
 	
-	/** A global property of concept uuids, separated by commas; none when blank. */
+	/**
+	 * Reads a global property that lists concept uuids separated by commas. A blank property gives an
+	 * empty set.
+	 */
 	private Set<String> uuids(AdministrationService admin, String property) {
 		Set<String> found = new HashSet<String>();
 		for (String value : StringUtils.split(StringUtils.defaultString(admin.getGlobalProperty(property)), ',')) {
@@ -454,7 +503,10 @@ public class AdherenceRefresh {
 		return value.trim();
 	}
 	
-	/** A date column's value, which the JDBC driver gives as a Date, a LocalDateTime or a LocalDate. */
+	/**
+	 * Converts a date column's value to a local date. The JDBC driver gives such a value as a Date, a
+	 * LocalDateTime or a LocalDate, depending on the database.
+	 */
 	static LocalDate localDate(Object value) {
 		if (value instanceof LocalDateTime) {
 			return ((LocalDateTime) value).toLocalDate();

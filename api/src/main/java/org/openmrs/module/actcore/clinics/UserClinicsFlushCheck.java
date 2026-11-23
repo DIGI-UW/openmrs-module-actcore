@@ -17,27 +17,34 @@ import org.openmrs.User;
 import org.openmrs.api.context.Context;
 
 /**
- * Checks a limited administrator's change to a user's clinics or roles as Hibernate writes it,
- * while the database still holds the old values, so a flush before the save cannot get past the
- * rules.
+ * A Hibernate interceptor that checks a limited administrator's change to a user's clinics or roles
+ * at the moment Hibernate writes it, while the database still holds the old values. It closes the
+ * gap the UserService advice leaves, where a flush before the save would write the change without
+ * passing the rules.
  */
 public class UserClinicsFlushCheck extends EmptyInterceptor {
 	
 	private static final long serialVersionUID = 1L;
 	
-	/** Set while a check runs, so nothing it calls checks again. */
+	/**
+	 * Set on the thread while a check runs, so that a flush caused by the check's own reads does not
+	 * start another check.
+	 */
 	private static final ThreadLocal<Boolean> CHECKING = new ThreadLocal<Boolean>();
 	
+	/** @see org.hibernate.Interceptor#onCollectionUpdate(Object, Serializable) */
 	@Override
 	public void onCollectionUpdate(Object collection, Serializable key) {
 		check(collection);
 	}
 	
+	/** @see org.hibernate.Interceptor#onCollectionRecreate(Object, Serializable) */
 	@Override
 	public void onCollectionRecreate(Object collection, Serializable key) {
 		check(collection);
 	}
 	
+	/** @see org.hibernate.Interceptor#onCollectionRemove(Object, Serializable) */
 	@Override
 	public void onCollectionRemove(Object collection, Serializable key) {
 		check(collection);

@@ -19,8 +19,9 @@ import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * Each patient's adherence as ACT 2.0 would have held it on past days, replayed in memory from the
- * records as they are now; nothing is written.
+ * Replays patients' adherence as ACT 2.0 would have held it on past days. The replay runs in memory
+ * over the records as they stand now and writes nothing, so the run charts can show adherence on
+ * days no refresh stored.
  */
 public final class AdherenceSeries {
 	
@@ -28,8 +29,14 @@ public final class AdherenceSeries {
 	}
 	
 	/**
-	 * By patient, then by day, the adherence held on that day: absent for a day the patient held no row
-	 * or no adherence. Each history is read and replayed once.
+	 * Gets the adherence each patient held on each of the days, keyed by patient id and then by day.
+	 * Each patient's history is read and replayed once for all the days. A day on which the patient
+	 * held no row, or a row without adherence, is absent from that patient's map.
+	 *
+	 * @param patientIds the patients to replay
+	 * @param days the days to replay each patient on
+	 * @return each patient's adherence by day; empty when either argument is empty, and a patient with
+	 *         nothing recorded that the refresh reads is absent
 	 */
 	public static Map<Integer, Map<LocalDate, Double>> adherenceOn(Collection<Integer> patientIds,
 	        SortedSet<LocalDate> days) {

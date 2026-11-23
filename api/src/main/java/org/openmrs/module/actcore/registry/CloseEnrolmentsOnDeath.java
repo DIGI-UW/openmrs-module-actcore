@@ -32,13 +32,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Advice that ends a dead patient's open RHD Registry and study enrolments in their death state
- * when the patient is saved or has a duplicate merged in.
+ * Advice that ends a dead patient's open RHD Registry and study enrolments in each program's death
+ * state, when the patient is saved or has a duplicate merged into them.
  */
 public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
+	/**
+	 * The name of the global property that holds the uuid of the concept whose state a study enrolment
+	 * ends in when the patient dies. A blank value leaves study enrolments open.
+	 */
 	public static final String STUDY_DEATH_STATE_PROPERTY = "actcore.studies.deathStateConcept";
 	
+	/**
+	 * The name of the global property that holds the uuid of the concept whose state an RHD Registry
+	 * enrolment ends in when the patient dies. A blank value leaves registry enrolments open.
+	 */
 	public static final String REGISTRY_DEATH_STATE_PROPERTY = "actcore.registry.deathStateConcept";
 	
 	private static final Logger log = LoggerFactory.getLogger(CloseEnrolmentsOnDeath.class);
@@ -48,6 +56,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	        PrivilegeConstants.GET_PATIENT_PROGRAMS, PrivilegeConstants.EDIT_PATIENT_PROGRAMS,
 	        PrivilegeConstants.GET_PROGRAMS };
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		String method = invocation.getMethod().getName();
@@ -64,7 +73,10 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	/**
 	 * Ends the open enrolments of patients recorded dead before this module ended them on death, such
-	 * as ACT 2.0's or an import's, and returns how many it ended.
+	 * as ACT 2.0's or an import's, and returns how many it ended. A patient whose enrolments fail to
+	 * close is logged and skipped.
+	 *
+	 * @return the number of enrolments ended; 0 when no program has a death state configured
 	 */
 	public static int closeEnrolmentsOfTheDead() {
 		List<Integer> programIds = programsWithADeathState();
@@ -100,8 +112,15 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	}
 	
 	/**
-	 * Ends a dead patient's enrolment in its death state, without saving it; false when the program has
-	 * no death state configured.
+	 * Ends a dead patient's enrolment in its program's death state, without saving the enrolment. It
+	 * reads what it needs with proxy privileges, since the user marking a patient deceased need not
+	 * hold program privileges.
+	 *
+	 * @param enrolment the enrolment to end
+	 * @param person the patient, whose death date, or now without one, ends the enrolment, moved no
+	 *            earlier than the enrolment's own dates
+	 * @return true when the enrolment was ended; false, leaving it unchanged, when its program has no
+	 *         death state configured
 	 */
 	public static boolean endInDeathState(PatientProgram enrolment, Person person) {
 		for (String privilege : PRIVILEGES) {
@@ -128,8 +147,9 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	}
 	
 	/**
-	 * The state a dead patient's enrolment in the program ends in: the registry's or a study's death
-	 * state by its property, or null when it has none.
+	 * Gets the state that a dead patient's enrolment in the program ends in: the state, in an unretired
+	 * workflow, whose concept the registry's or the studies' death state property names. It is null
+	 * when the program is neither the registry nor a study, or no such state is configured.
 	 */
 	static ProgramWorkflowState deathStateOf(Program program) {
 		String property = deathPropertyFor(program);
@@ -214,8 +234,9 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	}
 	
 	/**
-	 * The death date, moved up to the enrolment's latest recorded start or end, since a death state
-	 * cannot overlap the statuses recorded before it and endInDeathState does not rewrite them.
+	 * Moves the death date up, when needed, to the enrolment's latest recorded date: its enrolment date
+	 * or a status's start or end. A death state cannot overlap the statuses recorded before it, and
+	 * endInDeathState does not rewrite them.
 	 */
 	private static Date notBefore(Date date, PatientProgram enrolment) {
 		Date earliest = later(date, enrolment.getDateEnrolled());

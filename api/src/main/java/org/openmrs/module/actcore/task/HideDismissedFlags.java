@@ -21,14 +21,17 @@ import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 
 /**
- * Advice on FlagService that filters a patient's dismissed flags out on read, which holds whenever
- * patientflags' own thread rewrites their rows, as voiding them would not.
+ * Advice on FlagService that leaves a patient's dismissed flags out of what the service returns
+ * when a patient's flags are read. Filtering on read keeps a dismissal in force when the
+ * patientflags module's own thread rewrites the patient's flag rows, which voiding the rows would
+ * not survive.
  */
 public class HideDismissedFlags implements MethodInterceptor {
 	
 	// Not generateFlagsForPatient: patientflags' own thread writes the patient's rows from it.
 	private static final List<String> FILTERED = Arrays.asList("getPatientFlags", "getFlagsForPatient");
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object result = invocation.proceed();

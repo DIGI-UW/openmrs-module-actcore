@@ -19,13 +19,19 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 
 /**
- * ACT 2.0's adherence calculation (is4r-rhd-cdk
- * adherence_utils.calculate_adherence_and_injection_date), with injection adherence as days covered
- * over days prescribed: an injection covers its interval's days, the prescription's start covers
- * them as the first injection would, a change of injection prescription carries the last
- * injection's cover on, and a dose due today is not yet late. The next due date is ACT 2.0's but
- * counted from the latest injection however old, and, unlike ACT 2.0, a change of injection
- * prescription does not move it past a dose already due; AdherenceCalculationParityTest holds both.
+ * The prophylaxis adherence calculation that ACT 2.0 ran (is4r-rhd-cdk
+ * adherence_utils.calculate_adherence_and_injection_date), computing a patient's adherence and the
+ * next date a dose is due from their prescriptions, injections and oral adherence estimates.
+ * <p>
+ * For an injection regimen, adherence is the share of prescribed days that an injection covered.
+ * Each injection covers the days of its regimen's interval, the start of a prescription covers them
+ * as a first injection would, a change from one injection prescription to another carries the last
+ * injection's cover on, and a dose due today does not count as late yet.
+ * <p>
+ * The next due date follows ACT 2.0 with two differences: it is counted from the latest injection
+ * given within the current run of injection prescriptions, however long ago that was, and a change
+ * of injection prescription does not move it past a dose that is already due.
+ * AdherenceCalculationParityTest checks both against ACT 2.0's results.
  */
 public final class AdherenceCalculation {
 	
@@ -33,7 +39,8 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
-	 * An oral adherence entry: the estimate in percent, and the days the prescription it records lasts.
+	 * One oral adherence entry, holding the estimated adherence in percent and the number of days the
+	 * prescription it records lasts. Either value may be null when the form did not record it.
 	 */
 	public static final class OralEntry {
 		
@@ -47,7 +54,10 @@ public final class AdherenceCalculation {
 		}
 	}
 	
-	/** Adherence as a fraction, and the next date prophylaxis is due; either may be null. */
+	/**
+	 * The result of a calculation: the adherence as a fraction, where 1 means fully adherent, and the
+	 * next date a dose of prophylaxis is due. Either value is null when nothing recorded gives one.
+	 */
 	public static final class Result {
 		
 		private final Double adherence;
@@ -69,13 +79,16 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
-	 * ACT 2.0's calculation as it was: an oral regimen with no oral adherence entry since it started
-	 * gets no due date.
+	 * Calculates adherence and the next due date without a first oral visit day, as ACT 2.0 did. An
+	 * oral regimen with no oral adherence entry recorded since it started then takes its due date from
+	 * the latest estimate recorded under an earlier oral course in the past year, or has none.
 	 *
 	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
 	 *            regimen that is not an injection
 	 * @param injections the dates injections were given
 	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
+	 * @return the adherence and next due date; both are null when no prescription has started by today
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
@@ -83,13 +96,25 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
+	 * Calculates adherence, from the injections over the past year or the latest oral estimate, and the
+	 * next date prophylaxis is due.
+	 * <p>
+	 * The calculation looks back 365 days from today. When the latest prescription started by today is
+	 * oral and an oral estimate was recorded under it in that window, the adherence is the latest such
+	 * estimate, as a fraction. Otherwise it is the share of the injection regimens' prescribed days in
+	 * the window that the injections covered, or null when the window holds no injection regimen.
+	 *
 	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
 	 *            regimen that is not an injection
 	 * @param injections the dates injections were given
 	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
 	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due, while
 	 *            no oral adherence entry has been recorded since the start; null gives such a regimen
-	 *            no due date, as ACT 2.0 did
+	 *            no first-visit due date, as ACT 2.0 did, and it then takes its due date from the
+	 *            latest estimate recorded under an earlier oral course in the past year, or has none
+	 * @return the adherence and next due date; both are null when no prescription has started by today,
+	 *         and either is null when nothing recorded gives a value for it
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today, Integer oralFirstDueDays) {
@@ -151,7 +176,7 @@ public final class AdherenceCalculation {
 			totalDays += ChronoUnit.DAYS.between(windowStart, windowEnd);
 		}
 		
-		// Unlike ACT 2.0, which takes it from the past year only, the latest injection however old.
+		// Any age, unlike ACT 2.0's past year; nextDue still drops one from before the current run.
 		SortedSet<LocalDate> givenByToday = injections.headSet(today.plusDays(1));
 		LocalDate latestInjection = givenByToday.isEmpty() ? null : givenByToday.last();
 		return new Result(adherence(estimate, missedDays, totalDays),
@@ -159,8 +184,8 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
-	 * The start of the injection prescriptions that run unbroken by an oral one up to prescription i,
-	 * since an injection given before them does not cover days after it.
+	 * Finds the start date of the run of injection prescriptions, unbroken by an oral one, that ends
+	 * with prescription i. An injection given before that run does not cover any day within it.
 	 */
 	private static LocalDate injectionRunStart(SortedMap<LocalDate, Integer> started, List<LocalDate> dates, int i) {
 		int j = i;

@@ -20,8 +20,9 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * Replays how ACT 2.0 kept a patient's adherence: recomputed whenever a form was saved, and each
- * night only for a patient whose stored regimen was an injection, unless batch entry held them.
+ * Replays, from a patient's records, the adherence row that ACT 2.0 would have stored for them on a
+ * given day. ACT 2.0 recomputed the row whenever a form was saved, and each night as well, but only
+ * for a patient whose stored regimen was an injection and whom batch entry was not holding back.
  */
 final class AdherenceReplay {
 	
@@ -29,8 +30,8 @@ final class AdherenceReplay {
 	}
 	
 	/**
-	 * The prescriptions one encounter records: each start date's injection interval (0 if oral) and
-	 * regimen.
+	 * The prescriptions that one consultation records. For each start date it holds the regimen's
+	 * injection interval in days, which is 0 for an oral regimen, and the regimen's concept id.
 	 */
 	static final class Prescriptions {
 		
@@ -38,11 +39,17 @@ final class AdherenceReplay {
 		
 		final Map<LocalDate, Integer> regimens = new HashMap<LocalDate, Integer>();
 		
-		/** Every prescription it records, stopped ones too, agreeing with intervals on the rest. */
+		/**
+		 * Every prescription the consultation records, including the stopped ones, by start date. For a
+		 * prescription that is not stopped, the course's interval is the one in {@code intervals}.
+		 */
 		final TreeMap<LocalDate, Course> courses = new TreeMap<LocalDate, Course>();
 	}
 	
-	/** A prescription's injection interval (0 if oral) and the date it was stopped, if it was. */
+	/**
+	 * One prescribed course: its injection interval in days, which is 0 for an oral regimen, and the
+	 * date it was stopped, or null when it was not stopped.
+	 */
 	static final class Course {
 		
 		final int interval;
@@ -55,10 +62,16 @@ final class AdherenceReplay {
 		}
 	}
 	
-	/** A patient's records, each taken to be saved on the date it records. */
+	/**
+	 * A patient's records that the replay reads. Each record is taken to have been saved on the date it
+	 * records rather than on the date it was entered.
+	 */
 	static final class History {
 		
-		/** By consultation date, else encounter date; the first consultation of a day wins. */
+		/**
+		 * The prescriptions of each consultation, keyed by the consultation's date, or by its encounter's
+		 * date when it records none. When two consultations share a date, the first one is kept.
+		 */
 		final TreeMap<LocalDate, Prescriptions> prescriptions = new TreeMap<LocalDate, Prescriptions>();
 		
 		final TreeSet<LocalDate> injections = new TreeSet<LocalDate>();
@@ -67,11 +80,17 @@ final class AdherenceReplay {
 		
 		final TreeSet<LocalDate> consultations = new TreeSet<LocalDate>();
 		
-		/** Each consultation's days between batches, 0 for continuous entry or no answer. */
+		/**
+		 * The days between batches that each consultation records for how injections are entered, keyed by
+		 * the consultation's date. It is 0 for continuous entry or when the question is not answered.
+		 */
 		final TreeMap<LocalDate, Integer> batchDays = new TreeMap<LocalDate, Integer>();
 	}
 	
-	/** What ACT 2.0 would store for the patient today. */
+	/**
+	 * The adherence row that ACT 2.0 would store for a patient on a day: the regimen in force, its
+	 * injection interval, the last injection or oral entry, the adherence and the next due date.
+	 */
 	static final class Row {
 		
 		final Integer regimen;
@@ -83,8 +102,11 @@ final class AdherenceReplay {
 		final Double adherence;
 		
 		/**
-		 * The calculation's, kept with no injection recorded: one interval after the regimen starts; and
-		 * with no oral entry recorded, the first oral visit's day when one is set.
+		 * The next due date as the calculation gives it. It is kept even when no injection is recorded, in
+		 * which case it is the current interval counted from the start of the unbroken run of injection
+		 * prescriptions, so a change of injection regimen does not move a dose already due. It is kept too
+		 * when no oral entry is recorded at all, in which case it is the first oral visit's day if one is
+		 * set, or else null.
 		 */
 		final LocalDate nextDue;
 		
@@ -98,7 +120,8 @@ final class AdherenceReplay {
 	}
 	
 	/**
-	 * The regimen stored by a computation on a day: the one started last, and the latest record for it.
+	 * The regimen that a computation on a given day would store: the prescription started last by that
+	 * day, with the latest injection or oral entry recorded for it.
 	 */
 	private static final class Stored {
 		
@@ -130,16 +153,27 @@ final class AdherenceReplay {
 	}
 	
 	/**
-	 * The row ACT 2.0 would hold today, or null when the patient has no prescription to hold one for.
+	 * Replays the row ACT 2.0 would hold for the patient today, without a first oral visit day.
+	 *
+	 * @param h the patient's records
+	 * @param today the day to replay the row for
+	 * @return the row, or null when the patient has no prescription to hold one for
 	 */
 	static Row replay(History h, LocalDate today) {
 		return replay(h, today, null);
 	}
 	
 	/**
+	 * Replays the row ACT 2.0 would hold for the patient today, giving an oral regimen with no oral
+	 * entry recorded the first oral visit's day as its due date when one is set.
+	 *
+	 * @param h the patient's records
+	 * @param today the day to replay the row for
 	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due while
-	 *            none is recorded; null gives it no due date, as ACT 2.0 did
-	 * @see #replay(History, LocalDate)
+	 *            none is recorded; null gives it no first-visit due date, as ACT 2.0 did, and it then
+	 *            takes its due date from the latest estimate recorded under an earlier oral course in
+	 *            the past year, or has none
+	 * @return the row, or null when the patient has no prescription to hold one for
 	 */
 	static Row replay(History h, LocalDate today, Integer oralFirstDueDays) {
 		TreeSet<LocalDate> day = new TreeSet<LocalDate>();
@@ -148,8 +182,9 @@ final class AdherenceReplay {
 	}
 	
 	/**
-	 * The row ACT 2.0 would have held on each of the days, from one walk of the history to the last of
-	 * them; null for a day it held none.
+	 * Replays the row ACT 2.0 would have held on each of the days given, walking the history once up to
+	 * the last of them. The map holds every day given, with a null row for a day on which ACT 2.0 held
+	 * none.
 	 */
 	static Map<LocalDate, Row> replayOn(History h, SortedSet<LocalDate> days, Integer oralFirstDueDays) {
 		Map<LocalDate, Row> rows = new TreeMap<LocalDate, Row>();
@@ -209,8 +244,9 @@ final class AdherenceReplay {
 	}
 	
 	/**
-	 * ACT 2.0's nightly run skipped a batch-entered patient until the batch interval had passed since
-	 * the later of their latest consultation and the last injection it had stored.
+	 * Tells whether ACT 2.0's nightly run would have skipped the patient on the day. It skipped a
+	 * batch-entered patient until the batch interval had passed since the later of their latest
+	 * consultation and the last injection it had stored.
 	 */
 	private static boolean held(History h, LocalDate day, Stored stored) {
 		Map.Entry<LocalDate, Integer> entry = h.batchDays.floorEntry(day);

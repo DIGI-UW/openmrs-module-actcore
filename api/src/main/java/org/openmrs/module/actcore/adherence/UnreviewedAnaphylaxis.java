@@ -24,8 +24,10 @@ import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * Whether a BPG Delivery form recorded anaphylaxis that no RHD Consultation Visit has followed, by
- * encounter date and then id, as Next steps reads it from the same global properties.
+ * Tells whether a patient's latest BPG Delivery form that recorded anaphylaxis has not yet been
+ * followed by an RHD Consultation Visit. Encounters are ordered by date and then by id. It reads
+ * the encounter types and the anaphylaxis answer from the same global properties that Next steps
+ * reads.
  */
 final class UnreviewedAnaphylaxis {
 	
@@ -77,7 +79,11 @@ final class UnreviewedAnaphylaxis {
 		return byDate != 0 ? byDate > 0 : a.getEncounterId() > b.getEncounterId();
 	}
 	
-	/** The type mapped to the key in actcore.nextSteps.encounterTypes, a list of key:uuid pairs. */
+	/**
+	 * Gets the encounter type mapped to the key in actcore.nextSteps.encounterTypes, which lists
+	 * key:uuid pairs separated by commas. It is null when the key is not mapped or no type has the
+	 * uuid.
+	 */
 	private static EncounterType type(String key) {
 		for (String pair : StringUtils.split(StringUtils.defaultString(property("actcore.nextSteps.encounterTypes")), ',')) {
 			String[] parts = StringUtils.split(pair, ':');

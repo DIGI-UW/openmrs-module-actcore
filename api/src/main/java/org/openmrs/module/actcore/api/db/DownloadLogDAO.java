@@ -15,23 +15,28 @@ import java.util.List;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.DownloadRecord;
 
-/** Database access for {@link org.openmrs.module.actcore.api.DownloadLogService}. */
+/**
+ * The database access behind {@link org.openmrs.module.actcore.api.DownloadLogService}, which saves
+ * download records and reads them back.
+ */
 public interface DownloadLogDAO {
 	
 	/**
-	 * Saves a download.
+	 * Saves a download record in the current session.
 	 *
-	 * @param record the download to save
+	 * @param record the download record to save
 	 */
 	void saveDownloadRecord(DownloadRecord record);
 	
 	/**
-	 * Gets the downloads that match the filters, newest first.
+	 * Gets the downloads that match the filters, newest first, each with its user's uuid and its form's
+	 * uuid and name. A filter left null is not applied.
 	 *
-	 * @param userId the user who downloaded, or null for every user
-	 * @param from the earliest time, included, or null for no lower bound
-	 * @param before the time the downloads must be before, or null for no upper bound
-	 * @return the matching downloads, an empty list when there are none
+	 * @param userId the id of the user who downloaded, or null for every user
+	 * @param from the earliest time to include, or null for no lower bound
+	 * @param before the time every download returned must come before, which is excluded, or null for
+	 *            no upper bound
+	 * @return the matching downloads; an empty list when there are none
 	 */
 	List<DownloadLog.Entry> getDownloads(Integer userId, Date from, Date before);
 }

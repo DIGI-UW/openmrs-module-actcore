@@ -31,22 +31,42 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses a new study enrolment without consent, the opt-in, a Study ID or a living patient, and an
- * edit that changes a study enrolment's program or strips an open one of its Study ID.
+ * Advice on ProgramWorkflowService that enforces the rules for enrolling patients in research
+ * studies. It refuses a new study enrolment without the patient's consent, their opt-in to research
+ * or a Study ID, and a new open one for a patient who has died. It also refuses an edit that moves
+ * an enrolment into or out of a study, or that takes the Study ID away from an open study
+ * enrolment.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
 	
+	/**
+	 * The name of the global property that holds the uuid of the person attribute type recording the
+	 * patient's consent. A blank value turns the consent rule off.
+	 */
 	public static final String CONSENT_PROPERTY = "actcore.studies.consentAttributeType";
 	
+	/**
+	 * The name of the global property that holds the uuid of the person attribute type recording
+	 * whether the patient opted in to research. A blank value turns the opt-in rule off.
+	 */
 	public static final String OPT_IN_PROPERTY = "actcore.studies.optInAttributeType";
 	
+	/**
+	 * The name of the global property that holds the uuid of the Yes concept, which the consent and
+	 * opt-in attributes hold when the patient answered yes.
+	 */
 	public static final String YES_PROPERTY = "actcore.studies.yesConcept";
 	
+	/**
+	 * The name of the global property that holds the uuid of the program attribute type recording a
+	 * study enrolment's Study ID. A blank value turns the Study ID rule off.
+	 */
 	public static final String STUDY_ID_PROPERTY = "actcore.studies.participantIdAttributeType";
 	
 	private static final String[] PRIVILEGES = { PrivilegeConstants.GET_GLOBAL_PROPERTIES,
 	        PrivilegeConstants.GET_PERSON_ATTRIBUTE_TYPES, PrivilegeConstants.GET_CONCEPTS };
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
@@ -112,7 +132,7 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	/**
-	 * An enrolment stays in the program it was saved in when that or the new one is a study: moving it
+	 * Refuses to move a saved enrolment to another program when either program is a study. Such a move
 	 * would skip the enrolment rules and carry the Study ID of one study into another.
 	 */
 	private static void refuseMoveAcrossStudies(PatientProgram enrolment, Studies studies) {
@@ -134,7 +154,8 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	/**
-	 * The program the enrolment is saved in, read from the table as the session holds the edited one.
+	 * Gets the id of the program the enrolment is saved in, read from the table, since the session
+	 * holds the edited enrolment. It is null when the enrolment is not saved.
 	 */
 	private static Integer storedProgramId(int patientProgramId) {
 		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
@@ -149,7 +170,11 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		}
 	}
 	
-	/** True when the property is blank, which turns the rule off, for example while migrating. */
+	/**
+	 * Tells whether the enrolment's patient answered Yes to the attribute that the property names. It
+	 * is true when the property is blank, which turns the rule off, for example while migrating, and
+	 * when the attribute type or the Yes concept cannot be found.
+	 */
 	private static boolean answeredYes(PatientProgram enrolment, String property, Concept yes) {
 		String uuid = property(property);
 		if (uuid == null) {
@@ -162,7 +187,16 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		return answeredYes(enrolment.getPatient(), type, yes);
 	}
 	
-	/** Whether it holds Yes's concept id; the research download reads its opt-in here too. */
+	/**
+	 * Tells whether the person's attribute of the type holds the Yes concept's id. The research
+	 * download reads the research opt-in through this method too.
+	 *
+	 * @param person the person whose attribute to read
+	 * @param type the attribute type holding the answer
+	 * @param yes the Yes concept
+	 * @return true when the person's attribute of the type holds the concept's id; false when they have
+	 *         none
+	 */
 	public static boolean answeredYes(Person person, PersonAttributeType type, Concept yes) {
 		PersonAttribute answer = person.getAttribute(type);
 		return answer != null && yes.getConceptId().toString().equals(answer.getValue());
@@ -184,8 +218,9 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	/**
-	 * Whether the stored row is open without a Study ID, as core's merge saves its copy. Reopening a
-	 * completed enrolment that has no Study ID is still refused.
+	 * Tells whether the enrolment's stored row is open and has no Study ID, as is the copy that core's
+	 * merge saves. Such an enrolment may be saved again without one, while reopening a completed
+	 * enrolment that has no Study ID is still refused.
 	 */
 	private static boolean storedOpenWithoutStudyId(PatientProgram enrolment) {
 		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
@@ -216,7 +251,6 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		return StringUtils.isBlank(value) ? null : value.trim();
 	}
 	
-	// As a global error, so the REST API answers 400 with the message rather than a stack trace.
 	private static ValidationException refusal(PatientProgram enrolment, String message) {
 		Errors errors = new BindException(enrolment, "patientProgram");
 		errors.reject("actcore.studyEnrolment", message);

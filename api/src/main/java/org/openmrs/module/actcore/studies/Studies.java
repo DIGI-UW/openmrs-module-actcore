@@ -30,11 +30,17 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Research studies, as ACT 2.0's study list: each study is a program named after it, whose Study
- * status workflow is a copy of the template program's.
+ * Lists, creates and renames research studies, which take the place of ACT 2.0's study list. Each
+ * study is a program named after it, whose Study status workflow is a copy of the template
+ * program's. Its methods do their reads and writes with proxy privileges, so a caller that must
+ * restrict who may use them checks the user's privileges itself, as the studies endpoint does.
  */
 public class Studies {
 	
+	/**
+	 * The name of the global property that holds the uuid of the template program, whose workflows each
+	 * new study copies.
+	 */
 	public static final String TEMPLATE_PROPERTY = "actcore.studyTemplateProgram";
 	
 	private static final int MAX_NAME_LENGTH = 50;
@@ -44,7 +50,12 @@ public class Studies {
 	        PrivilegeConstants.GET_CONCEPT_DATATYPES, PrivilegeConstants.GET_CONCEPT_ATTRIBUTE_TYPES,
 	        PrivilegeConstants.GET_OBS, PrivilegeConstants.GET_GLOBAL_PROPERTIES };
 	
-	/** The studies that are not retired, by name. */
+	/**
+	 * Gets the studies that are not retired, sorted by name.
+	 *
+	 * @return the studies, sorted by name ignoring case; empty when there are none
+	 * @throws APIException when {@value #TEMPLATE_PROPERTY} names no program with a workflow
+	 */
 	public List<Program> getStudies() {
 		return withPrivileges(() -> {
 			Program template = template();
@@ -60,8 +71,13 @@ public class Studies {
 	}
 	
 	/**
-	 * Whether the program is a study, retired or not: not the template, with a workflow on the
-	 * template's. False for every program without a template, so enrolling keeps working.
+	 * Tells whether the program is a study, whether retired or not. A study is a program other than the
+	 * template that has an unretired workflow on one of the template's workflow concepts. While no
+	 * template is configured, no program is a study, so enrolling keeps working.
+	 *
+	 * @param program the program, or null
+	 * @return true for a study; false for a null program, the template itself, or when no template is
+	 *         configured
 	 */
 	public boolean isStudy(Program program) {
 		return program != null && withPrivileges(() -> {
@@ -70,6 +86,16 @@ public class Studies {
 		});
 	}
 	
+	/**
+	 * Creates a study: a program with the name, a new concept named after it, and a copy of each of the
+	 * template's unretired workflows with their unretired states.
+	 *
+	 * @param name the study's name, trimmed before use
+	 * @return the saved program
+	 * @throws ValidationException when the name is blank, longer than 50 characters, or already used by
+	 *             another program or another study's concept
+	 * @throws APIException when {@value #TEMPLATE_PROPERTY} names no program with a workflow
+	 */
 	public Program create(String name) {
 		String trimmed = requireName(name);
 		return withPrivileges(() -> {
@@ -105,7 +131,18 @@ public class Studies {
 		});
 	}
 	
-	/** Renames the study and its concept; enrolments follow, as they point at the program. */
+	/**
+	 * Renames the study and its concept. The study's enrolments follow the new name, since they point
+	 * at the program rather than at its name.
+	 *
+	 * @param study the study to rename
+	 * @param name the new name, trimmed before use
+	 * @return the saved program
+	 * @throws ValidationException when the name is blank, longer than 50 characters, or already used by
+	 *             another program or another study's concept
+	 * @throws APIException when the program is not a study, or {@value #TEMPLATE_PROPERTY} names no
+	 *             program with a workflow
+	 */
 	public Program rename(Program study, String name) {
 		String trimmed = requireName(name);
 		return withPrivileges(() -> {
@@ -172,8 +209,9 @@ public class Studies {
 	}
 	
 	/**
-	 * Kept apart from other concepts' names, such as the old form's study answers, which a study's name
-	 * may share.
+	 * Gives the name of a study's concept, which adds " (research study)" to the study's name so that
+	 * it stays apart from other concepts' names that the study's name may share, such as the old form's
+	 * study answers.
 	 */
 	private static String conceptName(String name) {
 		return name + " (research study)";
@@ -194,7 +232,6 @@ public class Studies {
 		return LocaleUtility.getDefaultLocale();
 	}
 	
-	// As a global error, so the REST API answers 400 with the message rather than a stack trace.
 	private static ValidationException refusal(String message) {
 		Errors errors = new BindException(new Object(), "study");
 		errors.reject("actcore.study", message);

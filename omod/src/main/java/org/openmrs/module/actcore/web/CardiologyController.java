@@ -27,10 +27,21 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+/** Serves the date a patient's next cardiology review is due. */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class CardiologyController extends ActCoreRestController {
 	
+	/**
+	 * Gets the date the patient's next cardiology review is due, as {@code nextDue}.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @return the due date as an ISO date, or a null nextDue when
+	 *         {@link org.openmrs.module.actcore.consultation.NextConsultation#of(Patient)} gives none
+	 * @throws IllegalRequestException when no patient is given
+	 * @throws ObjectNotFoundException when no patient has the uuid
+	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
+	 */
 	@RequestMapping(value = "/cardiology", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getNextVisit(@RequestParam(value = "patient", required = false) String patientUuid) {

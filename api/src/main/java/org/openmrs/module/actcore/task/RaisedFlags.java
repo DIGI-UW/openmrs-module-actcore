@@ -33,21 +33,32 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Each raised flag's date and dismissal, kept here as patientflags recreates its own rows on every
- * save, so neither its date_created nor a voided row outlives the next save.
+ * Keeps the date each flag was raised for each patient, and the flag's dismissal, and dismisses
+ * flags. ACT Core keeps these in tables of its own because the patientflags module recreates its
+ * own rows on every save, so neither the date_created of its row nor a voided row outlives the next
+ * save.
  */
 public class RaisedFlags {
 	
+	/**
+	 * The table that holds one row per flag raised for a patient, with when it was raised and any
+	 * dismissal. A row is deleted once its flag lowers.
+	 */
 	public static final String TABLE = "actcore_raised_flag";
 	
-	/** Each dismissal, never deleted, as the refresh deletes a TABLE row once its flag lowers. */
+	/**
+	 * The table that keeps each dismissal for good, since the refresh deletes a row of {@link #TABLE}
+	 * once its flag lowers.
+	 */
 	public static final String DISMISSAL_TABLE = "actcore_flag_dismissal";
 	
-	/**
-	 * A user without it, other than a superuser, cannot dismiss a flag.
-	 */
+	/** The privilege a user needs, unless they are a superuser, to dismiss a flag. */
 	public static final String DISMISS_PRIVILEGE = ActCorePrivileges.DISMISS_FLAGS;
 	
+	/**
+	 * The name of the global property that holds the tag a flag must carry to be dismissible. While it
+	 * is blank, every flag may be dismissed.
+	 */
 	public static final String DISMISS_TAG_PROPERTY = "actcore.dismissFlagTag";
 	
 	private static final Logger log = LoggerFactory.getLogger(RaisedFlags.class);
@@ -56,6 +67,10 @@ public class RaisedFlags {
 	        PrivilegeConstants.SQL_LEVEL_ACCESS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_GLOBAL_PROPERTIES,
 	        "View Cohorts In Cohort Module", "Edit Cohorts in Cohort Module" };
 	
+	/**
+	 * The outcome of {@link RaisedFlags#dismiss(Patient, Flag)}: the flag was dismissed, it is not
+	 * raised for the patient now, it may not be dismissed, or the full refresh is running.
+	 */
 	public enum Dismissal {
 		DISMISSED,
 		NOT_RAISED,
@@ -63,7 +78,10 @@ public class RaisedFlags {
 		REFRESH_RUNNING
 	}
 	
-	/** Records the flag as raised from now, unless it already is or the patient does not exist. */
+	/**
+	 * Records the flag as raised for the patient from now, unless it is already recorded as raised or
+	 * the patient does not exist.
+	 */
 	static void raise(int flagId, int patientId) {
 		inTransaction(() -> {
 			// A query, as a raised flag the session holds may since have been lowered by a bulk delete.
@@ -106,24 +124,39 @@ public class RaisedFlags {
 		return dismissedFlags(patientId).contains(flagId);
 	}
 	
-	/** The flags dismissed for the patient, by flag id. */
+	/**
+	 * Gets the ids of the flags dismissed for the patient that are still recorded as raised.
+	 *
+	 * @param patientId the patient
+	 * @return the ids of the flags dismissed and still raised for the patient; empty when there are
+	 *         none
+	 */
 	public static Set<Integer> dismissedFlags(int patientId) {
 		return ids("select key.flagId from RaisedFlag where key.patientId = :id and dateDismissed is not null", patientId);
 	}
 	
-	/** Since when each of the flag's patients has had it raised, by patient id. */
+	/** Gets when the flag was raised for each of its patients, keyed by patient id. */
 	static Map<Integer, Date> raisedSinceByPatient(int flagId) {
 		return dates("select key.patientId, raisedSince from RaisedFlag where key.flagId = :id", flagId);
 	}
 	
-	/** Since when the patient has had each of their raised flags, by flag id. */
+	/**
+	 * Gets when each of the patient's raised flags was raised, keyed by flag id.
+	 *
+	 * @param patientId the patient
+	 * @return the date each raised flag was raised, by flag id; empty when none is raised
+	 */
 	public static Map<Integer, Date> raisedSinceByFlag(int patientId) {
 		return dates("select key.flagId, raisedSince from RaisedFlag where key.patientId = :id", patientId);
 	}
 	
 	/**
-	 * Whether the signed-in user may dismiss this flag: it carries actcore.dismissFlagTag, or that is
-	 * empty.
+	 * Tells whether the signed-in user may dismiss this flag. They may when they hold
+	 * {@link #DISMISS_PRIVILEGE} and View Patient Flags, and the flag carries the tag that
+	 * {@value #DISMISS_TAG_PROPERTY} names, or that property is blank.
+	 *
+	 * @param flag the flag
+	 * @return true when the user may dismiss the flag, whether or not it is raised for anyone
 	 */
 	public static boolean mayDismiss(Flag flag) {
 		return Context.hasPrivilege(DISMISS_PRIVILEGE) && Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)
@@ -131,8 +164,17 @@ public class RaisedFlags {
 	}
 	
 	/**
-	 * Hides the flag for the patient wherever ACT reads flags until ACT Core finds that it no longer
-	 * matches them. Only a flag that matches now can be dismissed, and not during the full refresh.
+	 * Dismisses the flag for the patient, which hides it wherever ACT reads flags until ACT Core finds
+	 * that the flag has stopped matching the patient. A flag can be dismissed only while it matches the
+	 * patient, and not while the full refresh runs, which would undo the dismissal.
+	 *
+	 * @param patient the patient the flag is raised for
+	 * @param flag the flag to dismiss
+	 * @return DISMISSED, also when it was already dismissed; NOT_DISMISSIBLE when it lacks the dismiss
+	 *         tag; REFRESH_RUNNING while the full refresh runs; NOT_RAISED when the patient is voided,
+	 *         the flag is disabled or retired, or it does not match the patient now
+	 * @throws APIAuthenticationException when the user lacks {@link #DISMISS_PRIVILEGE} or View Patient
+	 *             Flags
 	 */
 	public static Dismissal dismiss(Patient patient, Flag flag) {
 		for (String privilege : new String[] { DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS }) {

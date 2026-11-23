@@ -12,27 +12,40 @@ package org.openmrs.module.actcore.download;
 import java.util.Date;
 
 /**
- * Each download, as ACT 2.0's audit log kept it. The audit log module records reads and changes but
- * offers no way for another module to record an event of its own, so downloads are kept here.
+ * The log of downloads of patient data, kept as ACT 2.0's audit log kept them. The audit log module
+ * records reads and changes, but offers no way for another module to record an event of its own, so
+ * ACT Core keeps the downloads in a table of its own.
  */
 public class DownloadLog {
 	
+	/** The table that holds one row per download recorded. */
 	public static final String TABLE = "actcore_download_log";
 	
-	/** The audit log module's, as a download is a read of patients' data. */
+	/**
+	 * The privilege needed to list the downloads. It is the audit log module's privilege for reading
+	 * the read audit, since a download is a read of patients' data.
+	 */
 	public static final String VIEW_PRIVILEGE = "View Read Audit Logs";
 	
-	/** One download, with the form it was of, null once the form is purged. */
+	/** One recorded download, as the Logs page lists it. */
 	public static class Entry {
 		
+		/** When the download was recorded. */
 		public Date date;
 		
+		/** The uuid of the user who downloaded. */
 		public String userUuid;
 		
+		/**
+		 * The uuid of the form downloaded when the download held exactly one form. It is null for any other
+		 * download, and once the form is purged.
+		 */
 		public String formUuid;
 		
+		/** The name users see for the form. It is null whenever {@link #formUuid} is null. */
 		public String formName;
 		
+		/** What the download held, such as its forms, columns and filters, as JSON. */
 		public String detail;
 	}
 }

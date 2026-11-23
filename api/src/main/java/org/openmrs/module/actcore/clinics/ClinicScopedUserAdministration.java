@@ -26,16 +26,19 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 
 /**
- * Advice on UserService that holds an administrator limited to their clinics to those clinics'
- * users, as ACT 2.0 held its site administrator; the README lists the rules.
+ * Advice on UserService that confines an administrator limited to their clinics, such as a site
+ * administrator, to the users of those clinics, as ACT 2.0 confined its site administrator. Such an
+ * administrator sees only the users who share one of their clinics, and changes a user only within
+ * the rules the README lists. Every other user passes through untouched.
  */
 public class ClinicScopedUserAdministration implements MethodInterceptor {
 	
 	private static final List<String> LISTS = Arrays.asList("getAllUsers", "getUsersByName", "getUsers");
 	
 	/**
-	 * Single-user lookups, which answer nothing for a user of other clinics, as ACT 2.0's get_user
-	 * refused.
+	 * The names of the UserService methods that look up a single user. For a limited administrator they
+	 * return null when the user found is at none of the administrator's clinics, as ACT 2.0's get_user
+	 * refused such a user.
 	 */
 	private static final List<String> LOOKUPS = Arrays.asList("getUserByUuid", "getUserByUsername");
 	
@@ -43,10 +46,12 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 	    "unretireUser", "purgeUser", "changePassword", "setUserProperty", "removeUserProperty");
 	
 	/**
-	 * Set while this advice runs its own search, which core answers through the advised service again.
+	 * Set on the thread while this advice runs its own search of the users. Core answers that search
+	 * through the advised service again, and the flag lets the nested call pass through unfiltered.
 	 */
 	private static final ThreadLocal<Boolean> SEARCHING = new ThreadLocal<Boolean>();
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();
@@ -91,8 +96,9 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 	}
 	
 	/**
-	 * The clinics the user will have after a property call, or null when the call leaves them alone, in
-	 * which case the user's current clinics are checked.
+	 * Works out the clinics the user will have after a call that sets or removes a user property. It
+	 * returns null when the call does not touch the clinics property, in which case the caller checks
+	 * the user's current clinics instead.
 	 */
 	private static Set<String> changedClinics(User user, Object[] args, boolean set) {
 		if (args.length < 2 || !UserClinics.PROPERTY.equals(args[1])) {
@@ -140,7 +146,10 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 		}
 	}
 	
-	/** The paged search, filtered before the page is cut so pages stay full and in order. */
+	/**
+	 * Runs the paged user search for a limited administrator. It filters every matching user before it
+	 * cuts the page, so that each page stays full and in order.
+	 */
 	private static List<User> pageOfVisible(MethodInvocation invocation, User me) {
 		Object[] args = invocation.getArguments();
 		List<User> visible = visible(allMatching(invocation, args), me);
@@ -149,7 +158,7 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 		return start >= end ? new ArrayList<User>() : new ArrayList<User>(visible.subList(start, end));
 	}
 	
-	/** Every user the search matches, unfiltered and unpaged. */
+	/** Runs the search again for every user it matches, without filtering or paging them. */
 	@SuppressWarnings("unchecked")
 	private static List<User> allMatching(MethodInvocation invocation, Object[] args) {
 		SEARCHING.set(true);

@@ -32,12 +32,17 @@ import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.springframework.stereotype.Component;
 
 /**
- * {@code GET /form?patient=<uuid>}, the patient chart forms list's {@code customFormsUrl}: its
- * forms, without the female-only forms for a patient whose gender isn't F.
+ * The search handler behind {@code GET /form?patient=<uuid>}, which the patient chart's forms list
+ * calls as its {@code customFormsUrl}. It returns the published forms, other than components, that
+ * the list offers, leaving out the female-only forms for a patient whose gender is not F.
  */
 @Component
 public class FormsForPatientSearchHandler implements SearchHandler {
 	
+	/**
+	 * The name of the global property that lists, by uuid and separated by commas or spaces, the forms
+	 * offered only for a female patient.
+	 */
 	public static final String FEMALE_ONLY_PROPERTY = "actcore.forms.femaleOnly";
 	
 	private static final Pattern COMPONENT = Pattern.compile("component", Pattern.CASE_INSENSITIVE);
@@ -47,11 +52,15 @@ public class FormsForPatientSearchHandler implements SearchHandler {
 	        new SearchQuery.Builder("The published forms to offer for a patient, female-only forms only for a woman")
 	                .withRequiredParameters("patient").build());
 	
+	/** @see org.openmrs.module.webservices.rest.web.resource.api.SearchHandler#getSearchConfig() */
 	@Override
 	public SearchConfig getSearchConfig() {
 		return searchConfig;
 	}
 	
+	/**
+	 * @see org.openmrs.module.webservices.rest.web.resource.api.SearchHandler#search(org.openmrs.module.webservices.rest.web.RequestContext)
+	 */
 	@Override
 	public PageableResult search(RequestContext context) {
 		Patient patient = Context.getPatientService().getPatientByUuid(context.getParameter("patient"));

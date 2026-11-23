@@ -31,13 +31,17 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
 /**
- * Refuses an overlapping RHD Registry or study enrolment while either is open, and an open registry
- * enrolment for the dead; folds overlaps into one when patients are merged.
+ * Advice on ProgramWorkflowService and PatientService that keeps a patient's RHD Registry and study
+ * enrolments from overlapping. It refuses to save an enrolment that overlaps another enrolment of
+ * the patient in the same program while either of them is open, and refuses to save an open
+ * registry enrolment for a patient who has died. When patients are merged, it folds the overlapping
+ * enrolments the merge leaves into one.
  */
 public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
 	private static final ThreadLocal<Boolean> SUSPENDED = ThreadLocal.withInitial(() -> false);
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
@@ -68,13 +72,21 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	}
 	
 	/**
-	 * Whether a merge, or work run by {@link #withoutRefusing}, is saving enrolments on this thread.
+	 * Tells whether a merge, or work run by {@link #withoutRefusing}, is saving enrolments on this
+	 * thread, so that overlaps are not being refused.
+	 *
+	 * @return true while overlapping enrolments are not refused on this thread
 	 */
 	public static boolean isSuspended() {
 		return SUSPENDED.get();
 	}
 	
-	/** Runs the work without refusing overlaps, for saves that end every open enrolment they touch. */
+	/**
+	 * Runs the work on this thread without refusing overlapping enrolments. It is meant for saves that
+	 * end every open enrolment they touch, which would otherwise be refused partway through.
+	 *
+	 * @param work the work to run on this thread
+	 */
 	public static void withoutRefusing(Runnable work) {
 		boolean outer = SUSPENDED.get();
 		SUSPENDED.set(true);
@@ -150,8 +162,9 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	}
 	
 	/**
-	 * A dead patient's registry enrolment is ended in its death state, so an open one would count them
-	 * as active. Off while the registry has no death state configured, as during an import.
+	 * Refuses to save an open registry enrolment for a patient who has died. A dead patient's registry
+	 * enrolment is ended in its death state, so an open one would count them as active. The rule is off
+	 * while the registry has no death state configured, as during an import.
 	 */
 	private static void refuseOpenRegistryEnrolmentOfTheDead(PatientProgram enrolment) {
 		if (Boolean.TRUE.equals(enrolment.getVoided()) || enrolment.getDateCompleted() != null
@@ -206,7 +219,6 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 		        : "This enrolment overlaps the patient's enrolment in " + existing.getProgram().getName() + " from "
 		                + date.format(existing.getDateEnrolled()) + " to " + date.format(existing.getDateCompleted())
 		                + "; edit that enrolment instead";
-		// As a global error, so the REST API answers 400 with the message rather than a stack trace.
 		Errors errors = new BindException(enrolment, "patientProgram");
 		errors.reject("actcore.alreadyEnrolled", message);
 		return new ValidationException(message, errors);

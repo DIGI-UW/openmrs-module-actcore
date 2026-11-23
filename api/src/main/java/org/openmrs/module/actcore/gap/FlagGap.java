@@ -12,6 +12,10 @@ package org.openmrs.module.actcore.gap;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 
+/**
+ * A gap behind a patient's flag: a question that is missing from one of the patient's encounters,
+ * as the flag's SQL criteria report it.
+ */
 public class FlagGap {
 	
 	private final Encounter encounter;

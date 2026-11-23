@@ -10,8 +10,9 @@
 package org.openmrs.module.actcore;
 
 /**
- * The privileges ACT Core checks, declared in its config.xml so a deployment without the
- * distribution still has them; the only place each name is spelled.
+ * The names of the privileges that ACT Core checks. The module's config.xml declares each of them,
+ * so that a deployment without the ACT distribution still has them, and the Java code refers to
+ * them through these constants rather than spelling the names again.
  */
 public final class ActCorePrivileges {
 	

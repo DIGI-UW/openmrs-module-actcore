@@ -30,10 +30,22 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+/** Serves the next steps the chart suggests for a patient. */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class NextStepsController extends ActCoreRestController {
 	
+	/**
+	 * Gets the patient's next steps, as {@link NextSteps#of(Patient, LocalDate)} gives them as of
+	 * today.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @return the steps as {@code steps}, each with its key, form, title, reason, referral type and
+	 *         whether it is new, done, on hold or an alert
+	 * @throws IllegalRequestException when no patient is given
+	 * @throws ObjectNotFoundException when no patient has the uuid
+	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
+	 */
 	@RequestMapping(value = "/nextsteps", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getNextSteps(@RequestParam(value = "patient", required = false) String patientUuid) {
