@@ -29,8 +29,9 @@ import java.util.SortedSet;
  * injection's cover on, and a dose due today does not count as late yet.
  * <p>
  * The next due date follows ACT 2.0 with two differences: it is counted from the latest injection
- * however long ago that was, and a change of injection prescription does not move it past a dose
- * that is already due. AdherenceCalculationParityTest checks both against ACT 2.0's results.
+ * given within the current run of injection prescriptions, however long ago that was, and a change
+ * of injection prescription does not move it past a dose that is already due.
+ * AdherenceCalculationParityTest checks both against ACT 2.0's results.
  */
 public final class AdherenceCalculation {
 	
@@ -175,7 +176,7 @@ public final class AdherenceCalculation {
 			totalDays += ChronoUnit.DAYS.between(windowStart, windowEnd);
 		}
 		
-		// Unlike ACT 2.0, which takes it from the past year only, the latest injection however old.
+		// Any age, unlike ACT 2.0's past year; nextDue still drops one from before the current run.
 		SortedSet<LocalDate> givenByToday = injections.headSet(today.plusDays(1));
 		LocalDate latestInjection = givenByToday.isEmpty() ? null : givenByToday.last();
 		return new Result(adherence(estimate, missedDays, totalDays),

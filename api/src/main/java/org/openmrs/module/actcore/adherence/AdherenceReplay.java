@@ -105,8 +105,8 @@ final class AdherenceReplay {
 		 * The next due date as the calculation gives it. It is kept even when no injection is recorded, in
 		 * which case it is the current interval counted from the start of the unbroken run of injection
 		 * prescriptions, so a change of injection regimen does not move a dose already due. It is kept too
-		 * when no oral entry is recorded, in which case it is the first oral visit's day, if one is set, or
-		 * else is taken from the latest estimate recorded under an earlier oral course in the past year.
+		 * when no oral entry is recorded at all, in which case it is the first oral visit's day if one is
+		 * set, or else null.
 		 */
 		final LocalDate nextDue;
 		

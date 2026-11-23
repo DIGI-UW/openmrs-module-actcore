@@ -329,7 +329,7 @@
     <property>actcore.adherence.oralFirstDueDays</property>
     <defaultValue></defaultValue>
     <description>
-      Days after an oral regimen starts that its first oral visit is due, while no oral adherence form has been recorded since the start: 0 makes it due on the start date, so the patient is on the due list and flagged overdue until the first supply is recorded. Leave empty to give such a regimen no first-visit due date, as ACT 2.0 did; it then takes its due date from the latest estimate recorded under an earlier oral course in the past year, or has none. Before a BPG regimen's first injection, the injection is due the current interval after the start of the unbroken run of injection prescriptions.
+      Days after an oral regimen starts that its first oral visit is due, while no oral adherence form has been recorded since the start: 0 makes it due on the start date, so the patient is on the due list and flagged overdue until the first supply is recorded. Leave empty to give such a regimen no first-visit due date, as ACT 2.0 did; it then takes its due date from the latest estimate recorded under an earlier oral course in the past year, or has none. Until an injection is recorded in the unbroken run of BPG prescriptions, the next injection is due one current interval after the start of that run.
     </description>
   </globalProperty>
 
