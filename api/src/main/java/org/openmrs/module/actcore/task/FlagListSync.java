@@ -70,6 +70,14 @@ public class FlagListSync {
 		int failures;
 	}
 	
+	/**
+	 * Brings each flag's list into line: voids the lists of purged flags, creates, restores or renames
+	 * each listed flag's list, and sets each list's members to the patients the flag is raised for and
+	 * not dismissed. A flag must be enabled, unretired and carry {@value #TAG_PROPERTY}, when that is
+	 * set, to be listed. A flag whose list fails to sync is logged and counted, and the run goes on.
+	 *
+	 * @return what the run changed, and how many flags failed
+	 */
 	public Result syncAll() {
 		Result result = new Result();
 		FlagService flagService = Context.getService(FlagService.class);
@@ -110,6 +118,9 @@ public class FlagListSync {
 	/**
 	 * Puts one patient on, or takes them off, the flag's list as their flag rows and dismissal now
 	 * stand. Creating, renaming and retiring the list is left to {@link #syncAll()}.
+	 *
+	 * @param flagId the flag whose list to update; nothing happens when it or its list does not exist
+	 * @param patientId the patient; nothing happens when they do not exist
 	 */
 	public void syncPatient(int flagId, int patientId) {
 		Flag flag = Context.getService(FlagService.class).getFlag(flagId);

@@ -156,11 +156,13 @@ public class ScreeningCount extends BaseOpenmrsData {
 		facilityPositive = counts.get("facility_positive");
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return screeningCountId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		screeningCountId = id;

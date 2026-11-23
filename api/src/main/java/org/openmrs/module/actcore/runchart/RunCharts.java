@@ -115,7 +115,13 @@ public class RunCharts {
 		WEEK,
 		MONTH;
 		
-		/** The period a request names, week when it names none. */
+		/**
+		 * The period a request names, week when it names none.
+		 *
+		 * @param name day, week or month, ignoring case, or blank
+		 * @return the period; WEEK for a blank name
+		 * @throws IllegalArgumentException when the name is none of them
+		 */
 		public static Period of(String name) {
 			if (StringUtils.isBlank(name)) {
 				return WEEK;
@@ -141,6 +147,7 @@ public class RunCharts {
 		}
 	}
 	
+	/** One point of a metric's series. */
 	public static class Point {
 		
 		/** The day the figure is as of: the period's last day, or the range's end for the last period. */
@@ -170,6 +177,12 @@ public class RunCharts {
 	/**
 	 * The days the range's points are as of, earliest first: the end, then the last day of each earlier
 	 * period while it is not before the start. Refuses more than MOST_POINTS of them.
+	 *
+	 * @param start the range's first day
+	 * @param end the range's last day
+	 * @param period the period each point closes
+	 * @return the points' days; empty when the end is before the start
+	 * @throws IllegalArgumentException when the range has more than {@link #MOST_POINTS} points
 	 */
 	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
 		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
@@ -186,6 +199,15 @@ public class RunCharts {
 	/**
 	 * Every metric in points of the period, of a clinic or of every clinic when it is null, from one
 	 * evaluation of the report. A point the report gives the clinic no row for counts nobody.
+	 *
+	 * @param clinic the clinic, or null for every clinic
+	 * @param start the range's first day
+	 * @param end the range's last day
+	 * @param period the period each point closes
+	 * @return each of {@link #METRICS}' points, earliest first, by metric in that order
+	 * @throws IllegalArgumentException when the range has more than {@link #MOST_POINTS} points
+	 * @throws APIException when {@value #GP_REPORT} names no report, or the report cannot be evaluated
+	 *             or gives rows ACT Core cannot read
 	 */
 	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
 		List<LocalDate> days = pointDates(start, end, period);
@@ -334,6 +356,9 @@ public class RunCharts {
 	/**
 	 * The middle of the points' values, or the mean of the middle two, ignoring points with no value;
 	 * null with none.
+	 *
+	 * @param points the points
+	 * @return the median, or null when no point has a value
 	 */
 	public static Double median(List<Point> points) {
 		List<Double> values = new ArrayList<Double>();

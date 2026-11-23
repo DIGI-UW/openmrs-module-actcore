@@ -56,11 +56,13 @@ public class DownloadRecord extends BaseOpenmrsObject {
 		this.dateCreated = dateCreated;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return downloadId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		downloadId = id;

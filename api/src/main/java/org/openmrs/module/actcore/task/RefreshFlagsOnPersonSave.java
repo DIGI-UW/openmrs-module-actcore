@@ -51,6 +51,7 @@ public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 		this.flagRefresher = flagRefresher;
 	}
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();

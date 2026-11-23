@@ -54,9 +54,14 @@ public final class NextConsultation {
 	}
 	
 	/**
-	 * Null for a patient not enrolled in the registry now or who has died, whose last review date is no
-	 * longer anyone's to act on, or with no review date recorded. The caller must hold Get
-	 * Observations.
+	 * Gets the date the patient's next cardiology review is due. The caller must hold Get Observations.
+	 *
+	 * @param patient the patient
+	 * @return the due date; null for a patient not enrolled in the registry now or who has died, whose
+	 *         last review date is no longer anyone's to act on, or with no review date recorded, and
+	 *         null when the amount and period concepts are not configured or the period is not days,
+	 *         weeks, months or years
+	 * @throws org.openmrs.api.APIAuthenticationException when the caller lacks Get Observations
 	 */
 	public static LocalDate of(Patient patient) {
 		Concept amount;

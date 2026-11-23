@@ -39,8 +39,12 @@ public class FlagGapLookup {
 	private static final Logger log = LoggerFactory.getLogger(FlagGapLookup.class);
 	
 	/**
-	 * Reading a flag definition takes Test Flags, which a clinician who sees flags on the chart need
-	 * not hold.
+	 * Gets a flag by uuid for a user who holds View Patient Flags. Reading a flag definition takes Test
+	 * Flags, which a clinician who sees flags on the chart need not hold.
+	 *
+	 * @param uuid the flag's uuid
+	 * @return the flag, or null when none has the uuid
+	 * @throws APIAuthenticationException when the user lacks View Patient Flags
 	 */
 	public Flag getFlag(String uuid) {
 		requireViewPatientFlags();
@@ -55,7 +59,15 @@ public class FlagGapLookup {
 	
 	/**
 	 * The gaps behind this flag for this patient in encounter date order, or null when the flag is not
-	 * a SQL flag with a patient column, the patient is voided, or no row of three columns comes back.
+	 * a SQL flag with a patient column, the patient is voided, or no row of three columns comes back. A
+	 * row is left out when its encounter is voided, another patient's or one the user may not view, or
+	 * when its encounter or concept uuid names nothing.
+	 *
+	 * @param patient the patient
+	 * @param flag the flag
+	 * @return the gaps, oldest encounter first; empty when rows come back but each is left out, and
+	 *         null in the cases given
+	 * @throws APIAuthenticationException when the user lacks View Patient Flags
 	 */
 	public List<FlagGap> find(Patient patient, Flag flag) {
 		requireViewPatientFlags();

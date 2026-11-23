@@ -47,11 +47,15 @@ public class FormsForPatientSearchHandler implements SearchHandler {
 	        new SearchQuery.Builder("The published forms to offer for a patient, female-only forms only for a woman")
 	                .withRequiredParameters("patient").build());
 	
+	/** @see org.openmrs.module.webservices.rest.web.resource.api.SearchHandler#getSearchConfig() */
 	@Override
 	public SearchConfig getSearchConfig() {
 		return searchConfig;
 	}
 	
+	/**
+	 * @see org.openmrs.module.webservices.rest.web.resource.api.SearchHandler#search(org.openmrs.module.webservices.rest.web.RequestContext)
+	 */
 	@Override
 	public PageableResult search(RequestContext context) {
 		Patient patient = Context.getPatientService().getPatientByUuid(context.getParameter("patient"));

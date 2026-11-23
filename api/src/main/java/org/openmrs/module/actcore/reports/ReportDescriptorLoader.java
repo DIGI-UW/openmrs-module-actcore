@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ReportDescriptorLoader {
 	
+	/** What {@link ReportDescriptorLoader#load()} did. */
 	public enum Outcome {
 		LOADED,
 		SKIPPED,
@@ -40,6 +41,8 @@ public class ReportDescriptorLoader {
 	/**
 	 * Loads the descriptors unless the property says not to. A failure is logged, so the module still
 	 * starts.
+	 *
+	 * @return LOADED, SKIPPED when the property is false, or FAILED when loading threw
 	 */
 	public static Outcome load() {
 		try {

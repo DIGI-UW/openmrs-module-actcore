@@ -33,6 +33,7 @@ public class EnrolOnRegistration implements MethodInterceptor {
 	
 	private static final Logger log = LoggerFactory.getLogger(EnrolOnRegistration.class);
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
@@ -45,7 +46,13 @@ public class EnrolOnRegistration implements MethodInterceptor {
 		return saved;
 	}
 	
-	/** Whether the program is the RHD Registry, by actcore.registryProgram. */
+	/**
+	 * Whether the program is the RHD Registry, by actcore.registryProgram.
+	 *
+	 * @param program the program, or null
+	 * @return true when the program's uuid is the property's; false for a null program or when the
+	 *         property is blank
+	 */
 	public static boolean isRegistry(Program program) {
 		String registry = Context.getAdministrationService().getGlobalProperty(PROGRAM_PROPERTY);
 		return program != null && StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid());

@@ -76,6 +76,8 @@ public final class AdherenceCalculation {
 	 *            regimen that is not an injection
 	 * @param injections the dates injections were given
 	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
+	 * @return the adherence and next due date; both are null when no prescription has started by today
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
@@ -83,13 +85,18 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
+	 * Calculates the patient's adherence over the past year and the next date prophylaxis is due.
+	 *
 	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
 	 *            regimen that is not an injection
 	 * @param injections the dates injections were given
 	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
 	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due, while
 	 *            no oral adherence entry has been recorded since the start; null gives such a regimen
 	 *            no due date, as ACT 2.0 did
+	 * @return the adherence and next due date; both are null when no prescription has started by today,
+	 *         and either is null when nothing recorded gives a value for it
 	 */
 	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
 	        SortedMap<LocalDate, OralEntry> oral, LocalDate today, Integer oralFirstDueDays) {

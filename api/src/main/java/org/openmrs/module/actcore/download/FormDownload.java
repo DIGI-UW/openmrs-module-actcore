@@ -203,19 +203,63 @@ public class FormDownload {
 	/**
 	 * The forms between the days, either open, a column per chosen concept. Only an identified download
 	 * gives the names, birth date, ID numbers, phones and identifying questions.
+	 *
+	 * @param form the form whose unvoided saves to list
+	 * @param asked the questions chosen, a column each
+	 * @param askedLabels each question's column label, in the order of asked
+	 * @param from the first day, or null for no start
+	 * @param to the last day, or null for no end
+	 * @param identified whether the rows may give the patient fields and questions that identify the
+	 *            patient
+	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
+	 *            nobody is kept when the opt-in or Yes is not configured
+	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
+	 *         save matches
 	 */
 	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
 	        boolean identified, boolean researchOnly) {
 		return build(form, asked, askedLabels, from, to, identified, researchOnly, new Filters(null, null, null));
 	}
 	
-	/** As build, of the patients the filters keep. */
+	/**
+	 * As build, of the patients the filters keep.
+	 *
+	 * @param form the form whose unvoided saves to list
+	 * @param asked the questions chosen, a column each
+	 * @param askedLabels each question's column label, in the order of asked
+	 * @param from the first day, or null for no start
+	 * @param to the last day, or null for no end
+	 * @param identified whether the rows may give the patient fields and questions that identify the
+	 *            patient
+	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
+	 *            nobody is kept when the opt-in or Yes is not configured
+	 * @param filters the status and clinics to keep patients by
+	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
+	 *         save matches
+	 */
 	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
 	        boolean identified, boolean researchOnly, Filters filters) {
 		return build(form, asked, askedLabels, from, to, identified, researchOnly, filters, null);
 	}
 	
-	/** As build, with the patient fields chosen, or null for the default patientFields gives. */
+	/**
+	 * As build, with the patient fields chosen, or null for the default patientFields gives.
+	 *
+	 * @param form the form whose unvoided saves to list
+	 * @param asked the questions chosen, a column each
+	 * @param askedLabels each question's column label, in the order of asked
+	 * @param from the first day, or null for no start
+	 * @param to the last day, or null for no end
+	 * @param identified whether the rows may give the patient fields and questions that identify the
+	 *            patient
+	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
+	 *            nobody is kept when the opt-in or Yes is not configured
+	 * @param filters the status and clinics to keep patients by
+	 * @param chosen the keys of the {@link #PATIENT_FIELDS} to give, or null for sex and age, and every
+	 *            field when identified
+	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
+	 *         save matches
+	 */
 	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
 	        boolean identified, boolean researchOnly, Filters filters, List<String> chosen) {
 		Locale locale = Context.getLocale();
@@ -262,6 +306,17 @@ public class FormDownload {
 	/**
 	 * ACT 2.0's row per patient: each chosen form's saves in the range as numbered columns, oldest
 	 * first, of the patients with at least one of them that the filters keep.
+	 *
+	 * @param choices the forms and the questions chosen of each
+	 * @param from the first day, or null for no start
+	 * @param to the last day, or null for no end
+	 * @param identified whether the rows may give the patient fields and questions that identify the
+	 *            patient
+	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
+	 *            nobody is kept when the opt-in or Yes is not configured
+	 * @param filters the status and clinics to keep patients by
+	 * @return the table, a row per patient by ACT ID, leaving out voided patients; no rows when no save
+	 *         matches, while each form still heads one group of columns
 	 */
 	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
 	        boolean researchOnly, Filters filters) {
@@ -270,6 +325,19 @@ public class FormDownload {
 	
 	/**
 	 * As buildPerPatient, with the patient fields chosen, or null for the default patientFields gives.
+	 *
+	 * @param choices the forms and the questions chosen of each
+	 * @param from the first day, or null for no start
+	 * @param to the last day, or null for no end
+	 * @param identified whether the rows may give the patient fields and questions that identify the
+	 *            patient
+	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
+	 *            nobody is kept when the opt-in or Yes is not configured
+	 * @param filters the status and clinics to keep patients by
+	 * @param chosen the keys of the {@link #PATIENT_FIELDS} to give, or null for sex and age, and every
+	 *            field when identified
+	 * @return the table, a row per patient by ACT ID, leaving out voided patients; no rows when no save
+	 *         matches, while each form still heads one group of columns
 	 */
 	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
 	        boolean researchOnly, Filters filters, List<String> chosen) {
@@ -520,6 +588,12 @@ public class FormDownload {
 		return types;
 	}
 	
+	/**
+	 * Reads a global property holding uuids separated by commas.
+	 *
+	 * @param property the global property's name
+	 * @return the uuids, trimmed and in order, without blanks; empty when the property is unset
+	 */
 	public static List<String> uuids(String property) {
 		String value = Context.getAdministrationService().getGlobalProperty(property);
 		List<String> uuids = new ArrayList<String>();

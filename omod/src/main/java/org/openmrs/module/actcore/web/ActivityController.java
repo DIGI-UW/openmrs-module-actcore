@@ -43,6 +43,24 @@ public class ActivityController extends ActCoreRestController {
 	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
 	static final int KIND_DEFAULT_DAYS = 30;
 	
+	/**
+	 * Gets a page of what ACT's users changed, newest first.
+	 *
+	 * @param username the user to list, or blank for no user filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for a default span before the end date or
+	 *            today, {@value #KIND_DEFAULT_DAYS} days with a kind
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param kind one of {@link ActivityLog#KINDS}, or blank for no kind filter
+	 * @param form the uuid of the form whose saves to list, or blank for no form filter
+	 * @param patient the uuid of the patient whose changes to list, or blank for no patient filter
+	 * @param startIndex the first entry to give, from 0; null for 0
+	 * @param limit the most entries to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
+	 *            {@link Rows#DEFAULT_LIMIT}
+	 * @return the entries as {@code results}, with {@code totalCount} and the days read
+	 * @throws APIAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws IllegalRequestException when the kind or a date is not recognised, the start is after the
+	 *             end, or a kind filter has too many changes to sort
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getActivity(@RequestParam(value = "username", required = false) String username,
@@ -87,6 +105,14 @@ public class ActivityController extends ActCoreRestController {
 		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
 	}
 	
+	/**
+	 * Gets an entry's fields, each with its previous and current value, and its void reason.
+	 *
+	 * @param revisionId the entry's revision id
+	 * @return the revision id, the fields and the void reason, null when there is none
+	 * @throws APIAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws ObjectNotFoundException when the log has no entry for the revision
+	 */
 	@RequestMapping(value = "/{revisionId}", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {

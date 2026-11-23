@@ -59,6 +59,18 @@ public class ScreeningCountController extends ActCoreRestController {
 	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
 	
+	/**
+	 * Gets the clinic's counts for the month.
+	 *
+	 * @param clinic the clinic's location uuid
+	 * @param month the month as YYYY-MM
+	 * @return the clinic, the month, whether it was saved, each column's count, all zero when it was
+	 *         not, and the notes
+	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE},
+	 *             {@link #DASHBOARD_PRIVILEGE} and {@link #ENTER_PRIVILEGE}, or is a site administrator
+	 *             without the clinic on their account
+	 * @throws IllegalRequestException when the clinic or month is missing or not recognised
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject get(@RequestParam("clinic") String clinic, @RequestParam("month") String month) {
@@ -68,6 +80,20 @@ public class ScreeningCountController extends ActCoreRestController {
 		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
+	/**
+	 * Saves the clinic's counts for the month, replacing the counts saved before.
+	 *
+	 * @param clinic the clinic's location uuid
+	 * @param month the month as YYYY-MM
+	 * @param body the request body, holding each column's count as {@code counts}, a column not given
+	 *            being zero, and optional {@code notes}
+	 * @return the month as saved, as {@link #get(String, String)} gives it
+	 * @throws APIAuthenticationException when the user lacks {@link #ENTER_PRIVILEGE}, or is a site
+	 *             administrator without the clinic on their account
+	 * @throws IllegalRequestException when the clinic, month or counts are missing, the clinic or month
+	 *             is not recognised, a count is not a whole number, or the counts or month are refused,
+	 *             saying why
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject save(@RequestParam("clinic") String clinic, @RequestParam("month") String month,
@@ -88,6 +114,17 @@ public class ScreeningCountController extends ActCoreRestController {
 	/**
 	 * The sums from startMonth to endMonth, both included, by default the twelve months to this one, of
 	 * the clinics given or of every clinic.
+	 *
+	 * @param clinics the clinics' location uuids, or none for no clinic filter; a site administrator's
+	 *            are limited to the clinics on their account, which none stands for
+	 * @param startMonth the first month as YYYY-MM; blank for eleven months before the end
+	 * @param endMonth the last month as YYYY-MM; blank for this month
+	 * @return the months, how many clinic months were saved, the totals screened, female, positive,
+	 *         negative and by age group, and the screened by setting
+	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE},
+	 *             {@link #DASHBOARD_PRIVILEGE} and {@link #ENTER_PRIVILEGE}
+	 * @throws IllegalRequestException when a month or clinic is not recognised or the start is after
+	 *             the end
 	 */
 	@RequestMapping(value = "/summary", method = RequestMethod.GET)
 	@ResponseBody

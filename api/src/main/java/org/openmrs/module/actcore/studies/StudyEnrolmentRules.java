@@ -47,6 +47,7 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	private static final String[] PRIVILEGES = { PrivilegeConstants.GET_GLOBAL_PROPERTIES,
 	        PrivilegeConstants.GET_PERSON_ATTRIBUTE_TYPES, PrivilegeConstants.GET_CONCEPTS };
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
@@ -162,7 +163,15 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 		return answeredYes(enrolment.getPatient(), type, yes);
 	}
 	
-	/** Whether it holds Yes's concept id; the research download reads its opt-in here too. */
+	/**
+	 * Whether it holds Yes's concept id; the research download reads its opt-in here too.
+	 *
+	 * @param person the person whose attribute to read
+	 * @param type the attribute type holding the answer
+	 * @param yes the Yes concept
+	 * @return true when the person's attribute of the type holds the concept's id; false when they have
+	 *         none
+	 */
 	public static boolean answeredYes(Person person, PersonAttributeType type, Concept yes) {
 		PersonAttribute answer = person.getAttribute(type);
 		return answer != null && yes.getConceptId().toString().equals(answer.getValue());

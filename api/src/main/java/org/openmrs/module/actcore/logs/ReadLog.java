@@ -57,6 +57,7 @@ public class ReadLog {
 	    "Allergy", "Relationship", "Cohort", "CohortMembership", "MedicationDispense", "PersonName", "PersonAddress",
 	    "PersonAttribute", "PatientIdentifier", "UnknownEntity"));
 	
+	/** Which reads to list, and which page of the rows. */
 	public static class Filter {
 		
 		public String username;
@@ -73,6 +74,7 @@ public class ReadLog {
 		public int limit = Rows.DEFAULT_LIMIT;
 	}
 	
+	/** One page of the rows, and how many rows the filter matches in all. */
 	public static class Page {
 		
 		public final List<Row> results = new ArrayList<Row>();
@@ -124,6 +126,7 @@ public class ReadLog {
 		String patientName;
 	}
 	
+	/** The patient a row's reads are of, as the Logs page names them. */
 	public static class Subject {
 		
 		public String uuid;
@@ -139,6 +142,16 @@ public class ReadLog {
 	
 	private final Names names = new Names();
 	
+	/**
+	 * Lists the reads of patients' data the filter matches, folded into rows, newest row first. The
+	 * caller checks {@link #VIEW_PRIVILEGE}.
+	 *
+	 * @param filter the user, the patient, the days from and to, each inclusive and each optional, and
+	 *            the page
+	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
+	 *         its days
+	 * @throws Rows.TooMany when more than {@value #PATIENT_MATCHES} patients match the filter's patient
+	 */
 	public Page list(Filter filter) {
 		Page page = new Page();
 		StringBuilder sql = new StringBuilder(" where (l.entity_name in (" + Rows.placeholders(PATIENT_DATA)

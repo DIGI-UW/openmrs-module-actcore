@@ -48,6 +48,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	        PrivilegeConstants.GET_PATIENT_PROGRAMS, PrivilegeConstants.EDIT_PATIENT_PROGRAMS,
 	        PrivilegeConstants.GET_PROGRAMS };
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		String method = invocation.getMethod().getName();
@@ -64,7 +65,10 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	/**
 	 * Ends the open enrolments of patients recorded dead before this module ended them on death, such
-	 * as ACT 2.0's or an import's, and returns how many it ended.
+	 * as ACT 2.0's or an import's, and returns how many it ended. A patient whose enrolments fail to
+	 * close is logged and skipped.
+	 *
+	 * @return the number of enrolments ended; 0 when no program has a death state configured
 	 */
 	public static int closeEnrolmentsOfTheDead() {
 		List<Integer> programIds = programsWithADeathState();
@@ -102,6 +106,12 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	/**
 	 * Ends a dead patient's enrolment in its death state, without saving it; false when the program has
 	 * no death state configured.
+	 *
+	 * @param enrolment the enrolment to end
+	 * @param person the patient, whose death date, or now without one, ends the enrolment, moved no
+	 *            earlier than the enrolment's own dates
+	 * @return true when the enrolment was ended; false, leaving it unchanged, when its program has no
+	 *         death state configured
 	 */
 	public static boolean endInDeathState(PatientProgram enrolment, Person person) {
 		for (String privilege : PRIVILEGES) {

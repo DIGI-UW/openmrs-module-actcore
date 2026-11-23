@@ -32,12 +32,27 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+/** Serves the questions missing behind a patient's flag, from the flag's own SQL criteria. */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class FlagGapController extends ActCoreRestController {
 	
 	private final FlagGapLookup lookup = new FlagGapLookup();
 	
+	/**
+	 * Gets the gaps behind the flag for the patient: each one's encounter uuid and date, its form, and
+	 * the question missing.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @param flagUuid the flag's uuid
+	 * @return {@code configured}, false when the look-up gives no answer for the flag, as
+	 *         {@link FlagGapLookup#find(Patient, Flag)} describes, and the gaps as {@code results},
+	 *         oldest encounter first and empty when configured is false; a gap's form is null for a
+	 *         user without Get Forms
+	 * @throws IllegalRequestException when the patient or flag is missing
+	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
+	 * @throws APIAuthenticationException when the user lacks Get Patients or View Patient Flags
+	 */
 	@RequestMapping(value = "/gap", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getGaps(@RequestParam(value = "patient", required = false) String patientUuid,

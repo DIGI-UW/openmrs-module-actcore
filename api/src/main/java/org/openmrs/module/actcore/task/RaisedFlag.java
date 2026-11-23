@@ -26,6 +26,7 @@ import javax.persistence.TemporalType;
 @Table(name = RaisedFlags.TABLE)
 public class RaisedFlag {
 	
+	/** The patient and the flag, which identify a raised flag. */
 	@Embeddable
 	public static class Key implements Serializable {
 		
@@ -51,12 +52,14 @@ public class RaisedFlag {
 			return flagId;
 		}
 		
+		/** @see Object#equals(Object) */
 		@Override
 		public boolean equals(Object other) {
 			return other instanceof Key && Objects.equals(patientId, ((Key) other).patientId)
 			        && Objects.equals(flagId, ((Key) other).flagId);
 		}
 		
+		/** @see Object#hashCode() */
 		@Override
 		public int hashCode() {
 			return Objects.hash(patientId, flagId);

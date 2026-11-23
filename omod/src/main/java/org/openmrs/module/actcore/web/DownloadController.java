@@ -89,6 +89,25 @@ public class DownloadController extends ActCoreRestController {
 		LOG_TABS.put("signIns", "Sign-ins");
 	}
 	
+	/**
+	 * Gets the CSV of the forms asked for and records the download: a row per save of one form, or a
+	 * row per patient across several forms or when asked. Without {@link #DOWNLOAD_PRIVILEGE} it is of
+	 * the patients who opted in to research.
+	 *
+	 * @param body the request body: {@code forms}, each a form uuid and its chosen fields, or one
+	 *            {@code form} and its {@code fields}; and optionally {@code rowPerPatient},
+	 *            {@code status}, {@code cardiacClinic}, {@code primaryCareClinic}, {@code startDate},
+	 *            {@code endDate} and the {@code patient} fields
+	 * @return the headers and rows, whether identifiers were given, whether it is research only, and
+	 *         the labels of the fields withheld
+	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
+	 *             {@link #RESEARCH_PRIVILEGE}, or lacks Get Forms or Get Concepts
+	 * @throws ObjectNotFoundException when a form is missing or no form has its uuid
+	 * @throws IllegalRequestException when no form is asked for, a form is asked for twice or has no
+	 *             field, a field, status, clinic, date or patient field is not recognised, the start is
+	 *             after the end, or the record of the download would be too long
+	 * @throws JsonProcessingException when the record of the download cannot be written as JSON
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject download(@RequestBody Map<String, Object> body) throws JsonProcessingException {
@@ -161,6 +180,22 @@ public class DownloadController extends ActCoreRestController {
 	
 	/**
 	 * The downloads matching the filters, newest first, for a user who may read the audit log's reads.
+	 *
+	 * @param username the user whose downloads to list, or blank for no user filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_MONTHS} months before
+	 *            the end date or today
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
+	 * @param identifiers with, without or research, or null for no identifiers filter
+	 * @param startIndex the first download to give, from 0; null for 0
+	 * @param limit the most downloads to give, capped at {@value #MAX_LIMIT}; null or below 1 for
+	 *            {@value #DEFAULT_LIMIT}
+	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
+	 *         no user has the username or no form has the uuid
+	 * @throws APIAuthenticationException when the user lacks {@link DownloadLog#VIEW_PRIVILEGE}
+	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
+	 *             after the end
+	 * @throws IOException when a recorded download's detail cannot be read as JSON
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -227,6 +262,16 @@ public class DownloadController extends ActCoreRestController {
 	/**
 	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. Recorded before the
 	 * app writes the file, which it does not when this fails.
+	 *
+	 * @param body the request body: the {@code list}, as registry, worklist:&lt;name&gt; or
+	 *            logs:&lt;tab&gt;, its {@code columns}, and optionally the number of {@code rows},
+	 *            whether it holds {@code identifiers} and its {@code filters}
+	 * @return {@code recorded} true
+	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
+	 *             {@link #RESEARCH_PRIVILEGE}
+	 * @throws IllegalRequestException when the list or columns are missing, there are more than
+	 *             {@value #MAX_COLUMNS} columns, or the record would be too long
+	 * @throws JsonProcessingException when the record cannot be written as JSON
 	 */
 	@RequestMapping(value = "/record", method = RequestMethod.POST)
 	@ResponseBody

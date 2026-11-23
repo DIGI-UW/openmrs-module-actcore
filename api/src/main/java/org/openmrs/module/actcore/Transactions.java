@@ -23,6 +23,10 @@ import org.springframework.transaction.support.TransactionSynchronizationAdapter
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * Runs work in a Spring transaction from code that the module's services do not wrap, such as
+ * advice classes and scheduled tasks.
+ */
 public final class Transactions {
 	
 	private Transactions() {
@@ -31,6 +35,9 @@ public final class Transactions {
 	/**
 	 * Runs the work in a transaction of its own. After a commit the old transaction's resources are
 	 * still bound, so writing then needs one.
+	 *
+	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
+	 *            propagates
 	 */
 	public static void inNewTransaction(final Runnable work) {
 		TransactionTemplate template = new TransactionTemplate(transactionManager());
@@ -47,12 +54,22 @@ public final class Transactions {
 	/** Work run in a transaction that may throw anything, as an advice's proceed. */
 	public interface Work<T> {
 		
+		/**
+		 * Does the work.
+		 *
+		 * @return the work's result
+		 * @throws Throwable whatever the work throws
+		 */
 		T run() throws Throwable;
 	}
 	
 	/**
 	 * Runs the work in the current transaction, or in one of its own outside one, so no service call it
 	 * makes commits (and flushes the session) before it returns; an exception rolls it all back.
+	 *
+	 * @param work the work to run
+	 * @return what the work returns
+	 * @throws Throwable what the work throws, checked exceptions included, unwrapped
 	 */
 	public static <T> T inTransaction(final Work<T> work) throws Throwable {
 		try {
@@ -77,7 +94,7 @@ public final class Transactions {
 		return Context.getRegisteredComponent("transactionManager", PlatformTransactionManager.class);
 	}
 	
-	// Carries a checked exception out of the callback, which cannot declare one.
+	/** Carries a checked exception out of the callback, which cannot declare one. */
 	private static final class Checked extends RuntimeException {
 		
 		private Checked(Throwable cause) {
@@ -88,6 +105,11 @@ public final class Transactions {
 	/**
 	 * Runs the work for the patient once the current transaction commits, or at once outside one, so a
 	 * failure cannot roll the save back; an owner, such as an advice class, runs it once per patient.
+	 *
+	 * @param owner what the work is registered under in the current transaction; a later call with the
+	 *            same owner adds its patient to that registration and its own work is not used
+	 * @param patientId the patient to run the work for
+	 * @param work the work, given the patient id
 	 */
 	public static void afterCommit(Object owner, int patientId, IntConsumer work) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -109,6 +131,9 @@ public final class Transactions {
 		return pending;
 	}
 	
+	/**
+	 * Holds one owner's patients until the transaction commits, then runs the owner's work for each.
+	 */
 	private static final class Pending extends TransactionSynchronizationAdapter {
 		
 		private final Object owner;
@@ -122,6 +147,7 @@ public final class Transactions {
 			this.work = work;
 		}
 		
+		/** @see org.springframework.transaction.support.TransactionSynchronization#afterCommit() */
 		@Override
 		public void afterCommit() {
 			for (Integer patientId : patientIds) {

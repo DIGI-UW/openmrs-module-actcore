@@ -108,6 +108,9 @@ public class AdherenceRefresh {
 	/**
 	 * Recomputes every row and returns how many patients now have one. Run it outside a transaction:
 	 * one commits after the unlock, and the deferred patients are refreshed from its stale snapshot.
+	 *
+	 * @param today the day to compute adherence and due dates as of
+	 * @return the number of patients written a row, 0 when none has a prescription
 	 */
 	public int refreshAll(LocalDate today) {
 		ROWS.writeLock().lock();
@@ -139,6 +142,9 @@ public class AdherenceRefresh {
 	/**
 	 * Recomputes one patient's rows, so the registry shows a saved form at once; while a full refresh
 	 * runs, it is left to that run, which then refreshes the patient and their flags.
+	 *
+	 * @param patientId the patient to recompute
+	 * @param today the day to compute adherence and due dates as of
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
 		if (!ROWS.readLock().tryLock()) {

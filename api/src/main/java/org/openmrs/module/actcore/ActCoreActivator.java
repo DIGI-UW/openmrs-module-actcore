@@ -54,6 +54,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	private static volatile DaemonToken daemonToken;
 	
+	/** @see org.openmrs.module.DaemonTokenAware#setDaemonToken(DaemonToken) */
 	@Override
 	public void setDaemonToken(DaemonToken token) {
 		daemonToken = token;
@@ -62,6 +63,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	/**
 	 * What the refresh endpoint runs the refresh with, and the run chart endpoint its report, as the
 	 * scheduler's daemon user; null until the module has started.
+	 *
+	 * @return the module's daemon token, or null before the module framework has set it
 	 */
 	public static DaemonToken getDaemonToken() {
 		return daemonToken;
@@ -71,6 +74,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS);
 	}
 	
+	/** @see org.openmrs.module.BaseModuleActivator#started() */
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
@@ -153,6 +157,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		}
 	}
 	
+	/** @see org.openmrs.module.BaseModuleActivator#stopped() */
 	@Override
 	public void stopped() {
 		log.info("ACT Core module stopped");

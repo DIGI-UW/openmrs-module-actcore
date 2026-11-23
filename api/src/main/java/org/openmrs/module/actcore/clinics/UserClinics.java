@@ -46,7 +46,12 @@ public final class UserClinics {
 	private UserClinics() {
 	}
 	
-	/** The location uuids in a {@value #PROPERTY} value, in order and without blanks or repeats. */
+	/**
+	 * The location uuids in a {@value #PROPERTY} value, in order and without blanks or repeats.
+	 *
+	 * @param value the property value, or null
+	 * @return the uuids, trimmed; empty when the value is null or blank
+	 */
 	public static Set<String> parse(String value) {
 		Set<String> clinics = new LinkedHashSet<String>();
 		if (value == null) {
@@ -60,7 +65,12 @@ public final class UserClinics {
 		return clinics;
 	}
 	
-	/** The clinics on the user's account, as they stand on the object, saved or not. */
+	/**
+	 * The clinics on the user's account, as they stand on the object, saved or not.
+	 *
+	 * @param user the user, or null
+	 * @return the clinics' location uuids; empty for a null user or one without the property
+	 */
 	public static Set<String> of(User user) {
 		return user == null ? Collections.<String> emptySet() : parse(user.getUserProperty(PROPERTY));
 	}
@@ -68,6 +78,9 @@ public final class UserClinics {
 	/**
 	 * Whether the user may add or edit users without {@value #ALL_CLINICS_PRIVILEGE}; never a super
 	 * user.
+	 *
+	 * @param user the user, or null
+	 * @return true for an administrator limited to their clinics; false for a null user
 	 */
 	public static boolean isLimited(User user) {
 		if (user == null || user.isSuperUser()) {
@@ -78,7 +91,13 @@ public final class UserClinics {
 		return administersUsers && !user.hasPrivilege(ALL_CLINICS_PRIVILEGE);
 	}
 	
-	/** Whether the two sets of clinics have one in common. */
+	/**
+	 * Whether the two sets of clinics have one in common.
+	 *
+	 * @param some one set of location uuids
+	 * @param others the other
+	 * @return true when a clinic is in both; false when either set is empty
+	 */
 	public static boolean share(Set<String> some, Set<String> others) {
 		for (String clinic : some) {
 			if (others.contains(clinic)) {
@@ -88,18 +107,32 @@ public final class UserClinics {
 		return false;
 	}
 	
-	/** The roles, by uuid, a limited administrator may give out; empty leaves roles to OpenMRS. */
+	/**
+	 * The roles, by uuid, a limited administrator may give out; empty leaves roles to OpenMRS.
+	 *
+	 * @return the role uuids in {@value #ASSIGNABLE_ROLES_PROPERTY}; empty when it is unset or blank
+	 */
 	public static Set<String> assignableRoles() {
 		return rolesIn(ASSIGNABLE_ROLES_PROPERTY);
 	}
 	
-	/** The role uuids in a global property, read without flushing the session; empty when unset. */
+	/**
+	 * The role uuids in a global property, read without flushing the session; empty when unset.
+	 *
+	 * @param property the global property's name
+	 * @return the uuids, in order and without blanks or repeats
+	 */
 	public static Set<String> rolesIn(String property) {
 		List<String> values = column("select property_value from global_property where property = ?", property);
 		return parse(values.isEmpty() ? null : values.get(0));
 	}
 	
-	/** The names of the roles with these uuids, for messages; a uuid with no role stays as it is. */
+	/**
+	 * The names of the roles with these uuids, for messages; a uuid with no role stays as it is.
+	 *
+	 * @param uuids the role uuids
+	 * @return a name for each uuid, in the order given
+	 */
 	public static List<String> roleNames(Set<String> uuids) {
 		List<String> names = new ArrayList<String>();
 		for (String uuid : uuids) {
@@ -109,7 +142,12 @@ public final class UserClinics {
 		return names;
 	}
 	
-	/** The uuids of the user's roles on the object, saved or not. */
+	/**
+	 * The uuids of the user's roles on the object, saved or not.
+	 *
+	 * @param user the user, or null
+	 * @return the uuids; empty for a null user or one without roles
+	 */
 	public static Set<String> roleUuids(User user) {
 		Set<String> uuids = new LinkedHashSet<String>();
 		if (user != null && user.getRoles() != null) {
@@ -120,7 +158,12 @@ public final class UserClinics {
 		return uuids;
 	}
 	
-	/** The clinics saved on a user's account, read from the database rather than the edited object. */
+	/**
+	 * The clinics saved on a user's account, read from the database rather than the edited object.
+	 *
+	 * @param userId the user's id, or null for a user not yet saved
+	 * @return the clinics' location uuids; empty for a null id or a user without the property
+	 */
 	public static Set<String> stored(Integer userId) {
 		if (userId == null) {
 			return Collections.emptySet();
@@ -130,7 +173,12 @@ public final class UserClinics {
 		return values.isEmpty() ? Collections.<String> emptySet() : parse(values.get(0));
 	}
 	
-	/** The uuids of the roles saved on a user, read from the database rather than the edited object. */
+	/**
+	 * The uuids of the roles saved on a user, read from the database rather than the edited object.
+	 *
+	 * @param userId the user's id, or null for a user not yet saved
+	 * @return the uuids; empty for a null id or a user without saved roles
+	 */
 	public static Set<String> storedRoles(Integer userId) {
 		if (userId == null) {
 			return new LinkedHashSet<String>();

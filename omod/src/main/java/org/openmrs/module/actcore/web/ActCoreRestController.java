@@ -24,6 +24,14 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
+	/**
+	 * Answers a request parameter that is missing or of the wrong type with 400 and a message naming
+	 * it.
+	 *
+	 * @param e the MethodArgumentTypeMismatchException or MissingServletRequestParameterException
+	 * @param response the response, whose status is set to 400
+	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 */
 	@ExceptionHandler({ MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class })
 	@ResponseBody
 	public SimpleObject badParameterHandler(Exception e, HttpServletResponse response) {

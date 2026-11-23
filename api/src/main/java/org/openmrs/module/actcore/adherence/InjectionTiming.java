@@ -28,6 +28,7 @@ import javax.persistence.TemporalType;
 @Table(name = AdherenceRefresh.TIMING_TABLE)
 public class InjectionTiming {
 	
+	/** The patient and the day of the injection, which identify a timing. */
 	@Embeddable
 	public static class Key implements Serializable {
 		
@@ -54,12 +55,14 @@ public class InjectionTiming {
 			return injectionDate;
 		}
 		
+		/** @see Object#equals(Object) */
 		@Override
 		public boolean equals(Object other) {
 			return other instanceof Key && Objects.equals(patientId, ((Key) other).patientId)
 			        && Objects.equals(injectionDate, ((Key) other).injectionDate);
 		}
 		
+		/** @see Object#hashCode() */
 		@Override
 		public int hashCode() {
 			return Objects.hash(patientId, injectionDate);

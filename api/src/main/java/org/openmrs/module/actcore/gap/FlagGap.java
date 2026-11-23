@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.gap;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 
+/** A question missing from one of the patient's encounters, as a flag's criteria report it. */
 public class FlagGap {
 	
 	private final Encounter encounter;

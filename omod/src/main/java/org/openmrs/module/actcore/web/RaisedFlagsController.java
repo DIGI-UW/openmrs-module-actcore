@@ -50,6 +50,17 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/raisedflags")
 public class RaisedFlagsController extends ActCoreRestController {
 	
+	/**
+	 * Gets the patient's raised flags, less the dismissed ones: each flag's uuid and name, since when
+	 * it has been raised, and whether the user may dismiss it.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @return the flags as {@code results}, one per flag, empty when none is shown; a flag's
+	 *         raisedSince is null when ACT Core has no date for it
+	 * @throws APIAuthenticationException when the user lacks View Patient Flags or Get Patients
+	 * @throws IllegalRequestException when no patient is given
+	 * @throws ObjectNotFoundException when no patient has the uuid
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getRaisedFlags(@RequestParam(value = "patient", required = false) String patientUuid) {
@@ -74,6 +85,19 @@ public class RaisedFlagsController extends ActCoreRestController {
 		return new SimpleObject().add("results", results);
 	}
 	
+	/**
+	 * Dismisses a raised flag for the patient, as {@link RaisedFlags#dismiss} does.
+	 *
+	 * @param body the request body, holding the patient's uuid as {@code patient} and the flag's as
+	 *            {@code flag}
+	 * @return {@code dismissed} true, also when the flag was already dismissed
+	 * @throws IllegalRequestException when the patient or flag is missing, the flag may not be
+	 *             dismissed, or it is not raised for the patient now
+	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
+	 * @throws APIAuthenticationException when the user lacks Get Patients, View Patient Flags or
+	 *             {@link RaisedFlags#DISMISS_PRIVILEGE}
+	 * @throws ResponseException with 409 Conflict while the patient flag refresh runs
+	 */
 	@RequestMapping(value = "/dismiss", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject dismiss(@RequestBody Map<String, Object> body) {
@@ -98,6 +122,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 		}
 	}
 	
+	/** Answers a dismissal made while the patient flag refresh runs with 409 Conflict. */
 	@ResponseStatus(HttpStatus.CONFLICT)
 	static class RefreshRunning extends ResponseException {
 		

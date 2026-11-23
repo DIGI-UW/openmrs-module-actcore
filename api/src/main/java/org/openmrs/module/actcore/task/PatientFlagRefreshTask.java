@@ -77,6 +77,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	int cleared;
 	
+	/** What failed in a run of the refresh. */
 	public static class Result {
 		
 		public final int flagsFailed;
@@ -92,6 +93,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		}
 	}
 	
+	/** @see org.openmrs.scheduler.tasks.AbstractTask#execute() */
 	@Override
 	public void execute() {
 		runIfIdle();
@@ -100,6 +102,9 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	/**
 	 * Runs the refresh unless another run is in progress, returning what failed in it, or null when
 	 * this call did not run it.
+	 *
+	 * @return the flags and lists that failed and whether the adherence refresh failed, or null when
+	 *         another run was in progress
 	 */
 	public Result runIfIdle() {
 		if (!RUNNING.tryLock()) {
@@ -143,6 +148,11 @@ public class PatientFlagRefreshTask extends AbstractTask {
 		refreshPatient(patientId);
 	}
 	
+	/**
+	 * Whether a full refresh is running now.
+	 *
+	 * @return true while a run holds the refresh, whichever instance started it
+	 */
 	public static boolean isRunning() {
 		return RUNNING.isLocked();
 	}
@@ -150,6 +160,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	/**
 	 * Re-evaluates and lists one patient's flags, which patientflags' own pass may have read before the
 	 * save committed; while the full refresh writes the rows, it is left to that run's end.
+	 *
+	 * @param patientId the patient whose flags to refresh
 	 */
 	public static void refreshPatient(int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {

@@ -29,6 +29,7 @@ public class HideDismissedFlags implements MethodInterceptor {
 	// Not generateFlagsForPatient: patientflags' own thread writes the patient's rows from it.
 	private static final List<String> FILTERED = Arrays.asList("getPatientFlags", "getFlagsForPatient");
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object result = invocation.proceed();

@@ -47,6 +47,7 @@ public class ScreeningCounts {
 	
 	public static final String REPLACED_REASON = "Replaced by a later save of the month";
 	
+	/** One clinic's counts and notes for one month. */
 	public static class Month {
 		
 		/** Whether the month has been saved; one that has not is all zeros. */
@@ -58,6 +59,7 @@ public class ScreeningCounts {
 		public String notes;
 	}
 	
+	/** The counts of the clinic months saved in a range, summed. */
 	public static class Summary {
 		
 		/** How many clinic months were saved in the range. */
@@ -66,7 +68,12 @@ public class ScreeningCounts {
 		/** Every column's sum. */
 		public Map<String, Long> sums = new LinkedHashMap<String, Long>();
 		
-		/** A metric summed over the settings. */
+		/**
+		 * A metric summed over the settings.
+		 *
+		 * @param metric one of {@link ScreeningCounts#METRICS}
+		 * @return the metric's sum over {@link ScreeningCounts#SETTINGS}
+		 */
 		public Long total(String metric) {
 			long total = 0;
 			for (String setting : SETTINGS) {
@@ -75,14 +82,29 @@ public class ScreeningCounts {
 			return total;
 		}
 		
+		/**
+		 * The people screened, over the settings.
+		 *
+		 * @return the sum of the settings' screened counts
+		 */
 		public Long screened() {
 			return total("screened");
 		}
 		
+		/**
+		 * The people screened positive, over the settings.
+		 *
+		 * @return the sum of the settings' positive counts
+		 */
 		public Long positive() {
 			return total("positive");
 		}
 		
+		/**
+		 * The people screened and not positive, over the settings.
+		 *
+		 * @return the people screened less those positive
+		 */
 		public Long negative() {
 			return screened() - positive();
 		}

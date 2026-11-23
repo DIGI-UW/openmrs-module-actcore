@@ -38,6 +38,7 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
 	private static final ThreadLocal<Boolean> SUSPENDED = ThreadLocal.withInitial(() -> false);
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();
@@ -69,12 +70,18 @@ public class OneOpenRegistryEnrolment implements MethodInterceptor {
 	
 	/**
 	 * Whether a merge, or work run by {@link #withoutRefusing}, is saving enrolments on this thread.
+	 *
+	 * @return true while overlapping enrolments are not refused on this thread
 	 */
 	public static boolean isSuspended() {
 		return SUSPENDED.get();
 	}
 	
-	/** Runs the work without refusing overlaps, for saves that end every open enrolment they touch. */
+	/**
+	 * Runs the work without refusing overlaps, for saves that end every open enrolment they touch.
+	 *
+	 * @param work the work to run on this thread
+	 */
 	public static void withoutRefusing(Runnable work) {
 		boolean outer = SUSPENDED.get();
 		SUSPENDED.set(true);

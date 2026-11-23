@@ -48,6 +48,14 @@ public class StudiesController extends ActCoreRestController {
 	
 	private final Studies studies = new Studies();
 	
+	/**
+	 * Gets the studies that are not retired, by name, each with its uuid, name and Study status states,
+	 * the initial states first.
+	 *
+	 * @return the studies as {@code results}; empty when there are none
+	 * @throws APIAuthenticationException when the user lacks Get Programs
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStudies() {
@@ -59,6 +67,15 @@ public class StudiesController extends ActCoreRestController {
 		return new SimpleObject().add("results", results);
 	}
 	
+	/**
+	 * Creates a study, as {@link Studies#create(String)} does.
+	 *
+	 * @param body the request body, holding the study's name as {@code name}
+	 * @return the new study, with its uuid, name and states
+	 * @throws APIAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws org.openmrs.api.ValidationException with 400 when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
@@ -66,6 +83,17 @@ public class StudiesController extends ActCoreRestController {
 		return toJson(studies.create(name(body)));
 	}
 	
+	/**
+	 * Renames a study, as {@link Studies#rename(Program, String)} does.
+	 *
+	 * @param uuid the study's uuid
+	 * @param body the request body, holding the new name as {@code name}
+	 * @return the renamed study, with its uuid, name and states
+	 * @throws APIAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws ObjectNotFoundException when no unretired study has the uuid
+	 * @throws org.openmrs.api.ValidationException with 400 when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(value = "/{uuid}", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {

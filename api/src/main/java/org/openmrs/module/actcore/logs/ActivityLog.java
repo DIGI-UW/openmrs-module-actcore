@@ -102,6 +102,7 @@ public class ActivityLog {
 		}
 	}
 	
+	/** Which changes to list, and which page of the entries. */
 	public static class Filter {
 		
 		public String username;
@@ -121,6 +122,7 @@ public class ActivityLog {
 		public int limit = Rows.DEFAULT_LIMIT;
 	}
 	
+	/** One page of the entries, and how many entries the filter matches in all. */
 	public static class Page {
 		
 		public final List<Entry> results = new ArrayList<Entry>();
@@ -175,6 +177,7 @@ public class ActivityLog {
 		Revision revision;
 	}
 	
+	/** What an entry's change was made to: a patient, person, user, role, clinic or study. */
 	public static class Target {
 		
 		public String kind;
@@ -186,6 +189,7 @@ public class ActivityLog {
 		public String actId;
 	}
 	
+	/** The encounter an entry's change was saved on, with its form, type and date. */
 	public static class EncounterRef {
 		
 		public String uuid;
@@ -215,6 +219,7 @@ public class ActivityLog {
 		}
 	}
 	
+	/** One entry's fields as they were and are, and the reason when it voided something. */
 	public static class Details {
 		
 		public int revisionId;
@@ -256,6 +261,16 @@ public class ActivityLog {
 	
 	private final Names names = new Names();
 	
+	/**
+	 * Lists the changes the filter matches, newest first, with ACT Core's flag dismissals where the
+	 * filter allows them. The caller checks {@link #VIEW_PRIVILEGE}.
+	 *
+	 * @param filter the user, the days from and to, each inclusive, the kind, one of {@link #KINDS},
+	 *            the form and the patient, each optional, and the page
+	 * @return the page of entries; empty when the filter names a user, patient or form that does not
+	 *         exist
+	 * @throws Rows.TooMany when a kind filter has more than {@link #MAX_CLASSIFIED} changes to sort
+	 */
 	public Page list(Filter filter) {
 		Page page = new Page();
 		Integer userId = null;
@@ -361,7 +376,13 @@ public class ActivityLog {
 		return result;
 	}
 	
-	/** The expansion of one revision's entry; null for a revision the log leaves out. */
+	/**
+	 * The expansion of one revision's entry; null for a revision the log leaves out.
+	 *
+	 * @param revisionId the revision's id
+	 * @return the entry's fields and void reason; null when no audited table has the revision or the
+	 *         log leaves it out
+	 */
 	public Details details(int revisionId) {
 		Map<Integer, Revision> revisions = new HashMap<Integer, Revision>();
 		for (String table : TABLES.keySet()) {

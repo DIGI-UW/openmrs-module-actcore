@@ -28,16 +28,19 @@ public class UserClinicsFlushCheck extends EmptyInterceptor {
 	/** Set while a check runs, so nothing it calls checks again. */
 	private static final ThreadLocal<Boolean> CHECKING = new ThreadLocal<Boolean>();
 	
+	/** @see org.hibernate.Interceptor#onCollectionUpdate(Object, Serializable) */
 	@Override
 	public void onCollectionUpdate(Object collection, Serializable key) {
 		check(collection);
 	}
 	
+	/** @see org.hibernate.Interceptor#onCollectionRecreate(Object, Serializable) */
 	@Override
 	public void onCollectionRecreate(Object collection, Serializable key) {
 		check(collection);
 	}
 	
+	/** @see org.hibernate.Interceptor#onCollectionRemove(Object, Serializable) */
 	@Override
 	public void onCollectionRemove(Object collection, Serializable key) {
 		check(collection);

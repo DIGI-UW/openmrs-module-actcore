@@ -44,7 +44,12 @@ public class Studies {
 	        PrivilegeConstants.GET_CONCEPT_DATATYPES, PrivilegeConstants.GET_CONCEPT_ATTRIBUTE_TYPES,
 	        PrivilegeConstants.GET_OBS, PrivilegeConstants.GET_GLOBAL_PROPERTIES };
 	
-	/** The studies that are not retired, by name. */
+	/**
+	 * The studies that are not retired, by name.
+	 *
+	 * @return the studies, sorted by name ignoring case; empty when there are none
+	 * @throws APIException when {@value #TEMPLATE_PROPERTY} names no program with a workflow
+	 */
 	public List<Program> getStudies() {
 		return withPrivileges(() -> {
 			Program template = template();
@@ -62,6 +67,10 @@ public class Studies {
 	/**
 	 * Whether the program is a study, retired or not: not the template, with a workflow on the
 	 * template's. False for every program without a template, so enrolling keeps working.
+	 *
+	 * @param program the program, or null
+	 * @return true for a study; false for a null program, the template itself, or when no template is
+	 *         configured
 	 */
 	public boolean isStudy(Program program) {
 		return program != null && withPrivileges(() -> {
@@ -70,6 +79,16 @@ public class Studies {
 		});
 	}
 	
+	/**
+	 * Creates a study: a program with the name, a new concept for it, and a copy of each of the
+	 * template's unretired workflows and their unretired states.
+	 *
+	 * @param name the study's name, trimmed before use
+	 * @return the saved program
+	 * @throws ValidationException when the name is blank, longer than 50 characters, or already used by
+	 *             another program or another study's concept
+	 * @throws APIException when {@value #TEMPLATE_PROPERTY} names no program with a workflow
+	 */
 	public Program create(String name) {
 		String trimmed = requireName(name);
 		return withPrivileges(() -> {
@@ -105,7 +124,17 @@ public class Studies {
 		});
 	}
 	
-	/** Renames the study and its concept; enrolments follow, as they point at the program. */
+	/**
+	 * Renames the study and its concept; enrolments follow, as they point at the program.
+	 *
+	 * @param study the study to rename
+	 * @param name the new name, trimmed before use
+	 * @return the saved program
+	 * @throws ValidationException when the name is blank, longer than 50 characters, or already used by
+	 *             another program or another study's concept
+	 * @throws APIException when the program is not a study, or {@value #TEMPLATE_PROPERTY} names no
+	 *             program with a workflow
+	 */
 	public Program rename(Program study, String name) {
 		String trimmed = requireName(name);
 		return withPrivileges(() -> {

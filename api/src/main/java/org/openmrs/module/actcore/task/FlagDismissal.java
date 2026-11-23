@@ -55,11 +55,13 @@ public class FlagDismissal extends BaseOpenmrsObject {
 		this.dateDismissed = dateDismissed;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#getId() */
 	@Override
 	public Integer getId() {
 		return dismissalId;
 	}
 	
+	/** @see org.openmrs.OpenmrsObject#setId(Integer) */
 	@Override
 	public void setId(Integer id) {
 		dismissalId = id;

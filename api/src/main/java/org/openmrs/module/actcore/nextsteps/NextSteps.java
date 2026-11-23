@@ -129,6 +129,10 @@ public class NextSteps {
 	/**
 	 * The steps the signed-in user may take: to do before done, new before the rest, else in rule
 	 * order.
+	 *
+	 * @param patient the patient
+	 * @param today the day the steps are for
+	 * @return the steps; empty when no rule gives the user a step
 	 */
 	public static List<NextStep> of(Patient patient, LocalDate today) {
 		return new NextSteps(patient, today).list();
@@ -707,12 +711,14 @@ public class NextSteps {
 		}
 	};
 	
+	/** Whether a consultation reviewed a finding, and whether it was in this visit. */
 	private enum Review {
 		BEFORE_THIS_VISIT,
 		THIS_VISIT,
 		NONE
 	}
 	
+	/** A step while the rules build it, before it is shown as a {@link NextStep}. */
 	private static final class Step {
 		
 		private final String key;

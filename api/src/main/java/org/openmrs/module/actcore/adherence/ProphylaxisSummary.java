@@ -23,6 +23,10 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.util.PrivilegeConstants;
 
+/**
+ * A patient's prophylaxis as the chart shows it: the regimen in force, when the next dose is due,
+ * how many injections were on time and the adherence, computed from the patient's saved forms.
+ */
 public final class ProphylaxisSummary {
 	
 	private static final int ON_TIME_MONTHS = 6;
@@ -65,6 +69,11 @@ public final class ProphylaxisSummary {
 	
 	/**
 	 * Replays the patient's saved forms now, as the nightly refresh does, so a dose saved today counts.
+	 *
+	 * @param patient the patient
+	 * @param today the day to compute the summary as of
+	 * @return the summary; without a regimen in force its status is none, it is not on hold, and its
+	 *         other values are null except the injections, which are still listed
 	 */
 	public static ProphylaxisSummary of(Patient patient, LocalDate today) {
 		AdherenceReplay.History history = new AdherenceRefresh().historyOf(patient.getPatientId());
@@ -229,6 +238,7 @@ public final class ProphylaxisSummary {
 		return injections;
 	}
 	
+	/** One injection given, and whether it was on time. */
 	public static final class Injection {
 		
 		private final LocalDate date;
@@ -250,6 +260,7 @@ public final class ProphylaxisSummary {
 		}
 	}
 	
+	/** How many of the injections in the past months were on time, out of those timed. */
 	public static final class OnTime {
 		
 		private final int given;

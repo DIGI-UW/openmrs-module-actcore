@@ -25,6 +25,7 @@ public class AdherenceRefreshTask extends AbstractTask {
 	// Static for the same reason as the flag refresh's: taskaction runs a second instance alongside the scheduler's.
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
+	/** @see org.openmrs.scheduler.tasks.AbstractTask#execute() */
 	@Override
 	public void execute() {
 		if (!RUNNING.tryLock()) {

@@ -22,6 +22,7 @@ import org.openmrs.ProgramWorkflowState;
  */
 public class StudyEnrolmentStatus implements MethodInterceptor {
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Object[] args = invocation.getArguments();

@@ -51,6 +51,7 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	/** Core's retire and unretire save the user through the service itself, so they are named too. */
 	private static final List<String> SAVES = Arrays.asList("saveUser", "createUser", "retireUser", "unretireUser");
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();
@@ -138,86 +139,103 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 			}
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#hasPrivilege(String) */
 		@Override
 		public boolean hasPrivilege(String privilege) {
 			return own.hasPrivilege(privilege) || privileges.contains(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#authenticate(org.openmrs.api.context.Credentials) */
 		@Override
 		public Authenticated authenticate(Credentials credentials) throws ContextAuthenticationException {
 			return own.authenticate(credentials);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#refreshAuthenticatedUser() */
 		@Override
 		public void refreshAuthenticatedUser() {
 			own.refreshAuthenticatedUser();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#becomeUser(String) */
 		@Override
 		public User becomeUser(String systemId) throws ContextAuthenticationException {
 			return own.becomeUser(systemId);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAuthenticatedUser() */
 		@Override
 		public User getAuthenticatedUser() {
 			return own.getAuthenticatedUser();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#isAuthenticated() */
 		@Override
 		public boolean isAuthenticated() {
 			return own.isAuthenticated();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#logout() */
 		@Override
 		public void logout() {
 			own.logout();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#addProxyPrivilege(String) */
 		@Override
 		public void addProxyPrivilege(String privilege) {
 			own.addProxyPrivilege(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#removeProxyPrivilege(String) */
 		@Override
 		public void removeProxyPrivilege(String privilege) {
 			own.removeProxyPrivilege(privilege);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocale(java.util.Locale) */
 		@Override
 		public void setLocale(Locale locale) {
 			own.setLocale(locale);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocale() */
 		@Override
 		public Locale getLocale() {
 			return own.getLocale();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAllRoles() */
 		@Override
 		public Set<Role> getAllRoles() throws Exception {
 			return own.getAllRoles();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getAllRoles(org.openmrs.User) */
 		@Override
 		public Set<Role> getAllRoles(User user) throws Exception {
 			return own.getAllRoles(user);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocationId() */
 		@Override
 		public Integer getLocationId() {
 			return own.getLocationId();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocationId(Integer) */
 		@Override
 		public void setLocationId(Integer locationId) {
 			own.setLocationId(locationId);
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#getLocation() */
 		@Override
 		public Location getLocation() {
 			return own.getLocation();
 		}
 		
+		/** @see org.openmrs.api.context.UserContext#setLocation(org.openmrs.Location) */
 		@Override
 		public void setLocation(Location location) {
 			own.setLocation(location);

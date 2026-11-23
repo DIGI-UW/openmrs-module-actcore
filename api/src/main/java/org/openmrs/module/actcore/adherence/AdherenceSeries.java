@@ -30,6 +30,11 @@ public final class AdherenceSeries {
 	/**
 	 * By patient, then by day, the adherence held on that day: absent for a day the patient held no row
 	 * or no adherence. Each history is read and replayed once.
+	 *
+	 * @param patientIds the patients to replay
+	 * @param days the days to replay each patient on
+	 * @return each patient's adherence by day; empty when either argument is empty, and a patient with
+	 *         nothing recorded that the refresh reads is absent
 	 */
 	public static Map<Integer, Map<LocalDate, Double>> adherenceOn(Collection<Integer> patientIds,
 	        SortedSet<LocalDate> days) {

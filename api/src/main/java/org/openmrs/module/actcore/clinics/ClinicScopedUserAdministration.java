@@ -47,6 +47,7 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 	 */
 	private static final ThreadLocal<Boolean> SEARCHING = new ThreadLocal<Boolean>();
 	
+	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
 		User me = Context.getAuthenticatedUser();

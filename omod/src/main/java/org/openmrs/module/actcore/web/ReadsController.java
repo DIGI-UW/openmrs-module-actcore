@@ -36,6 +36,22 @@ public class ReadsController extends ActCoreRestController {
 	/** Shorter than the other logs' default, as every chart opened writes reads. */
 	static final int DEFAULT_DAYS = 30;
 	
+	/**
+	 * Gets a page of who opened which patient's record, newest first.
+	 *
+	 * @param username the user to list, or blank for no user filter
+	 * @param patient a patient uuid, or an ACT ID or name to search for; blank for no patient filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_DAYS} days before the
+	 *            end date or today
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param startIndex the first row to give, from 0; null for 0
+	 * @param limit the most rows to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
+	 *            {@link Rows#DEFAULT_LIMIT}
+	 * @return the rows as {@code results}, with {@code totalCount} and the days read
+	 * @throws APIAuthenticationException when the user lacks {@link ReadLog#VIEW_PRIVILEGE}
+	 * @throws IllegalRequestException when a date is not a date, the start is after the end, or too
+	 *             many patients match
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getReads(@RequestParam(value = "username", required = false) String username,
