@@ -22,6 +22,7 @@ import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
 import org.openmrs.module.actcore.screening.ScreeningCount;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 
+/** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.ScreeningCountDAO}. */
 public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 	
 	private DbSessionFactory sessionFactory;
@@ -30,6 +31,9 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 		this.sessionFactory = sessionFactory;
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.ScreeningCountDAO#getCurrentCounts(Integer, Date)
+	 */
 	@Override
 	@SuppressWarnings("unchecked")
 	public List<ScreeningCount> getCurrentCounts(Integer locationId, Date month) {
@@ -38,16 +42,25 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 		        .setParameter("clinic", locationId).setParameter("month", month).list();
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.ScreeningCountDAO#lockLocation(Integer)
+	 */
 	@Override
 	public void lockLocation(Integer locationId) {
 		sessionFactory.getCurrentSession().get(Location.class, locationId, LockOptions.UPGRADE);
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.ScreeningCountDAO#saveScreeningCount(ScreeningCount)
+	 */
 	@Override
 	public void saveScreeningCount(ScreeningCount count) {
 		sessionFactory.getCurrentSession().save(count);
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.ScreeningCountDAO#getSummary(Collection, Date, Date)
+	 */
 	@Override
 	public ScreeningCounts.Summary getSummary(Collection<Integer> locationIds, Date start, Date end) {
 		StringBuilder select = new StringBuilder("select count(*)");

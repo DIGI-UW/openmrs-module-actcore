@@ -22,21 +22,36 @@ import org.openmrs.module.actcore.screening.ScreeningCounts;
 /** ACT 2.0's monthly screening counts per clinic, read, saved and summed. */
 public interface ScreeningCountService extends OpenmrsService {
 	
-	/** The clinic's counts for the month, or zeros when it has not been saved. */
+	/**
+	 * Gets the clinic's counts for the month.
+	 *
+	 * @param clinic the clinic
+	 * @param month the month
+	 * @return the month's counts, all zero and not saved when the month has no counts yet
+	 */
 	@Authorized({ ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD,
 	        ActCorePrivileges.ENTER_SCREENING_COUNTS })
 	ScreeningCounts.Month getMonth(Location clinic, YearMonth month);
 	
 	/**
-	 * Replaces the clinic's month with these counts, a column not given being zero, once they hold
-	 * together, voiding the counts it replaces; an IllegalArgumentException says what does not hold.
+	 * Saves the clinic's counts for the month, voiding the counts they replace.
+	 *
+	 * @param clinic the clinic
+	 * @param month the month, which must have started
+	 * @param counts each column's count; a column not given is zero
+	 * @param notes free text, or null
+	 * @throws IllegalArgumentException when the counts do not hold together, saying what does not
 	 */
 	@Authorized(ActCorePrivileges.ENTER_SCREENING_COUNTS)
 	void saveMonth(Location clinic, YearMonth month, Map<String, Integer> counts, String notes);
 	
 	/**
-	 * The sums of the clinics' months from start to end, both included: of every clinic when clinics is
-	 * null, of none when it is empty.
+	 * Gets the sums of the clinics' counts from start to end, both months included.
+	 *
+	 * @param clinics the location ids to sum, null for every clinic, empty for none
+	 * @param start the first month
+	 * @param end the last month
+	 * @return the sums and how many clinic months were saved, all zero when nothing matches
 	 */
 	@Authorized({ ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD,
 	        ActCorePrivileges.ENTER_SCREENING_COUNTS })

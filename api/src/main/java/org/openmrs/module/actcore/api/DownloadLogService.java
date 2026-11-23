@@ -21,13 +21,23 @@ import org.openmrs.module.actcore.download.DownloadLog;
 public interface DownloadLogService extends OpenmrsService {
 	
 	/**
-	 * Records the download for the signed-in user in a transaction of its own, so a failure fails the
-	 * caller.
+	 * Records a download by the signed-in user, in a transaction of its own, so that a download that
+	 * cannot be recorded fails.
+	 *
+	 * @param formId the form downloaded, or null when the download held several forms
+	 * @param detail what the download held, as JSON
 	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
 	void recordDownload(Integer formId, String detail);
 	
-	/** Every download matching the filters, newest first; each filter is left out when null. */
+	/**
+	 * Gets the downloads that match the filters, newest first.
+	 *
+	 * @param userId the user who downloaded, or null for every user
+	 * @param from the first day, or null for no lower bound
+	 * @param to the last day, included, or null for no upper bound
+	 * @return the matching downloads, an empty list when there are none
+	 */
 	@Authorized(DownloadLog.VIEW_PRIVILEGE)
 	List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to);
 }

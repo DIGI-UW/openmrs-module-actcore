@@ -23,6 +23,7 @@ import org.openmrs.module.actcore.download.DownloadRecord;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Default implementation of {@link org.openmrs.module.actcore.api.DownloadLogService}. */
 @Transactional
 public class DownloadLogServiceImpl extends BaseOpenmrsService implements DownloadLogService {
 	
@@ -32,6 +33,9 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		this.dao = dao;
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.DownloadLogService#recordDownload(Integer, String)
+	 */
 	@Override
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void recordDownload(Integer formId, String detail) {
@@ -39,6 +43,10 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		dao.saveDownloadRecord(new DownloadRecord(userId, formId, detail, new Date()));
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(Integer, LocalDate,
+	 *      LocalDate)
+	 */
 	@Override
 	@Transactional(readOnly = true)
 	public List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to) {

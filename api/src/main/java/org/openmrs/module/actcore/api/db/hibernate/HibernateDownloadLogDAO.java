@@ -22,6 +22,7 @@ import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.DownloadRecord;
 import org.openmrs.module.actcore.logs.Names;
 
+/** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.DownloadLogDAO}. */
 public class HibernateDownloadLogDAO implements DownloadLogDAO {
 	
 	private DbSessionFactory sessionFactory;
@@ -30,11 +31,17 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 		this.sessionFactory = sessionFactory;
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.DownloadLogDAO#saveDownloadRecord(DownloadRecord)
+	 */
 	@Override
 	public void saveDownloadRecord(DownloadRecord record) {
 		sessionFactory.getCurrentSession().save(record);
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.DownloadLogDAO#getDownloads(Integer, Date, Date)
+	 */
 	@Override
 	public List<DownloadLog.Entry> getDownloads(Integer userId, Date from, Date before) {
 		StringBuilder where = new StringBuilder();

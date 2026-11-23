@@ -16,16 +16,40 @@ import java.util.List;
 import org.openmrs.module.actcore.screening.ScreeningCount;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 
+/** Database access for {@link org.openmrs.module.actcore.api.ScreeningCountService}. */
 public interface ScreeningCountDAO {
 	
-	/** The clinic's current, not voided, counts for the month starting on that day. */
+	/**
+	 * Gets the clinic's counts for the month that are not voided.
+	 *
+	 * @param locationId the clinic's location id
+	 * @param month the first day of the month
+	 * @return the current counts, an empty list when the month has none
+	 */
 	List<ScreeningCount> getCurrentCounts(Integer locationId, Date month);
 	
-	/** Holds the clinic's row until the transaction ends, so its saves take turns. */
+	/**
+	 * Locks the clinic's location row until the transaction ends, so that saves for one clinic take
+	 * turns.
+	 *
+	 * @param locationId the clinic's location id
+	 */
 	void lockLocation(Integer locationId);
 	
+	/**
+	 * Saves a month's counts.
+	 *
+	 * @param count the counts to save
+	 */
 	void saveScreeningCount(ScreeningCount count);
 	
-	/** The sums of the current counts from start to end, both included, of every clinic when null. */
+	/**
+	 * Gets the sums of the counts that are not voided, from start to end, both included.
+	 *
+	 * @param locationIds the clinics to sum, or null for every clinic
+	 * @param start the first day of the first month
+	 * @param end the first day of the last month
+	 * @return the sums, all zero when nothing matches
+	 */
 	ScreeningCounts.Summary getSummary(Collection<Integer> locationIds, Date start, Date end);
 }

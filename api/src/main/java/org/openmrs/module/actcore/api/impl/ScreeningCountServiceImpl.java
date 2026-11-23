@@ -29,6 +29,7 @@ import org.openmrs.module.actcore.screening.ScreeningCount;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Default implementation of {@link org.openmrs.module.actcore.api.ScreeningCountService}. */
 @Transactional
 public class ScreeningCountServiceImpl extends BaseOpenmrsService implements ScreeningCountService {
 	
@@ -38,6 +39,9 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		this.dao = dao;
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.ScreeningCountService#getMonth(Location, YearMonth)
+	 */
 	@Override
 	@Transactional(readOnly = true)
 	public ScreeningCounts.Month getMonth(Location clinic, YearMonth month) {
@@ -56,6 +60,10 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		return result;
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.ScreeningCountService#saveMonth(Location, YearMonth, Map,
+	 *      String)
+	 */
 	@Override
 	public void saveMonth(Location clinic, YearMonth month, Map<String, Integer> counts, String notes) {
 		Map<String, Integer> values = validated(month, counts, notes);
@@ -71,6 +79,10 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		dao.saveScreeningCount(new ScreeningCount(clinicId, day, values, StringUtils.trimToNull(notes)));
 	}
 	
+	/**
+	 * @see org.openmrs.module.actcore.api.ScreeningCountService#getSummary(Collection, YearMonth,
+	 *      YearMonth)
+	 */
 	@Override
 	@Transactional(readOnly = true)
 	public ScreeningCounts.Summary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end) {
