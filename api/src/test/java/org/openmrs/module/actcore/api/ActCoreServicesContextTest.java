@@ -87,8 +87,9 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
-		holding(ActCorePrivileges.DOWNLOAD_DATA,
-		    () -> refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE));
+		for (String download : new String[] { ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA }) {
+			holding(download, () -> refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE));
+		}
 	}
 	
 	private static void holding(String privilege, Runnable call) {
