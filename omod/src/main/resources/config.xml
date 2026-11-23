@@ -502,4 +502,10 @@
       The forms, by uuid and comma-separated, that the patient chart's forms list offers only for a patient whose gender is F, through GET /form?patient=. The default is RHD Pregnancy.
     </description>
   </globalProperty>
+
+  <!-- Declared as the DTD and billing do; core loads messages.properties from the .omod root either way. -->
+  <messages>
+    <lang>en</lang>
+    <file>messages.properties</file>
+  </messages>
 </module>

@@ -20,9 +20,7 @@ public class NextStep {
 	
 	private final String form;
 	
-	private final String title;
-	
-	private final String reason;
+	private final StepReason reason;
 	
 	private final boolean isNew;
 	
@@ -34,20 +32,23 @@ public class NextStep {
 	
 	private final boolean alert;
 	
-	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold) {
-		this(key, form, title, reason, isNew, done, onHold, null);
-	}
-	
-	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold,
-	    String referralType) {
-		this(key, form, title, reason, isNew, done, onHold, referralType, false);
-	}
-	
-	public NextStep(String key, String form, String title, String reason, boolean isNew, boolean done, boolean onHold,
+	/**
+	 * Creates a step.
+	 *
+	 * @param key the step's key, such as {@code bpg}, which also names its title message
+	 *            {@code actcore.nextStep.title.<key>}
+	 * @param form the uuid of the form that records the step, or null when no form records it
+	 * @param reason why the step is suggested
+	 * @param isNew whether a finding still to be acted on raised the step
+	 * @param done whether the step was done at this visit
+	 * @param onHold whether the step is listed only to say why it waits
+	 * @param referralType the uuid of the encounter type that records a referral, or null
+	 * @param alert whether the step is a patient safety alert
+	 */
+	public NextStep(String key, String form, StepReason reason, boolean isNew, boolean done, boolean onHold,
 	    String referralType, boolean alert) {
 		this.key = key;
 		this.form = form;
-		this.title = title;
 		this.reason = reason;
 		this.isNew = isNew;
 		this.done = done;
@@ -68,11 +69,21 @@ public class NextStep {
 		return form;
 	}
 	
-	public String getTitle() {
-		return title;
+	/**
+	 * Gets the code of the step's title message, {@code actcore.nextStep.title.<key>}.
+	 *
+	 * @return the title's message code
+	 */
+	public String getTitleCode() {
+		return "actcore.nextStep.title." + key;
 	}
 	
-	public String getReason() {
+	/**
+	 * Gets why the step is suggested, as a message code and the values that fill it in.
+	 *
+	 * @return the reason
+	 */
+	public StepReason getReason() {
 		return reason;
 	}
 	

@@ -10,9 +10,19 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -66,6 +76,9 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("echo", step.get("key"));
 		assertEquals("Echocardiogram", step.get("title"));
 		assertEquals("Last echo was over 12 months ago (19-Aug-2008)", step.get("reason"));
+		assertEquals("actcore.nextStep.title.echo", step.get("titleCode"));
+		assertEquals("actcore.nextStep.reason.echoOverdue", step.get("reasonCode"));
+		assertEquals(Arrays.asList(12, "2008-08-19"), step.get("reasonArgs"));
 		assertEquals(false, step.get("isNew"));
 		assertEquals(false, step.get("done"));
 		assertEquals(false, step.get("onHold"));
@@ -115,6 +128,32 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 		}
 		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains("Get Observations"));
+		}
+	}
+	
+	@Test
+	public void hasAnEnglishMessageForEveryCodeTheStepsUse() throws Exception {
+		String rules = new String(
+		        Files.readAllBytes(Paths.get("../api/src/main/java/org/openmrs/module/actcore/nextsteps/NextSteps.java")),
+		        StandardCharsets.UTF_8);
+		Set<String> codes = new TreeSet<String>();
+		Matcher reason = Pattern.compile("StepReason\\.of\\(([^()]*(?:\\([^()]*\\)[^()]*)*)\\)").matcher(rules);
+		while (reason.find()) {
+			Matcher literal = Pattern.compile("\"(\\w+)\"").matcher(reason.group(1));
+			while (literal.find()) {
+				codes.add(NextStepsController.REASON_PREFIX + literal.group(1));
+			}
+		}
+		assertTrue(codes.toString(), codes.size() > 20);
+		for (String key : Arrays.asList("bpg", "oral", "consult", "echo", "procedures", "inr", "patientInfo", "pregnancy",
+		    "refer")) {
+			codes.add("actcore.nextStep.title." + key);
+		}
+		Object[] sample = { "7", "01-Oct-2026" };
+		for (String code : codes) {
+			String text = Context.getMessageSourceService().getMessage(code, sample, Locale.ENGLISH);
+			assertNotEquals("no message for " + code, code, text);
+			assertFalse(code + " left a placeholder: " + text, text.contains("{"));
 		}
 	}
 }

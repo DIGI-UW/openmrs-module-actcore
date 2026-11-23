@@ -10,6 +10,8 @@
 package org.openmrs.module.actcore.nextsteps;
 
 import static org.junit.Assert.assertEquals;
+import static org.openmrs.module.actcore.nextsteps.NextStepText.text;
+import static org.openmrs.module.actcore.nextsteps.NextStepText.title;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -132,9 +134,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|echo", keys(steps));
-		assertEquals("Give BPG injection", steps.get(0).getTitle());
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
-		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", steps.get(1).getReason());
+		assertEquals("Give BPG injection", title(steps.get(0)));
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
+		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", text(steps.get(1).getReason()));
 		assertEquals(false, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 	}
@@ -151,7 +153,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 		assertEquals(true, steps.get(1).isDone());
@@ -170,7 +172,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg", keys(steps));
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", text(steps.get(1).getReason()));
 		assertEquals(false, steps.get(1).isDone());
 	}
 	
@@ -186,8 +188,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("consult|bpg", keys(steps));
 		NextStep held = steps.get(1);
-		assertEquals("Give BPG injection", held.getTitle());
-		assertEquals("On hold: complete the consultation before giving BPG", held.getReason());
+		assertEquals("Give BPG injection", title(held));
+		assertEquals("On hold: complete the consultation before giving BPG", text(held.getReason()));
 		assertEquals(true, held.isOnHold());
 		assertNull(held.getForm());
 		assertEquals(false, held.isDone());
@@ -360,7 +362,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		NextStep review = steps.get(0);
 		assertEquals("consult", review.getKey());
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", review.getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", text(review.getReason()));
 		assertEquals(false, review.isAlert());
 	}
 	
@@ -377,7 +379,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer|bpg", keys(steps));
-		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
+		assertEquals("On hold: a clinician must review before the next dose", text(steps.get(1).getReason()));
 		assertEquals(true, steps.get(1).isOnHold());
 		assertNull(steps.get(1).getForm());
 	}
@@ -447,9 +449,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|consult", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(1).isDone());
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(1).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(1).getReason()));
 		assertEquals(false, steps.get(1).isNew());
 	}
 	
@@ -477,7 +479,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("consult|bpg", keys(steps));
 		assertEquals(false, steps.get(0).isDone());
 		assertEquals(true, steps.get(0).isNew());
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -491,7 +493,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|consult", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(1).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(1).getReason()));
 		assertEquals(true, steps.get(1).isDone());
 	}
 	
@@ -506,9 +508,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isNew());
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -521,8 +523,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
+		assertEquals("On hold: complete the consultation before giving BPG", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -537,7 +539,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("consult|bpg", keys(steps));
 		assertEquals(true, steps.get(0).isNew());
-		assertEquals("Entered this visit", steps.get(1).getReason());
+		assertEquals("Entered this visit", text(steps.get(1).getReason()));
 		assertEquals(true, steps.get(1).isDone());
 	}
 	
@@ -555,8 +557,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer|bpg", keys(steps));
-		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", steps.get(0).getReason());
-		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
+		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", text(steps.get(0).getReason()));
+		assertEquals("On hold: a clinician must review before the next dose", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -607,11 +609,11 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("refer|bpg", keys(steps));
 		NextStep refer = steps.get(0);
-		assertEquals("Refer to clinician", refer.getTitle());
+		assertEquals("Refer to clinician", title(refer));
 		assertNull(refer.getForm());
-		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", refer.getReason());
+		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", text(refer.getReason()));
 		assertEquals(true, refer.isNew());
-		assertEquals("On hold: a clinician must review before the next dose", steps.get(1).getReason());
+		assertEquals("On hold: a clinician must review before the next dose", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -628,10 +630,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("bpg|refer", keys(steps));
 		assertEquals(true, steps.get(0).isOnHold());
-		assertEquals("On hold: a clinician must review before the next dose", steps.get(0).getReason());
+		assertEquals("On hold: a clinician must review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(1).isDone());
 		assertEquals(false, steps.get(1).isNew());
-		assertEquals("Referral sent: a clinician to review", steps.get(1).getReason());
+		assertEquals("Referral sent: a clinician to review", text(steps.get(1).getReason()));
 		assertEquals(true, steps.get(0).isAlert());
 		assertEquals(false, steps.get(1).isAlert());
 	}
@@ -651,7 +653,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(referral.getUuid(), refer.getReferralType());
 		assertEquals(false, refer.isDone());
 		assertEquals(true, refer.isNew());
-		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", refer.getReason());
+		assertEquals("Anaphylaxis reported: a clinician must review before the next dose", text(refer.getReason()));
 	}
 	
 	@Test
@@ -853,7 +855,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		assertEquals("refer", refer.getKey());
 		assertEquals(true, refer.isDone());
-		assertEquals("No prophylaxis prescribed: a clinician to prescribe", refer.getReason());
+		assertEquals("No prophylaxis prescribed: a clinician to prescribe", text(refer.getReason()));
 	}
 	
 	@Test
@@ -896,7 +898,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|refer", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(1).isDone());
 		assertEquals(false, steps.get(1).isNew());
 	}
@@ -916,7 +918,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		NextStep refer = steps().get(0);
 		
 		assertEquals("refer", refer.getKey());
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", refer.getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", text(refer.getReason()));
 		assertEquals(false, refer.isDone());
 	}
 	
@@ -933,9 +935,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg|echo", keys(steps));
-		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals("Review the new echo result and update the care plan", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(1).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -951,9 +953,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg|echo", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
-		assertEquals("On hold: complete the consultation before giving BPG", steps.get(1).getReason());
+		assertEquals("On hold: complete the consultation before giving BPG", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -969,7 +971,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg|echo", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isNew());
 		assertEquals(true, steps.get(1).isDone());
 	}
@@ -986,7 +988,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|echo|consult", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(2).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(2).getReason()));
 		assertEquals(true, steps.get(2).isDone());
 	}
 	
@@ -1013,7 +1015,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|echo", keys(steps));
-		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals("Review the new echo result and update the care plan", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isDone());
 	}
 	
@@ -1029,7 +1031,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		lastGiven(28);
 		echoed(at(30));
 		
-		assertEquals("Due today", steps().get(0).getReason());
+		assertEquals("Due today", text(steps().get(0).getReason()));
 	}
 	
 	@Test
@@ -1037,7 +1039,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		lastGiven(27);
 		echoed(at(30));
 		
-		assertEquals("Due tomorrow", steps().get(0).getReason());
+		assertEquals("Due tomorrow", text(steps().get(0).getReason()));
 	}
 	
 	@Test
@@ -1048,7 +1050,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg", keys(steps));
-		assertEquals("Due in 2 days", steps.get(0).getReason());
+		assertEquals("Due in 2 days", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1067,7 +1069,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps));
-		assertEquals("No prophylaxis prescribed", steps.get(0).getReason());
+		assertEquals("No prophylaxis prescribed", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1081,9 +1083,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer", keys(steps));
-		assertEquals("Refer to clinician", steps.get(0).getTitle());
+		assertEquals("Refer to clinician", title(steps.get(0)));
 		assertNull(steps.get(0).getForm());
-		assertEquals("No prophylaxis prescribed: a clinician to prescribe", steps.get(0).getReason());
+		assertEquals("No prophylaxis prescribed: a clinician to prescribe", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 	}
@@ -1117,7 +1119,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer", keys(steps).replace("|oral", "").replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isNew());
 	}
 	
@@ -1130,7 +1132,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg|patientInfo", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1155,7 +1157,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1254,7 +1256,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("procedures", keys(steps));
-		assertEquals("30-day follow-up due", steps.get(0).getReason());
+		assertEquals("30-day follow-up due", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1268,7 +1270,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("inr", keys(steps));
-		assertEquals("INR review overdue: was due 24-Sep-2026", steps.get(0).getReason());
+		assertEquals("INR review overdue: was due 24-Sep-2026", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1286,7 +1288,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("echo", keys(steps));
-		assertEquals("No echocardiogram recorded", steps.get(0).getReason());
+		assertEquals("No echocardiogram recorded", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1301,10 +1303,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|echo", keys(steps));
-		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals("Review the new echo result and update the care plan", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isNew());
 		assertEquals(true, steps.get(1).isDone());
-		assertEquals("Entered this visit", steps.get(1).getReason());
+		assertEquals("Entered this visit", text(steps.get(1).getReason()));
 	}
 	
 	@Test
@@ -1317,7 +1319,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|echo", keys(steps));
-		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals("Review the new echo result and update the care plan", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
@@ -1333,7 +1335,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		property(NextSteps.GP_ECHO_MONTHS, "99999999999");
 		echoed(at(395));
 		
-		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", steps().get(0).getReason());
+		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", text(steps().get(0).getReason()));
 	}
 	
 	@Test
@@ -1345,7 +1347,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("procedures", keys(steps));
-		assertEquals("Entered this visit", steps.get(0).getReason());
+		assertEquals("Entered this visit", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isDone());
 	}
 	
@@ -1358,7 +1360,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1370,10 +1372,10 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|oral", keys(steps));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(0).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(0).getReason()));
 		NextStep supply = steps.get(1);
-		assertEquals("Record oral prophylaxis visit", supply.getTitle());
-		assertTrue(supply.getReason().startsWith("Overdue: was due "));
+		assertEquals("Record oral prophylaxis visit", title(supply));
+		assertTrue(text(supply.getReason()).startsWith("Overdue: was due "));
 		assertEquals(false, supply.isOnHold());
 		assertEquals(false, supply.isDone());
 	}
@@ -1391,7 +1393,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer|oral", keys(steps));
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", text(steps.get(0).getReason()));
 		assertEquals(form.getUuid(), steps.get(1).getForm());
 	}
 	
@@ -1443,7 +1445,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals("consult", keys(steps()));
 		estimate(encounterOf(oral, 10), 20);
 		assertEquals("consult", keys(steps()));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps().get(0).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps().get(0).getReason()));
 	}
 	
 	@Test
@@ -1467,7 +1469,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", steps.get(0).getKey());
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(0).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
@@ -1483,7 +1485,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("refer", keys(steps).replace("|oral", "").replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(0).getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1533,7 +1535,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg", keys(steps));
-		assertEquals("Due today", steps.get(0).getReason());
+		assertEquals("Due today", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
@@ -1547,7 +1549,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
@@ -1562,7 +1564,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("bpg", keys(steps));
-		assertEquals("Overdue: was due 21-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 21-Sep-2026", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1584,7 +1586,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("echo", keys(steps));
-		assertEquals("Last echo was over 12 months ago (25-Aug-2025)", steps.get(0).getReason());
+		assertEquals("Last echo was over 12 months ago (25-Aug-2025)", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
@@ -1599,7 +1601,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan",
+		    text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1613,7 +1616,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: a clinician to review the plan", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: a clinician to review the plan",
+		    text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1627,7 +1631,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1641,7 +1645,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1660,7 +1664,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1681,7 +1685,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1700,7 +1704,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps).replace("oral|", ""));
-		assertEquals("Oral adherence below 80%: consider switching to BPG", steps.get(steps.size() - 1).getReason());
+		assertEquals("Oral adherence below 80%: consider switching to BPG", text(steps.get(steps.size() - 1).getReason()));
 	}
 	
 	@Test
@@ -1711,8 +1715,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("patientInfo", keys(steps));
-		assertEquals("Patient Information", steps.get(0).getTitle());
-		assertEquals("Patient Information not recorded", steps.get(0).getReason());
+		assertEquals("Patient Information", title(steps.get(0)));
+		assertEquals("Patient Information not recorded", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 	}
@@ -1759,7 +1763,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("patientInfo", keys(steps));
-		assertEquals("Entered this visit", steps.get(0).getReason());
+		assertEquals("Entered this visit", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(0).isDone());
 	}
 	
@@ -1805,7 +1809,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		
 		List<NextStep> steps = steps();
 		
-		assertEquals("Review the new echo result and update the care plan", steps.get(0).getReason());
+		assertEquals("Review the new echo result and update the care plan", text(steps.get(0).getReason()));
 		assertEquals(false, keys(steps).contains("bpg"));
 	}
 	
@@ -1817,8 +1821,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps));
-		assertEquals("Consultation visit", steps.get(0).getTitle());
-		assertEquals("Overdue: was due 21-Aug-2026", steps.get(0).getReason());
+		assertEquals("Consultation visit", title(steps.get(0)));
+		assertEquals("Overdue: was due 21-Aug-2026", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isNew());
 		assertEquals(false, steps.get(0).isDone());
 	}
@@ -1855,7 +1859,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps));
-		assertEquals("Overdue: was due 28-Sep-2026", steps.get(0).getReason());
+		assertEquals("Overdue: was due 28-Sep-2026", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1893,7 +1897,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult|bpg", keys(steps));
-		assertEquals("Anaphylaxis reported after BPG: review before the next dose", steps.get(0).getReason());
+		assertEquals("Anaphylaxis reported after BPG: review before the next dose", text(steps.get(0).getReason()));
 		assertEquals(true, steps.get(1).isOnHold());
 	}
 	
@@ -1907,7 +1911,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("consult", keys(steps));
-		assertEquals("No prophylaxis prescribed", steps.get(0).getReason());
+		assertEquals("No prophylaxis prescribed", text(steps.get(0).getReason()));
 	}
 	
 	@Test
@@ -1929,8 +1933,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		List<NextStep> steps = steps();
 		
 		assertEquals("pregnancy", keys(steps));
-		assertEquals("Pregnancy", steps.get(0).getTitle());
-		assertEquals("Delivery outcome overdue", steps.get(0).getReason());
+		assertEquals("Pregnancy", title(steps.get(0)));
+		assertEquals("Delivery outcome overdue", text(steps.get(0).getReason()));
 		assertEquals(false, steps.get(0).isDone());
 	}
 	
