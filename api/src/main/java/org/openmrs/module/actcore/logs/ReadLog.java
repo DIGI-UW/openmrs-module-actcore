@@ -448,7 +448,7 @@ public class ReadLog {
 		Set<String> patientClinics = new LinkedHashSet<String>();
 		for (Map<String, Object> attribute : Rows.select("select a.value, t.uuid as type_uuid from person_attribute a"
 		        + " join person_attribute_type t on t.person_attribute_type_id = a.person_attribute_type_id"
-		        + " where a.person_id = ? and a.voided = 0 and t.format = 'org.openmrs.Location'",
+		        + " where a.person_id = ? and a.voided = false and t.format = 'org.openmrs.Location'",
 		    found.id)) {
 			String value = Rows.string(attribute, "value");
 			int which = clinicTypes.indexOf(Rows.string(attribute, "type_uuid"));
@@ -487,14 +487,14 @@ public class ReadLog {
 			return uuids;
 		}
 		String part = "%" + query.toLowerCase().replaceAll("[!%_]", "!$0") + "%";
-		for (Map<String, Object> row : Rows
-		        .select("select distinct p.uuid from person p join patient t on t.patient_id = p.person_id and t.voided = 0"
-		                + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = 0"
-		                + " left join person_name n on n.person_id = p.person_id and n.voided = 0"
-		                + " where p.voided = 0 and (i.identifier = ? or lower(n.given_name) like ? escape '!'"
-		                + " or lower(n.middle_name) like ? escape '!' or lower(n.family_name) like ? escape '!') limit "
-		                + (PATIENT_MATCHES + 1),
-		            query, part, part, part)) {
+		for (Map<String, Object> row : Rows.select(
+		    "select distinct p.uuid from person p join patient t on t.patient_id = p.person_id and t.voided = false"
+		            + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = false"
+		            + " left join person_name n on n.person_id = p.person_id and n.voided = false"
+		            + " where p.voided = false and (i.identifier = ? or lower(n.given_name) like ? escape '!'"
+		            + " or lower(n.middle_name) like ? escape '!' or lower(n.family_name) like ? escape '!') limit "
+		            + (PATIENT_MATCHES + 1),
+		    query, part, part, part)) {
 			uuids.add(Rows.string(row, "uuid"));
 		}
 		if (uuids.size() > PATIENT_MATCHES) {

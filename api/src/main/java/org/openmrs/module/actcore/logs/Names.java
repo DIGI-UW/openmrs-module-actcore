@@ -126,7 +126,7 @@ public class Names {
 		who.display = StringUtils
 		        .defaultIfBlank(
 		            personName(
-		                "select given_name, middle_name, family_name from person_name where person_id = ? and voided = 0"
+		                "select given_name, middle_name, family_name from person_name where person_id = ? and voided = false"
 		                        + " order by preferred desc, person_name_id",
 		                Rows.integer(user, "person_id")),
 		            who.username);
