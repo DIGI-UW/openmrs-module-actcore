@@ -20,7 +20,10 @@ import org.openmrs.module.actcore.download.DownloadLog;
 /** Records each download and lists them, as ACT 2.0's audit log did. */
 public interface DownloadLogService extends OpenmrsService {
 	
-	/** Records it for the signed-in user in a transaction of its own, so a failure fails the caller. */
+	/**
+	 * Records the download for the signed-in user in a transaction of its own, so a failure fails the
+	 * caller.
+	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
 	void recordDownload(Integer formId, String detail);
 	

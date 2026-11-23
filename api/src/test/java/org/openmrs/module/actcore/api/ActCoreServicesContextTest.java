@@ -74,6 +74,33 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE);
 	}
 	
+	@Test
+	public void saveMonth_shouldRefuseAUserWhoMayOnlyReadTheCounts() {
+		ScreeningCountService service = Context.getService(ScreeningCountService.class);
+		for (String read : new String[] { ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD }) {
+			holding(read,
+			    () -> refused(() -> service.saveMonth(clinic, MONTH, Collections.<String, Integer> emptyMap(), null),
+			        ActCorePrivileges.ENTER_SCREENING_COUNTS));
+		}
+	}
+	
+	@Test
+	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		holding(ActCorePrivileges.DOWNLOAD_DATA,
+		    () -> refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE));
+	}
+	
+	private static void holding(String privilege, Runnable call) {
+		Context.addProxyPrivilege(privilege);
+		try {
+			call.run();
+		}
+		finally {
+			Context.removeProxyPrivilege(privilege);
+		}
+	}
+	
 	private static void refused(Runnable call, String privilege) {
 		try {
 			call.run();

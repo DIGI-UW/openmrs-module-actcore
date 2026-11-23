@@ -22,7 +22,7 @@ import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsObject;
 
-/** One download, as {@link DownloadLog} records it. */
+/** One download, as {@link org.openmrs.module.actcore.api.DownloadLogService} records it. */
 @Entity
 @Table(name = DownloadLog.TABLE)
 public class DownloadRecord extends BaseOpenmrsObject {
