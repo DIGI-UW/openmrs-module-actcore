@@ -202,4 +202,21 @@
             </list>
         </property>
     </bean>
+
+    <bean id="actcore.RunChartService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.RunChartServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.RunChartService</value>
+                <ref bean="actcore.RunChartService"/>
+            </list>
+        </property>
+    </bean>
 </beans>

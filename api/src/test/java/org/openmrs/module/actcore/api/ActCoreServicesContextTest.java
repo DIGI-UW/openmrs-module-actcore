@@ -35,6 +35,7 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.ReadLog;
+import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -223,6 +224,16 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 			refused(() -> service.getFlag("uuid"), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 			refused(() -> service.getGaps(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		});
+	}
+	
+	@Test
+	public void runChartService_shouldRefuseAUserWithoutTheDashboard() {
+		RunChartService service = Context.getService(RunChartService.class);
+		assertNotNull(service);
+		refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY), ActCorePrivileges.DASHBOARD);
+		holding(ActCorePrivileges.SCREENING_COUNTS,
+		    () -> refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY),
+		        ActCorePrivileges.DASHBOARD));
 	}
 	
 	@Test

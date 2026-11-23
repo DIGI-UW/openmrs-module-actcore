@@ -25,6 +25,7 @@ import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -133,7 +134,7 @@ public class RunChartController extends ActCoreRestController {
 			@Override
 			public void run() {
 				try {
-					calculated.add(new RunCharts().calculate(clinic, start, end, period));
+					calculated.add(Context.getService(RunChartService.class).getRunCharts(clinic, start, end, period));
 				}
 				catch (RuntimeException e) {
 					failure[0] = e;
