@@ -191,8 +191,10 @@ public class Names {
 	}
 	
 	/**
-	 * Gets the patient's ACT ID as the download does: their preferred identifier unless its type
-	 * identifies them, or else the first identifier whose type does not. It is null when there is none.
+	 * Gets the patient's ACT ID: the first identifier whose type does not identify them, taking
+	 * unvoided identifiers before voided ones and the preferred one first among each. Unlike the
+	 * download, which uses only unvoided identifiers, it falls back to a voided one. It is null when
+	 * there is none.
 	 */
 	private String actId(int personId) {
 		if (identifyingTypes == null) {

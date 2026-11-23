@@ -174,8 +174,8 @@ public final class ProphylaxisSummary {
 	/**
 	 * Finds the injection course in force on the day. It is the latest course begun and not stopped by
 	 * that day among those of the consultation in force on it, or of the first consultation when the
-	 * day comes before every consultation. It is null, leaving the injection untimed, when that course
-	 * is not an injection.
+	 * day comes before every consultation. It is null, leaving the injection untimed, when no course
+	 * has begun and not been stopped by that day, or when that course is not an injection.
 	 */
 	private static Map.Entry<LocalDate, AdherenceReplay.Course> inForce(
 	        NavigableMap<LocalDate, AdherenceReplay.Prescriptions> prescriptions, LocalDate day) {

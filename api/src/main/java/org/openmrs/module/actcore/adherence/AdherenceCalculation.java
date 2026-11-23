@@ -78,9 +78,9 @@ public final class AdherenceCalculation {
 	}
 	
 	/**
-	 * Calculates adherence and the next due date without a first oral visit day, so that, as in ACT
-	 * 2.0, an oral regimen gets no due date while no oral adherence entry has been recorded since it
-	 * started.
+	 * Calculates adherence and the next due date without a first oral visit day, as ACT 2.0 did. An
+	 * oral regimen with no oral adherence entry recorded since it started then takes its due date from
+	 * the latest estimate recorded under an earlier oral course in the past year, or has none.
 	 *
 	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
 	 *            regimen that is not an injection
@@ -110,7 +110,8 @@ public final class AdherenceCalculation {
 	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
 	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due, while
 	 *            no oral adherence entry has been recorded since the start; null gives such a regimen
-	 *            no due date, as ACT 2.0 did
+	 *            no first-visit due date, as ACT 2.0 did, and it then takes its due date from the
+	 *            latest estimate recorded under an earlier oral course in the past year, or has none
 	 * @return the adherence and next due date; both are null when no prescription has started by today,
 	 *         and either is null when nothing recorded gives a value for it
 	 */

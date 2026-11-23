@@ -163,8 +163,9 @@ public class ReadLog {
 		public String userAgent;
 		
 		/**
-		 * Whether the user and the patient share a clinic. It is null when the user has no clinics on their
-		 * account or the patient has none recorded.
+		 * Whether the user and the patient share a clinic. It is null when the reads found no single
+		 * patient, when the patient is purged, when the user has no clinics on their account, or when the
+		 * patient has none recorded.
 		 */
 		public Boolean sameClinicAsUser;
 		

@@ -461,7 +461,9 @@ public class AdherenceRefresh {
 	/**
 	 * Gets the number of days after an oral regimen starts that its first oral visit is due, while no
 	 * oral adherence entry has been recorded under it. It is null when
-	 * actcore.adherence.oralFirstDueDays is blank, which gives such a regimen no due date.
+	 * actcore.adherence.oralFirstDueDays is blank, which gives such a regimen no first-visit due date;
+	 * it then takes its due date from the latest estimate recorded under an earlier oral course in the
+	 * past year, or has none.
 	 */
 	static Integer oralFirstDueDays() {
 		return days(Context.getAdministrationService(), GP_ORAL_FIRST_DUE);

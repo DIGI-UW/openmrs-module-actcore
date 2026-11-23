@@ -103,8 +103,10 @@ final class AdherenceReplay {
 		
 		/**
 		 * The next due date as the calculation gives it. It is kept even when no injection is recorded, in
-		 * which case it is one interval after the regimen starts, and when no oral entry is recorded, in
-		 * which case it is the first oral visit's day, if one is set.
+		 * which case it is the current interval counted from the start of the unbroken run of injection
+		 * prescriptions, so a change of injection regimen does not move a dose already due. It is kept too
+		 * when no oral entry is recorded, in which case it is the first oral visit's day, if one is set, or
+		 * else is taken from the latest estimate recorded under an earlier oral course in the past year.
 		 */
 		final LocalDate nextDue;
 		
@@ -168,7 +170,9 @@ final class AdherenceReplay {
 	 * @param h the patient's records
 	 * @param today the day to replay the row for
 	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due while
-	 *            none is recorded; null gives it no due date, as ACT 2.0 did
+	 *            none is recorded; null gives it no first-visit due date, as ACT 2.0 did, and it then
+	 *            takes its due date from the latest estimate recorded under an earlier oral course in
+	 *            the past year, or has none
 	 * @return the row, or null when the patient has no prescription to hold one for
 	 */
 	static Row replay(History h, LocalDate today, Integer oralFirstDueDays) {
