@@ -16,6 +16,7 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -78,7 +79,7 @@ public class ReadsController extends ActCoreRestController {
 		
 		ReadLog.Page page;
 		try {
-			page = new ReadLog().list(filter);
+			page = Context.getService(AuditLogService.class).getReads(filter);
 		}
 		catch (Rows.TooMany e) {
 			throw new IllegalRequestException(e.getMessage());

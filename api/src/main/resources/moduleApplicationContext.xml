@@ -156,4 +156,27 @@
             </list>
         </property>
     </bean>
+
+    <bean id="actcore.AuditLogService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.AuditLogServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateAuditLogDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.AuditLogService</value>
+                <ref bean="actcore.AuditLogService"/>
+            </list>
+        </property>
+    </bean>
 </beans>

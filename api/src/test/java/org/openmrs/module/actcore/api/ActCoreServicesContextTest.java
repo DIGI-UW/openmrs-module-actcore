@@ -33,6 +33,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.download.DownloadLog;
+import org.openmrs.module.actcore.logs.ActivityLog;
+import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -185,6 +187,30 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		});
 		holding(PatientFlagsConstants.PRIV_TEST_FLAGS,
 		    () -> refused(() -> service.refreshAll(TODAY), ActCorePrivileges.REFRESH_FLAGS));
+	}
+	
+	@Test
+	public void auditLogService_shouldRefuseAUserWithoutTheLogPrivileges() {
+		AuditLogService service = Context.getService(AuditLogService.class);
+		assertNotNull(service);
+		refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
+		refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
+		refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getUsers(Collections.singleton("uuid")), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
+	}
+	
+	@Test
+	public void auditLogService_shouldRefuseAUserWhoMayReadOnlyTheOtherLog() {
+		AuditLogService service = Context.getService(AuditLogService.class);
+		holding(ReadLog.VIEW_PRIVILEGE, () -> {
+			refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
+			refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
+		});
+		holding(ActivityLog.VIEW_PRIVILEGE,
+		    () -> refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE));
+		holding("View Security Audit Logs",
+		    () -> refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE));
 	}
 	
 	@Test

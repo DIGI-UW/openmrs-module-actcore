@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.download.FormDownload;
 
@@ -197,12 +198,25 @@ public class ReadLog {
 		public String cardiacClinic;
 	}
 	
-	private final Names names = new Names();
+	private final AuditLogDAO dao;
+	
+	private final Names names;
+	
+	/**
+	 * Creates a log that reads through the DAO.
+	 *
+	 * @param dao the DAO
+	 */
+	public ReadLog(AuditLogDAO dao) {
+		this.dao = dao;
+		this.names = new Names(dao);
+	}
 	
 	/**
 	 * Lists the reads of patients' data that the filter matches, folded into rows, the row with the
-	 * latest first read first. This method does not check a privilege, so the caller must check
-	 * {@link #VIEW_PRIVILEGE} first.
+	 * latest first read first. This method does not check a privilege:
+	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks {@link #VIEW_PRIVILEGE} before it
+	 * calls it.
 	 *
 	 * @param filter the filters that choose the reads and the page of rows to return
 	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
@@ -240,7 +254,7 @@ public class ReadLog {
 			        .append(Rows.placeholders(uuids)).append("))");
 			params.addAll(uuids);
 		}
-		Map<String, Object> ids = Rows
+		Map<String, Object> ids = dao
 		        .select("select min(l.id) as lowest, max(l.id) as highest from read_audit_log l where 1 = 1" + dates,
 		            dateParams.toArray())
 		        .get(0);
@@ -260,7 +274,7 @@ public class ReadLog {
 			List<Object> fetchParams = new ArrayList<Object>(params);
 			fetchParams.add(after);
 			fetchParams.add(after + READ_SPAN);
-			for (Map<String, Object> read : Rows.select(fetch, fetchParams.toArray())) {
+			for (Map<String, Object> read : dao.select(fetch, fetchParams.toArray())) {
 				reads.add(new Raw(read));
 			}
 		}
@@ -446,7 +460,7 @@ public class ReadLog {
 		}
 		List<String> clinicTypes = FormDownload.uuids(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY);
 		Set<String> patientClinics = new LinkedHashSet<String>();
-		for (Map<String, Object> attribute : Rows.select("select a.value, t.uuid as type_uuid from person_attribute a"
+		for (Map<String, Object> attribute : dao.select("select a.value, t.uuid as type_uuid from person_attribute a"
 		        + " join person_attribute_type t on t.person_attribute_type_id = a.person_attribute_type_id"
 		        + " where a.person_id = ? and a.voided = false and t.format = 'org.openmrs.Location'",
 		    found.id)) {
@@ -464,7 +478,7 @@ public class ReadLog {
 			}
 		}
 		patientClinics.remove(null);
-		List<Map<String, Object>> property = Rows
+		List<Map<String, Object>> property = dao
 		        .select("select p.property_value from user_property p join users u on u.user_id = p.user_id"
 		                + " where u.uuid = ? and p.property = ?",
 		            row.userUuid, UserClinics.PROPERTY);
@@ -480,14 +494,14 @@ public class ReadLog {
 	 * because the audit log module would record a search through the patient service as a read of every
 	 * patient found.
 	 */
-	private static List<String> patientUuids(String query) {
+	private List<String> patientUuids(String query) {
 		List<String> uuids = new ArrayList<String>();
 		if (query.matches("[0-9a-fA-F-]{36}")) {
 			uuids.add(query);
 			return uuids;
 		}
 		String part = "%" + query.toLowerCase().replaceAll("[!%_]", "!$0") + "%";
-		for (Map<String, Object> row : Rows.select(
+		for (Map<String, Object> row : dao.select(
 		    "select distinct p.uuid from person p join patient t on t.patient_id = p.person_id and t.voided = false"
 		            + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = false"
 		            + " left join person_name n on n.person_id = p.person_id and n.voided = false"

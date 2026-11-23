@@ -23,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.util.PrivilegeConstants;
 
@@ -71,7 +72,18 @@ public class Names {
 	
 	private final Map<String, Object> cache = new HashMap<String, Object>();
 	
+	private final AuditLogDAO dao;
+	
 	private List<String> identifyingTypes;
+	
+	/**
+	 * Creates a namer that reads through the DAO.
+	 *
+	 * @param dao the DAO
+	 */
+	public Names(AuditLogDAO dao) {
+		this.dao = dao;
+	}
 	
 	/**
 	 * Gets a user by id, read by SQL: the site administrator, who reads the logs, is limited by ACT
@@ -101,8 +113,8 @@ public class Names {
 	 * @param username the username or system ID
 	 * @return the user's id, or null when no user has it
 	 */
-	public static Integer userId(String username) {
-		List<Map<String, Object>> rows = Rows.select(
+	public Integer userId(String username) {
+		List<Map<String, Object>> rows = dao.select(
 		    "select user_id from users where username = ?"
 		            + " or ((username is null or username = '') and system_id = ?) order by username desc",
 		    username, username);
@@ -113,8 +125,8 @@ public class Names {
 	 * Reads the user that the where clause selects, with their name and their ACT role. The ACT role is
 	 * the organizational one, which the roles CSV names as in "Organizational: ACT Clinician".
 	 */
-	private static Who who(String where, Object param) {
-		List<Map<String, Object>> rows = Rows
+	private Who who(String where, Object param) {
+		List<Map<String, Object>> rows = dao
 		        .select("select u.user_id, u.uuid, u.username, u.system_id, u.person_id from users u where " + where, param);
 		if (rows.isEmpty()) {
 			return null;
@@ -132,9 +144,9 @@ public class Names {
 		            who.username);
 		// The user's own roles before the ones they inherit: a site administrator's role inherits Clinician.
 		Integer userId = Rows.integer(user, "user_id");
-		who.role = organizationalRole(Rows.select("select role from user_role where user_id = ?", userId));
+		who.role = organizationalRole(dao.select("select role from user_role where user_id = ?", userId));
 		if (who.role == null) {
-			who.role = organizationalRole(Rows.select("select rr.parent_role as role from role_role rr"
+			who.role = organizationalRole(dao.select("select rr.parent_role as role from role_role rr"
 			        + " join user_role ur on ur.role = rr.child_role where ur.user_id = ?",
 			    userId));
 		}
@@ -159,7 +171,7 @@ public class Names {
 	 */
 	public Subject patient(Integer personId) {
 		return personId == null ? null : memo("patient:" + personId, key -> {
-			List<Map<String, Object>> rows = Rows.select("select uuid from person where person_id = ?", personId);
+			List<Map<String, Object>> rows = dao.select("select uuid from person where person_id = ?", personId);
 			return rows.isEmpty() ? null : subject(personId, Rows.string(rows.get(0), "uuid"));
 		});
 	}
@@ -172,7 +184,7 @@ public class Names {
 	 */
 	public Subject patient(String uuid) {
 		return uuid == null ? null : memo("patient:" + uuid, key -> {
-			List<Map<String, Object>> rows = Rows.select("select person_id from person where uuid = ?", uuid);
+			List<Map<String, Object>> rows = dao.select("select person_id from person where uuid = ?", uuid);
 			return rows.isEmpty() ? null : subject(Rows.integer(rows.get(0), "person_id"), uuid);
 		});
 	}
@@ -200,7 +212,7 @@ public class Names {
 		if (identifyingTypes == null) {
 			identifyingTypes = FormDownload.uuids(FormDownload.IDENTIFIER_TYPES_PROPERTY);
 		}
-		for (Map<String, Object> row : Rows.select("select i.identifier, t.uuid type_uuid from patient_identifier i"
+		for (Map<String, Object> row : dao.select("select i.identifier, t.uuid type_uuid from patient_identifier i"
 		        + " join patient_identifier_type t on t.patient_identifier_type_id = i.identifier_type"
 		        + " where i.patient_id = ? order by i.voided, i.preferred desc, i.patient_identifier_id",
 		    personId)) {
@@ -215,8 +227,8 @@ public class Names {
 	 * Runs a query for person names and joins the given, middle and family names of its first row into
 	 * a full name. It is null when the query returns no row.
 	 */
-	static String personName(String sql, Object... params) {
-		List<Map<String, Object>> rows = Rows.select(sql, params);
+	String personName(String sql, Object... params) {
+		List<Map<String, Object>> rows = dao.select(sql, params);
 		if (rows.isEmpty()) {
 			return null;
 		}
@@ -375,7 +387,7 @@ public class Names {
 	 */
 	public Map<String, Object> row(String table, String idColumn, Integer id) {
 		return id == null ? null : memo("row:" + table + ":" + id, key -> {
-			List<Map<String, Object>> rows = Rows.select("select * from " + table + " where " + idColumn + " = ?", id);
+			List<Map<String, Object>> rows = dao.select("select * from " + table + " where " + idColumn + " = ?", id);
 			return rows.isEmpty() ? null : rows.get(0);
 		});
 	}

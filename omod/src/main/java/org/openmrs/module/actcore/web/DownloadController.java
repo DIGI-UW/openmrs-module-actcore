@@ -17,9 +17,11 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
@@ -29,6 +31,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -233,7 +236,7 @@ public class DownloadController extends ActCoreRestController {
 		        .add("from", from.toString()).add("to", to == null ? null : to.toString());
 		Integer userId = null;
 		if (StringUtils.isNotBlank(username)) {
-			userId = Names.userId(username.trim());
+			userId = Context.getService(AuditLogService.class).getUserId(username.trim());
 			if (userId == null) {
 				return none;
 			}
@@ -251,10 +254,15 @@ public class DownloadController extends ActCoreRestController {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
 		ObjectMapper json = new ObjectMapper();
-		Names names = new Names();
+		List<DownloadLog.Entry> entries = Context.getService(DownloadLogService.class).getDownloads(userId, from, to);
+		Set<String> userUuids = new HashSet<String>();
+		for (DownloadLog.Entry entry : entries) {
+			userUuids.add(entry.userUuid);
+		}
+		Map<String, Names.Who> users = Context.getService(AuditLogService.class).getUsers(userUuids);
 		List<SimpleObject> matching = new ArrayList<SimpleObject>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : Context.getService(DownloadLogService.class).getDownloads(userId, from, to)) {
+		for (DownloadLog.Entry entry : entries) {
 			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
 			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
 				continue;
@@ -264,7 +272,7 @@ public class DownloadController extends ActCoreRestController {
 			}
 			Object list = detail == null ? null : detail.get("list");
 			matching.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
-			        .add("user", ActivityController.who(names.user(entry.userUuid)))
+			        .add("user", ActivityController.who(users.get(entry.userUuid)))
 			        .add("form",
 			            entry.formName == null ? null
 			                    : new SimpleObject().add("uuid", entry.formUuid).add("name", entry.formName))

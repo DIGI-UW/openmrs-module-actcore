@@ -1,0 +1,95 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.actcore.api;
+
+import java.util.Collection;
+import java.util.Map;
+
+import org.openmrs.annotation.Authorized;
+import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.logs.ActivityLog;
+import org.openmrs.module.actcore.logs.Names;
+import org.openmrs.module.actcore.logs.ReadLog;
+import org.openmrs.module.actcore.logs.Rows;
+
+/**
+ * The service behind the Logs page: what ACT's users changed, read from the audit log module's and
+ * Envers' tables, and who opened which patient's record, read from the read audit. It also names
+ * the users the Downloads tab lists.
+ */
+public interface AuditLogService extends OpenmrsService {
+	
+	/**
+	 * Gets a page of the changes the filter matches, newest first, as
+	 * {@link ActivityLog#list(ActivityLog.Filter)} describes.
+	 *
+	 * @param filter the filters that choose the changes and the page of them to return
+	 * @return the page of entries; empty when the filter names a user, patient or form that does not
+	 *         exist
+	 * @throws Rows.TooMany when a kind filter has more than {@link ActivityLog#MAX_CLASSIFIED} changes
+	 *             to sort
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActivityLog#VIEW_PRIVILEGE}
+	 */
+	@Authorized(ActivityLog.VIEW_PRIVILEGE)
+	ActivityLog.Page getActivity(ActivityLog.Filter filter);
+	
+	/**
+	 * Gets the fields one revision's save changed, and the reason given for a void.
+	 *
+	 * @param revisionId the revision's id
+	 * @return the entry's fields and void reason; null when no audited table has the revision or the
+	 *         log leaves it out
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActivityLog#VIEW_PRIVILEGE}
+	 */
+	@Authorized(ActivityLog.VIEW_PRIVILEGE)
+	ActivityLog.Details getActivityDetails(int revisionId);
+	
+	/**
+	 * Gets a page of the reads of patients' data that the filter matches, folded into rows, as
+	 * {@link ReadLog#list(ReadLog.Filter)} describes.
+	 *
+	 * @param filter the filters that choose the reads and the page of rows to return
+	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
+	 *         its days
+	 * @throws Rows.TooMany when more than {@value ReadLog#PATIENT_MATCHES} patients match the filter's
+	 *             patient
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ReadLog#VIEW_PRIVILEGE}
+	 */
+	@Authorized(ReadLog.VIEW_PRIVILEGE)
+	ReadLog.Page getReads(ReadLog.Filter filter);
+	
+	/**
+	 * Gets the id of the user with this username, or of the user with this system ID and no username,
+	 * since a log names a user without a username by their system ID.
+	 *
+	 * @param username the username or system ID
+	 * @return the user's id, or null when no user has it
+	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
+	 *             {@link ActivityLog#VIEW_PRIVILEGE} nor {@link ReadLog#VIEW_PRIVILEGE}
+	 */
+	@Authorized({ ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE })
+	Integer getUserId(String username);
+	
+	/**
+	 * Gets the users with these uuids as a log names them, with their name and ACT role, read by SQL:
+	 * the site administrator, who reads the logs, is limited by ACT Core's user administration advice
+	 * to the users of its clinics, and a log names everyone.
+	 *
+	 * @param uuids the users' uuids
+	 * @return each user found, by uuid; a uuid that no user has is absent
+	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
+	 *             {@link ActivityLog#VIEW_PRIVILEGE} nor {@link ReadLog#VIEW_PRIVILEGE}
+	 */
+	@Authorized({ ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE })
+	Map<String, Names.Who> getUsers(Collection<String> uuids);
+}
