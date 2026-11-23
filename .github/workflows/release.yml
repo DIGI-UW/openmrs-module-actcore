@@ -24,6 +24,8 @@ jobs:
       development_version: ${{ inputs.development_version }}
       branch: ${{ inputs.branch }}
       java_version: '8'
+      # The same JDK vendor as the build; see build.yml.
+      java_distribution: zulu
       # Outside the openmrs org the shared workflow refuses to release unless this is true.
       publish: ${{ github.repository_owner == 'DIGI-UW' }}
     secrets:
