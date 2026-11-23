@@ -27,6 +27,7 @@ import org.openmrs.Form;
 import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.module.actcore.logs.Names;
@@ -47,7 +48,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * ACT 2.0's Download, each recorded in the download log, under privileges the distribution creates.
+ * ACT 2.0's Download, each recorded in the download log, under ACT Core's download privileges.
  * Identifiers only with IDENTIFIERS_PRIVILEGE; a research download is never identified.
  */
 @Controller
@@ -55,13 +56,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class DownloadController extends ActCoreRestController {
 	
 	/** Download any patient's forms, without identifiers. */
-	public static final String DOWNLOAD_PRIVILEGE = "Task: act.downloadData";
+	public static final String DOWNLOAD_PRIVILEGE = ActCorePrivileges.DOWNLOAD_DATA;
 	
 	/** With DOWNLOAD_PRIVILEGE, also give what identifies the patient, as FormDownload lists it. */
-	public static final String IDENTIFIERS_PRIVILEGE = "Task: act.downloadIdentifiers";
+	public static final String IDENTIFIERS_PRIVILEGE = ActCorePrivileges.DOWNLOAD_IDENTIFIERS;
 	
 	/** Without DOWNLOAD_PRIVILEGE, download only the forms of patients who opted in to research. */
-	public static final String RESEARCH_PRIVILEGE = "Task: act.downloadResearchData";
+	public static final String RESEARCH_PRIVILEGE = ActCorePrivileges.DOWNLOAD_RESEARCH_DATA;
 	
 	static final int MAX_LABEL = 255;
 	

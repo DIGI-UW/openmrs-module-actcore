@@ -99,6 +99,49 @@
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
   </advice>
+
+  <!-- Kept equal to ActCorePrivileges by ModulePrivilegesTest; in the distribution, its privileges CSV overrides these descriptions. -->
+  <privilege>
+    <name>Task: act.allClinics</name>
+    <description>Administer the users of every clinic: not limited to the clinics on the user's own account, as a site administrator is</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.dismissFlags</name>
+    <description>Dismiss a patient's critical data flag, which stays dismissed until the patient no longer matches it</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.downloadData</name>
+    <description>Download a form's fields for every patient, without names, birth dates, ID numbers or phones</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.downloadIdentifiers</name>
+    <description>With Task: act.downloadData, keep the patients' names, birth dates, ID numbers and phones in a download</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.downloadResearchData</name>
+    <description>Download a form's fields, never with identifiers, for the patients who opted in to research</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.enterScreeningCounts</name>
+    <description>Enter and save a clinic's monthly screening counts; a site administrator, for the clinics on their account</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.manageStudies</name>
+    <description>Create and rename research studies</description>
+  </privilege>
+  <privilege>
+    <name>Task: act.refreshFlags</name>
+    <description>Refresh every patient's critical data flags and prophylaxis adherence now, from the Admin section</description>
+  </privilege>
+  <privilege>
+    <name>App: act.dashboard</name>
+    <description>Open the Dashboard: the registry's figures and charts for the clinics chosen</description>
+  </privilege>
+  <privilege>
+    <name>App: act.screeningCounts</name>
+    <description>Open Screening counts in the Admin section: each clinic's monthly screening counts</description>
+  </privilege>
+
   <globalProperty>
     <property>actcore.registryProgram</property>
     <defaultValue>7d73e143-a550-5a9d-aecd-dd771add098d</defaultValue>

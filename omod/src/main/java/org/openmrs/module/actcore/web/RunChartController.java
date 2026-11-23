@@ -24,6 +24,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -43,8 +44,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RunChartController extends ActCoreRestController {
 	
-	/** The Dashboard's own privilege in the distribution, which the run charts sit on. */
-	public static final String READ_PRIVILEGE = "App: act.dashboard";
+	/** The Dashboard's own privilege, which the run charts sit on. */
+	public static final String READ_PRIVILEGE = ActCorePrivileges.DASHBOARD;
 	
 	/**
 	 * The year to today in weeks unless the request says day or month, of a clinic or of every clinic;

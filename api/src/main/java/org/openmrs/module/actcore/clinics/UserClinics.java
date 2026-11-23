@@ -25,6 +25,7 @@ import org.hibernate.jdbc.ReturningWork;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -37,7 +38,7 @@ public final class UserClinics {
 	public static final String PROPERTY = "actcore.clinics";
 	
 	/** Held by the instance and global administrators, who work with every clinic. */
-	public static final String ALL_CLINICS_PRIVILEGE = "Task: act.allClinics";
+	public static final String ALL_CLINICS_PRIVILEGE = ActCorePrivileges.ALL_CLINICS;
 	
 	/** The roles, by uuid, that an administrator limited to their clinics may give out. */
 	public static final String ASSIGNABLE_ROLES_PROPERTY = "actcore.users.siteAdministratorRoles";
