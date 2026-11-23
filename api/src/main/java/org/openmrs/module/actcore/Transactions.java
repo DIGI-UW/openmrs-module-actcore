@@ -69,9 +69,9 @@ public final class Transactions {
 	
 	/**
 	 * Runs the work in the current transaction, or in a new transaction when none is in progress. The
-	 * service calls the work makes therefore join that one transaction, so none of them commits or
-	 * flushes the session before the work returns, and an exception thrown by the work rolls all of it
-	 * back.
+	 * service calls the work makes therefore join that one transaction, so none of them commits, which
+	 * would flush the session, before the work returns, and an exception thrown by the work rolls all
+	 * of it back.
 	 *
 	 * @param work the work to run
 	 * @return what the work returns

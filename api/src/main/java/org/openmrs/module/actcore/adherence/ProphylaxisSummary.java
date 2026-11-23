@@ -25,9 +25,9 @@ import org.openmrs.util.PrivilegeConstants;
 
 /**
  * A patient's prophylaxis as the chart shows it, computed from the patient's saved forms at the
- * time it is asked for. It holds the regimen in force, when the last dose was given and the next is
- * due, how many recent injections were on time, the adherence, the injections recorded, and whether
- * BPG is on hold.
+ * time it is asked for. It holds the regimen in force, the latest day recorded for it, when the
+ * next dose is due, how many recent injections were on time, the adherence, the injections
+ * recorded, and whether BPG is on hold.
  */
 public final class ProphylaxisSummary {
 	
@@ -205,6 +205,13 @@ public final class ProphylaxisSummary {
 		return intervalDays;
 	}
 	
+	/**
+	 * Gets the latest day recorded for the regimen in force, as of the day the row was last computed
+	 * (see {@link #getAdherence()}). For an injection regimen it is the day of the latest injection,
+	 * under whatever regimen it was given. For an oral regimen it is the day of the latest oral
+	 * adherence entry, which records an estimate rather than a dose. It is null without a regimen in
+	 * force, and while nothing of the regimen's kind is recorded.
+	 */
 	public LocalDate getLastGiven() {
 		return lastGiven;
 	}
@@ -231,9 +238,15 @@ public final class ProphylaxisSummary {
 	}
 	
 	/**
-	 * Gets the adherence as a fraction, as {@link AdherenceCalculation} computes it over the past 365
-	 * days for an injection regimen. It is null without a prescription, and before the first injection
-	 * or oral estimate under the regimen is recorded.
+	 * Gets the adherence as a fraction, as {@link AdherenceCalculation} computes it over the 365 days
+	 * up to the day the row was last computed. That is the latest day on which ACT 2.0 would have
+	 * recomputed the row: a day with a prescription, injection, oral adherence entry or consultation
+	 * recorded for the patient, or, while the patient is on an injection regimen, a night on which
+	 * batch entry does not hold the patient back. It can therefore be earlier than today.
+	 * <p>
+	 * It is null without a prescription, and, for an injection regimen, until any injection has been
+	 * recorded, or, for an oral regimen, until any oral adherence entry has been recorded, under
+	 * whatever regimen. It can also be null when the 365 days hold nothing that gives a value.
 	 */
 	public Double getAdherence() {
 		return adherence;
@@ -256,7 +269,10 @@ public final class ProphylaxisSummary {
 		return injections;
 	}
 	
-	/** One injection given: the day it was given, and whether it was on time. */
+	/**
+	 * One injection recorded for the patient. It gives the day the injection was given and whether it
+	 * was given on time.
+	 */
 	public static final class Injection {
 		
 		private final LocalDate date;

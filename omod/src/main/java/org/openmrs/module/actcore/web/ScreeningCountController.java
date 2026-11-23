@@ -181,10 +181,19 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Works out the location ids of the clinics to sum. They are the clinics given, which for a site
-	 * administrator are cut down to their own and may end up empty, or, without any given, every clinic
-	 * for most users, as null, and a site administrator's own clinics. A uuid that names no location is
-	 * a bad request, unless it is on the site administrator's account.
+	 * Works out the location ids of the clinics to sum.
+	 * <p>
+	 * When clinics are given, the ids are those of the clinics given. For a site administrator, who is
+	 * limited to their own clinics, the clinics given are cut down to their own, so the result may be
+	 * empty.
+	 * <p>
+	 * When none is given to a user who is not limited to their clinics, the result is null, which means
+	 * every clinic.
+	 * <p>
+	 * When none is given to a site administrator, the ids are those of the administrator's own clinics.
+	 * <p>
+	 * A uuid given that names no location is a bad request, unless it is one of the site
+	 * administrator's own clinics.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();

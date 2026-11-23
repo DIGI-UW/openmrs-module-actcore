@@ -46,7 +46,8 @@ public class ReadsController extends ActCoreRestController {
 	 * Gets a page of who opened which patient's record, newest first.
 	 *
 	 * @param username the user to list, or blank for no user filter
-	 * @param patient a patient uuid, or an ACT ID or name to search for; blank for no patient filter
+	 * @param patient a patient uuid, or else an identifier to match exactly or part of a name to search
+	 *            for; blank for no patient filter
 	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_DAYS} days before the
 	 *            end date or today
 	 * @param endDate the last day as YYYY-MM-DD; blank for no end

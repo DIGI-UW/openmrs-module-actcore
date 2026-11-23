@@ -70,9 +70,10 @@ public class ReadLog {
 	 * The filters that choose which reads of patient data to list, and which page of the matching rows
 	 * to return.
 	 * <p>
-	 * A filter left null is not applied. {@code patient} matches a patient by uuid, or else searches by
-	 * ACT ID or name. {@code from} and {@code to} are both included, each as a whole day.
-	 * {@code startIndex} and {@code limit} pick the page, the limit defaulting to
+	 * A filter left null is not applied. {@code patient} matches a patient by uuid, or else matches the
+	 * patients with an unvoided identifier equal to it, such as an ACT ID or a National ID, or with a
+	 * given, middle or family name containing it. {@code from} and {@code to} are both included, each
+	 * as a whole day. {@code startIndex} and {@code limit} pick the page, the limit defaulting to
 	 * {@link Rows#DEFAULT_LIMIT}.
 	 */
 	public static class Filter {

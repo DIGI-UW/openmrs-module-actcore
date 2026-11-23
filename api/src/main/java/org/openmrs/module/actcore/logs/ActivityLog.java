@@ -161,7 +161,10 @@ public class ActivityLog {
 		public int totalCount;
 	}
 	
-	/** One entry of the log: a save, with what was done, by whom, to whom and when. */
+	/**
+	 * One entry of the activity log, such as a form saved or a flag dismissed. It tells what was done,
+	 * when it was done, which user did it when that is known, and what it was done to.
+	 */
 	public static class Entry {
 		
 		/**
@@ -259,7 +262,10 @@ public class ActivityLog {
 		public Date visitDate;
 	}
 	
-	/** One field of an entry's expansion: its name, what it was before the save and what it is now. */
+	/**
+	 * One field that a save changed, as an entry's expansion lists it. It gives the field's name, its
+	 * value before the save and its value after the save.
+	 */
 	public static class Field {
 		
 		/** The field's name as a reader would read it, such as "Visit date". */

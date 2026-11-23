@@ -42,9 +42,7 @@ public class DownloadLog {
 		 */
 		public String formUuid;
 		
-		/**
-		 * The name users see for the form, null whenever {@link #formUuid} is null.
-		 */
+		/** The name users see for the form. It is null whenever {@link #formUuid} is null. */
 		public String formName;
 		
 		/** What the download held, such as its forms, columns and filters, as JSON. */

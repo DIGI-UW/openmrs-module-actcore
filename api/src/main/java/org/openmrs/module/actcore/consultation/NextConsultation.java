@@ -67,10 +67,9 @@ public final class NextConsultation {
 	 * read with proxy privileges.
 	 *
 	 * @param patient the patient
-	 * @return the due date; null for a patient not enrolled in the registry now or who has died, whose
-	 *         last review date is no longer anyone's to act on, or with no review date recorded, and
-	 *         null when the amount and period concepts are not configured or the period is not days,
-	 *         weeks, months or years
+	 * @return the due date. It is null when the amount and period concepts are not configured, when the
+	 *         patient is not enrolled in the registry now, when the patient has died, when no review
+	 *         date is recorded, and when the recorded period is not days, weeks, months or years.
 	 * @throws org.openmrs.api.APIAuthenticationException when the caller lacks Get Observations, the
 	 *             amount and period concepts are configured, and the patient is alive and enrolled in
 	 *             the registry

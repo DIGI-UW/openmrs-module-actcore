@@ -438,8 +438,9 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Tells what a recorded download held, in the identifiers filter's terms: research for a research
-	 * download, with when it gave identifiers, and without otherwise.
+	 * Tells what a recorded download held, in the identifiers filter's terms. It is "research" for a
+	 * download of research data only, "with" for any other download that gave identifiers, and
+	 * "without" for the rest, a download with no detail recorded among them.
 	 */
 	private static String identifiersOf(Map<?, ?> detail) {
 		if (detail == null) {

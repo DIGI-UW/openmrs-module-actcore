@@ -137,13 +137,19 @@ public class FormDownload {
 	 */
 	public static class Choice {
 		
-		/** The form whose saves to give. */
+		/**
+		 * The form whose saves the download gives. Each of a patient's saves of the form fills one group of
+		 * the form's columns.
+		 */
 		public final Form form;
 		
 		/** The name that prefixes the form's column headers, followed by the number of the save. */
 		public final String name;
 		
-		/** The questions chosen of the form, a column each. */
+		/**
+		 * The questions chosen from the form. Each question gives one column in every group of the form's
+		 * columns, unless it identifies the patient and the download withholds it.
+		 */
 		public final List<Concept> concepts;
 		
 		/** Each question's column label, in the order of {@link #concepts}. */
