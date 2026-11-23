@@ -245,6 +245,11 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		assertTrue(identified.rows.get(0).contains("Plot 12, Kira Road, Kampala"));
 	}
 	
+	@Test(expected = UnsupportedOperationException.class)
+	public void patientFields_shouldNotBeChangeable() {
+		FormDownload.PATIENT_FIELDS.put("address", "Address");
+	}
+	
 	@Test
 	public void buildPerPatient_shouldGiveARowPerPatientWithEachFormNumberedOldestFirst() {
 		Form consult = otherForm("RHD Consultation Visit");

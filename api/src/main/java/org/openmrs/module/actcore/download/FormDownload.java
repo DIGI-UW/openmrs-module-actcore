@@ -83,7 +83,7 @@ public class FormDownload {
 	 * order their columns take. The ACT ID is not among them, since every row starts with it. The
 	 * identifiers and phones fields each give a column per type that the identifying properties name.
 	 */
-	public static final Map<String, String> PATIENT_FIELDS = new LinkedHashMap<String, String>();
+	public static final Map<String, String> PATIENT_FIELDS;
 	
 	/**
 	 * The keys of the patient fields that identify the patient, which only a download with identifiers
@@ -93,13 +93,15 @@ public class FormDownload {
 	    "identifiers", "phones");
 	
 	static {
-		PATIENT_FIELDS.put("givenName", "Given name");
-		PATIENT_FIELDS.put("familyName", "Family name");
-		PATIENT_FIELDS.put("birthDate", "Birth date");
-		PATIENT_FIELDS.put("identifiers", "ID numbers");
-		PATIENT_FIELDS.put("phones", "Phone numbers");
-		PATIENT_FIELDS.put("sex", "Sex");
-		PATIENT_FIELDS.put("age", "Age");
+		Map<String, String> fields = new LinkedHashMap<String, String>();
+		fields.put("givenName", "Given name");
+		fields.put("familyName", "Family name");
+		fields.put("birthDate", "Birth date");
+		fields.put("identifiers", "ID numbers");
+		fields.put("phones", "Phone numbers");
+		fields.put("sex", "Sex");
+		fields.put("age", "Age");
+		PATIENT_FIELDS = Collections.unmodifiableMap(fields);
 	}
 	
 	/**
