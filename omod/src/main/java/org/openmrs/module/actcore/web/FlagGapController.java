@@ -54,8 +54,9 @@ public class FlagGapController extends ActCoreRestController {
 	 *         user without Get Forms
 	 * @throws IllegalRequestException when the patient or flag is missing
 	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
-	 * @throws APIAuthenticationException when the user lacks Get Patients or View Patient Flags, or
-	 *             lacks Get Encounters or Get Concepts once the flag's criteria return a gap to look up
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Patients or View
+	 *             Patient Flags, or lacks Get Encounters or Get Concepts once the flag's criteria
+	 *             return a gap to look up
 	 */
 	@RequestMapping(value = "/gap", method = RequestMethod.GET)
 	@ResponseBody
