@@ -26,6 +26,7 @@ import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
@@ -91,8 +92,9 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @param body the request body, holding each column's count as {@code counts}, a column not given
 	 *            being zero, and optional {@code notes}
 	 * @return the month as saved, as {@link #get(String, String)} gives it
-	 * @throws APIAuthenticationException when the user lacks {@link #ENTER_PRIVILEGE}, or is a site
-	 *             administrator without the clinic on their account
+	 * @throws ContextAuthenticationException when the user lacks {@link #ENTER_PRIVILEGE}
+	 * @throws APIAuthenticationException when the user is a site administrator without the clinic on
+	 *             their account
 	 * @throws IllegalRequestException when the clinic or month is blank or not recognised, the counts
 	 *             are missing, a count is not a whole number, or the counts or month are refused,
 	 *             saying why; a request without the clinic or month is answered with 400 before this
@@ -102,7 +104,7 @@ public class ScreeningCountController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject save(@RequestParam("clinic") String clinic, @RequestParam("month") String month,
 	        @RequestBody Map<String, Object> body) {
-		requirePrivilege(ENTER_PRIVILEGE);
+		Context.requirePrivilege(ENTER_PRIVILEGE);
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
 		Object notes = body == null ? null : body.get("notes");
@@ -277,12 +279,6 @@ public class ScreeningCountController extends ActCoreRestController {
 		        && !Context.hasPrivilege(ENTER_PRIVILEGE)) {
 			throw new APIAuthenticationException(
 			        "Privilege required: " + READ_PRIVILEGE + ", " + DASHBOARD_PRIVILEGE + " or " + ENTER_PRIVILEGE);
-		}
-	}
-	
-	private static void requirePrivilege(String privilege) {
-		if (!Context.hasPrivilege(privilege)) {
-			throw new APIAuthenticationException("Privilege required: " + privilege);
 		}
 	}
 	

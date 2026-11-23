@@ -22,9 +22,9 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -63,7 +63,7 @@ public class CardiologyControllerTest extends BaseModuleWebContextSensitiveTest 
 			controller.getNextVisit(PATIENT_7);
 			throw new AssertionError("expected the request to be refused");
 		}
-		catch (APIAuthenticationException e) {
+		catch (ContextAuthenticationException e) {
 			assertTrue(e.getMessage().contains("Get Observations"));
 		}
 	}

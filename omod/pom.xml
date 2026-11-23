@@ -92,37 +92,7 @@
     <!-- the REST resources, so the controller's REF representations resolve under test -->
     <dependency>
       <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.8</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.9</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.10</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.11</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-1.12</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.0</artifactId>
+      <artifactId>webservices.rest-omod</artifactId>
       <version>${webservicesRestVersion}</version>
       <scope>test</scope>
     </dependency>
@@ -130,30 +100,6 @@
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
       <version>3.0.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.1</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.2</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.3</artifactId>
-      <version>${webservicesRestVersion}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.openmrs.module</groupId>
-      <artifactId>webservices.rest-omod-2.4</artifactId>
-      <version>${webservicesRestVersion}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

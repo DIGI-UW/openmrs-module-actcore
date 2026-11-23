@@ -27,6 +27,7 @@ import org.openmrs.Form;
 import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
@@ -211,7 +212,7 @@ public class DownloadController extends ActCoreRestController {
 	 *            {@value #DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
 	 *         no user has the username or no form has the uuid
-	 * @throws APIAuthenticationException when the user lacks {@link DownloadLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link DownloadLog#VIEW_PRIVILEGE}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
 	 *             after the end
 	 * @throws IOException when a recorded download's detail cannot be read as JSON
@@ -225,9 +226,7 @@ public class DownloadController extends ActCoreRestController {
 	        @RequestParam(value = "identifiers", required = false) String identifiers,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) throws IOException {
-		if (!Context.hasPrivilege(DownloadLog.VIEW_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DownloadLog.VIEW_PRIVILEGE);
-		}
+		Context.requirePrivilege(DownloadLog.VIEW_PRIVILEGE);
 		LocalDate to = date(endDate);
 		LocalDate from = from(startDate, to);
 		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
