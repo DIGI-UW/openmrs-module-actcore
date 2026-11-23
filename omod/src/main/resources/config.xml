@@ -32,7 +32,8 @@
     <require_module version="${reportingVersion}">org.openmrs.module.reporting</require_module>
     <!-- The Logs page reads its read audit, and the Envers tables hibernate.integration.envers.enabled makes:
          with Envers off there is no revision_entity table and the activity endpoint fails, so the distribution
-         turns it on. No version, as platform 2.8 reads 1.1.0-SNAPSHOT as below 1.1.0; the distribution pins it. -->
+         turns it on. No version, as platform 2.8 reads 1.1.0-SNAPSHOT as below 1.1.0 and 1.0.0, the only release,
+         has no read audit; the distribution pins 1.1.0-SNAPSHOT. -->
     <require_module>org.openmrs.module.auditlogweb</require_module>
   </require_modules>
 
