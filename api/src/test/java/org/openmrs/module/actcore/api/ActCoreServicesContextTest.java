@@ -155,10 +155,27 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void userClinicsService_shouldRefuseAUserWhoDoesNotAdministerUsers() {
+		UserClinicsService service = Context.getService(UserClinicsService.class);
+		assertNotNull(service);
+		for (Runnable call : userClinicsCalls(service)) {
+			refused(call, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS);
+			holding(PrivilegeConstants.GET_USERS,
+			    () -> refused(call, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS));
+		}
+	}
+	
+	@Test
 	public void getDismissedFlagsAndIsStudy_shouldRefuseACallerWhoIsNotSignedIn() {
 		Context.logout();
 		refusedSignedOut(() -> Context.getService(RaisedFlagService.class).getDismissedFlags(2));
 		refusedSignedOut(() -> Context.getService(StudyService.class).isStudy(new Program(1)));
+	}
+	
+	private static Runnable[] userClinicsCalls(UserClinicsService service) {
+		return new Runnable[] { () -> service.getStoredClinics(1), () -> service.getStoredRoles(1),
+		        () -> service.getRolesIn("actcore.users.siteAdministratorRoles"),
+		        () -> service.getRoleNames(Collections.singleton("uuid")) };
 	}
 	
 	private static void holding(String privilege, Runnable call) {

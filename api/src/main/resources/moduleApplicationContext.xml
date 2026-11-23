@@ -110,4 +110,27 @@
             </list>
         </property>
     </bean>
+    <!-- A bean of its own, as UserClinicsFlushCheck looks it up to read without starting a transaction mid-flush -->
+    <bean id="actcoreUserClinicsDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateUserClinicsDAO">
+        <property name="sessionFactory" ref="dbSessionFactory"/>
+    </bean>
+
+    <bean id="actcore.UserClinicsService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl">
+                <property name="dao" ref="actcoreUserClinicsDAO"/>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.UserClinicsService</value>
+                <ref bean="actcore.UserClinicsService"/>
+            </list>
+        </property>
+    </bean>
 </beans>
