@@ -13,7 +13,7 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.download.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadLog;
 
 /**
  * The service that records each download of patient data and lists the downloads recorded, as ACT

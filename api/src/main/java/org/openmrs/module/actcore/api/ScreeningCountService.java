@@ -17,13 +17,13 @@ import org.openmrs.Location;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 
 /**
  * The service that reads, saves and sums the monthly screening counts that each clinic enters, as
  * ACT 2.0 kept them. The Screening counts page reads and saves a clinic's month through it, and the
  * Dashboard reads the sums. A site administrator, an administrator limited to the clinics on their
- * account as {@link org.openmrs.module.actcore.clinics.UserClinics#isLimited(org.openmrs.User)}
+ * account as {@link org.openmrs.module.actcore.utils.UserClinics#isLimited(org.openmrs.User)}
  * tells, reads, saves and sums only those clinics.
  */
 public interface ScreeningCountService extends OpenmrsService {

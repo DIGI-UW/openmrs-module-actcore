@@ -19,8 +19,8 @@ import org.hibernate.Query;
 import org.openmrs.Location;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
-import org.openmrs.module.actcore.screening.ScreeningCount;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.ScreeningCountDAO}. */
 public class HibernateScreeningCountDAO implements ScreeningCountDAO {

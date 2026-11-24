@@ -45,59 +45,59 @@
 
   <advice>
     <point>org.openmrs.module.patientflags.api.FlagService</point>
-    <class>org.openmrs.module.actcore.task.HideDismissedFlags</class>
+    <class>org.openmrs.module.actcore.aop.HideDismissedFlags</class>
   </advice>
   <advice>
     <point>org.openmrs.api.PatientService</point>
-    <class>org.openmrs.module.actcore.registry.EnrolOnRegistration</class>
+    <class>org.openmrs.module.actcore.aop.EnrolOnRegistration</class>
   </advice>
   <!-- An earlier advice wraps a later one, so a merge folds enrolments before ending them on death. -->
   <advice>
     <point>org.openmrs.api.PatientService</point>
-    <class>org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath</class>
+    <class>org.openmrs.module.actcore.aop.CloseEnrolmentsOnDeath</class>
   </advice>
   <advice>
     <point>org.openmrs.api.PatientService</point>
-    <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
+    <class>org.openmrs.module.actcore.aop.OneOpenRegistryEnrolment</class>
   </advice>
   <!-- The rules first: they read an edited enrolment's stored program before the overlap guard's query flushes the edit. -->
   <advice>
     <point>org.openmrs.api.ProgramWorkflowService</point>
-    <class>org.openmrs.module.actcore.studies.StudyEnrolmentRules</class>
+    <class>org.openmrs.module.actcore.aop.StudyEnrolmentRules</class>
   </advice>
   <advice>
     <point>org.openmrs.api.ProgramWorkflowService</point>
-    <class>org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment</class>
+    <class>org.openmrs.module.actcore.aop.OneOpenRegistryEnrolment</class>
   </advice>
   <advice>
     <point>org.openmrs.api.ProgramWorkflowService</point>
-    <class>org.openmrs.module.actcore.studies.StudyEnrolmentStatus</class>
+    <class>org.openmrs.module.actcore.aop.StudyEnrolmentStatus</class>
   </advice>
   <advice>
     <point>org.openmrs.api.PersonService</point>
-    <class>org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath</class>
+    <class>org.openmrs.module.actcore.aop.CloseEnrolmentsOnDeath</class>
   </advice>
   <advice>
     <point>org.openmrs.api.EncounterService</point>
-    <class>org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave</class>
+    <class>org.openmrs.module.actcore.aop.RefreshAdherenceOnSave</class>
   </advice>
   <advice>
     <point>org.openmrs.api.PersonService</point>
-    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
+    <class>org.openmrs.module.actcore.aop.RefreshFlagsOnPersonSave</class>
   </advice>
   <!-- A site administrator lists and changes only the users of its clinics, and gives only the clinician roles -->
   <advice>
     <point>org.openmrs.api.UserService</point>
-    <class>org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration</class>
+    <class>org.openmrs.module.actcore.aop.ClinicScopedUserAdministration</class>
   </advice>
   <!-- An instance or global administrator gives the roles configured for them, which OpenMRS would refuse for the clinical privileges they lack -->
   <advice>
     <point>org.openmrs.api.UserService</point>
-    <class>org.openmrs.module.actcore.users.AdministratorRoleAssignment</class>
+    <class>org.openmrs.module.actcore.aop.AdministratorRoleAssignment</class>
   </advice>
   <advice>
     <point>org.openmrs.api.PatientService</point>
-    <class>org.openmrs.module.actcore.task.RefreshFlagsOnPersonSave</class>
+    <class>org.openmrs.module.actcore.aop.RefreshFlagsOnPersonSave</class>
   </advice>
 
   <!-- Kept equal to ActCorePrivileges by ModulePrivilegesTest; in the distribution, its privileges CSV overrides these descriptions. -->

@@ -29,7 +29,6 @@ import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.actcore.api.db.StudyDAO;
-import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.util.LocaleUtility;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;

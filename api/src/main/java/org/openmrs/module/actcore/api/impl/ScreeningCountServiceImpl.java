@@ -30,11 +30,9 @@ import org.openmrs.api.handler.BaseVoidHandler;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
-import org.openmrs.module.actcore.clinics.UserClinics;
-import org.openmrs.module.actcore.logs.Names;
-import org.openmrs.module.actcore.logs.Rows;
-import org.openmrs.module.actcore.screening.ScreeningCount;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 

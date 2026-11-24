@@ -20,7 +20,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.task.RaisedFlags;
+import org.openmrs.module.actcore.model.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;

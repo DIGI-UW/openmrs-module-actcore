@@ -17,9 +17,9 @@ import java.util.List;
 
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
-import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 
@@ -78,6 +78,30 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void reschedulesTasksAnEarlierVersionRegisteredUnderTheirClassesBeforeTheyMovedToTasks() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		savedUnder(ActCoreActivator.REFRESH_TASK_NAME, "org.openmrs.module.actcore.task.PatientFlagRefreshTask");
+		savedUnder(ActCoreActivator.ADHERENCE_TASK_NAME, "org.openmrs.module.actcore.adherence.AdherenceRefreshTask");
+		
+		new ActCoreActivator().started();
+		
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		try {
+			Context.flushSession();
+			assertEquals(PatientFlagRefreshTask.class.getName(), storedClass(flags));
+			assertEquals(AdherenceRefreshTask.class.getName(), storedClass(adherence));
+			// Core marks a task started only once it has made an instance from the class the task holds.
+			assertTrue(flags.getStarted() && flags.getTaskInstance() != null);
+			assertTrue(adherence.getStarted() && adherence.getTaskInstance() != null);
+		}
+		finally {
+			schedulerService.shutdownTask(flags);
+			schedulerService.shutdownTask(adherence);
+		}
+	}
+	
+	@Test
 	public void registersTheDailyAdherenceRefresh() {
 		new ActCoreActivator().started();
 		
@@ -87,4 +111,31 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		assertTrue(task.getStartOnStartup());
 	}
 	
+	/**
+	 * Saves a task as a database that ran an earlier version holds it, under a class that no longer
+	 * loads.
+	 */
+	private static void savedUnder(String name, String taskClass) {
+		TaskDefinition task = new TaskDefinition();
+		task.setName(name);
+		task.setTaskClass(AdherenceRefreshTask.class.getName());
+		task.setRepeatInterval(3600L);
+		task.setStartTime(new Date(1500000000000L));
+		task.setStartOnStartup(Boolean.TRUE);
+		task.setStarted(Boolean.FALSE);
+		Context.getSchedulerService().saveTaskDefinition(task);
+		// Core will not save a class it cannot load.
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update scheduler_task_config set schedulable_class = '" + taskClass
+		        + "' where task_config_id = " + task.getId(),
+		    false);
+		Context.clearSession();
+	}
+	
+	private static Object storedClass(TaskDefinition task) {
+		return Context.getAdministrationService()
+		        .executeSQL("select schedulable_class from scheduler_task_config where task_config_id = " + task.getId(),
+		            true)
+		        .get(0).get(0);
+	}
 }

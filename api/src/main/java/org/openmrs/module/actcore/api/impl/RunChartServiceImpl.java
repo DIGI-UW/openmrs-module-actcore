@@ -17,7 +17,6 @@ import org.openmrs.Location;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.api.RunChartService;
-import org.openmrs.module.actcore.runchart.RunCharts;
 
 /**
  * Default implementation of {@link org.openmrs.module.actcore.api.RunChartService}. It has no DAO,
