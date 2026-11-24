@@ -13,7 +13,7 @@ import java.util.Date;
 import java.util.Map;
 
 /** One recorded download, as the Logs page lists it. */
-public class Download {
+public class DownloadLogItem {
 	
 	/** When the download was recorded. */
 	public Date date;

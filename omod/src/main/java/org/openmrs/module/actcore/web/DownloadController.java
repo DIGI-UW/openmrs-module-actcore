@@ -31,7 +31,7 @@ import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.impl.FormDownload;
 import org.openmrs.module.actcore.api.impl.Names;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
-import org.openmrs.module.actcore.model.Download;
+import org.openmrs.module.actcore.model.DownloadLogItem;
 import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
@@ -215,7 +215,7 @@ public class DownloadController extends ActCoreRestController {
 		filter.limit = limit == null ? DownloadSearchCriteria.DEFAULT_LIMIT : limit;
 		DownloadPage page = Context.getService(DownloadLogService.class).getDownloads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (Download download : page.results) {
+		for (DownloadLogItem download : page.results) {
 			Object list = download.detail == null ? null : download.detail.get("list");
 			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.date, null))
 			        .add("user", who(download.user))

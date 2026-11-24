@@ -27,7 +27,7 @@ import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
-import org.openmrs.module.actcore.model.Download;
+import org.openmrs.module.actcore.model.DownloadLogItem;
 import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.model.DownloadRecord;
@@ -90,7 +90,7 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			userUuids.add(entry.userUuid);
 		}
 		Map<String, LogUser> users = logs.getUsers(userUuids);
-		List<Download> matching = new ArrayList<Download>();
+		List<DownloadLogItem> matching = new ArrayList<DownloadLogItem>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLogEntry entry : entries) {
 			Map<?, ?> detail = read(entry.detail);
@@ -100,7 +100,7 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
 				continue;
 			}
-			Download download = new Download();
+			DownloadLogItem download = new DownloadLogItem();
 			download.date = entry.date;
 			download.user = users.get(entry.userUuid);
 			download.formUuid = entry.formUuid;

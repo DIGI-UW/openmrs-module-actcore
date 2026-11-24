@@ -56,7 +56,6 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
-import org.openmrs.module.actcore.model.Download;
 import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.utils.Transactions;

@@ -20,7 +20,7 @@ import java.util.List;
 public class DownloadPage {
 	
 	/** The downloads on the page, newest first. */
-	public final List<Download> results = new ArrayList<Download>();
+	public final List<DownloadLogItem> results = new ArrayList<DownloadLogItem>();
 	
 	/** How many downloads the search matches across every page. */
 	public int totalCount;
