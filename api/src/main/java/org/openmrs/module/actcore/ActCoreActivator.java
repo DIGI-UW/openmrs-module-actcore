@@ -9,8 +9,12 @@
  */
 package org.openmrs.module.actcore;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.function.Supplier;
 
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.BaseModuleActivator;
@@ -74,14 +78,48 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * Gets the daemon token the module framework gave this module. The refresh endpoint uses it to run
-	 * the patient flag refresh as the scheduler's daemon user, and the run chart endpoint uses it to
-	 * evaluate its report as that user.
+	 * Gets the daemon token the module framework gave this module, which
+	 * {@link #runAsDaemon(String, String, Supplier)} runs its work with.
 	 *
 	 * @return the module's daemon token, or null before the module framework has set it
 	 */
 	public static DaemonToken getDaemonToken() {
 		return daemonToken;
+	}
+	
+	/**
+	 * Runs the work as the scheduler's daemon user, on a daemon thread, and waits for it. The refresh
+	 * endpoint runs the patient flag refresh this way, and the run chart service evaluates its report
+	 * this way, as both read and write more than the caller's own privileges allow.
+	 *
+	 * @param task what the work does, completing "ACT Core has not started, so it cannot", as "run the
+	 *            refresh"
+	 * @param failure the message of the exception thrown when the work throws, as "The patient flag
+	 *            refresh failed"
+	 * @param work the work
+	 * @return what the work returns
+	 * @throws APIException when the module has not started, so has no daemon token, or the work throws
+	 *             a runtime exception, which becomes its cause
+	 */
+	public static <T> T runAsDaemon(String task, String failure, Supplier<T> work) {
+		DaemonToken token = daemonToken;
+		if (token == null) {
+			throw new APIException("ACT Core has not started, so it cannot " + task);
+		}
+		List<T> result = new ArrayList<T>(1);
+		RuntimeException[] thrown = new RuntimeException[1];
+		Daemon.runInDaemonThreadAndWait(() -> {
+			try {
+				result.add(work.get());
+			}
+			catch (RuntimeException e) {
+				thrown[0] = e;
+			}
+		}, token);
+		if (thrown[0] != null) {
+			throw new APIException(failure, thrown[0]);
+		}
+		return result.get(0);
 	}
 	
 	private static Date soon() {

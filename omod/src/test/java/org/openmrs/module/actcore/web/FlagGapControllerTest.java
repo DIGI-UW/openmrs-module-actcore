@@ -119,7 +119,7 @@ public class FlagGapControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail();
 		}
 		catch (APIAuthenticationException e) {
-			assertEquals("Privilege required: View Patient Flags", e.getMessage());
+			assertEquals("Privileges required: View Patient Flags", e.getMessage());
 		}
 	}
 	

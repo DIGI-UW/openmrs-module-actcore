@@ -240,7 +240,10 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 			log.getReads(filter(null, "grace", null, null));
 			fail("expected the search to be refused");
 		}
-		catch (Rows.TooMany expected) {}
+		catch (Rows.TooMany expected) {
+			// A ValidationException, so the REST layer answers it with 400 and this as the global error.
+			assertEquals(expected.getMessage(), expected.getErrors().getGlobalError().getDefaultMessage());
+		}
 		try {
 			log.getReads(filter(null, "grace", LocalDate.of(2030, 1, 1), LocalDate.of(2030, 1, 1)));
 			fail("expected the search to be refused on a day with no reads");

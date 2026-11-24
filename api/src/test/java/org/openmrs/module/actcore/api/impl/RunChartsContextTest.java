@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
@@ -349,23 +350,38 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void calculate_shouldRefuseMoreThanAThousandPointsBeforeEvaluatingTheReportAndAllowAThousand() {
+	public void calculate_shouldRefuseDailyPointsOverMoreThanTheMostDailyDaysBeforeEvaluatingTheReport() {
 		try {
-			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS), END, RunCharts.Period.DAY);
+			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_DAILY_DAYS + 1), END, RunCharts.Period.DAY);
 			fail("expected the range to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
+			assertEquals(
+			    "points=day is for a range of up to " + RunCharts.MOST_DAILY_DAYS + " days; ask for weeks or months",
+			    e.getMessage());
+		}
+	}
+	
+	@Test
+	public void calculate_shouldRefuseMoreThanAThousandPointsBeforeEvaluatingTheReportAndAllowAThousand() {
+		LocalDate lastSunday = LocalDate.of(2026, 10, 18);
+		try {
+			runCharts.calculate(clinic, lastSunday.minusWeeks(RunCharts.MOST_POINTS - 1), END, RunCharts.Period.WEEK);
+			fail("expected the range to be refused");
+		}
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(String.valueOf(RunCharts.MOST_POINTS)));
 		}
-		useReportSelecting("select cast(dateadd('DAY', -x, date '2026-10-21') as date) as point_date, null as clinic_uuid,"
+		useReportSelecting("select case when x = 0 then date '2026-10-21'"
+		        + " else cast(dateadd('DAY', -7 * (x - 1), date '2026-10-18') as date) end as point_date, null as clinic_uuid,"
 		        + " 0 as total_registrants, 0 as active_registrants, 0 as active_registrants_seen_last_7_months,"
 		        + " 0 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,"
 		        + " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
 		        + " 0 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"
 		        + " from system_range(0, " + (RunCharts.MOST_POINTS - 1) + ")");
 		
-		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS - 1),
-		    END, RunCharts.Period.DAY);
+		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic,
+		    lastSunday.minusWeeks(RunCharts.MOST_POINTS - 2), END, RunCharts.Period.WEEK);
 		
 		assertEquals(RunCharts.MOST_POINTS, series.get("total_registrants").size());
 	}
@@ -409,7 +425,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			RunCharts.Period.of("year");
 			fail("expected the period to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage().contains("day, week or month"));
 		}
 	}

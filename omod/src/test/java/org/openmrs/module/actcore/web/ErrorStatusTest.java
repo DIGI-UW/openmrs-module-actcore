@@ -11,8 +11,10 @@ package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +25,10 @@ import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +54,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	@Autowired
 	private ExceptionHandlerExceptionResolver resolver;
 	
+	@Autowired
+	private ScreeningCountController screeningCounts;
+	
 	@Test
 	public void answersARefusedStudyNameWithABadRequest() throws Exception {
 		MockHttpServletResponse response = dispatch(post("/rest/v1/actcore/studies", "{\"name\":\" \"}"));
@@ -63,6 +71,46 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		MockHttpServletResponse response = dispatch(post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"));
 		
 		assertEquals(403, response.getStatus());
+	}
+	
+	@Test
+	public void answersScreeningCountsThatDoNotAddUpWithABadRequest() throws Exception {
+		ModuleTables.create();
+		MockHttpServletRequest request = post("/rest/v1/actcore/screeningcounts", "{\"counts\":{\"school_screened\":5}}");
+		request.setParameter("clinic", "8d6c993e-c2cc-11de-8d13-0010c6dffd0f");
+		request.setParameter("month", "2026-09");
+		
+		assertEquals(400, dispatch(request).getStatus());
+	}
+	
+	@Test
+	public void givesTheServicesRefusalAsTheGlobalErrorOfTheBadRequest() {
+		ModuleTables.create();
+		try {
+			screeningCounts.save("8d6c993e-c2cc-11de-8d13-0010c6dffd0f", "2026-09",
+			    Collections.singletonMap("counts", Collections.singletonMap("school_screened", 5)));
+			fail("expected the counts to be refused");
+		}
+		catch (ValidationException e) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			SimpleObject body = screeningCounts.validationExceptionHandler(e, new MockHttpServletRequest(), response);
+			
+			assertEquals(400, response.getStatus());
+			List<?> globalErrors = (List<?>) ((SimpleObject) body.get("error")).get("globalErrors");
+			assertEquals("The school age groups add up to 0, not the 5 screened",
+			    ((SimpleObject) globalErrors.get(0)).get("message"));
+		}
+	}
+	
+	@Test
+	public void answersDailyRunChartPointsOverTooLongARangeWithABadRequest() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rest/v1/actcore/runchart");
+		request.addHeader("Accept", "application/json");
+		request.setParameter("points", "day");
+		request.setParameter("startDate", "2026-01-01");
+		request.setParameter("endDate", "2026-10-21");
+		
+		assertEquals(400, dispatch(request).getStatus());
 	}
 	
 	private static MockHttpServletRequest post(String uri, String json) {

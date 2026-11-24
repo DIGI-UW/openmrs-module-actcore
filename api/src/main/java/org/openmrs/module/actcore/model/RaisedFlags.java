@@ -9,10 +9,16 @@
  */
 package org.openmrs.module.actcore.model;
 
+import java.util.Date;
+
+import org.openmrs.module.patientflags.Flag;
+
 /**
  * Holds the {@link Dismissal} outcome that
  * {@link org.openmrs.module.actcore.api.RaisedFlagService#dismiss(org.openmrs.Patient, org.openmrs.module.patientflags.Flag)}
- * returns.
+ * returns, and the {@link Raised} flags that
+ * {@link org.openmrs.module.actcore.api.RaisedFlagService#getRaisedFlags(org.openmrs.Patient)}
+ * lists.
  */
 public class RaisedFlags {
 	
@@ -28,5 +34,31 @@ public class RaisedFlags {
 		NOT_RAISED,
 		NOT_DISMISSIBLE,
 		REFRESH_RUNNING
+	}
+	
+	/** A flag raised for a patient, as the patient's chart lists it. */
+	public static class Raised {
+		
+		/** The flag. */
+		public final Flag flag;
+		
+		/** When ACT Core first recorded the flag as raised for the patient, or null when it has no date. */
+		public final Date since;
+		
+		/** Whether the signed-in user may dismiss the flag. */
+		public final boolean dismissible;
+		
+		/**
+		 * Creates a raised flag.
+		 *
+		 * @param flag the flag
+		 * @param since when the flag was raised, or null
+		 * @param dismissible whether the user may dismiss it
+		 */
+		public Raised(Flag flag, Date since, boolean dismissible) {
+			this.flag = flag;
+			this.since = since;
+			this.dismissible = dismissible;
+		}
 	}
 }

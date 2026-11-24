@@ -14,8 +14,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.After;
@@ -27,14 +29,16 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.api.impl.RunCharts;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
@@ -172,7 +176,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 			controller.get("active_registrants", null, null, null, null);
 			fail("expected the request to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ActCorePrivileges.DASHBOARD));
 		}
 	}
@@ -199,14 +203,14 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 			controller.get("active_registrants", null, "2026-01-01", "2026-10-21", "day");
 			fail("expected the request to be refused");
 		}
-		catch (IllegalRequestException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("92"));
 		}
 		try {
 			controller.get("active_registrants", null, "2000-01-01", "2026-10-21", "week");
 			fail("expected the request to be refused");
 		}
-		catch (IllegalRequestException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("1000"));
 		}
 		assertEquals(93, points(controller.get("active_registrants", null, "2026-07-21", "2026-10-21", "day")).size());
@@ -224,9 +228,35 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 				call.run();
 				fail("expected the request to be refused");
 			}
-			catch (IllegalRequestException e) {
+			catch (IllegalRequestException | ValidationException e) {
 				// expected
 			}
+		}
+	}
+	
+	@Test
+	public void service_shouldCalculateAsTheDaemonForACallerWithOnlyTheDashboardPrivilege() {
+		authenticateWith(ActCorePrivileges.DASHBOARD);
+		
+		Map<String, List<RunCharts.Point>> series = Context.getService(RunChartService.class).getRunCharts(null,
+		    LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 21), RunCharts.Period.DAY);
+		
+		assertEquals(3, series.get("active_registrants").size());
+		assertEquals(21.0, series.get("active_registrants").get(2).value, 0);
+	}
+	
+	@Test
+	public void service_shouldRefuseDailyPointsOverMoreThan92DaysBeforeCalculating() {
+		new ActCoreActivator().setDaemonToken(null);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
+		
+		try {
+			Context.getService(RunChartService.class).getRunCharts(null, LocalDate.of(2026, 1, 1),
+			    LocalDate.of(2026, 10, 21), RunCharts.Period.DAY);
+			fail("expected the range to be refused");
+		}
+		catch (ValidationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("92"));
 		}
 	}
 	

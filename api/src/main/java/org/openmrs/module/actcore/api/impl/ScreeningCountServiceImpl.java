@@ -12,14 +12,19 @@ package org.openmrs.module.actcore.api.impl;
 import java.sql.Date;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.handler.BaseVoidHandler;
 import org.openmrs.api.impl.BaseOpenmrsService;
@@ -27,6 +32,8 @@ import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
 import org.openmrs.module.actcore.model.ScreeningCount;
 import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.utils.UserClinics;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.ScreeningCountService}. */
@@ -45,6 +52,7 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	@Override
 	@Transactional(readOnly = true)
 	public ScreeningCounts.Month getMonth(Location clinic, YearMonth month) {
+		refuseUnlessTheirs(clinic);
 		List<ScreeningCount> rows = dao.getCurrentCounts(clinic.getLocationId(), firstDay(month));
 		ScreeningCounts.Month result = new ScreeningCounts.Month();
 		ScreeningCount saved = rows.isEmpty() ? null : rows.get(0);
@@ -66,6 +74,7 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	 */
 	@Override
 	public void saveMonth(Location clinic, YearMonth month, Map<String, Integer> counts, String notes) {
+		refuseUnlessTheirs(clinic);
 		Map<String, Integer> values = validated(month, counts, notes);
 		Integer clinicId = clinic.getLocationId();
 		Date day = firstDay(month);
@@ -86,6 +95,7 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	@Override
 	@Transactional(readOnly = true)
 	public ScreeningCounts.Summary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end) {
+		clinics = inScope(clinics);
 		if (clinics != null && clinics.isEmpty()) {
 			ScreeningCounts.Summary none = new ScreeningCounts.Summary();
 			for (String column : ScreeningCounts.COLUMNS) {
@@ -96,24 +106,56 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		return dao.getSummary(clinics, firstDay(start), firstDay(end));
 	}
 	
+	private static void refuseUnlessTheirs(Location clinic) {
+		User user = Context.getAuthenticatedUser();
+		if (UserClinics.isLimited(user) && !UserClinics.of(user).contains(clinic.getUuid())) {
+			throw new APIAuthenticationException(clinic.getName() + " is not one of your clinics");
+		}
+	}
+	
+	/**
+	 * Cuts the clinics down to those on a site administrator's account, standing in their clinics for
+	 * every clinic. A clinic on the account that names no location any more is left out.
+	 */
+	private static Collection<Integer> inScope(Collection<Integer> clinics) {
+		User user = Context.getAuthenticatedUser();
+		if (!UserClinics.isLimited(user)) {
+			return clinics;
+		}
+		Set<Integer> own = new LinkedHashSet<Integer>();
+		for (String uuid : UserClinics.of(user)) {
+			Location location = Names.proxied(PrivilegeConstants.GET_LOCATIONS,
+			    () -> Context.getLocationService().getLocationByUuid(uuid));
+			if (location != null) {
+				own.add(location.getLocationId());
+			}
+		}
+		if (clinics == null) {
+			return own;
+		}
+		List<Integer> kept = new ArrayList<Integer>(clinics);
+		kept.retainAll(own);
+		return kept;
+	}
+	
 	private static Map<String, Integer> validated(YearMonth month, Map<String, Integer> counts, String notes) {
 		// The zone where a month starts first, so a browser ahead of the server can save the month it is in.
 		if (month.isAfter(YearMonth.now(ZoneId.of("Etc/GMT-14")))) {
-			throw new IllegalArgumentException(month + " has not started, so it has no screening counts yet");
+			throw refusal(month + " has not started, so it has no screening counts yet");
 		}
 		for (String column : counts.keySet()) {
 			if (!ScreeningCounts.COLUMNS.contains(column)) {
-				throw new IllegalArgumentException("No screening count is named " + column);
+				throw refusal("No screening count is named " + column);
 			}
 		}
 		if (notes != null && notes.trim().length() > ScreeningCounts.NOTES_LENGTH) {
-			throw new IllegalArgumentException("Notes may be at most " + ScreeningCounts.NOTES_LENGTH + " characters");
+			throw refusal("Notes may be at most " + ScreeningCounts.NOTES_LENGTH + " characters");
 		}
 		Map<String, Integer> values = new LinkedHashMap<String, Integer>();
 		for (String column : ScreeningCounts.COLUMNS) {
 			Integer value = counts.get(column);
 			if (value != null && value < 0) {
-				throw new IllegalArgumentException(column + " cannot be below 0");
+				throw refusal(column + " cannot be below 0");
 			}
 			values.put(column, value == null ? 0 : value);
 		}
@@ -122,13 +164,11 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 			long ages = (long) values.get(setting + "_children") + values.get(setting + "_adolescents")
 			        + values.get(setting + "_adults");
 			if (ages != screened) {
-				throw new IllegalArgumentException(
-				        "The " + setting + " age groups add up to " + ages + ", not the " + screened + " screened");
+				throw refusal("The " + setting + " age groups add up to " + ages + ", not the " + screened + " screened");
 			}
 			for (String part : new String[] { "females", "positive" }) {
 				if (values.get(setting + "_" + part) > screened) {
-					throw new IllegalArgumentException(
-					        "The " + setting + " " + part + " are more than the " + screened + " screened");
+					throw refusal("The " + setting + " " + part + " are more than the " + screened + " screened");
 				}
 			}
 		}
@@ -137,5 +177,9 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	
 	private static Date firstDay(YearMonth month) {
 		return Date.valueOf(month.atDay(1));
+	}
+	
+	private static ValidationException refusal(String message) {
+		return Rows.refusal("screeningCount", message);
 	}
 }

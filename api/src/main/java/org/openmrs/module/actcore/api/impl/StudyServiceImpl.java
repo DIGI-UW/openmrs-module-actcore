@@ -32,8 +32,6 @@ import org.openmrs.module.actcore.api.db.StudyDAO;
 import org.openmrs.util.LocaleUtility;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.validation.BindException;
-import org.springframework.validation.Errors;
 
 /**
  * Default implementation of {@link org.openmrs.module.actcore.api.StudyService}. It reads and saves
@@ -254,9 +252,7 @@ public class StudyServiceImpl extends BaseOpenmrsService implements StudyService
 	}
 	
 	private static ValidationException refusal(String message) {
-		Errors errors = new BindException(new Object(), "study");
-		errors.reject("actcore.study", message);
-		return new ValidationException(message, errors);
+		return Rows.refusal("study", message);
 	}
 	
 	private static <T> T withPrivileges(Supplier<T> work) {

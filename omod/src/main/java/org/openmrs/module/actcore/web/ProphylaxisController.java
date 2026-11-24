@@ -13,18 +13,15 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.impl.ProphylaxisSummary;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -48,21 +45,12 @@ public class ProphylaxisController extends ActCoreRestController {
 	 *         injections are still listed, and its other values are null
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
-	 * @throws APIAuthenticationException when the user lacks Get Patients
-	 * @throws ContextAuthenticationException when the user lacks Get Observations
+	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
 	 */
 	@RequestMapping(value = "/prophylaxis", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getSummary(@RequestParam(value = "patient", required = false) String patientUuid) {
-		if (StringUtils.isBlank(patientUuid)) {
-			throw new IllegalRequestException("The patient is required");
-		}
-		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
-		if (patient == null) {
-			throw new ObjectNotFoundException();
-		}
-		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
-		
+		Patient patient = patient(patientUuid);
 		ProphylaxisSummary summary = Context.getService(AdherenceService.class).getProphylaxisSummary(patient,
 		    LocalDate.now());
 		ProphylaxisSummary.OnTime onTime = summary.getOnTime();

@@ -10,27 +10,22 @@
 package org.openmrs.module.actcore.web;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
-import org.openmrs.api.context.Daemon;
-import org.openmrs.module.DaemonToken;
-import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.api.impl.RunCharts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -58,9 +53,10 @@ public class RunChartController extends ActCoreRestController {
 	 * @param points day, week or month; blank for week
 	 * @return the range, the period and each metric's points and median, with the named metric's too; a
 	 *         median is null when no point has a value
-	 * @throws ContextAuthenticationException when the user lacks {@link ActCorePrivileges#DASHBOARD}
-	 * @throws IllegalRequestException when the metric, a date, the points or the clinic is not
-	 *             recognised, the start is after the end, a daily range is longer than
+	 * @throws APIAuthenticationException when the user lacks {@link ActCorePrivileges#DASHBOARD}
+	 * @throws IllegalRequestException when the metric, a date or the clinic is not recognised, or the
+	 *             start is after the end
+	 * @throws ValidationException when the points are not recognised, a daily range is longer than
 	 *             {@link RunCharts#MOST_DAILY_DAYS} days, or the range has more than
 	 *             {@link RunCharts#MOST_POINTS} points
 	 * @throws APIException when the module has not started or the report cannot be calculated
@@ -72,7 +68,6 @@ public class RunChartController extends ActCoreRestController {
 	        @RequestParam(value = "startDate", required = false) String startDate,
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "points", required = false) String points) {
-		Context.requirePrivilege(ActCorePrivileges.DASHBOARD);
 		if (StringUtils.isNotBlank(metric) && !RunCharts.METRICS.contains(metric)) {
 			throw new IllegalRequestException("metric must be one of " + RunCharts.METRICS);
 		}
@@ -81,24 +76,13 @@ public class RunChartController extends ActCoreRestController {
 		if (start.isAfter(end)) {
 			throw new IllegalRequestException("startDate is after endDate");
 		}
-		RunCharts.Period period;
-		try {
-			period = RunCharts.Period.of(points);
+		RunCharts.Period period = RunCharts.Period.of(points);
+		Location location = location(clinic);
+		if (StringUtils.isNotBlank(clinic) && location == null) {
+			throw new IllegalRequestException("No location has the uuid " + clinic);
 		}
-		catch (IllegalArgumentException e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
-		if (period == RunCharts.Period.DAY && ChronoUnit.DAYS.between(start, end) > RunCharts.MOST_DAILY_DAYS) {
-			throw new IllegalRequestException(
-			        "points=day is for a range of up to " + RunCharts.MOST_DAILY_DAYS + " days; ask for weeks or months");
-		}
-		try {
-			RunCharts.pointDates(start, end, period);
-		}
-		catch (IllegalArgumentException e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
-		Map<String, List<RunCharts.Point>> series = calculate(location(clinic), start, end, period);
+		Map<String, List<RunCharts.Point>> series = Context.getService(RunChartService.class).getRunCharts(location, start,
+		    end, period);
 		SimpleObject metrics = new SimpleObject();
 		for (Map.Entry<String, List<RunCharts.Point>> entry : series.entrySet()) {
 			metrics.add(entry.getKey(), new SimpleObject().add("points", describe(entry.getValue())).add("median",
@@ -113,37 +97,6 @@ public class RunChartController extends ActCoreRestController {
 		return response.add("metrics", metrics);
 	}
 	
-	/**
-	 * Calculates the run charts as the daemon user. Loading the report definition needs Get Users,
-	 * since the reporting serializer loads its creator, and the caller's Dashboard privilege need not
-	 * come with it.
-	 */
-	private static Map<String, List<RunCharts.Point>> calculate(final Location clinic, final LocalDate start,
-	        final LocalDate end, final RunCharts.Period period) {
-		DaemonToken token = ActCoreActivator.getDaemonToken();
-		if (token == null) {
-			throw new APIException("ACT Core has not started, so it cannot calculate the run chart");
-		}
-		final List<Map<String, List<RunCharts.Point>>> calculated = new ArrayList<Map<String, List<RunCharts.Point>>>();
-		final RuntimeException[] failure = new RuntimeException[1];
-		Daemon.runInDaemonThreadAndWait(new Runnable() {
-			
-			@Override
-			public void run() {
-				try {
-					calculated.add(Context.getService(RunChartService.class).getRunCharts(clinic, start, end, period));
-				}
-				catch (RuntimeException e) {
-					failure[0] = e;
-				}
-			}
-		}, token);
-		if (failure[0] != null) {
-			throw new APIException("The run chart could not be calculated", failure[0]);
-		}
-		return calculated.get(0);
-	}
-	
 	private static List<SimpleObject> describe(List<RunCharts.Point> points) {
 		List<SimpleObject> values = new ArrayList<SimpleObject>();
 		for (RunCharts.Point point : points) {
@@ -151,35 +104,5 @@ public class RunChartController extends ActCoreRestController {
 			        .add("count", point.count).add("total", point.total));
 		}
 		return values;
-	}
-	
-	private static LocalDate date(String name, String value, LocalDate fallback) {
-		if (StringUtils.isBlank(value)) {
-			return fallback;
-		}
-		try {
-			return LocalDate.parse(value.trim());
-		}
-		catch (DateTimeParseException e) {
-			throw new IllegalRequestException(name + " must be a date as YYYY-MM-DD");
-		}
-	}
-	
-	private static Location location(String uuid) {
-		if (StringUtils.isBlank(uuid)) {
-			return null;
-		}
-		Location location;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-			location = Context.getLocationService().getLocationByUuid(uuid.trim());
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-		}
-		if (location == null) {
-			throw new IllegalRequestException("No location has the uuid " + uuid);
-		}
-		return location;
 	}
 }

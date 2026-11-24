@@ -12,9 +12,14 @@ package org.openmrs.module.actcore.api.impl;
 import java.util.List;
 import java.util.Map;
 
+import org.openmrs.api.ValidationException;
+import org.springframework.validation.BindException;
+import org.springframework.validation.Errors;
+
 /**
  * Helpers the logs use to read the rows that {@link org.openmrs.module.actcore.api.db.AuditLogDAO}
- * gives, each a map of column name to value, and to page the results.
+ * gives, each a map of column name to value, and to page the results, and the factory of the
+ * validation errors that ACT Core's services and calculations refuse a request with.
  */
 public final class Rows {
 	
@@ -28,14 +33,37 @@ public final class Rows {
 	}
 	
 	/**
-	 * Thrown when a log's filter is too broad for one request to read. The log endpoints answer it with
-	 * 400 and its message.
+	 * Thrown when a log's filter is too broad for one request to read. It is a validation error with
+	 * its message as the one global error, so the REST layer answers it with 400 and that message.
 	 */
-	public static class TooMany extends RuntimeException {
+	public static class TooMany extends ValidationException {
 		
+		private static final long serialVersionUID = 1L;
+		
+		/**
+		 * Creates the exception.
+		 *
+		 * @param message what is too broad and how to narrow it
+		 */
 		public TooMany(String message) {
-			super(message);
+			super(message, refusal("logFilter", message).getErrors());
 		}
+	}
+	
+	/**
+	 * Creates a validation error whose message is its one global error. The REST layer answers it with
+	 * 400 and that message, and reads a {@link ValidationException}'s errors without checking that it
+	 * has any, so a refusal needs them.
+	 *
+	 * @param objectName the name of the object refused, as "runChart", which after "actcore." is the
+	 *            global error's code
+	 * @param message why the request is refused, which is also the global error's default message
+	 * @return the validation error, to be thrown
+	 */
+	public static ValidationException refusal(String objectName, String message) {
+		Errors errors = new BindException(new Object(), objectName);
+		errors.reject("actcore." + objectName, message);
+		return new ValidationException(message, errors);
 	}
 	
 	/**

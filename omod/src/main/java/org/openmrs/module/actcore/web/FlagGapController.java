@@ -15,12 +15,10 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.model.FlagGap;
 import org.openmrs.module.patientflags.Flag;
-import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -65,16 +63,14 @@ public class FlagGapController extends ActCoreRestController {
 		if (StringUtils.isBlank(patientUuid) || StringUtils.isBlank(flagUuid)) {
 			throw new IllegalRequestException("Both patient and flag are required");
 		}
-		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
-		if (patient == null) {
-			throw new ObjectNotFoundException();
-		}
-		Flag flag = flag(flagUuid);
+		Patient patient = patient(patientUuid);
+		FlagGapService flagGaps = Context.getService(FlagGapService.class);
+		Flag flag = flagGaps.getFlag(flagUuid);
 		if (flag == null) {
 			throw new ObjectNotFoundException();
 		}
 		
-		List<FlagGap> gaps = Context.getService(FlagGapService.class).getGaps(patient, flag);
+		List<FlagGap> gaps = flagGaps.getGaps(patient, flag);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		if (gaps != null) {
 			for (FlagGap gap : gaps) {
@@ -87,22 +83,6 @@ public class FlagGapController extends ActCoreRestController {
 			}
 		}
 		return new SimpleObject().add("configured", gaps != null).add("results", results);
-	}
-	
-	/**
-	 * Gets a flag by uuid for the gap and dismiss endpoints, refusing a user without View Patient Flags
-	 * with "Privilege required: View Patient Flags", the message those endpoints answer, rather than
-	 * core's "Privileges required".
-	 *
-	 * @param uuid the flag's uuid
-	 * @return the flag, or null when none has the uuid
-	 * @throws APIAuthenticationException when the user lacks View Patient Flags
-	 */
-	static Flag flag(String uuid) {
-		if (!Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)) {
-			throw new APIAuthenticationException("Privilege required: " + PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
-		}
-		return Context.getService(FlagGapService.class).getFlag(uuid);
 	}
 	
 	/**

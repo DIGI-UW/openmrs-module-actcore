@@ -16,11 +16,9 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.impl.ActivityLog;
-import org.openmrs.module.actcore.api.impl.Names;
 import org.openmrs.module.actcore.api.impl.Rows;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
@@ -54,7 +52,7 @@ public class ActivityController extends ActCoreRestController {
 	 * @param username the user to list, or blank for no user filter
 	 * @param startDate the first day as YYYY-MM-DD; blank for a default span before the end date, or
 	 *            before today without one, which is {@value #KIND_DEFAULT_DAYS} days with a kind and
-	 *            {@value DownloadController#DEFAULT_MONTHS} months without
+	 *            {@value ActCoreRestController#DEFAULT_MONTHS} months without
 	 * @param endDate the last day as YYYY-MM-DD; blank for no end
 	 * @param kind one of {@link ActivityLog#KINDS}, or blank for no kind filter
 	 * @param form the uuid of the form whose saves to list, or blank for no form filter
@@ -63,10 +61,11 @@ public class ActivityController extends ActCoreRestController {
 	 * @param limit the most entries to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
 	 *            {@link Rows#DEFAULT_LIMIT}
 	 * @return the entries as {@code results}, with {@code totalCount} and the days read
-	 * @throws ContextAuthenticationException when the user lacks
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
-	 * @throws IllegalRequestException when the kind or a date is not recognised, the start is after the
-	 *             end, or a kind filter has too many changes to sort
+	 * @throws IllegalRequestException when the kind or a date is not recognised, or the start is after
+	 *             the end
+	 * @throws Rows.TooMany when a kind filter has too many changes to sort
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -78,28 +77,21 @@ public class ActivityController extends ActCoreRestController {
 	        @RequestParam(value = "patient", required = false) String patient,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		ActivityLog.Filter filter = new ActivityLog.Filter();
 		filter.username = StringUtils.trimToNull(username);
 		filter.kind = StringUtils.trimToNull(kind);
 		if (filter.kind != null && !ActivityLog.KINDS.contains(filter.kind)) {
 			throw new IllegalRequestException("Not a kind of activity: " + kind + "; one of " + ActivityLog.KINDS);
 		}
-		filter.to = DownloadController.date(endDate);
-		filter.from = filter.kind == null ? DownloadController.from(startDate, filter.to)
-		        : DownloadController.from(startDate, filter.to, Period.ofDays(KIND_DEFAULT_DAYS));
+		filter.to = date("endDate", endDate, null);
+		filter.from = from(startDate, filter.to,
+		    filter.kind == null ? Period.ofMonths(DEFAULT_MONTHS) : Period.ofDays(KIND_DEFAULT_DAYS));
 		filter.formUuid = StringUtils.trimToNull(form);
 		filter.patientUuid = StringUtils.trimToNull(patient);
 		filter.startIndex = startIndex == null ? 0 : startIndex;
 		filter.limit = limit == null ? Rows.DEFAULT_LIMIT : limit;
 		
-		ActivityLog.Page page;
-		try {
-			page = Context.getService(AuditLogService.class).getActivity(filter);
-		}
-		catch (Rows.TooMany e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
+		ActivityLog.Page page = Context.getService(AuditLogService.class).getActivity(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (ActivityLog.Entry entry : page.results) {
 			results.add(new SimpleObject().add("revisionId", entry.revisionId)
@@ -117,14 +109,13 @@ public class ActivityController extends ActCoreRestController {
 	 *
 	 * @param revisionId the entry's revision id
 	 * @return the revision id, the fields and the void reason, null when there is none
-	 * @throws ContextAuthenticationException when the user lacks
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 * @throws ObjectNotFoundException when the log has no entry for the revision
 	 */
 	@RequestMapping(value = "/{revisionId}", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {
-		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		ActivityLog.Details details = Context.getService(AuditLogService.class).getActivityDetails(revisionId);
 		if (details == null) {
 			throw new ObjectNotFoundException();
@@ -136,12 +127,6 @@ public class ActivityController extends ActCoreRestController {
 		}
 		return new SimpleObject().add("revisionId", details.revisionId).add("fields", fields).add("voidReason",
 		    details.voidReason);
-	}
-	
-	static SimpleObject who(Names.Who who) {
-		return who == null ? null
-		        : new SimpleObject().add("uuid", who.uuid).add("username", who.username).add("display", who.display)
-		                .add("role", who.role);
 	}
 	
 	private static SimpleObject target(ActivityLog.Target target) {

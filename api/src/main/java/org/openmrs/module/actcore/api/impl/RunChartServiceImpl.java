@@ -15,6 +15,7 @@ import java.util.Map;
 
 import org.openmrs.Location;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.api.RunChartService;
 
 /**
@@ -32,6 +33,9 @@ public class RunChartServiceImpl extends BaseOpenmrsService implements RunChartS
 	// No @Transactional: reporting evaluates a report outside one, each read in its own.
 	public Map<String, List<RunCharts.Point>> getRunCharts(Location clinic, LocalDate start, LocalDate end,
 	        RunCharts.Period period) {
-		return new RunCharts().calculate(clinic, start, end, period);
+		// Refused here, on the caller's thread, rather than as a failure of the daemon's work.
+		RunCharts.pointDates(start, end, period);
+		return ActCoreActivator.runAsDaemon("calculate the run chart", "The run chart could not be calculated",
+		    () -> new RunCharts().calculate(clinic, start, end, period));
 	}
 }

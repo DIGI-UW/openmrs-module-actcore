@@ -36,10 +36,11 @@ import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
+import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.model.RaisedFlags;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -190,15 +191,32 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 			fail();
 		}
 		catch (APIAuthenticationException e) {
-			assertEquals("Privilege required: View Patient Flags", e.getMessage());
+			assertEquals("Privileges required: View Patient Flags", e.getMessage());
 		}
 	}
 	
-	@Test(expected = ContextAuthenticationException.class)
+	@Test(expected = APIAuthenticationException.class)
 	public void refusesAUserWhoMayNotSeeFlags() {
 		Context.logout();
 		
 		controller.getRaisedFlags(PATIENT_7);
+	}
+	
+	@Test
+	public void service_shouldListEachRaisedFlagWithWhenItWasRaisedAndWhetherTheUserMayDismissIt() {
+		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
+		Flag risk = raised(saveFlag("overdue", MATCHES_7, null), null);
+		
+		List<RaisedFlags.Raised> flags = Context.getService(RaisedFlagService.class)
+		        .getRaisedFlags(Context.getPatientService().getPatient(7));
+		
+		assertEquals(2, flags.size());
+		for (RaisedFlags.Raised flag : flags) {
+			boolean isMissing = flag.flag.equals(missing);
+			assertTrue(isMissing || flag.flag.equals(risk));
+			assertEquals(isMissing, flag.since != null);
+			assertEquals(isMissing, flag.dismissible);
+		}
 	}
 	
 	private Flag saveFlag(String name, String criteria, Tag tag) {

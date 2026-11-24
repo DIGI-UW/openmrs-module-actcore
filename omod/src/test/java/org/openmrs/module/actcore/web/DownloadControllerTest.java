@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
@@ -44,7 +45,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
@@ -53,6 +54,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.DownloadLogService;
+import org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO;
 import org.openmrs.module.actcore.model.DownloadLog;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -274,7 +276,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			controller.getDownloads(null, null, null, null, null, null, null);
 			fail("expected the downloads to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
@@ -406,6 +408,45 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected the identifiers filter to be refused");
 		}
 		catch (IllegalRequestException expected) {}
+	}
+	
+	@Test
+	public void service_shouldFilterTheDownloadsByUserFormAndIdentifiersAndPageThem() throws Exception {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		controller.download(body());
+		Map<String, Object> list = new HashMap<String, Object>();
+		list.put("list", "registry");
+		list.put("columns", Collections.singletonList("ACT ID"));
+		controller.record(list);
+		signInAs("researcher", with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
+		controller.download(body());
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		
+		DownloadLog.Page every = service.getDownloads(new DownloadLog.Filter());
+		assertEquals(3, every.totalCount);
+		assertEquals("researcher", every.results.get(0).user.username);
+		assertEquals(Boolean.TRUE, every.results.get(0).detail.get("researchOnly"));
+		assertEquals("registry", every.results.get(1).detail.get("list"));
+		assertEquals(2, service.getDownloads(filter(f -> f.username = "downloadcaller")).totalCount);
+		assertEquals(0, service.getDownloads(filter(f -> f.username = "nobody")).totalCount);
+		assertEquals(2, service.getDownloads(filter(f -> f.formUuid = form.getUuid())).totalCount);
+		assertEquals(0, service.getDownloads(filter(f -> f.formUuid = "no-such-form")).totalCount);
+		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "research")).totalCount);
+		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "without")).totalCount);
+		DownloadLog.Page page = service.getDownloads(filter(f -> {
+			f.startIndex = 1;
+			f.limit = 1;
+		}));
+		assertEquals(3, page.totalCount);
+		assertEquals(1, page.results.size());
+		assertEquals("registry", page.results.get(0).detail.get("list"));
+	}
+	
+	private static DownloadLog.Filter filter(Consumer<DownloadLog.Filter> settings) {
+		DownloadLog.Filter filter = new DownloadLog.Filter();
+		settings.accept(filter);
+		return filter;
 	}
 	
 	@Test
@@ -723,14 +764,10 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		Context.authenticate(username, "Download123");
 	}
 	
-	/** The log, read as someone who may read it, whoever is signed in. */
+	/** The log as it was recorded, its detail as the JSON saved, whoever is signed in. */
 	private static List<DownloadLog.Entry> logged() {
-		try {
-			Context.addProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
-			return Context.getService(DownloadLogService.class).getDownloads(null, null, null);
-		}
-		finally {
-			Context.removeProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
-		}
+		HibernateDownloadLogDAO dao = new HibernateDownloadLogDAO();
+		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
+		return dao.getDownloads(null, null, null);
 	}
 }

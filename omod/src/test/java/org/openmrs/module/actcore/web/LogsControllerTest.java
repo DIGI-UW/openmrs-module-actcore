@@ -27,9 +27,10 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.impl.AuditTables;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -69,7 +70,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 				call.run();
 				fail("expected the activity to be refused");
 			}
-			catch (ContextAuthenticationException e) {
+			catch (APIAuthenticationException e) {
 				assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS));
 			}
 		}
@@ -127,7 +128,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 			reads.getReads(null, null, null, null, null, null);
 			fail("expected the reads to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
@@ -160,7 +161,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 			activity.getActivity(null, null, null, "other", null, null, null, null);
 			fail("expected the kind filter to be refused");
 		}
-		catch (IllegalRequestException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().startsWith("More than 10000 changes"));
 		}
 	}

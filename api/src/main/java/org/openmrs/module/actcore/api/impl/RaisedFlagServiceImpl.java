@@ -9,8 +9,11 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,8 +32,10 @@ import org.openmrs.module.actcore.tasks.FlagListSync;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.Tag;
+import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,6 +148,25 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	public boolean mayDismiss(Flag flag) {
 		return Context.hasPrivilege(ActCorePrivileges.DISMISS_FLAGS)
 		        && Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS) && carriesDismissTag(flag);
+	}
+	
+	/**
+	 * @see org.openmrs.module.actcore.api.RaisedFlagService#getRaisedFlags(Patient)
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<RaisedFlags.Raised> getRaisedFlags(Patient patient) {
+		Map<Integer, Date> raisedSince = dao.getRaisedSinceByFlag(patient.getPatientId());
+		List<RaisedFlags.Raised> raised = new ArrayList<RaisedFlags.Raised>();
+		Set<Integer> seen = new HashSet<Integer>();
+		for (PatientFlag row : Context.getService(FlagService.class).getPatientFlags(patient)) {
+			Flag flag = row.getFlag();
+			if (Boolean.TRUE.equals(row.getVoided()) || flag == null || !seen.add(flag.getFlagId())) {
+				continue;
+			}
+			raised.add(new RaisedFlags.Raised(flag, raisedSince.get(flag.getFlagId()), mayDismiss(flag)));
+		}
+		return raised;
 	}
 	
 	/**

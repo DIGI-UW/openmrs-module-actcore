@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.api;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -154,6 +155,19 @@ public interface RaisedFlagService extends OpenmrsService {
 	 */
 	@Authorized(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)
 	boolean mayDismiss(Flag flag);
+	
+	/**
+	 * Gets the flags raised for the patient that are not dismissed, each once, with when it was raised
+	 * and whether the user may dismiss it. The flags are the patient's unvoided patientflags rows, less
+	 * the dismissed ones, which the advice on FlagService leaves out.
+	 *
+	 * @param patient the patient
+	 * @return the raised flags in the order patientflags gives them; empty when none is raised
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link PatientFlagsConstants#PRIV_VIEW_PATIENT_FLAGS}
+	 */
+	@Authorized(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)
+	List<RaisedFlags.Raised> getRaisedFlags(Patient patient);
 	
 	/**
 	 * Dismisses the flag for the patient, which hides it wherever ACT reads flags until ACT Core finds

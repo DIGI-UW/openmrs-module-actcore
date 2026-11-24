@@ -36,6 +36,7 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.impl.ActivityLog;
 import org.openmrs.module.actcore.api.impl.ReadLog;
 import org.openmrs.module.actcore.api.impl.RunCharts;
+import org.openmrs.module.actcore.model.DownloadLog;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -84,7 +85,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		assertNotNull(service);
 		refused(() -> service.recordDownload(null, "{}"), ActCorePrivileges.DOWNLOAD_DATA);
-		refused(() -> service.getDownloads(null, null, null), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getDownloads(new DownloadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 	}
 	
 	@Test
@@ -101,7 +102,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		for (String download : new String[] { ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA }) {
-			holding(download, () -> refused(() -> service.getDownloads(null, null, null),
+			holding(download, () -> refused(() -> service.getDownloads(new DownloadLog.Filter()),
 			    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
@@ -119,6 +120,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		refused(() -> service.getRaisedSinceByPatient(1), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		refused(() -> service.getRaisedSinceByFlag(2), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		refused(() -> service.mayDismiss(new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		refused(() -> service.getRaisedFlags(new Patient(2)), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		refused(() -> service.dismiss(new Patient(2), new Flag()), ActCorePrivileges.DISMISS_FLAGS,
 		    PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 	}
@@ -132,8 +134,10 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 			refused(() -> service.lowerAll(1), PatientFlagsConstants.PRIV_TEST_FLAGS);
 			refused(() -> service.dismiss(new Patient(2), new Flag()), ActCorePrivileges.DISMISS_FLAGS);
 		});
-		holding(PatientFlagsConstants.PRIV_TEST_FLAGS,
-		    () -> refused(() -> service.mayDismiss(new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS));
+		holding(PatientFlagsConstants.PRIV_TEST_FLAGS, () -> {
+			refused(() -> service.mayDismiss(new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+			refused(() -> service.getRaisedFlags(new Patient(2)), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		});
 		holding(ActCorePrivileges.DISMISS_FLAGS,
 		    () -> refused(() -> service.dismiss(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS));
 	}
