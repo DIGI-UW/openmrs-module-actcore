@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.actcore.api.db.hibernate;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,14 +138,21 @@ public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
 	}
 	
 	/**
-	 * Reads by SQL as {@link #getPatientFlagRows(Integer, Integer)} does.
+	 * Reads by SQL on the current session's connection, with the uuid bound as a parameter.
 	 *
 	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#hasCohort(String)
 	 */
 	@Override
 	public boolean hasCohort(String uuid) {
-		List<List<Object>> rows = sql("select count(*) from cohort where uuid = '" + uuid.replace("'", "''") + "'");
-		return ((Number) rows.get(0).get(0)).intValue() > 0;
+		return session().doReturningWork(connection -> {
+			try (PreparedStatement statement = connection.prepareStatement("select count(*) from cohort where uuid = ?")) {
+				statement.setString(1, uuid);
+				try (ResultSet result = statement.executeQuery()) {
+					result.next();
+					return result.getInt(1) > 0;
+				}
+			}
+		});
 	}
 	
 	private List<List<Object>> sql(String sql) {
