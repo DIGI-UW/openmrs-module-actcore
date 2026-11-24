@@ -121,6 +121,10 @@ public class HibernateAuditLogDAOTest extends BaseModuleContextSensitiveTest {
 		dismissal(2, 9999, 1, "2026-10-23 09:00:00");
 		dismissal(PATIENT, flagId, 1, "2026-10-23 09:00:00");
 		dismissal(PATIENT, flagId, 501, "2026-10-24 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-21 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-22 00:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-23 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-24 00:00:00");
 		
 		read(1, "Patient", "admin", "2026-10-21 09:00:00", patientUuid);
 		read(2, "Cohort", "admin", "2026-10-22 09:00:00", null);
