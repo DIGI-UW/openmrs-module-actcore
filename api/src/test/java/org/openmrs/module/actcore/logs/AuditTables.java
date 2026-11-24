@@ -12,15 +12,19 @@ package org.openmrs.module.actcore.logs;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
-import org.openmrs.module.actcore.api.db.hibernate.HibernateAuditLogDAO;
 
 /**
  * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
@@ -45,12 +49,29 @@ public final class AuditTables {
 	}
 	
 	/**
-	 * Runs a query as the logs run theirs, giving each row as a map of column label to value.
+	 * Runs a query as the logs run theirs, giving each row as a map of column label to value, looked up
+	 * ignoring case.
 	 */
 	public static List<Map<String, Object>> select(String sql, Object... params) {
-		HibernateAuditLogDAO dao = new HibernateAuditLogDAO();
-		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
-		return dao.select(sql, params);
+		return Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession()
+		        .doReturningWork(connection -> {
+			        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+			        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+				        for (int i = 0; i < params.length; i++) {
+					        statement.setObject(i + 1, params[i]);
+				        }
+				        ResultSet results = statement.executeQuery();
+				        ResultSetMetaData columns = results.getMetaData();
+				        while (results.next()) {
+					        Map<String, Object> row = new TreeMap<String, Object>(String.CASE_INSENSITIVE_ORDER);
+					        for (int i = 1; i <= columns.getColumnCount(); i++) {
+						        row.put(columns.getColumnLabel(i), results.getObject(i));
+					        }
+					        rows.add(row);
+				        }
+			        }
+			        return rows;
+		        });
 	}
 	
 	private static String script() {

@@ -94,7 +94,7 @@ public class Names {
 	 * @return the user; null for a null id or one no user has
 	 */
 	public Who user(Integer userId) {
-		return userId == null ? null : memo("user:" + userId, key -> who("u.user_id = ?", userId));
+		return userId == null ? null : memo("user:" + userId, key -> who(dao.getUserById(userId)));
 	}
 	
 	/**
@@ -104,7 +104,7 @@ public class Names {
 	 * @return the user; null for a null uuid or one no user has
 	 */
 	public Who user(String uuid) {
-		return uuid == null ? null : memo("user:" + uuid, key -> who("u.uuid = ?", uuid));
+		return uuid == null ? null : memo("user:" + uuid, key -> who(dao.getUserByUuid(uuid)));
 	}
 	
 	/**
@@ -115,20 +115,15 @@ public class Names {
 	 * @return the user's id, or null when no user has it
 	 */
 	public Integer userId(String username) {
-		List<Map<String, Object>> rows = dao.select(
-		    "select user_id from users where username = ?"
-		            + " or ((username is null or username = '') and system_id = ?) order by username desc",
-		    username, username);
+		List<Map<String, Object>> rows = dao.getUserIdsByUsername(username);
 		return rows.isEmpty() ? null : Rows.integer(rows.get(0), "user_id");
 	}
 	
 	/**
-	 * Reads the user that the where clause selects, with their name and their ACT role. The ACT role is
-	 * the organizational one, which the roles CSV names as in "Organizational: ACT Clinician".
+	 * Reads the user of the first row, with their name and their ACT role. The ACT role is the
+	 * organizational one, which the roles CSV names as in "Organizational: ACT Clinician".
 	 */
-	private Who who(String where, Object param) {
-		List<Map<String, Object>> rows = dao
-		        .select("select u.user_id, u.uuid, u.username, u.system_id, u.person_id from users u where " + where, param);
+	private Who who(List<Map<String, Object>> rows) {
 		if (rows.isEmpty()) {
 			return null;
 		}
@@ -136,20 +131,13 @@ public class Names {
 		Who who = new Who();
 		who.uuid = Rows.string(user, "uuid");
 		who.username = StringUtils.defaultIfBlank(Rows.string(user, "username"), Rows.string(user, "system_id"));
-		who.display = StringUtils
-		        .defaultIfBlank(
-		            personName(
-		                "select given_name, middle_name, family_name from person_name where person_id = ? and voided = false"
-		                        + " order by preferred desc, person_name_id",
-		                Rows.integer(user, "person_id")),
-		            who.username);
+		who.display = StringUtils.defaultIfBlank(personName(dao.getUnvoidedPersonNames(Rows.integer(user, "person_id"))),
+		    who.username);
 		// The user's own roles before the ones they inherit: a site administrator's role inherits Clinician.
 		Integer userId = Rows.integer(user, "user_id");
-		who.role = organizationalRole(dao.select("select role from user_role where user_id = ?", userId));
+		who.role = organizationalRole(dao.getUserRoles(userId));
 		if (who.role == null) {
-			who.role = organizationalRole(dao.select("select rr.parent_role as role from role_role rr"
-			        + " join user_role ur on ur.role = rr.child_role where ur.user_id = ?",
-			    userId));
+			who.role = organizationalRole(dao.getInheritedRoles(userId));
 		}
 		return who;
 	}
@@ -172,7 +160,7 @@ public class Names {
 	 */
 	public Subject patient(Integer personId) {
 		return personId == null ? null : memo("patient:" + personId, key -> {
-			List<Map<String, Object>> rows = dao.select("select uuid from person where person_id = ?", personId);
+			List<Map<String, Object>> rows = dao.getPersonUuid(personId);
 			return rows.isEmpty() ? null : subject(personId, Rows.string(rows.get(0), "uuid"));
 		});
 	}
@@ -185,7 +173,7 @@ public class Names {
 	 */
 	public Subject patient(String uuid) {
 		return uuid == null ? null : memo("patient:" + uuid, key -> {
-			List<Map<String, Object>> rows = dao.select("select person_id from person where uuid = ?", uuid);
+			List<Map<String, Object>> rows = dao.getPersonId(uuid);
 			return rows.isEmpty() ? null : subject(Rows.integer(rows.get(0), "person_id"), uuid);
 		});
 	}
@@ -195,10 +183,7 @@ public class Names {
 		subject.id = personId;
 		subject.uuid = uuid;
 		// A voided patient keeps only voided names, so those are read after the unvoided.
-		subject.display = StringUtils
-		        .defaultIfBlank(personName("select given_name, middle_name, family_name from person_name where person_id = ?"
-		                + " order by voided, preferred desc, person_name_id",
-		            personId), uuid);
+		subject.display = StringUtils.defaultIfBlank(personName(dao.getPersonNames(personId)), uuid);
 		subject.actId = actId(personId);
 		return subject;
 	}
@@ -213,10 +198,7 @@ public class Names {
 		if (identifyingTypes == null) {
 			identifyingTypes = FormDownload.uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_IDENTIFIER_TYPES);
 		}
-		for (Map<String, Object> row : dao.select("select i.identifier, t.uuid type_uuid from patient_identifier i"
-		        + " join patient_identifier_type t on t.patient_identifier_type_id = i.identifier_type"
-		        + " where i.patient_id = ? order by i.voided, i.preferred desc, i.patient_identifier_id",
-		    personId)) {
+		for (Map<String, Object> row : dao.getPatientIdentifiers(personId)) {
 			if (!identifyingTypes.contains(Rows.string(row, "type_uuid"))) {
 				return Rows.string(row, "identifier");
 			}
@@ -225,11 +207,10 @@ public class Names {
 	}
 	
 	/**
-	 * Runs a query for person names and joins the given, middle and family names of its first row into
-	 * a full name. It is null when the query returns no row.
+	 * Joins the given, middle and family names of the first row of person names into a full name. It is
+	 * null when there is no row.
 	 */
-	String personName(String sql, Object... params) {
-		List<Map<String, Object>> rows = dao.select(sql, params);
+	static String personName(List<Map<String, Object>> rows) {
 		if (rows.isEmpty()) {
 			return null;
 		}
@@ -388,7 +369,7 @@ public class Names {
 	 */
 	public Map<String, Object> row(String table, String idColumn, Integer id) {
 		return id == null ? null : memo("row:" + table + ":" + id, key -> {
-			List<Map<String, Object>> rows = dao.select("select * from " + table + " where " + idColumn + " = ?", id);
+			List<Map<String, Object>> rows = dao.getRow(table, idColumn, id);
 			return rows.isEmpty() ? null : rows.get(0);
 		});
 	}

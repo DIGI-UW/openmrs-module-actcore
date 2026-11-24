@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.logs;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -47,15 +46,6 @@ public final class Rows {
 		int from = Math.min(Math.max(startIndex, 0), all.size());
 		int size = limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
 		return all.subList(from, Math.min(from + size, all.size()));
-	}
-	
-	/** Builds the placeholders of an in-list for the values, such as "?, ?, ?" for three of them. */
-	static String placeholders(Collection<?> values) {
-		StringBuilder list = new StringBuilder();
-		for (int i = 0; i < values.size(); i++) {
-			list.append(i == 0 ? "?" : ", ?");
-		}
-		return list.toString();
 	}
 	
 	static Integer integer(Map<String, Object> row, String column) {
