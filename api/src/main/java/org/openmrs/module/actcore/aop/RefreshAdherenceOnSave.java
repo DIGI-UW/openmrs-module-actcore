@@ -39,7 +39,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	 * The time, in milliseconds, beyond which a patient's refresh is logged as a warning rather than at
 	 * debug level, since the save waits for the refresh to finish.
 	 */
-	public static final long SLOW_MILLIS = 1000L;
+	static final long SLOW_MILLIS = 1000L;
 	
 	private static final Set<String> METHODS = new HashSet<String>(
 	        Arrays.asList("saveEncounter", "voidEncounter", "unvoidEncounter", "purgeEncounter"));
@@ -71,13 +71,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		});
 	}
 	
-	/**
-	 * Creates the advice with the refreshes it runs after a save, which a test replaces.
-	 *
-	 * @param refresher refreshes one patient's adherence
-	 * @param flagRefresher refreshes one patient's flags
-	 */
-	public RefreshAdherenceOnSave(IntConsumer refresher, IntConsumer flagRefresher) {
+	RefreshAdherenceOnSave(IntConsumer refresher, IntConsumer flagRefresher) {
 		this.refresher = refresher;
 		this.flagRefresher = flagRefresher;
 	}

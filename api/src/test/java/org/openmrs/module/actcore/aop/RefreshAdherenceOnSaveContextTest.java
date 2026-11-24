@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.api.impl;
+package org.openmrs.module.actcore.aop;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -16,7 +16,6 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.IntConsumer;
 
@@ -34,8 +33,10 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.aop.RefreshAdherenceOnSave;
 import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
+import org.openmrs.module.actcore.api.impl.AdherenceRefresh;
+import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.patientflags.Flag;
@@ -439,46 +440,42 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	 * RefreshAdherenceOnSave does, on another thread, after the refresh has read every patient.
 	 */
 	private AdherenceRefresh racingADose(final List<Throwable> failed) {
-		return new AdherenceRefresh(dao()) {
+		return AdherenceRefreshInTest.afterReadingEveryPatient(dao(), new Runnable() {
 			
 			@Override
-			Map<Integer, AdherenceReplay.History> read(Integer patientId) {
-				Map<Integer, AdherenceReplay.History> histories = super.read(patientId);
-				if (patientId == null) {
-					given(committed(encounter(7, 0)), 0);
-					Thread save = new Thread(new Runnable() {
-						
-						@Override
-						public void run() {
-							Context.openSession();
-							try {
-								Context.authenticate("admin", "test");
-								Context.getService(AdherenceService.class).refreshPatient(7, TODAY);
-								PatientFlagRefreshTask.refreshPatient(7);
-							}
-							catch (Throwable e) {
-								failed.add(e);
-							}
-							finally {
-								Context.closeSession();
-							}
+			public void run() {
+				given(committed(encounter(7, 0)), 0);
+				Thread save = new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						Context.openSession();
+						try {
+							Context.authenticate("admin", "test");
+							Context.getService(AdherenceService.class).refreshPatient(7, TODAY);
+							PatientFlagRefreshTask.refreshPatient(7);
 						}
-					});
-					save.start();
-					try {
-						save.join(10000);
+						catch (Throwable e) {
+							failed.add(e);
+						}
+						finally {
+							Context.closeSession();
+						}
 					}
-					catch (InterruptedException e) {
-						throw new IllegalStateException(e);
-					}
-					// A save that waited for the run, rather than leaving it the patient, would still be going.
-					if (save.isAlive()) {
-						failed.add(new IllegalStateException("the save did not return while the run held the rows"));
-					}
+				});
+				save.start();
+				try {
+					save.join(10000);
 				}
-				return histories;
+				catch (InterruptedException e) {
+					throw new IllegalStateException(e);
+				}
+				// A save that waited for the run, rather than leaving it the patient, would still be going.
+				if (save.isAlive()) {
+					failed.add(new IllegalStateException("the save did not return while the run held the rows"));
+				}
 			}
-		};
+		});
 	}
 	
 	private static Flag overdueFlag() {
