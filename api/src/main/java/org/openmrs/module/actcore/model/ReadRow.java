@@ -35,7 +35,7 @@ public class ReadRow {
 	public ReadPatient patient;
 	
 	/** The row's reads, oldest first. */
-	public final List<ReadEntry> reads = new ArrayList<ReadEntry>();
+	public final List<ReadEvent> reads = new ArrayList<ReadEvent>();
 	
 	/**
 	 * A short label for the session the first read was made in, derived from the session id rather than

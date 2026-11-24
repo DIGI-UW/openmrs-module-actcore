@@ -19,7 +19,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.TooManyResultsException;
 import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
-import org.openmrs.module.actcore.model.ReadEntry;
+import org.openmrs.module.actcore.model.ReadEvent;
 import org.openmrs.module.actcore.model.ReadPage;
 import org.openmrs.module.actcore.model.ReadRow;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -84,7 +84,7 @@ public class ReadsController extends ActCoreRestController {
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (ReadRow row : page.results) {
 			List<SimpleObject> reads = new ArrayList<SimpleObject>();
-			for (ReadEntry read : row.reads) {
+			for (ReadEvent read : row.reads) {
 				reads.add(new SimpleObject().add("time", ConversionUtil.convertToRepresentation(read.time, null))
 				        .add("entity", read.entity).add("description", read.description));
 			}

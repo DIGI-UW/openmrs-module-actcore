@@ -31,7 +31,7 @@ import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
 import org.openmrs.module.actcore.model.LogPatient;
 import org.openmrs.module.actcore.model.LogUser;
-import org.openmrs.module.actcore.model.ReadEntry;
+import org.openmrs.module.actcore.model.ReadEvent;
 import org.openmrs.module.actcore.model.ReadPage;
 import org.openmrs.module.actcore.model.ReadPatient;
 import org.openmrs.module.actcore.model.ReadRow;
@@ -186,11 +186,11 @@ class ReadLog {
 				open.put(key, row);
 			}
 			row.to = read.time;
-			ReadEntry entry = new ReadEntry();
-			entry.time = read.time;
-			entry.entity = read.entity;
-			entry.description = describe(read.entity, read.targets, read.patients, read.success);
-			row.reads.add(entry);
+			ReadEvent event = new ReadEvent();
+			event.time = read.time;
+			event.entity = read.entity;
+			event.description = describe(read.entity, read.targets, read.patients, read.success);
+			row.reads.add(event);
 		}
 		return rows;
 	}

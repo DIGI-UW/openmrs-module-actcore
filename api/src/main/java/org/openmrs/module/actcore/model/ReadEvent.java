@@ -12,7 +12,7 @@ package org.openmrs.module.actcore.model;
 import java.util.Date;
 
 /** One read as the audit log module recorded it, as a row of the read log lists it. */
-public class ReadEntry {
+public class ReadEvent {
 	
 	/** When the read happened. */
 	public Date time;
