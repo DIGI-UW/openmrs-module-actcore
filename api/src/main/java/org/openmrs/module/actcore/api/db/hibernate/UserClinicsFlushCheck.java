@@ -15,7 +15,6 @@ import org.hibernate.EmptyInterceptor;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.aop.ClinicScopedUserAdministration;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.api.db.UserClinicsDAO;
 import org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl;
@@ -84,7 +83,7 @@ public class UserClinicsFlushCheck extends EmptyInterceptor {
 		boolean rolesChange = !UserClinics.roleUuids(user).equals(clinics.getStoredRoles(user.getUserId()));
 		if (clinicsChange || rolesChange) {
 			// A new user has nothing stored, so is checked as it will be saved.
-			ClinicScopedUserAdministration.refuseUnlessMayChange(me, user, null, clinics);
+			UserClinics.refuseUnlessMayChange(me, user, null, clinics);
 		}
 	}
 	
