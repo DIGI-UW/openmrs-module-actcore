@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.runchart;
 import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -209,9 +210,13 @@ public class RunCharts {
 	 * @param end the range's last day
 	 * @param period the period each point closes
 	 * @return the points' days; empty when the end is before the start
-	 * @throws ValidationException when the range has more than {@link #MOST_POINTS} points
+	 * @throws ValidationException when the points are daily over a range longer than
+	 *             {@link #MOST_DAILY_DAYS} days, or the range has more than {@link #MOST_POINTS} points
 	 */
 	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
+		if (period == Period.DAY && ChronoUnit.DAYS.between(start, end) > MOST_DAILY_DAYS) {
+			throw refusal("points=day is for a range of up to " + MOST_DAILY_DAYS + " days; ask for weeks or months");
+		}
 		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
 		for (LocalDate day = end; !day.isBefore(start); day = period.previous(day)) {
 			dates.addFirst(day);
@@ -233,7 +238,8 @@ public class RunCharts {
 	 * @param end the range's last day
 	 * @param period the period each point closes
 	 * @return each of {@link #METRICS}' points, earliest first, by metric in that order
-	 * @throws ValidationException when the range has more than {@link #MOST_POINTS} points
+	 * @throws ValidationException when the points are daily over a range longer than
+	 *             {@link #MOST_DAILY_DAYS} days, or the range has more than {@link #MOST_POINTS} points
 	 * @throws APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the
 	 *             report cannot be evaluated or gives rows ACT Core cannot read
 	 */
