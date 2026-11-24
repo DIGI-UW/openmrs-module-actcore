@@ -32,7 +32,8 @@ import org.openmrs.module.actcore.utils.UserClinics;
  * Advice on UserService that confines an administrator limited to their clinics, such as a site
  * administrator, to the users of those clinics, as ACT 2.0 confined its site administrator. Such an
  * administrator sees only the users who share one of their clinics, and changes a user only within
- * the rules the README lists. Every other user passes through untouched.
+ * the rules {@link UserClinics#refuseUnlessMayChange} applies. Every other user passes through
+ * untouched.
  */
 public class ClinicScopedUserAdministration implements MethodInterceptor {
 	

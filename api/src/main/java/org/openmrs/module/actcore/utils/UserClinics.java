@@ -120,8 +120,8 @@ public final class UserClinics {
 	}
 	
 	/**
-	 * Refuses a limited administrator's change to a user unless the rules the README lists allow it,
-	 * comparing the user as changed with what is saved, which it reads through the service given.
+	 * Refuses a limited administrator's change to a user unless the rules allow it, comparing the user
+	 * as changed with what is saved, which it reads through the service given.
 	 *
 	 * @param me the limited administrator making the change
 	 * @param user the user as changed
