@@ -19,9 +19,8 @@ import org.openmrs.api.ValidationException;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.api.RunChartService;
+import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.module.actcore.runchart.RunCharts;
-import org.springframework.validation.BindException;
-import org.springframework.validation.Errors;
 
 /**
  * Default implementation of {@link org.openmrs.module.actcore.api.RunChartService}. It has no DAO,
@@ -49,8 +48,6 @@ public class RunChartServiceImpl extends BaseOpenmrsService implements RunChartS
 	}
 	
 	private static ValidationException refusal(String message) {
-		Errors errors = new BindException(new Object(), "runChart");
-		errors.reject("actcore.runChart", message);
-		return new ValidationException(message, errors);
+		return Rows.refusal("runChart", message);
 	}
 }

@@ -32,12 +32,11 @@ import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.logs.Names;
+import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.module.actcore.screening.ScreeningCount;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.validation.BindException;
-import org.springframework.validation.Errors;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.ScreeningCountService}. */
 @Transactional
@@ -183,8 +182,6 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	}
 	
 	private static ValidationException refusal(String message) {
-		Errors errors = new BindException(new Object(), "screeningCount");
-		errors.reject("actcore.screeningCount", message);
-		return new ValidationException(message, errors);
+		return Rows.refusal("screeningCount", message);
 	}
 }

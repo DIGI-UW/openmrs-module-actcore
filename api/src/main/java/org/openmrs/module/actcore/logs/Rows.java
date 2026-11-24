@@ -19,7 +19,8 @@ import org.springframework.validation.Errors;
 
 /**
  * Helpers the logs use to read the rows that {@link org.openmrs.module.actcore.api.db.AuditLogDAO}
- * gives, each a map of column name to value, and to page the results.
+ * gives, each a map of column name to value, and to page the results, and the factory of the
+ * validation errors that ACT Core's services and calculations refuse a request with.
  */
 public final class Rows {
 	
@@ -46,14 +47,24 @@ public final class Rows {
 		 * @param message what is too broad and how to narrow it
 		 */
 		public TooMany(String message) {
-			super(message, errors(message));
+			super(message, refusal("logFilter", message).getErrors());
 		}
-		
-		private static Errors errors(String message) {
-			Errors errors = new BindException(new Object(), "filter");
-			errors.reject("actcore.logFilter", message);
-			return errors;
-		}
+	}
+	
+	/**
+	 * Creates a validation error whose message is its one global error. The REST layer answers it with
+	 * 400 and that message, and reads a {@link ValidationException}'s errors without checking that it
+	 * has any, so a refusal needs them.
+	 *
+	 * @param objectName the name of the object refused, as "runChart", which after "actcore." is the
+	 *            global error's code
+	 * @param message why the request is refused, which is also the global error's default message
+	 * @return the validation error, to be thrown
+	 */
+	public static ValidationException refusal(String objectName, String message) {
+		Errors errors = new BindException(new Object(), objectName);
+		errors.reject("actcore." + objectName, message);
+		return new ValidationException(message, errors);
 	}
 	
 	/**

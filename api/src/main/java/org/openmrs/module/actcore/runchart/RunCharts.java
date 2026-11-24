@@ -33,6 +33,7 @@ import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.logs.Rows;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
@@ -40,8 +41,6 @@ import org.openmrs.module.reporting.evaluation.EvaluationException;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
-import org.springframework.validation.BindException;
-import org.springframework.validation.Errors;
 
 /**
  * Calculates ACT 2.0's run charts when they are asked for, without storing them. Each request
@@ -407,9 +406,7 @@ public class RunCharts {
 	}
 	
 	private static ValidationException refusal(String message) {
-		Errors errors = new BindException(new Object(), "runChart");
-		errors.reject("actcore.runChart", message);
-		return new ValidationException(message, errors);
+		return Rows.refusal("runChart", message);
 	}
 	
 	private static LocalDate toLocalDate(Object value) {
