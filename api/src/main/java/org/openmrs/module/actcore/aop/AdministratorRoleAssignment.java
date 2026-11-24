@@ -35,7 +35,7 @@ import org.openmrs.util.RoleConstants;
 /**
  * Advice on UserService that lets the instance and global administrators give out the roles
  * configured for them. OpenMRS would otherwise refuse, because the roles carry clinical privileges
- * that the administrators themselves lack. The README describes the rules.
+ * that the administrators themselves lack.
  */
 public class AdministratorRoleAssignment implements MethodInterceptor {
 	
