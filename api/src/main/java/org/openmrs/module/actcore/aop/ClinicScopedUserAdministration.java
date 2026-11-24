@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.clinics;
+package org.openmrs.module.actcore.aop;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,6 +26,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
+import org.openmrs.module.actcore.clinics.UserClinics;
 
 /**
  * Advice on UserService that confines an administrator limited to their clinics, such as a site
@@ -113,8 +114,14 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 	/**
 	 * Refuses a limited administrator's change to a user unless the rules allow it, comparing the user
 	 * as changed with what is saved, which it reads through the service given.
+	 *
+	 * @param me the limited administrator making the change
+	 * @param user the user as changed
+	 * @param clinicsAfter the clinics the user will have, or null to read them from the user
+	 * @param clinics the service that reads the user's and the administrator's saved clinics and roles
+	 * @throws APIAuthenticationException when the rules do not allow the change
 	 */
-	static void refuseUnlessMayChange(User me, User user, Set<String> clinicsAfter, UserClinicsService clinics) {
+	public static void refuseUnlessMayChange(User me, User user, Set<String> clinicsAfter, UserClinicsService clinics) {
 		Set<String> after = clinicsAfter != null ? clinicsAfter : UserClinics.of(user);
 		Set<String> mine = clinics.getStoredClinics(me.getUserId());
 		if (me.getUserId() != null && me.getUserId().equals(user.getUserId())) {

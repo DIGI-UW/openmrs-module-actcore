@@ -34,6 +34,7 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.aop.RefreshAdherenceOnSave;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;

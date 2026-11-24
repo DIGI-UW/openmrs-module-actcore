@@ -40,7 +40,7 @@ import org.openmrs.PersonAttributeType;
 import org.openmrs.Program;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
+import org.openmrs.module.actcore.aop.StudyEnrolmentRules;
 import org.openmrs.parameter.EncounterSearchCriteriaBuilder;
 import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;

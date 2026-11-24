@@ -32,8 +32,8 @@ import org.openmrs.module.AdvicePoint;
 import org.openmrs.module.Module;
 import org.openmrs.module.ModuleFactory;
 import org.openmrs.module.ModuleFileParser;
-import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
+import org.openmrs.module.actcore.aop.OneOpenRegistryEnrolment;
+import org.openmrs.module.actcore.aop.StudyEnrolmentRules;
 import org.openmrs.util.CycleException;
 
 public class ModuleStartupOrderTest {

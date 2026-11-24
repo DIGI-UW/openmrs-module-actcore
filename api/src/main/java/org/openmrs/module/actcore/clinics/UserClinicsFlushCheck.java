@@ -15,6 +15,7 @@ import org.hibernate.EmptyInterceptor;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.aop.ClinicScopedUserAdministration;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.api.db.UserClinicsDAO;
 import org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl;

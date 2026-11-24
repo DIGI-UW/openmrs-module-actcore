@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.studies;
+package org.openmrs.module.actcore.aop;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -25,7 +25,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.StudyService;
-import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;

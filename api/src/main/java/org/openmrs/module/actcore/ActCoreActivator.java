@@ -17,7 +17,7 @@ import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
-import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
+import org.openmrs.module.actcore.aop.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.reports.ReportDescriptorLoader;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.scheduler.SchedulerService;

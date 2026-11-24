@@ -38,6 +38,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.logs.ActivityLog;

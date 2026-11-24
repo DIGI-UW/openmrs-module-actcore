@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.task;
+package org.openmrs.module.actcore.aop;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -19,6 +19,7 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Person;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

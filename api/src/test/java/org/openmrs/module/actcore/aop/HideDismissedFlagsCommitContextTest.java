@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.task;
+package org.openmrs.module.actcore.aop;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
