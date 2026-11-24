@@ -21,6 +21,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.cohort.CohortAttribute;
@@ -338,8 +339,8 @@ public class FlagListSync {
 	 * because the cohort module's CohortService finds only unvoided cohorts by uuid.
 	 */
 	private boolean listWasVoided(Flag flag) {
-		return PatientFlagRefreshTask
-		        .inTransaction(() -> Context.getRegisteredComponents(RaisedFlagDAO.class).get(0).hasCohort(flag.getUuid()));
+		return Transactions.supplyInTransaction(
+		    () -> Context.getRegisteredComponents(RaisedFlagDAO.class).get(0).hasCohort(flag.getUuid()));
 	}
 	
 	private CohortType cohortType() {

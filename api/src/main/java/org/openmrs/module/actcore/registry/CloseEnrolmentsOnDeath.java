@@ -24,7 +24,6 @@ import org.openmrs.Person;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
-import org.openmrs.api.APIException;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -75,7 +74,7 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		if (programIds.isEmpty()) {
 			return 0;
 		}
-		List<Integer> personIds = inTransaction(
+		List<Integer> personIds = Transactions.supplyInTransaction(
 		    () -> Context.getRegisteredComponents(RegistryDAO.class).get(0).getDeadPatientsWithOpenEnrolments(programIds));
 		int ended = 0;
 		for (Integer personId : personIds) {
@@ -233,21 +232,5 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	private static Date later(Date date, Date other) {
 		return other != null && other.after(date) ? other : date;
-	}
-	
-	/**
-	 * Runs the work in the current transaction, or in a new one, as AdministrationService.executeSQL
-	 * ran the read before it moved to the DAO.
-	 */
-	private static <T> T inTransaction(Transactions.Work<T> work) {
-		try {
-			return Transactions.inTransaction(work);
-		}
-		catch (RuntimeException | Error e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException(e);
-		}
 	}
 }

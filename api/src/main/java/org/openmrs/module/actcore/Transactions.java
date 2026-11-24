@@ -12,6 +12,7 @@ package org.openmrs.module.actcore;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.IntConsumer;
+import java.util.function.Supplier;
 
 import org.openmrs.api.context.Context;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -94,6 +95,16 @@ public final class Transactions {
 		catch (Checked e) {
 			throw e.getCause();
 		}
+	}
+	
+	/**
+	 * Runs the work as {@link #inTransaction(Work)} does, for work that throws no checked exception.
+	 *
+	 * @param work the work to run
+	 * @return what the work returns
+	 */
+	public static <T> T supplyInTransaction(Supplier<T> work) {
+		return new TransactionTemplate(transactionManager()).execute(status -> work.get());
 	}
 	
 	private static PlatformTransactionManager transactionManager() {

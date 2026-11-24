@@ -25,7 +25,6 @@ import java.util.function.Consumer;
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
@@ -463,8 +462,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	private static Map<Integer, String> messages(Flag flag, Integer onlyPatientId) {
 		Map<Integer, String> messages = new HashMap<Integer, String>();
-		List<List<Object>> rows = inTransaction(() -> Context.getRegisteredComponents(RaisedFlagDAO.class).get(0)
-		        .getPatientFlagRows(flag.getFlagId(), onlyPatientId));
+		List<List<Object>> rows = Transactions.supplyInTransaction(() -> Context.getRegisteredComponents(RaisedFlagDAO.class)
+		        .get(0).getPatientFlagRows(flag.getFlagId(), onlyPatientId));
 		if (rows != null) {
 			for (List<Object> row : rows) {
 				if (row != null && !row.isEmpty() && row.get(0) != null) {
@@ -475,22 +474,6 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			}
 		}
 		return messages;
-	}
-	
-	/**
-	 * Runs the work in the current transaction, or in a new one, as AdministrationService.executeSQL
-	 * ran the reads of the flag rows and cohorts before they moved to the DAO.
-	 */
-	static <T> T inTransaction(Transactions.Work<T> work) {
-		try {
-			return Transactions.inTransaction(work);
-		}
-		catch (RuntimeException | Error e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException(e);
-		}
 	}
 	
 	/**
