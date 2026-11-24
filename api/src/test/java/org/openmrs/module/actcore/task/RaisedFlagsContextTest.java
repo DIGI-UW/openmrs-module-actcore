@@ -468,9 +468,9 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private long rows() {
-		return ((Number) single(
-		    "select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId()))
-		            .longValue();
+		Number count = (Number) single(
+		    "select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId());
+		return count.longValue();
 	}
 	
 	private String raisedSince() {
