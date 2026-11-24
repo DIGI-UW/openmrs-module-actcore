@@ -26,7 +26,9 @@ import org.openmrs.module.patientflags.PatientFlagsConstants;
  * The service that keeps the date each flag was raised for each patient, and the flag's dismissal,
  * and dismisses flags. The patient flag refresh raises and lowers flags through it, the flag lists,
  * the next steps and the raised flags endpoint read through it, and the advice on FlagService reads
- * the dismissed flags through it.
+ * the dismissed flags through it. ACT Core keeps these in tables of its own because the
+ * patientflags module recreates its own rows on every save, so neither the date_created of its row
+ * nor a voided row outlives the next save.
  */
 public interface RaisedFlagService extends OpenmrsService {
 	

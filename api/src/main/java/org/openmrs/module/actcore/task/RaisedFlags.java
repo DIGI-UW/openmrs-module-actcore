@@ -10,10 +10,9 @@
 package org.openmrs.module.actcore.task;
 
 /**
- * The outcomes of a dismissal by {@link org.openmrs.module.actcore.api.RaisedFlagService}, which
- * keeps the date each flag was raised for each patient, and the flag's dismissal. ACT Core keeps
- * these in tables of its own because the patientflags module recreates its own rows on every save,
- * so neither the date_created of its row nor a voided row outlives the next save.
+ * Holds the {@link Dismissal} outcome that
+ * {@link org.openmrs.module.actcore.api.RaisedFlagService#dismiss(org.openmrs.Patient, org.openmrs.module.patientflags.Flag)}
+ * returns.
  */
 public class RaisedFlags {
 	
