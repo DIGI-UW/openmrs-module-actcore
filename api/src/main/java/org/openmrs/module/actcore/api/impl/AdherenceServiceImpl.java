@@ -16,8 +16,6 @@ import java.util.SortedSet;
 
 import org.openmrs.Patient;
 import org.openmrs.api.impl.BaseOpenmrsService;
-import org.openmrs.module.actcore.adherence.AdherenceRefresh;
-import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.springframework.transaction.annotation.Transactional;

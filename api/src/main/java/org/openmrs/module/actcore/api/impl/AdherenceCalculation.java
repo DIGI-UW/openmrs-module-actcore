@@ -1,0 +1,227 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.actcore.api.impl;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableSet;
+import java.util.SortedMap;
+import java.util.SortedSet;
+
+/**
+ * The prophylaxis adherence calculation that ACT 2.0 ran (is4r-rhd-cdk
+ * adherence_utils.calculate_adherence_and_injection_date), computing a patient's adherence and the
+ * next date a dose is due from their prescriptions, injections and oral adherence estimates.
+ * <p>
+ * For an injection regimen, adherence is the share of prescribed days that an injection covered.
+ * Each injection covers the days of its regimen's interval, the start of a prescription covers them
+ * as a first injection would, a change from one injection prescription to another carries the last
+ * injection's cover on, and a dose due today does not count as late yet.
+ * <p>
+ * The next due date follows ACT 2.0 with two differences: it is counted from the latest injection
+ * given within the current run of injection prescriptions, however long ago that was, and a change
+ * of injection prescription does not move it past a dose that is already due.
+ * AdherenceCalculationParityTest checks both against ACT 2.0's results.
+ */
+public final class AdherenceCalculation {
+	
+	private AdherenceCalculation() {
+	}
+	
+	/**
+	 * One oral adherence entry, holding the estimated adherence in percent and the number of days the
+	 * prescription it records lasts. Either value may be null when the form did not record it.
+	 */
+	public static final class OralEntry {
+		
+		final Double estimate;
+		
+		private final Integer durationDays;
+		
+		public OralEntry(Double estimate, Integer durationDays) {
+			this.estimate = estimate;
+			this.durationDays = durationDays;
+		}
+	}
+	
+	/**
+	 * The result of a calculation: the adherence as a fraction, where 1 means fully adherent, and the
+	 * next date a dose of prophylaxis is due. Either value is null when nothing recorded gives one.
+	 */
+	public static final class Result {
+		
+		private final Double adherence;
+		
+		private final LocalDate nextDue;
+		
+		public Result(Double adherence, LocalDate nextDue) {
+			this.adherence = adherence;
+			this.nextDue = nextDue;
+		}
+		
+		public Double getAdherence() {
+			return adherence;
+		}
+		
+		public LocalDate getNextDue() {
+			return nextDue;
+		}
+	}
+	
+	/**
+	 * Calculates adherence and the next due date without a first oral visit day, as ACT 2.0 did. An
+	 * oral regimen with no oral adherence entry recorded since it started then takes its due date from
+	 * the latest estimate recorded under an earlier oral course in the past year, or has none.
+	 *
+	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
+	 *            regimen that is not an injection
+	 * @param injections the dates injections were given
+	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
+	 * @return the adherence and next due date; both are null when no prescription has started by today
+	 */
+	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
+	        SortedMap<LocalDate, OralEntry> oral, LocalDate today) {
+		return calculate(prescriptions, injections, oral, today, null);
+	}
+	
+	/**
+	 * Calculates adherence, from the injections over the past year or the latest oral estimate, and the
+	 * next date prophylaxis is due.
+	 * <p>
+	 * The calculation looks back 365 days from today. When the latest prescription started by today is
+	 * oral and an oral estimate was recorded under it in that window, the adherence is the latest such
+	 * estimate, as a fraction. Otherwise it is the share of the injection regimens' prescribed days in
+	 * the window that the injections covered, or null when the window holds no injection regimen.
+	 *
+	 * @param prescriptions each prescription's start date and its regimen's interval in days, 0 for a
+	 *            regimen that is not an injection
+	 * @param injections the dates injections were given
+	 * @param oral the oral adherence entries by date
+	 * @param today the day to calculate as of; later prescriptions and oral entries are ignored
+	 * @param oralFirstDueDays days after an oral regimen starts that its first oral visit is due, while
+	 *            no oral adherence entry has been recorded since the start; null gives such a regimen
+	 *            no first-visit due date, as ACT 2.0 did, and it then takes its due date from the
+	 *            latest estimate recorded under an earlier oral course in the past year, or has none
+	 * @return the adherence and next due date; both are null when no prescription has started by today,
+	 *         and either is null when nothing recorded gives a value for it
+	 */
+	public static Result calculate(SortedMap<LocalDate, Integer> prescriptions, NavigableSet<LocalDate> injections,
+	        SortedMap<LocalDate, OralEntry> oral, LocalDate today, Integer oralFirstDueDays) {
+		// Future prescriptions and oral entries do not count.
+		SortedMap<LocalDate, Integer> started = prescriptions.headMap(today.plusDays(1));
+		SortedMap<LocalDate, OralEntry> estimated = oral.headMap(today.plusDays(1));
+		if (started.isEmpty()) {
+			return new Result(null, null);
+		}
+		List<LocalDate> dates = new ArrayList<LocalDate>(started.keySet());
+		LocalDate yearAgo = today.minusDays(365);
+		
+		long missedDays = 0;
+		long totalDays = 0;
+		Double estimate = null;
+		LocalDate latestEstimateDate = null;
+		
+		for (int i = 0; i < dates.size(); i++) {
+			boolean last = i == dates.size() - 1;
+			LocalDate windowStart = dates.get(i);
+			// Only the last prescription started a year or more ago counts, from exactly a year ago.
+			if (!windowStart.isAfter(yearAgo)) {
+				if (last || dates.get(i + 1).isAfter(yearAgo)) {
+					windowStart = yearAgo;
+				} else {
+					continue;
+				}
+			}
+			LocalDate windowEnd = last ? today.plusDays(1) : dates.get(i + 1);
+			LocalDate finalDue = last ? today : windowEnd;
+			int intervalDays = started.get(dates.get(i));
+			estimate = null;
+			
+			if (intervalDays == 0) {
+				for (Map.Entry<LocalDate, OralEntry> entry : estimated.entrySet()) {
+					LocalDate day = entry.getKey();
+					if (!day.isBefore(windowStart) && day.isBefore(windowEnd) && entry.getValue().estimate != null) {
+						estimate = entry.getValue().estimate / 100;
+						latestEstimateDate = day;
+					}
+				}
+				continue;
+			}
+			
+			// The days from the window's start are covered by the injection before it, or by the run's start.
+			LocalDate runStart = injectionRunStart(started, dates, i);
+			LocalDate before = injections.floor(windowStart);
+			LocalDate previous = before != null && !before.isBefore(runStart) ? before : runStart;
+			List<LocalDate> given = new ArrayList<LocalDate>(injections.subSet(windowStart, false, windowEnd, false));
+			given.add(finalDue);
+			for (LocalDate injection : given) {
+				LocalDate due = previous.plusDays(intervalDays);
+				LocalDate lateFrom = due.isAfter(windowStart) ? due : windowStart;
+				if (injection.isAfter(lateFrom)) {
+					missedDays += ChronoUnit.DAYS.between(lateFrom, injection);
+				}
+				previous = injection;
+			}
+			totalDays += ChronoUnit.DAYS.between(windowStart, windowEnd);
+		}
+		
+		// Any age, unlike ACT 2.0's past year; nextDue still drops one from before the current run.
+		SortedSet<LocalDate> givenByToday = injections.headSet(today.plusDays(1));
+		LocalDate latestInjection = givenByToday.isEmpty() ? null : givenByToday.last();
+		return new Result(adherence(estimate, missedDays, totalDays),
+		        nextDue(started, latestInjection, latestEstimateDate, estimated, oralFirstDueDays));
+	}
+	
+	/**
+	 * Finds the start date of the run of injection prescriptions, unbroken by an oral one, that ends
+	 * with prescription i. An injection given before that run does not cover any day within it.
+	 */
+	private static LocalDate injectionRunStart(SortedMap<LocalDate, Integer> started, List<LocalDate> dates, int i) {
+		int j = i;
+		while (j > 0 && started.get(dates.get(j - 1)) != 0) {
+			j--;
+		}
+		return dates.get(j);
+	}
+	
+	private static Double adherence(Double estimate, long missedDays, long totalDays) {
+		if (estimate != null) {
+			return estimate;
+		}
+		return totalDays == 0 ? null : 1 - ((double) missedDays / totalDays);
+	}
+	
+	private static LocalDate nextDue(SortedMap<LocalDate, Integer> started, LocalDate latestInjection,
+	        LocalDate latestEstimateDate, SortedMap<LocalDate, OralEntry> estimated, Integer oralFirstDueDays) {
+		LocalDate latestPrescription = started.lastKey();
+		int intervalDays = started.get(latestPrescription);
+		if (intervalDays != 0) {
+			// A change of injection prescription keeps the dose already due, so count from the run as adherence does.
+			List<LocalDate> dates = new ArrayList<LocalDate>(started.keySet());
+			LocalDate runStart = injectionRunStart(started, dates, dates.size() - 1);
+			LocalDate from = latestInjection != null && !latestInjection.isBefore(runStart) ? latestInjection : runStart;
+			return from.plusDays(intervalDays);
+		}
+		// Nothing recorded since the oral regimen started: its first oral visit is due, if a day is set. Before
+		// the estimate branch, since a visit under an earlier oral course would otherwise set the date.
+		if (oralFirstDueDays != null && estimated.tailMap(latestPrescription).isEmpty()) {
+			return latestPrescription.plusDays(oralFirstDueDays);
+		}
+		if (latestEstimateDate != null) {
+			Integer durationDays = estimated.get(latestEstimateDate).durationDays;
+			return durationDays == null ? null : latestEstimateDate.plusDays(durationDays);
+		}
+		return null;
+	}
+}

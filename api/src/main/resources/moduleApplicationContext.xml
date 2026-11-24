@@ -17,7 +17,7 @@
 
     <!-- Core's session factory chains every Interceptor bean: checks a site administrator's change to a
          user's clinics or roles as it is written, against the values still in the database -->
-    <bean id="actcoreUserClinicsFlushCheck" class="org.openmrs.module.actcore.clinics.UserClinicsFlushCheck"/>
+    <bean id="actcoreUserClinicsFlushCheck" class="org.openmrs.module.actcore.api.db.hibernate.UserClinicsFlushCheck"/>
 
     <bean id="actcore.ScreeningCountService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
         <property name="transactionManager" ref="transactionManager"/>

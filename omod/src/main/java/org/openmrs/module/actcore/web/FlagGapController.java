@@ -18,7 +18,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.FlagGapService;
-import org.openmrs.module.actcore.gap.FlagGap;
+import org.openmrs.module.actcore.model.FlagGap;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.webservices.rest.SimpleObject;

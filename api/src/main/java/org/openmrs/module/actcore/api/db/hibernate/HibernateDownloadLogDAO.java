@@ -18,9 +18,9 @@ import java.util.Map;
 import org.hibernate.Query;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
-import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.download.DownloadRecord;
-import org.openmrs.module.actcore.logs.Names;
+import org.openmrs.module.actcore.api.impl.Names;
+import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadRecord;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.DownloadLogDAO}. */
 public class HibernateDownloadLogDAO implements DownloadLogDAO {

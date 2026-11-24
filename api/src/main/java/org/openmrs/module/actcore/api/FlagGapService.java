@@ -14,7 +14,7 @@ import java.util.List;
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
-import org.openmrs.module.actcore.gap.FlagGap;
+import org.openmrs.module.actcore.model.FlagGap;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 

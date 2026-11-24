@@ -27,7 +27,7 @@ import org.junit.Test;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.actcore.logs.AuditTables;
+import org.openmrs.module.actcore.api.impl.AuditTables;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;

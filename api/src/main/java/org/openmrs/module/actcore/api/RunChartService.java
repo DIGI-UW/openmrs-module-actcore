@@ -18,7 +18,7 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.runchart.RunCharts;
+import org.openmrs.module.actcore.api.impl.RunCharts;
 
 /**
  * The service that calculates ACT 2.0's run charts for the Dashboard when they are asked for,

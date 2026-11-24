@@ -12,8 +12,8 @@ package org.openmrs.module.actcore.api.db;
 import java.util.Date;
 import java.util.List;
 
-import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.download.DownloadRecord;
+import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadRecord;
 
 /**
  * The database access behind {@link org.openmrs.module.actcore.api.DownloadLogService}, which saves
