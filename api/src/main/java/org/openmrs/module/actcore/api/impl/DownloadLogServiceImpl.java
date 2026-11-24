@@ -23,6 +23,7 @@ import org.openmrs.Form;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
@@ -109,8 +110,8 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			matching.add(download);
 		}
 		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
-		int size = filter.limit < 1 ? DownloadSearchCriteria.DEFAULT_LIMIT
-		        : Math.min(filter.limit, DownloadSearchCriteria.MAX_LIMIT);
+		int size = filter.limit < 1 ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT
+		        : Math.min(filter.limit, ActCoreConstants.DOWNLOAD_MAX_LIMIT);
 		page.results.addAll(matching.subList(start, Math.min(start + size, matching.size())));
 		page.totalCount = matching.size();
 		return page;

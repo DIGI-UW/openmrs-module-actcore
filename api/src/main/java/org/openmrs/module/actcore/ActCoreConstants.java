@@ -166,11 +166,22 @@ public final class ActCoreConstants {
 	/** The cohort module's privilege for changing cohorts, which the patient lists of flags need. */
 	public static final String COHORT_EDIT_COHORTS = "Edit Cohorts in Cohort Module";
 	
-	/** The number of entries a log page holds when the request does not say how many it wants. */
+	/**
+	 * The number of entries an activity or read log page holds when the request does not say how many
+	 * it wants.
+	 */
 	public static final int LOG_DEFAULT_LIMIT = 20;
 	
-	/** The most entries a log page holds, whatever the request asks for. */
+	/** The most entries an activity or read log page holds, whatever the request asks for. */
 	public static final int LOG_MAX_LIMIT = 100;
+	
+	/**
+	 * The number of downloads a download log page holds when the filter does not say how many it wants.
+	 */
+	public static final int DOWNLOAD_DEFAULT_LIMIT = 100;
+	
+	/** The most downloads a download log page holds, whatever the filter asks for. */
+	public static final int DOWNLOAD_MAX_LIMIT = 500;
 	
 	private ActCoreConstants() {
 	}

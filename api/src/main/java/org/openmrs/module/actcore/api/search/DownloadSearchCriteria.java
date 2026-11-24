@@ -11,18 +11,14 @@ package org.openmrs.module.actcore.api.search;
 
 import java.time.LocalDate;
 
+import org.openmrs.module.actcore.ActCoreConstants;
+
 /**
  * Which recorded downloads to list, and which page of them. A filter left null is not applied.
  *
  * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(DownloadSearchCriteria)
  */
 public class DownloadSearchCriteria {
-	
-	/** The number of downloads a page holds when the filter does not say how many it wants. */
-	public static final int DEFAULT_LIMIT = 100;
-	
-	/** The most downloads a page holds, whatever the filter asks for. */
-	public static final int MAX_LIMIT = 500;
 	
 	/** The username, or the system ID of a user without one, of the user whose downloads to list. */
 	public String username;
@@ -49,7 +45,8 @@ public class DownloadSearchCriteria {
 	public int startIndex;
 	
 	/**
-	 * The most downloads to return, capped at {@link #MAX_LIMIT}; below 1 for {@link #DEFAULT_LIMIT}.
+	 * The most downloads to return, capped at {@link ActCoreConstants#DOWNLOAD_MAX_LIMIT}; below 1 for
+	 * {@link ActCoreConstants#DOWNLOAD_DEFAULT_LIMIT}.
 	 */
-	public int limit = DEFAULT_LIMIT;
+	public int limit = ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT;
 }

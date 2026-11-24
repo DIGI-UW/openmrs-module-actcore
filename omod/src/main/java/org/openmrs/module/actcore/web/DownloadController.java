@@ -183,8 +183,8 @@ public class DownloadController extends ActCoreRestController {
 	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
 	 * @param identifiers with, without or research, or null for no identifiers filter
 	 * @param startIndex the first download to give, from 0; null for 0
-	 * @param limit the most downloads to give, capped at {@value DownloadSearchCriteria#MAX_LIMIT};
-	 *            null or below 1 for {@value DownloadSearchCriteria#DEFAULT_LIMIT}
+	 * @param limit the most downloads to give, capped at {@value ActCoreConstants#DOWNLOAD_MAX_LIMIT};
+	 *            null or below 1 for {@value ActCoreConstants#DOWNLOAD_DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
 	 *         no user has the username or no form has the uuid
 	 * @throws APIAuthenticationException when the user lacks
@@ -212,7 +212,7 @@ public class DownloadController extends ActCoreRestController {
 		filter.formUuid = formUuid;
 		filter.identifiers = identifiers;
 		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? DownloadSearchCriteria.DEFAULT_LIMIT : limit;
+		filter.limit = limit == null ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT : limit;
 		DownloadPage page = Context.getService(DownloadLogService.class).getDownloads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (DownloadLogItem download : page.results) {
