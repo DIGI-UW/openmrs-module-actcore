@@ -52,8 +52,8 @@ public class PatientFlagRefresh {
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefresh.class);
 	
 	/**
-	 * The lock held while a full refresh runs. It is static because the REST taskaction resource and
-	 * the refresh endpoint each run a new instance alongside the scheduler's.
+	 * The lock held while a full refresh runs. It is static because each run, whether scheduled or
+	 * asked for through the refresh endpoint, makes its own instance of this class.
 	 */
 	private static final ReentrantLock RUNNING = new ReentrantLock();
 	
