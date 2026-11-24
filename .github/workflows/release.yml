@@ -30,4 +30,4 @@ jobs:
       # The shared job's GITHUB_TOKEN has no packages: write, so the release publishes as the bot.
       MAVEN_REPO_USERNAME: uwdigi
       MAVEN_REPO_API_KEY: ${{ secrets.GH_BOT_TOKEN }}
-      BOT_PAT: ${{ secrets.BOT_PAT }}
+      BOT_PAT: ${{ secrets.GH_BOT_TOKEN }}
