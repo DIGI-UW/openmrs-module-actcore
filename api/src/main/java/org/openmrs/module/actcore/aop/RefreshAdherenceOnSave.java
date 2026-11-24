@@ -21,7 +21,7 @@ import org.openmrs.Encounter;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.AdherenceService;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

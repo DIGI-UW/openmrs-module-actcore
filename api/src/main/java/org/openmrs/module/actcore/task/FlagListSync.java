@@ -22,6 +22,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.cohort.CohortAttribute;
 import org.openmrs.module.cohort.CohortAttributeType;
 import org.openmrs.module.cohort.CohortM;
@@ -57,17 +58,23 @@ public class FlagListSync {
 	 */
 	public static class Result {
 		
-		int created;
+		/** How many lists the run created. */
+		public int created;
 		
-		int restored;
+		/** How many lists of purged flags the run restored once the flag existed again. */
+		public int restored;
 		
-		int retired;
+		/** How many lists the run voided because their flag no longer exists. */
+		public int retired;
 		
-		int membersAdded;
+		/** How many patients the run added to lists. */
+		public int membersAdded;
 		
-		int membersEnded;
+		/** How many patients' list memberships the run ended. */
+		public int membersEnded;
 		
-		int failures;
+		/** How many flags' lists failed to sync. */
+		public int failures;
 	}
 	
 	/**

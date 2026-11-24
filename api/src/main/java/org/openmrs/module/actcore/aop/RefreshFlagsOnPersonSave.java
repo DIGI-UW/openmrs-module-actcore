@@ -19,7 +19,7 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Person;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.Transactions;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

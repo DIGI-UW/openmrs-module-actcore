@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.adherence;
+package org.openmrs.module.actcore.tasks;
 
 import java.time.LocalDate;
 import java.util.Locale;

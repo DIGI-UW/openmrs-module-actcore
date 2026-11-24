@@ -43,6 +43,8 @@ import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.model.RaisedFlags;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;
@@ -415,12 +417,12 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void runFullRefresh() {
 		Context.flushSession();
-		new PatientFlagRefreshTask() {
+		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
 			
 			@Override
-			void refreshAdherence() {
+			public void run() {
 			}
-		}.runIfIdle();
+		});
 	}
 	
 	private void refreshPatient() {

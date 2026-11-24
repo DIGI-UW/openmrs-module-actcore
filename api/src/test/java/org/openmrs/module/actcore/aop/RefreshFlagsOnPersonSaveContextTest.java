@@ -27,7 +27,7 @@ import org.openmrs.api.PatientService;
 import org.openmrs.api.PersonService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
-import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
+import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
