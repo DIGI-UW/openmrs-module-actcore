@@ -41,6 +41,8 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityPage;
 import org.openmrs.module.actcore.model.RaisedFlags;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
@@ -344,9 +346,9 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		flagService.saveFlag(disabled);
 		runFullRefresh();
 		
-		ActivityLog.Filter filter = new ActivityLog.Filter();
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
 		filter.kind = "flag";
-		ActivityLog.Page page = Context.getService(AuditLogService.class).getActivity(filter);
+		ActivityPage page = Context.getService(AuditLogService.class).getActivity(filter);
 		
 		assertEquals(0, rows());
 		assertEquals(2, page.totalCount);

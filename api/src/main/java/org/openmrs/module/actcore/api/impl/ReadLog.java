@@ -26,7 +26,15 @@ import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.TooManyResultsException;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
+import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.LogPatient;
+import org.openmrs.module.actcore.model.LogUser;
+import org.openmrs.module.actcore.model.ReadEntry;
+import org.openmrs.module.actcore.model.ReadPage;
+import org.openmrs.module.actcore.model.ReadPatient;
+import org.openmrs.module.actcore.model.ReadRow;
 import org.openmrs.module.actcore.utils.UserClinics;
 
 /**
@@ -60,108 +68,8 @@ public class ReadLog {
 	    "Allergy", "Relationship", "Cohort", "CohortMembership", "MedicationDispense", "PersonName", "PersonAddress",
 	    "PersonAttribute", "PatientIdentifier", "UnknownEntity"));
 	
-	/**
-	 * The filters that choose which reads of patient data to list, and which page of the matching rows
-	 * to return.
-	 * <p>
-	 * A filter left null is not applied. {@code patient} matches a patient by uuid, or else matches the
-	 * patients with an unvoided identifier equal to it, such as an ACT ID or a National ID, or with a
-	 * given, middle or family name containing it. {@code from} and {@code to} are both included, each
-	 * as a whole day. {@code startIndex} and {@code limit} pick the page, the limit defaulting to
-	 * {@link Rows#DEFAULT_LIMIT}.
-	 */
-	public static class Filter {
-		
-		/** The username, as the read audit recorded it, of the user whose reads to list. */
-		public String username;
-		
-		/**
-		 * The patient whose reads to list: a patient uuid, or else an identifier to match exactly or part
-		 * of a name to search for.
-		 */
-		public String patient;
-		
-		/** The first day whose reads to list. */
-		public LocalDate from;
-		
-		/** The last day whose reads to list. */
-		public LocalDate to;
-		
-		/** The index, from 0, of the first matching row to return. */
-		public int startIndex;
-		
-		/** The most rows to return. */
-		public int limit = Rows.DEFAULT_LIMIT;
-	}
-	
-	/** One page of the rows a filter matches, with how many rows it matches in all. */
-	public static class Page {
-		
-		/** The rows on the page, the row with the latest first read first. */
-		public final List<Row> results = new ArrayList<Row>();
-		
-		/** How many rows the filter matches across every page. */
-		public int totalCount;
-	}
-	
-	/** One read as the audit log module recorded it. */
-	public static class Read {
-		
-		/** When the read happened. */
-		public Date time;
-		
-		/** The name of the entity read, such as Patient or Encounter. */
-		public String entity;
-		
-		/**
-		 * What was read, as the page shows it, such as "the patient record", "2 encounters" or "a search: 4
-		 * patients", prefixed with "failed: " for a read that failed.
-		 */
-		public String description;
-	}
-	
-	/**
-	 * One row of the read log: a user's reads of one patient, or of one entity when the reads found no
-	 * single patient, that fall within {@link ReadLog#WINDOW_MILLIS} of the first of them.
-	 */
-	public static class Row {
-		
-		/** An id for the row, made of the user, the patient and the id of the row's first read. */
-		public String id;
-		
-		/** When the row's first read happened. */
-		public Date from;
-		
-		/** When the row's last read happened. */
-		public Date to;
-		
-		/** The user who read. */
-		public Names.Who user;
-		
-		/** The patient read, or null when the reads found no single patient. */
-		public Subject patient;
-		
-		/** The row's reads, oldest first. */
-		public final List<Read> reads = new ArrayList<Read>();
-		
-		/**
-		 * A short label for the session the first read was made in, derived from the session id rather than
-		 * the id itself, or null when no session was recorded.
-		 */
-		public String sessionId;
-		
-		/** The IP address the first read came from. */
-		public String ip;
-		
-		/** The user agent of the browser that made the first read. */
-		public String userAgent;
-		
-		/**
-		 * Whether the user and the patient share a clinic. It is null when the reads found no single
-		 * patient, when the patient is purged, when the user has no clinics on their account, or when the
-		 * patient has none recorded.
-		 */
-		public Boolean sameClinicAsUser;
+	/** A row with what the log reads to name its user and patient, which the page never shows. */
+	static class Row extends ReadRow {
 		
 		String username;
 		
@@ -170,25 +78,6 @@ public class ReadLog {
 		String patientUuid;
 		
 		String patientName;
-	}
-	
-	/** The patient a row's reads are of, as the Logs page names them. */
-	public static class Subject {
-		
-		/** The patient's uuid. */
-		public String uuid;
-		
-		/** The patient's name, or the name the read audit recorded once the patient is purged. */
-		public String display;
-		
-		/** The patient's ACT ID, or null when they have none or are purged. */
-		public String actId;
-		
-		/** The name of the patient's primary care clinic, or null when none is recorded. */
-		public String primaryCareClinic;
-		
-		/** The name of the patient's cardiac clinic, or null when none is recorded. */
-		public String cardiacClinic;
 	}
 	
 	private final AuditLogDAO dao;
@@ -214,10 +103,11 @@ public class ReadLog {
 	 * @param filter the filters that choose the reads and the page of rows to return
 	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
 	 *         its days
-	 * @throws Rows.TooMany when more than {@value #PATIENT_MATCHES} patients match the filter's patient
+	 * @throws TooManyResultsException when more than {@value #PATIENT_MATCHES} patients match the
+	 *             filter's patient
 	 */
-	public Page list(Filter filter) {
-		Page page = new Page();
+	public ReadPage list(ReadSearchCriteria filter) {
+		ReadPage page = new ReadPage();
 		List<String> uuids = null;
 		if (StringUtils.isNotBlank(filter.patient)) {
 			uuids = patientUuids(filter.patient.trim());
@@ -296,7 +186,7 @@ public class ReadLog {
 				open.put(key, row);
 			}
 			row.to = read.time;
-			Read entry = new Read();
+			ReadEntry entry = new ReadEntry();
 			entry.time = read.time;
 			entry.entity = read.entity;
 			entry.description = describe(read.entity, read.targets, read.patients, read.success);
@@ -402,7 +292,7 @@ public class ReadLog {
 	private void name(Row row) {
 		row.user = names.user(row.userUuid);
 		if (row.user == null) {
-			row.user = new Names.Who();
+			row.user = new LogUser();
 			row.user.uuid = row.userUuid;
 			row.user.username = row.username;
 			row.user.display = row.username;
@@ -410,8 +300,8 @@ public class ReadLog {
 		if (row.patientUuid == null) {
 			return;
 		}
-		Names.Subject found = names.patient(row.patientUuid);
-		row.patient = new Subject();
+		LogPatient found = names.patient(row.patientUuid);
+		row.patient = new ReadPatient();
 		row.patient.uuid = row.patientUuid;
 		row.patient.display = found == null ? row.patientName : found.display;
 		row.patient.actId = found == null ? null : found.actId;
@@ -458,7 +348,7 @@ public class ReadLog {
 			uuids.add(Rows.string(row, "uuid"));
 		}
 		if (uuids.size() > PATIENT_MATCHES) {
-			throw new Rows.TooMany("More than " + PATIENT_MATCHES + " patients match; narrow the patient search");
+			throw new TooManyResultsException("More than " + PATIENT_MATCHES + " patients match; narrow the patient search");
 		}
 		return uuids;
 	}

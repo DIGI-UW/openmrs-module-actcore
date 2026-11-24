@@ -15,8 +15,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
-import org.openmrs.module.actcore.api.impl.Names;
-
 /**
  * Holds the {@link Filter} that
  * {@link org.openmrs.module.actcore.api.DownloadLogService#getDownloads(Filter)} takes and the
@@ -103,7 +101,7 @@ public class DownloadLog {
 		public Date date;
 		
 		/** The user who downloaded, or null when no user has the uuid recorded. */
-		public Names.Who user;
+		public LogUser user;
 		
 		/** The uuid of the form downloaded when the download held exactly one form, else null. */
 		public String formUuid;

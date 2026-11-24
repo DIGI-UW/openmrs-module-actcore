@@ -44,6 +44,12 @@ import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
+import org.openmrs.module.actcore.api.TooManyResultsException;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityEntry;
+import org.openmrs.module.actcore.model.ActivityField;
+import org.openmrs.module.actcore.model.ActivityPage;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -164,7 +170,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	public void namesAnEncounterNoFormRecordedByItsEncounterType() {
 		referral();
 		
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), REFERRED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), REFERRED);
 		
 		assertEquals("Saved RHD Referral", entry.action);
 		assertNull(entry.summary);
@@ -175,7 +181,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	public void namesAnEncounterNoFormRecordedByTheNameUsersSeeForItsType() {
 		MutableMessageSource previous = showing("ui.i18n.EncounterType.name." + referral().getUuid(), "Referral");
 		try {
-			assertEquals("Saved Referral", entry(log.getActivity(new ActivityLog.Filter()), REFERRED).action);
+			assertEquals("Saved Referral", entry(log.getActivity(new ActivitySearchCriteria()), REFERRED).action);
 		}
 		finally {
 			Context.getMessageSourceService().setActiveMessageSource(previous);
@@ -191,7 +197,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		    PATIENT, type.getVisitTypeId());
 		MutableMessageSource previous = showing("ui.i18n.VisitType.name." + type.getUuid(), "Clinic Visit");
 		try {
-			ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), 41);
+			ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), 41);
 			
 			assertEquals("Started a visit", entry.action);
 			assertEquals("Clinic Visit, 21-Oct-2026", entry.summary);
@@ -242,7 +248,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void groupsASavedFormWithItsObservationsIntoOneEntry() {
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), SAVED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), SAVED);
 		
 		assertEquals("saved", entry.kind);
 		assertEquals("Saved RHD BPG Delivery", entry.action);
@@ -262,7 +268,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	public void namesAFormByTheNameUsersSeeWhenItHasOne() {
 		MutableMessageSource previous = showing("ui.i18n.Form.name." + form.getUuid(), "BPG Delivery");
 		try {
-			ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), SAVED);
+			ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), SAVED);
 			
 			assertEquals("Saved BPG Delivery", entry.action);
 			assertEquals("BPG Delivery", entry.encounter.formName);
@@ -294,13 +300,13 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsAnEditedFormByWhatChanged() {
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), EDITED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), EDITED);
 		
 		assertEquals("edited", entry.kind);
 		assertEquals("Edited RHD BPG Delivery", entry.action);
 		assertEquals("1 field changed: Dose given", entry.summary);
 		
-		ActivityLog.Details details = log.getActivityDetails(EDITED);
+		ActivityDetails details = log.getActivityDetails(EDITED);
 		assertEquals(1, details.fields.size());
 		assertEquals("Dose given", details.fields.get(0).name);
 		assertEquals("1.2", details.fields.get(0).previous);
@@ -322,15 +328,15 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		obs(908, MOVED, 0, false, date, "value_datetime", "'2026-10-22 00:00:00'");
 		obs(909, MOVED, 0, false, date, "value_datetime", "'2026-10-21 00:00:00'");
 		
-		assertEquals("1 field changed: Visit date", entry(log.getActivity(new ActivityLog.Filter()), MOVED).summary);
-		List<ActivityLog.Field> fields = log.getActivityDetails(MOVED).fields;
+		assertEquals("1 field changed: Visit date", entry(log.getActivity(new ActivitySearchCriteria()), MOVED).summary);
+		List<ActivityField> fields = log.getActivityDetails(MOVED).fields;
 		assertEquals(1, fields.size());
 		assertEquals("Visit date", fields.get(0).name);
 	}
 	
 	@Test
 	public void listsAVoidedFormWithItsReason() {
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), VOIDED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), VOIDED);
 		
 		assertEquals("voided", entry.kind);
 		assertEquals("Voided RHD BPG Delivery", entry.action);
@@ -341,7 +347,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void expandsASavedFormToEachQuestionAndAnswer() {
-		ActivityLog.Details details = log.getActivityDetails(SAVED);
+		ActivityDetails details = log.getActivityDetails(SAVED);
 		
 		assertEquals(3, details.fields.size());
 		assertEquals("Was BPG given at this visit?", details.fields.get(0).name);
@@ -357,7 +363,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	public void groupsARegistrationIntoOneEntryNamingTheClinicAndConsent() {
 		registration();
 		
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), REGISTERED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), REGISTERED);
 		
 		assertEquals("registered", entry.kind);
 		assertEquals("Registered a patient", entry.action);
@@ -365,7 +371,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Collet Test Chebaskwony", entry.target.display);
 		assertNull(entry.encounter);
 		List<String> fields = new ArrayList<String>();
-		for (ActivityLog.Field field : log.getActivityDetails(REGISTERED).fields) {
+		for (ActivityField field : log.getActivityDetails(REGISTERED).fields) {
 			fields.add(field.name + "=" + field.current);
 		}
 		assertTrue(fields.toString(), fields.contains("Gender=F"));
@@ -379,7 +385,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	public void namesAUserCreatedByTheirRole() {
 		userCreated();
 		
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), USER_CREATED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), USER_CREATED);
 		
 		assertEquals("user", entry.kind);
 		assertEquals("Created user", entry.action);
@@ -396,8 +402,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
 		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
-		ActivityLog.Entry entry = page.results.get(page.results.size() - 1);
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		ActivityEntry entry = page.results.get(page.results.size() - 1);
 		
 		assertNull(entry.revisionId);
 		assertEquals("flag", entry.kind);
@@ -413,7 +419,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, dead, death_date) values (%d, %d, 1, 'F', true, '2026-10-18 00:00:00')",
 		    PATIENT, DECEASED);
 		
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), DECEASED);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), DECEASED);
 		
 		assertEquals("patientStatus", entry.kind);
 		assertEquals("Marked deceased", entry.action);
@@ -429,10 +435,10 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values (%d, 17, 0, '%s', false, '2026-10-21 10:52:00', %d, %d)",
 		    encounter.getEncounterId(), encounter.getUuid(), form.getFormId(), PATIENT);
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
 		
 		assertEquals(3, page.totalCount);
-		for (ActivityLog.Entry entry : page.results) {
+		for (ActivityEntry entry : page.results) {
 			assertTrue(entry.revisionId != 17);
 		}
 	}
@@ -443,7 +449,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
 		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
 		
-		ActivityLog.Entry entry = only(filter("flag", null, null, null, null, null));
+		ActivityEntry entry = only(filter("flag", null, null, null, null, null));
 		
 		assertEquals("Dismissed flag", entry.action);
 		assertEquals(0, log.getActivity(filter("flag", "admin", null, null, null, null)).totalCount);
@@ -466,9 +472,9 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		sql("insert into patient_AUD (patient_id, REV, voided, void_reason) values (%d, 61, true, 'entered twice')",
 		    PATIENT);
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
 		
-		ActivityLog.Entry voided = entry(page, 60);
+		ActivityEntry voided = entry(page, 60);
 		assertEquals("edited", voided.kind);
 		assertEquals("Voided the patient", voided.action);
 		assertEquals("Reason: entered twice", voided.summary);
@@ -491,7 +497,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " patient_id) values (%d, 19, 1, '%s', true, 'entered on the wrong patient', '2026-10-22 10:52:00', %d, %d)",
 		    encounter.getEncounterId(), encounter.getUuid(), form.getFormId(), PATIENT);
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
 		
 		assertEquals("patientStatus", entry(page, DECEASED).kind);
 		assertEquals("edited", entry(page, 18).kind);
@@ -514,7 +520,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values (701, 21, 1, '2026-10-02 00:00:00', '2026-10-21 00:00:00', false, %d, %d)",
 		    program.getProgramId(), PATIENT);
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
 		
 		assertEquals("Ended enrolment in study HIV PROGRAM", entry(page, 20).action);
 		assertEquals("Changed enrolment in study HIV PROGRAM", entry(page, 21).action);
@@ -533,7 +539,7 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values (901, 22, 0, false, '2026-10-21 00:00:00', %d, 1)",
 		    Rows.integer(enrolment, "patient_program_id"));
 		
-		ActivityLog.Entry entry = entry(log.getActivity(new ActivityLog.Filter()), 22);
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), 22);
 		
 		assertEquals("Enrolled in study HIV PROGRAM", entry.action);
 		assertEquals("From 21-Oct-2026", entry.summary);
@@ -551,8 +557,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		        + " values (%d, 23, 1, true, 'Peter', 'Okello', false, %d)",
 		    person.getPersonName().getPersonNameId(), person.getPersonId());
 		
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
-		ActivityLog.Entry entry = entry(page, 23);
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		ActivityEntry entry = entry(page, 23);
 		
 		assertEquals(4, page.totalCount);
 		assertEquals("other", entry.kind);
@@ -573,16 +579,16 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 			log.getActivity(filter("other", null, null, null, null, null));
 			fail("expected the kind filter to be refused");
 		}
-		catch (Rows.TooMany expected) {}
-		assertEquals(ActivityLog.MAX_CLASSIFIED + 4, log.getActivity(new ActivityLog.Filter()).totalCount);
+		catch (TooManyResultsException expected) {}
+		assertEquals(ActivityLog.MAX_CLASSIFIED + 4, log.getActivity(new ActivitySearchCriteria()).totalCount);
 	}
 	
 	@Test
 	public void leavesOutARevisionThatOnlyTouchesTheServerSetup() {
-		ActivityLog.Page page = log.getActivity(new ActivityLog.Filter());
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
 		
 		assertEquals(3, page.totalCount);
-		for (ActivityLog.Entry entry : page.results) {
+		for (ActivityEntry entry : page.results) {
 			assertTrue(entry.revisionId != SETUP_ONLY);
 		}
 		assertNull(log.getActivityDetails(SETUP_ONLY));
@@ -590,11 +596,11 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void listsNewestFirstAndPages() {
-		ActivityLog.Filter filter = new ActivityLog.Filter();
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
 		filter.startIndex = 1;
 		filter.limit = 1;
 		
-		ActivityLog.Page page = log.getActivity(filter);
+		ActivityPage page = log.getActivity(filter);
 		
 		assertEquals(3, page.totalCount);
 		assertEquals(1, page.results.size());
@@ -617,9 +623,9 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(0, log.getActivity(filter(null, null, null, null, LocalDate.of(2026, 10, 22), null)).totalCount);
 	}
 	
-	private ActivityLog.Filter filter(String kind, String username, String patient, String form, LocalDate from,
+	private ActivitySearchCriteria filter(String kind, String username, String patient, String form, LocalDate from,
 	        LocalDate to) {
-		ActivityLog.Filter filter = new ActivityLog.Filter();
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
 		filter.kind = kind;
 		filter.username = username;
 		filter.patientUuid = patient;
@@ -629,8 +635,8 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 		return filter;
 	}
 	
-	private ActivityLog.Entry only(ActivityLog.Filter filter) {
-		ActivityLog.Page page = log.getActivity(filter);
+	private ActivityEntry only(ActivitySearchCriteria filter) {
+		ActivityPage page = log.getActivity(filter);
 		assertEquals(1, page.totalCount);
 		return page.results.get(0);
 	}
@@ -719,14 +725,14 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	private List<String> currentValues(int revisionId) {
 		List<String> values = new ArrayList<String>();
-		for (ActivityLog.Field field : log.getActivityDetails(revisionId).fields) {
+		for (ActivityField field : log.getActivityDetails(revisionId).fields) {
 			values.add(field.current);
 		}
 		return values;
 	}
 	
-	private static ActivityLog.Entry entry(ActivityLog.Page page, int revisionId) {
-		for (ActivityLog.Entry entry : page.results) {
+	private static ActivityEntry entry(ActivityPage page, int revisionId) {
+		for (ActivityEntry entry : page.results) {
 			if (entry.revisionId != null && entry.revisionId == revisionId) {
 				return entry;
 			}

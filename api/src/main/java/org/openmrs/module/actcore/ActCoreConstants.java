@@ -12,9 +12,9 @@ package org.openmrs.module.actcore;
 /**
  * The names that ACT Core shares with its config.xml, its database and the modules it depends on:
  * the global properties it declares, its user property, its tables, and the privileges of other
- * modules that it checks or proxies. Each is spelled here once, and the code refers to it through
- * these constants. The config.xml describes each global property. ACT Core's own privileges are in
- * {@link ActCorePrivileges}.
+ * modules that it checks or proxies, and the page sizes of its logs. Each is spelled here once, and
+ * the code refers to it through these constants. The config.xml describes each global property. ACT
+ * Core's own privileges are in {@link ActCorePrivileges}.
  */
 public final class ActCoreConstants {
 	
@@ -160,6 +160,12 @@ public final class ActCoreConstants {
 	
 	/** The cohort module's privilege for changing cohorts, which the patient lists of flags need. */
 	public static final String COHORT_EDIT_COHORTS = "Edit Cohorts in Cohort Module";
+	
+	/** The number of entries a log page holds when the request does not say how many it wants. */
+	public static final int LOG_DEFAULT_LIMIT = 20;
+	
+	/** The most entries a log page holds, whatever the request asks for. */
+	public static final int LOG_MAX_LIMIT = 100;
 	
 	private ActCoreConstants() {
 	}

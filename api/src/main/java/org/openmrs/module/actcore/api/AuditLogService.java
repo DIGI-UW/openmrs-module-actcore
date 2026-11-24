@@ -15,10 +15,12 @@ import java.util.Map;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.api.impl.ActivityLog;
-import org.openmrs.module.actcore.api.impl.Names;
-import org.openmrs.module.actcore.api.impl.ReadLog;
-import org.openmrs.module.actcore.api.impl.Rows;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.actcore.model.LogUser;
+import org.openmrs.module.actcore.model.ReadPage;
 
 /**
  * The service behind the Logs page: what ACT's users changed, read from the audit log module's and
@@ -28,19 +30,19 @@ import org.openmrs.module.actcore.api.impl.Rows;
 public interface AuditLogService extends OpenmrsService {
 	
 	/**
-	 * Gets a page of the changes the filter matches, newest first, as
-	 * {@link ActivityLog#list(ActivityLog.Filter)} describes.
+	 * Gets a page of the changes the filter matches, newest first, including ACT Core's flag dismissals
+	 * unless the filter names a form or a kind other than flag.
 	 *
 	 * @param filter the filters that choose the changes and the page of them to return
 	 * @return the page of entries; empty when the filter names a user, patient or form that does not
 	 *         exist
-	 * @throws Rows.TooMany when a kind filter has more than {@link ActivityLog#MAX_CLASSIFIED} changes
-	 *             to sort
+	 * @throws TooManyResultsException when a kind filter has more changes to sort than one request may
+	 *             sort
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS)
-	ActivityLog.Page getActivity(ActivityLog.Filter filter);
+	ActivityPage getActivity(ActivitySearchCriteria filter);
 	
 	/**
 	 * Gets the fields one revision's save changed, and the reason given for a void.
@@ -52,22 +54,22 @@ public interface AuditLogService extends OpenmrsService {
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS)
-	ActivityLog.Details getActivityDetails(int revisionId);
+	ActivityDetails getActivityDetails(int revisionId);
 	
 	/**
-	 * Gets a page of the reads of patients' data that the filter matches, folded into rows, as
-	 * {@link ReadLog#list(ReadLog.Filter)} describes.
+	 * Gets a page of the reads of patients' data that the filter matches, folded into rows, the row
+	 * with the latest first read first.
 	 *
 	 * @param filter the filters that choose the reads and the page of rows to return
 	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
 	 *         its days
-	 * @throws Rows.TooMany when more than {@value ReadLog#PATIENT_MATCHES} patients match the filter's
-	 *             patient
+	 * @throws TooManyResultsException when more patients match the filter's patient than one request
+	 *             may read
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
-	ReadLog.Page getReads(ReadLog.Filter filter);
+	ReadPage getReads(ReadSearchCriteria filter);
 	
 	/**
 	 * Gets the id of the user with this username, or of the user with this system ID and no username,
@@ -94,5 +96,5 @@ public interface AuditLogService extends OpenmrsService {
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
 	@Authorized({ ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS })
-	Map<String, Names.Who> getUsers(Collection<String> uuids);
+	Map<String, LogUser> getUsers(Collection<String> uuids);
 }

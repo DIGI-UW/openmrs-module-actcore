@@ -28,6 +28,7 @@ import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
 import org.openmrs.module.actcore.model.DownloadLog;
 import org.openmrs.module.actcore.model.DownloadRecord;
+import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,7 +86,7 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		for (DownloadLog.Entry entry : entries) {
 			userUuids.add(entry.userUuid);
 		}
-		Map<String, Names.Who> users = logs.getUsers(userUuids);
+		Map<String, LogUser> users = logs.getUsers(userUuids);
 		List<DownloadLog.Download> matching = new ArrayList<DownloadLog.Download>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLog.Entry entry : entries) {
