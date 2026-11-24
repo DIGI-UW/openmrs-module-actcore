@@ -12,9 +12,9 @@ package org.openmrs.module.actcore;
 /**
  * The names that ACT Core shares with its config.xml, its database and the modules it depends on:
  * the global properties it declares, its user property, its tables, and the privileges of other
- * modules that it checks or proxies. Each is spelled here once, and the code refers to it through
- * these constants. The config.xml describes each global property. ACT Core's own privileges are in
- * {@link ActCorePrivileges}.
+ * modules that it checks or proxies, and the page sizes of its logs. Each is spelled here once, and
+ * the code refers to it through these constants. The config.xml describes each global property. ACT
+ * Core's own privileges are in {@link ActCorePrivileges}.
  */
 public final class ActCoreConstants {
 	
@@ -146,6 +146,11 @@ public final class ActCoreConstants {
 	/** The table that holds the screening counts, one row per saved clinic month. */
 	public static final String SCREENING_COUNT_TABLE = "actcore_screening_count";
 	
+	/**
+	 * The void reason given to a month's screening counts when a later save of the month replaces them.
+	 */
+	public static final String SCREENING_COUNT_REPLACED_REASON = "Replaced by a later save of the month";
+	
 	/** The audit log module's privilege for reading its audit logs, which the activity log needs. */
 	public static final String AUDITLOGWEB_VIEW_AUDIT_LOGS = "View Audit Logs";
 	
@@ -160,6 +165,23 @@ public final class ActCoreConstants {
 	
 	/** The cohort module's privilege for changing cohorts, which the patient lists of flags need. */
 	public static final String COHORT_EDIT_COHORTS = "Edit Cohorts in Cohort Module";
+	
+	/**
+	 * The number of entries an activity or read log page holds when the request does not say how many
+	 * it wants.
+	 */
+	public static final int LOG_DEFAULT_LIMIT = 20;
+	
+	/** The most entries an activity or read log page holds, whatever the request asks for. */
+	public static final int LOG_MAX_LIMIT = 100;
+	
+	/**
+	 * The number of downloads a download log page holds when the filter does not say how many it wants.
+	 */
+	public static final int DOWNLOAD_DEFAULT_LIMIT = 100;
+	
+	/** The most downloads a download log page holds, whatever the filter asks for. */
+	public static final int DOWNLOAD_MAX_LIMIT = 500;
 	
 	private ActCoreConstants() {
 	}

@@ -25,6 +25,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.api.impl.Names;
+import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -197,7 +198,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 * @param who the user, or null
 	 * @return the user's uuid, username, display and role; null for a null user
 	 */
-	static SimpleObject who(Names.Who who) {
+	static SimpleObject who(LogUser who) {
 		return who == null ? null
 		        : new SimpleObject().add("uuid", who.uuid).add("username", who.username).add("display", who.display)
 		                .add("role", who.role);

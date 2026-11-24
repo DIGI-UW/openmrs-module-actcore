@@ -25,11 +25,10 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
+import org.openmrs.module.actcore.model.ChartFlag;
+import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.model.FlagDismissal;
 import org.openmrs.module.actcore.model.RaisedFlag;
-import org.openmrs.module.actcore.model.RaisedFlags;
-import org.openmrs.module.actcore.tasks.FlagListSync;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -155,16 +154,16 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public List<RaisedFlags.Raised> getRaisedFlags(Patient patient) {
+	public List<ChartFlag> getRaisedFlags(Patient patient) {
 		Map<Integer, Date> raisedSince = dao.getRaisedSinceByFlag(patient.getPatientId());
-		List<RaisedFlags.Raised> raised = new ArrayList<RaisedFlags.Raised>();
+		List<ChartFlag> raised = new ArrayList<ChartFlag>();
 		Set<Integer> seen = new HashSet<Integer>();
 		for (PatientFlag row : Context.getService(FlagService.class).getPatientFlags(patient)) {
 			Flag flag = row.getFlag();
 			if (Boolean.TRUE.equals(row.getVoided()) || flag == null || !seen.add(flag.getFlagId())) {
 				continue;
 			}
-			raised.add(new RaisedFlags.Raised(flag, raisedSince.get(flag.getFlagId()), mayDismiss(flag)));
+			raised.add(new ChartFlag(flag, raisedSince.get(flag.getFlagId()), mayDismiss(flag)));
 		}
 		return raised;
 	}
@@ -174,13 +173,13 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	 */
 	@Override
 	// No @Transactional: REQUIRED undoes it on a failing sync; SUPPORTS flushes outside a tx.
-	public RaisedFlags.Dismissal dismiss(Patient patient, Flag flag) {
+	public DismissalOutcome dismiss(Patient patient, Flag flag) {
 		if (!carriesDismissTag(flag)) {
-			return RaisedFlags.Dismissal.NOT_DISMISSIBLE;
+			return DismissalOutcome.NOT_DISMISSIBLE;
 		}
 		// Not waited on: the full refresh holds it for minutes, and would undo the dismissal.
-		if (!PatientFlagRefreshTask.ROWS.readLock().tryLock()) {
-			return RaisedFlags.Dismissal.REFRESH_RUNNING;
+		if (!PatientFlagRefresh.ROWS.readLock().tryLock()) {
+			return DismissalOutcome.REFRESH_RUNNING;
 		}
 		for (String privilege : DISMISS_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
@@ -189,19 +188,19 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
 			        || Boolean.TRUE.equals(flag.getRetired())
 			        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
-				return RaisedFlags.Dismissal.NOT_RAISED;
+				return DismissalOutcome.NOT_RAISED;
 			}
 			Integer userId = Context.getAuthenticatedUser().getUserId();
 			recordDismissal(flag.getFlagId(), patient.getPatientId(), userId);
 			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
 			log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(), userId);
-			return RaisedFlags.Dismissal.DISMISSED;
+			return DismissalOutcome.DISMISSED;
 		}
 		finally {
 			for (String privilege : DISMISS_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
-			PatientFlagRefreshTask.ROWS.readLock().unlock();
+			PatientFlagRefresh.ROWS.readLock().unlock();
 		}
 	}
 	

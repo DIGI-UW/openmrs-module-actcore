@@ -16,7 +16,7 @@ import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
@@ -66,8 +66,8 @@ public class RefreshController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject refresh() {
 		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
-		PatientFlagRefreshTask.Result ran = ActCoreActivator.runAsDaemon("run the refresh",
-		    "The patient flag refresh failed", () -> new PatientFlagRefreshTask().runIfIdle());
+		PatientFlagRefresh.Result ran = ActCoreActivator.runAsDaemon("run the refresh", "The patient flag refresh failed",
+		    () -> new PatientFlagRefresh().runIfIdle());
 		SimpleObject response = status().add("refreshed", ran != null);
 		if (ran != null) {
 			response.add("flagsFailed", ran.flagsFailed).add("listsFailed", ran.listsFailed).add("adherenceFailed",
@@ -86,6 +86,6 @@ public class RefreshController extends ActCoreRestController {
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
 		}
 		return new SimpleObject().add("lastRefreshed", StringUtils.defaultIfBlank(lastFinished, null)).add("running",
-		    PatientFlagRefreshTask.isRunning());
+		    PatientFlagRefresh.isRunning());
 	}
 }

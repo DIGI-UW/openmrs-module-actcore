@@ -28,10 +28,12 @@ import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.handler.BaseVoidHandler;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
 import org.openmrs.module.actcore.model.ScreeningCount;
-import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCountMonth;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
 import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,15 +53,15 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public ScreeningCounts.Month getMonth(Location clinic, YearMonth month) {
+	public ScreeningCountMonth getMonth(Location clinic, YearMonth month) {
 		refuseUnlessTheirs(clinic);
 		List<ScreeningCount> rows = dao.getCurrentCounts(clinic.getLocationId(), firstDay(month));
-		ScreeningCounts.Month result = new ScreeningCounts.Month();
+		ScreeningCountMonth result = new ScreeningCountMonth();
 		ScreeningCount saved = rows.isEmpty() ? null : rows.get(0);
 		result.saved = saved != null;
 		result.notes = saved == null ? null : saved.getNotes();
 		if (saved == null) {
-			for (String column : ScreeningCounts.COLUMNS) {
+			for (String column : ScreeningCount.COLUMNS) {
 				result.counts.put(column, 0);
 			}
 		} else {
@@ -83,7 +85,7 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		dao.lockLocation(clinicId);
 		java.util.Date now = new java.util.Date();
 		for (ScreeningCount current : dao.getCurrentCounts(clinicId, day)) {
-			new BaseVoidHandler().handle(current, user, now, ScreeningCounts.REPLACED_REASON);
+			new BaseVoidHandler().handle(current, user, now, ActCoreConstants.SCREENING_COUNT_REPLACED_REASON);
 		}
 		dao.saveScreeningCount(new ScreeningCount(clinicId, day, values, StringUtils.trimToNull(notes)));
 	}
@@ -94,11 +96,11 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public ScreeningCounts.Summary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end) {
+	public ScreeningCountSummary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end) {
 		clinics = inScope(clinics);
 		if (clinics != null && clinics.isEmpty()) {
-			ScreeningCounts.Summary none = new ScreeningCounts.Summary();
-			for (String column : ScreeningCounts.COLUMNS) {
+			ScreeningCountSummary none = new ScreeningCountSummary();
+			for (String column : ScreeningCount.COLUMNS) {
 				none.sums.put(column, 0L);
 			}
 			return none;
@@ -144,22 +146,22 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 			throw refusal(month + " has not started, so it has no screening counts yet");
 		}
 		for (String column : counts.keySet()) {
-			if (!ScreeningCounts.COLUMNS.contains(column)) {
+			if (!ScreeningCount.COLUMNS.contains(column)) {
 				throw refusal("No screening count is named " + column);
 			}
 		}
-		if (notes != null && notes.trim().length() > ScreeningCounts.NOTES_LENGTH) {
-			throw refusal("Notes may be at most " + ScreeningCounts.NOTES_LENGTH + " characters");
+		if (notes != null && notes.trim().length() > ScreeningCount.NOTES_LENGTH) {
+			throw refusal("Notes may be at most " + ScreeningCount.NOTES_LENGTH + " characters");
 		}
 		Map<String, Integer> values = new LinkedHashMap<String, Integer>();
-		for (String column : ScreeningCounts.COLUMNS) {
+		for (String column : ScreeningCount.COLUMNS) {
 			Integer value = counts.get(column);
 			if (value != null && value < 0) {
 				throw refusal(column + " cannot be below 0");
 			}
 			values.put(column, value == null ? 0 : value);
 		}
-		for (String setting : ScreeningCounts.SETTINGS) {
+		for (String setting : ScreeningCount.SETTINGS) {
 			int screened = values.get(setting + "_screened");
 			long ages = (long) values.get(setting + "_children") + values.get(setting + "_adolescents")
 			        + values.get(setting + "_adults");

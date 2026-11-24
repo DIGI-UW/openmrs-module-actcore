@@ -24,6 +24,7 @@ import org.openmrs.EncounterType;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.model.ProphylaxisSummary;
 
 public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	

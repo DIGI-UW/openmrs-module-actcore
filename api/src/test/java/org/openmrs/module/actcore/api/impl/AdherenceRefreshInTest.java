@@ -9,20 +9,23 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
+import java.time.LocalDate;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 
 /**
  * A full adherence refresh that runs a step after it has read every patient's history and before it
- * computes their rows.
+ * computes their rows, given as the function that runs it as of a day and returns how many patients
+ * it wrote a row for.
  */
 public final class AdherenceRefreshInTest {
 	
 	private AdherenceRefreshInTest() {
 	}
 	
-	public static AdherenceRefresh afterReadingEveryPatient(AdherenceDAO dao, final Runnable step) {
+	public static Function<LocalDate, Integer> afterReadingEveryPatient(AdherenceDAO dao, final Runnable step) {
 		return new AdherenceRefresh(dao) {
 			
 			@Override
@@ -33,6 +36,6 @@ public final class AdherenceRefreshInTest {
 				}
 				return histories;
 			}
-		};
+		}::refreshAll;
 	}
 }

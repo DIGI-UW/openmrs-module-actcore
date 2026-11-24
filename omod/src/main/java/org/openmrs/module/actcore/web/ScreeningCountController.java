@@ -27,7 +27,9 @@ import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.ScreeningCountService;
-import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCountMonth;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
 import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -127,9 +129,9 @@ public class ScreeningCountController extends ActCoreRestController {
 		if (start.isAfter(end)) {
 			throw new IllegalRequestException("startMonth is after endMonth");
 		}
-		ScreeningCounts.Summary summary = service().getSummary(locationIds(clinics), start, end);
+		ScreeningCountSummary summary = service().getSummary(locationIds(clinics), start, end);
 		SimpleObject settings = new SimpleObject();
-		for (String setting : ScreeningCounts.SETTINGS) {
+		for (String setting : ScreeningCount.SETTINGS) {
 			settings.add(setting, summary.sums.get(setting + "_screened"));
 		}
 		return new SimpleObject().add("startMonth", start.format(MONTH)).add("endMonth", end.format(MONTH))
@@ -139,7 +141,7 @@ public class ScreeningCountController extends ActCoreRestController {
 		        .add("adults", summary.total("adults")).add("settings", settings);
 	}
 	
-	private static SimpleObject describe(Location clinic, YearMonth month, ScreeningCounts.Month counts) {
+	private static SimpleObject describe(Location clinic, YearMonth month, ScreeningCountMonth counts) {
 		return new SimpleObject().add("clinic", clinic.getUuid()).add("month", month.format(MONTH))
 		        .add("saved", counts.saved).add("counts", counts.counts).add("notes", counts.notes);
 	}

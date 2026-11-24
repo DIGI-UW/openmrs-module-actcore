@@ -17,7 +17,9 @@ import org.openmrs.Location;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCountMonth;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
 
 /**
  * The service that reads, saves and sums the monthly screening counts that each clinic enters, as
@@ -42,7 +44,7 @@ public interface ScreeningCountService extends OpenmrsService {
 	 */
 	@Authorized({ ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD,
 	        ActCorePrivileges.ENTER_SCREENING_COUNTS })
-	ScreeningCounts.Month getMonth(Location clinic, YearMonth month);
+	ScreeningCountMonth getMonth(Location clinic, YearMonth month);
 	
 	/**
 	 * Saves the clinic's counts for the month, voiding the counts saved before for that month. Saves
@@ -50,7 +52,7 @@ public interface ScreeningCountService extends OpenmrsService {
 	 *
 	 * @param clinic the clinic whose counts to save
 	 * @param month the month the counts are for, which must have started somewhere in the world
-	 * @param counts each column's count, keyed by a column of {@link ScreeningCounts#COLUMNS}; a column
+	 * @param counts each column's count, keyed by a column of {@link ScreeningCount#COLUMNS}; a column
 	 *            not given is saved as zero
 	 * @param notes free text saved with the counts, trimmed, or null for none
 	 * @throws org.openmrs.api.ValidationException when the month has not started, a column is not
@@ -80,5 +82,5 @@ public interface ScreeningCountService extends OpenmrsService {
 	 */
 	@Authorized({ ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD,
 	        ActCorePrivileges.ENTER_SCREENING_COUNTS })
-	ScreeningCounts.Summary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end);
+	ScreeningCountSummary getSummary(Collection<Integer> clinics, YearMonth start, YearMonth end);
 }

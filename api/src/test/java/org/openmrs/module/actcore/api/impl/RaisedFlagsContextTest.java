@@ -41,9 +41,9 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.model.RaisedFlags;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;
@@ -171,7 +171,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, shownFlags());
 		assertEquals(1, listMembers());
 		
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismiss());
+		assertEquals(DismissalOutcome.DISMISSED, dismiss());
 		assertEquals(0, shownFlags());
 		assertEquals(0, listMembers());
 		
@@ -210,7 +210,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		matching(true);
 		flagService.savePatientFlag(new PatientFlag(patient(), flag, flag.getMessage()));
 		
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismiss());
+		assertEquals(DismissalOutcome.DISMISSED, dismiss());
 		
 		assertEquals(0, shownFlags());
 		assertEquals(1, rows());
@@ -276,7 +276,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 			
 			@Override
 			public void run() {
-				PatientFlagRefreshTask.ROWS.writeLock().lock();
+				PatientFlagRefresh.ROWS.writeLock().lock();
 				held.countDown();
 				try {
 					done.await();
@@ -285,13 +285,13 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 					Thread.currentThread().interrupt();
 				}
 				finally {
-					PatientFlagRefreshTask.ROWS.writeLock().unlock();
+					PatientFlagRefresh.ROWS.writeLock().unlock();
 				}
 			}
 		});
 		refresh.start();
 		held.await();
-		RaisedFlags.Dismissal refused;
+		DismissalOutcome refused;
 		try {
 			refused = dismiss();
 		}
@@ -300,13 +300,13 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 			refresh.join();
 		}
 		
-		assertEquals(RaisedFlags.Dismissal.REFRESH_RUNNING, refused);
+		assertEquals(DismissalOutcome.REFRESH_RUNNING, refused);
 		assertEquals(0L,
 		    count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where date_dismissed is not null"));
 		assertEquals(1, shownFlags());
 		assertEquals(1, listMembers());
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismiss());
-		assertEquals(0, PatientFlagRefreshTask.ROWS.getReadLockCount());
+		assertEquals(DismissalOutcome.DISMISSED, dismiss());
+		assertEquals(0, PatientFlagRefresh.ROWS.getReadLockCount());
 	}
 	
 	@Test
@@ -315,7 +315,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Flag untagged = saveFlag("risk", null);
 		runFullRefresh();
 		
-		assertEquals(RaisedFlags.Dismissal.NOT_DISMISSIBLE, raisedFlags().dismiss(patient(), untagged));
+		assertEquals(DismissalOutcome.NOT_DISMISSIBLE, raisedFlags().dismiss(patient(), untagged));
 		assertTrue(!raisedFlags().mayDismiss(untagged));
 	}
 	
@@ -326,7 +326,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Flag untagged = saveFlag("risk", null);
 		runFullRefresh();
 		
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, raisedFlags().dismiss(patient(), untagged));
+		assertEquals(DismissalOutcome.DISMISSED, raisedFlags().dismiss(patient(), untagged));
 	}
 	
 	@Test
@@ -344,9 +344,9 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		flagService.saveFlag(disabled);
 		runFullRefresh();
 		
-		ActivityLog.Filter filter = new ActivityLog.Filter();
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
 		filter.kind = "flag";
-		ActivityLog.Page page = Context.getService(AuditLogService.class).getActivity(filter);
+		ActivityPage page = Context.getService(AuditLogService.class).getActivity(filter);
 		
 		assertEquals(0, rows());
 		assertEquals(2, page.totalCount);
@@ -358,7 +358,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	public void refusesAFlagThePatientDoesNotMatch() {
 		matching(false);
 		
-		assertEquals(RaisedFlags.Dismissal.NOT_RAISED, dismiss());
+		assertEquals(DismissalOutcome.NOT_RAISED, dismiss());
 		assertEquals(0, rows());
 	}
 	
@@ -370,7 +370,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		User user = authenticateWith(ActCorePrivileges.DISMISS_FLAGS, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		
 		assertTrue(raisedFlags().mayDismiss(flag));
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, raisedFlags().dismiss(patient, flag));
+		assertEquals(DismissalOutcome.DISMISSED, raisedFlags().dismiss(patient, flag));
 		
 		Context.logout();
 		authenticate();
@@ -399,8 +399,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		return Context.getService(RaisedFlagService.class);
 	}
 	
-	private RaisedFlags.Dismissal dismiss() {
-		RaisedFlags.Dismissal dismissal = raisedFlags().dismiss(patient(), flagService.getFlag(flag.getFlagId()));
+	private DismissalOutcome dismiss() {
+		DismissalOutcome dismissal = raisedFlags().dismiss(patient(), flagService.getFlag(flag.getFlagId()));
 		Context.flushSession();
 		return dismissal;
 	}

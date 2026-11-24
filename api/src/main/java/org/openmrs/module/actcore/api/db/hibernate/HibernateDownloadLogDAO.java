@@ -18,8 +18,7 @@ import java.util.Map;
 import org.hibernate.Query;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
-import org.openmrs.module.actcore.api.impl.Names;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadRecord;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.DownloadLogDAO}. */
@@ -43,7 +42,7 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 	 * @see org.openmrs.module.actcore.api.db.DownloadLogDAO#getDownloads(Integer, Date, Date)
 	 */
 	@Override
-	public List<DownloadLog.Entry> getDownloads(Integer userId, Date from, Date before) {
+	public List<DownloadLogEntry> getDownloads(Integer userId, Date from, Date before) {
 		StringBuilder where = new StringBuilder();
 		Map<String, Object> params = new LinkedHashMap<String, Object>();
 		if (userId != null) {
@@ -65,14 +64,14 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 		for (Map.Entry<String, Object> param : params.entrySet()) {
 			query.setParameter(param.getKey(), param.getValue());
 		}
-		List<DownloadLog.Entry> entries = new ArrayList<DownloadLog.Entry>();
+		List<DownloadLogEntry> entries = new ArrayList<DownloadLogEntry>();
 		for (Object row : query.list()) {
 			Object[] columns = (Object[]) row;
-			DownloadLog.Entry entry = new DownloadLog.Entry();
+			DownloadLogEntry entry = new DownloadLogEntry();
 			entry.date = (Date) columns[0];
 			entry.userUuid = (String) columns[1];
 			entry.formUuid = (String) columns[2];
-			entry.formName = Names.shown("Form", entry.formUuid, (String) columns[3]);
+			entry.formName = (String) columns[3];
 			entry.detail = (String) columns[4];
 			entries.add(entry);
 		}

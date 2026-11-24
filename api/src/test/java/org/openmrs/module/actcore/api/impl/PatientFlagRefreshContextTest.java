@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.tasks;
+package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -61,7 +61,7 @@ import org.openmrs.module.patientflags.evaluator.FlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
-public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiveTest {
+public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final int MATCHING_PATIENT = 7;
 	
@@ -90,7 +90,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	public void recordsWhenItFinished() {
 		Instant before = Instant.now();
 		
-		PatientFlagRefreshTask.Result ran = new PatientFlagRefreshTask() {
+		PatientFlagRefresh.Result ran = new PatientFlagRefresh() {
 			
 			@Override
 			void refreshAdherence() {
@@ -103,13 +103,13 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		Instant finished = Instant
 		        .parse(Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED));
 		assertTrue(!finished.isBefore(before) && !finished.isAfter(Instant.now()));
-		assertTrue(!PatientFlagRefreshTask.isRunning());
+		assertTrue(!PatientFlagRefresh.isRunning());
 	}
 	
 	@Test
 	public void saysWhatFailedInARunAndStillRecordsThatItFinished() {
 		saveFlag("overdue", MATCHES_ONE);
-		PatientFlagRefreshTask failing = new PatientFlagRefreshTask() {
+		PatientFlagRefresh failing = new PatientFlagRefresh() {
 			
 			@Override
 			void refreshAdherence() {
@@ -129,7 +129,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 			}
 		};
 		
-		PatientFlagRefreshTask.Result ran = failing.runIfIdle();
+		PatientFlagRefresh.Result ran = failing.runIfIdle();
 		
 		assertEquals(1, ran.flagsFailed);
 		assertEquals(2, ran.listsFailed);
@@ -262,7 +262,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		final List<Integer> deferred = new ArrayList<Integer>();
 		final List<Integer> refreshedAtTheEnd = new ArrayList<Integer>();
 		
-		runScheduledWork(new PatientFlagRefreshTask() {
+		runScheduledWork(new PatientFlagRefresh() {
 			
 			// A save on another thread: this one, writing the rows, may also read them.
 			@Override
@@ -685,7 +685,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	public void reportsWhatTheListSyncDidAndNotOnlyTheFlags() {
 		saveFlag("overdue", MATCHES_ONE);
 		
-		LogEvent summary = theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask()));
+		LogEvent summary = theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh()));
 		
 		assertEquals(Level.INFO, summary.getLevel());
 		String message = summary.getMessage().getFormattedMessage();
@@ -700,7 +700,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	@Test
 	public void reportsARunThatFailedAtWarnRatherThanInfo() {
 		saveFlag("overdue", MATCHES_ONE);
-		PatientFlagRefreshTask failing = new PatientFlagRefreshTask() {
+		PatientFlagRefresh failing = new PatientFlagRefresh() {
 			
 			@Override
 			void reconcile(FlagService flagService, Flag flag) {
@@ -708,7 +708,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 			}
 		};
 		
-		LogEvent summary = theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, failing));
+		LogEvent summary = theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, failing));
 		
 		assertEquals(Level.WARN, summary.getLevel());
 		String message = summary.getMessage().getFormattedMessage();
@@ -794,8 +794,8 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 					@Override
 					public void run() {
 						try {
-							secondRunSaw.add(PatientFlagRefreshTask.isRunning());
-							secondRunSaw.add(new PatientFlagRefreshTask().runIfIdle() == null);
+							secondRunSaw.add(PatientFlagRefresh.isRunning());
+							secondRunSaw.add(new PatientFlagRefresh().runIfIdle() == null);
 						}
 						catch (Throwable t) {
 							secondRunThrew.set(t);
@@ -815,7 +815,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 			}
 		};
 		
-		runScheduledWorkWith(appender, PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask());
+		runScheduledWorkWith(appender, PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh());
 		
 		assertNull(String.valueOf(secondRunThrew.get()), secondRunThrew.get());
 		assertEquals(Arrays.asList(true, true), secondRunSaw);
@@ -837,8 +837,8 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		flagService.saveFlag(flag);
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(OTHER_PATIENT), flag, "overdue"));
 		
-		String summary = theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask()))
-		        .getMessage().getFormattedMessage();
+		String summary = theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
+		        .getFormattedMessage();
 		
 		assertTrue(summary, summary.contains("1 cleared"));
 		assertEquals(0, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
@@ -846,7 +846,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	private String summaryOfARun() {
-		return theSummaryIn(logged(PatientFlagRefreshTask.class, Level.INFO, new PatientFlagRefreshTask())).getMessage()
+		return theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
 		        .getFormattedMessage();
 	}
 	
@@ -872,19 +872,19 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 	}
 	
 	private void runScheduledWork() {
-		runScheduledWork(new PatientFlagRefreshTask());
+		runScheduledWork(new PatientFlagRefresh());
 	}
 	
-	private void runScheduledWork(PatientFlagRefreshTask task) {
+	private void runScheduledWork(PatientFlagRefresh task) {
 		Context.flushSession();
-		task.execute();
+		task.runIfIdle();
 	}
 	
 	private int errorsLoggedDuringScheduledWork() {
-		return logged(FlagListSync.class, Level.ERROR, new PatientFlagRefreshTask()).size();
+		return logged(FlagListSync.class, Level.ERROR, new PatientFlagRefresh()).size();
 	}
 	
-	private List<LogEvent> logged(Class<?> source, final Level threshold, PatientFlagRefreshTask task) {
+	private List<LogEvent> logged(Class<?> source, final Level threshold, PatientFlagRefresh task) {
 		final List<LogEvent> events = new ArrayList<LogEvent>();
 		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
 			
@@ -899,8 +899,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		return events;
 	}
 	
-	private void runScheduledWorkWith(AbstractAppender appender, Class<?> source, Level threshold,
-	        PatientFlagRefreshTask task) {
+	private void runScheduledWorkWith(AbstractAppender appender, Class<?> source, Level threshold, PatientFlagRefresh task) {
 		appender.start();
 		Logger logger = (Logger) LogManager.getLogger(source);
 		Level level = logger.getLevel();

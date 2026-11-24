@@ -32,7 +32,8 @@ import org.openmrs.module.actcore.utils.UserClinics;
  * Advice on UserService that confines an administrator limited to their clinics, such as a site
  * administrator, to the users of those clinics, as ACT 2.0 confined its site administrator. Such an
  * administrator sees only the users who share one of their clinics, and changes a user only within
- * the rules the README lists. Every other user passes through untouched.
+ * the rules {@link UserClinics#refuseUnlessMayChange} applies. Every other user passes through
+ * untouched.
  */
 public class ClinicScopedUserAdministration implements MethodInterceptor {
 	
@@ -73,9 +74,10 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 		if (CHANGES_TO_A_USER.contains(method) && args.length > 0 && args[0] instanceof User) {
 			User user = (User) args[0];
 			if ("setUserProperty".equals(method) || "removeUserProperty".equals(method)) {
-				refuseUnlessMayChange(me, user, changedClinics(user, args, "setUserProperty".equals(method)), clinics);
+				UserClinics.refuseUnlessMayChange(me, user, changedClinics(user, args, "setUserProperty".equals(method)),
+				    clinics);
 			} else {
-				refuseUnlessMayChange(me, user, null, clinics);
+				UserClinics.refuseUnlessMayChange(me, user, null, clinics);
 			}
 		}
 		if ("saveUserProperty".equals(method) && args.length == 2 && ActCoreConstants.USER_PROPERTY_CLINICS.equals(args[0])
@@ -109,55 +111,6 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 			return null;
 		}
 		return set ? UserClinics.parse(args.length > 2 ? (String) args[2] : null) : new HashSet<String>();
-	}
-	
-	/**
-	 * Refuses a limited administrator's change to a user unless the rules allow it, comparing the user
-	 * as changed with what is saved, which it reads through the service given.
-	 *
-	 * @param me the limited administrator making the change
-	 * @param user the user as changed
-	 * @param clinicsAfter the clinics the user will have, or null to read them from the user
-	 * @param clinics the service that reads the user's and the administrator's saved clinics and roles
-	 * @throws APIAuthenticationException when the rules do not allow the change
-	 */
-	public static void refuseUnlessMayChange(User me, User user, Set<String> clinicsAfter, UserClinicsService clinics) {
-		Set<String> after = clinicsAfter != null ? clinicsAfter : UserClinics.of(user);
-		Set<String> mine = clinics.getStoredClinics(me.getUserId());
-		if (me.getUserId() != null && me.getUserId().equals(user.getUserId())) {
-			if (!after.equals(mine)) {
-				throw refusal("You cannot change your own clinics. Ask an instance administrator");
-			}
-			if (!UserClinics.roleUuids(user).equals(clinics.getStoredRoles(me.getUserId()))) {
-				throw refusal("You cannot change your own roles. Ask an instance administrator");
-			}
-			return;
-		}
-		Set<String> assignable = clinics.getRolesIn(ActCoreConstants.GP_USERS_SITE_ADMINISTRATOR_ROLES);
-		if (user.getUserId() != null) {
-			if (!UserClinics.share(clinics.getStoredClinics(user.getUserId()), mine)) {
-				throw refusal("This user is not at one of your clinics, so you cannot change them");
-			}
-			if (!assignable.isEmpty() && !assignable.containsAll(clinics.getStoredRoles(user.getUserId()))) {
-				throw refusal(
-				    "This user has a role you cannot give out, so only an instance administrator can change" + " them");
-			}
-		}
-		// As ACT 2.0 needed only an overlap: the clinics that are not theirs stay as stored, so a clinician at A and B
-		// is changed by A's site administrator without leaving B's lists.
-		Set<String> othersBefore = new HashSet<String>(clinics.getStoredClinics(user.getUserId()));
-		othersBefore.removeAll(mine);
-		Set<String> othersAfter = new HashSet<String>(after);
-		othersAfter.removeAll(mine);
-		if (!othersAfter.equals(othersBefore)) {
-			throw refusal("You can give or take away only your own clinics");
-		}
-		if (!UserClinics.share(after, mine)) {
-			throw refusal("Give the user at least one of your clinics");
-		}
-		if (!assignable.isEmpty() && !assignable.containsAll(UserClinics.roleUuids(user))) {
-			throw refusal("You can give a user only the clinician roles: " + roleNames(assignable, clinics));
-		}
 	}
 	
 	/**
@@ -195,14 +148,6 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 			}
 		}
 		return shown;
-	}
-	
-	private static String roleNames(Set<String> uuids, UserClinicsService clinics) {
-		List<String> names = new ArrayList<String>();
-		for (String name : clinics.getRoleNames(uuids)) {
-			names.add(name.replaceFirst("^Organizational: ACT ", ""));
-		}
-		return String.join(", ", names);
 	}
 	
 	private static APIAuthenticationException refusal(String message) {

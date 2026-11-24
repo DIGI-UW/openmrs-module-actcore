@@ -40,6 +40,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.model.NextStep;
+import org.openmrs.module.actcore.model.ProphylaxisSummary;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -50,7 +51,7 @@ import org.openmrs.util.PrivilegeConstants;
  * rules to the patient's saved forms, to ACT Core's dose status and to the patient's flags, and
  * keeps the steps the signed-in user may take.
  */
-public class NextSteps {
+class NextSteps {
 	
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
 	

@@ -33,10 +33,10 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
-import org.openmrs.module.actcore.api.impl.ActivityLog;
-import org.openmrs.module.actcore.api.impl.ReadLog;
-import org.openmrs.module.actcore.api.impl.RunCharts;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.RunChartPeriod;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -85,7 +85,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		assertNotNull(service);
 		refused(() -> service.recordDownload(null, "{}"), ActCorePrivileges.DOWNLOAD_DATA);
-		refused(() -> service.getDownloads(new DownloadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getDownloads(new DownloadSearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 	}
 	
 	@Test
@@ -102,7 +102,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		for (String download : new String[] { ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA }) {
-			holding(download, () -> refused(() -> service.getDownloads(new DownloadLog.Filter()),
+			holding(download, () -> refused(() -> service.getDownloads(new DownloadSearchCriteria()),
 			    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
@@ -199,9 +199,9 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void auditLogService_shouldRefuseAUserWithoutTheLogPrivileges() {
 		AuditLogService service = Context.getService(AuditLogService.class);
 		assertNotNull(service);
-		refused(() -> service.getActivity(new ActivityLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
+		refused(() -> service.getActivity(new ActivitySearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		refused(() -> service.getActivityDetails(1), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
-		refused(() -> service.getReads(new ReadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getReads(new ReadSearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		refused(() -> service.getUserId("admin"), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
 		    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		refused(() -> service.getUsers(Collections.singleton("uuid")), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
@@ -212,11 +212,11 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void auditLogService_shouldRefuseAUserWhoMayReadOnlyTheOtherLog() {
 		AuditLogService service = Context.getService(AuditLogService.class);
 		holding(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS, () -> {
-			refused(() -> service.getActivity(new ActivityLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
+			refused(() -> service.getActivity(new ActivitySearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 			refused(() -> service.getActivityDetails(1), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		});
-		holding(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
-		    () -> refused(() -> service.getReads(new ReadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
+		holding(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, () -> refused(() -> service.getReads(new ReadSearchCriteria()),
+		    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		holding("View Security Audit Logs", () -> refused(() -> service.getUserId("admin"),
 		    ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 	}
@@ -237,10 +237,9 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void runChartService_shouldRefuseAUserWithoutTheDashboard() {
 		RunChartService service = Context.getService(RunChartService.class);
 		assertNotNull(service);
-		refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY), ActCorePrivileges.DASHBOARD);
+		refused(() -> service.getRunCharts(null, TODAY, TODAY, RunChartPeriod.DAY), ActCorePrivileges.DASHBOARD);
 		holding(ActCorePrivileges.SCREENING_COUNTS,
-		    () -> refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY),
-		        ActCorePrivileges.DASHBOARD));
+		    () -> refused(() -> service.getRunCharts(null, TODAY, TODAY, RunChartPeriod.DAY), ActCorePrivileges.DASHBOARD));
 	}
 	
 	@Test

@@ -16,6 +16,12 @@ import java.util.Map;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.actcore.model.LogUser;
+import org.openmrs.module.actcore.model.ReadPage;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.AuditLogService}. */
@@ -28,11 +34,11 @@ public class AuditLogServiceImpl extends BaseOpenmrsService implements AuditLogS
 	}
 	
 	/**
-	 * @see org.openmrs.module.actcore.api.AuditLogService#getActivity(ActivityLog.Filter)
+	 * @see org.openmrs.module.actcore.api.AuditLogService#getActivity(ActivitySearchCriteria)
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public ActivityLog.Page getActivity(ActivityLog.Filter filter) {
+	public ActivityPage getActivity(ActivitySearchCriteria filter) {
 		return new ActivityLog(dao).list(filter);
 	}
 	
@@ -41,16 +47,16 @@ public class AuditLogServiceImpl extends BaseOpenmrsService implements AuditLogS
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public ActivityLog.Details getActivityDetails(int revisionId) {
+	public ActivityDetails getActivityDetails(int revisionId) {
 		return new ActivityLog(dao).details(revisionId);
 	}
 	
 	/**
-	 * @see org.openmrs.module.actcore.api.AuditLogService#getReads(ReadLog.Filter)
+	 * @see org.openmrs.module.actcore.api.AuditLogService#getReads(ReadSearchCriteria)
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public ReadLog.Page getReads(ReadLog.Filter filter) {
+	public ReadPage getReads(ReadSearchCriteria filter) {
 		return new ReadLog(dao).list(filter);
 	}
 	
@@ -68,11 +74,11 @@ public class AuditLogServiceImpl extends BaseOpenmrsService implements AuditLogS
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public Map<String, Names.Who> getUsers(Collection<String> uuids) {
+	public Map<String, LogUser> getUsers(Collection<String> uuids) {
 		Names names = new Names(dao);
-		Map<String, Names.Who> users = new HashMap<String, Names.Who>();
+		Map<String, LogUser> users = new HashMap<String, LogUser>();
 		for (String uuid : uuids) {
-			Names.Who who = names.user(uuid);
+			LogUser who = names.user(uuid);
 			if (who != null) {
 				users.put(uuid, who);
 			}

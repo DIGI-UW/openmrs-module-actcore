@@ -25,6 +25,8 @@ import org.openmrs.ConceptName;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
+import org.openmrs.module.actcore.model.LogPatient;
+import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -34,41 +36,6 @@ import org.openmrs.util.PrivilegeConstants;
  * itself fill the read audit.
  */
 public class Names {
-	
-	/** A user as the Users page shows one. */
-	public static class Who {
-		
-		/** The user's uuid. */
-		public String uuid;
-		
-		/** The user's username, or their system ID when they have no username. */
-		public String username;
-		
-		/** The user's person name, or their username when the person has no name. */
-		public String display;
-		
-		/**
-		 * The user's organizational role, shortened as the Users page shows it, such as Clinician, or null
-		 * when they have none.
-		 */
-		public String role;
-	}
-	
-	/** A patient as a log names them, by name and ACT ID. */
-	public static class Subject {
-		
-		/** The patient's person id. */
-		public Integer id;
-		
-		/** The patient's uuid. */
-		public String uuid;
-		
-		/** The patient's name, or their uuid when they have no name. */
-		public String display;
-		
-		/** The patient's ACT ID, or null when they have no identifier that can serve as one. */
-		public String actId;
-	}
 	
 	private final Map<String, Object> cache = new HashMap<String, Object>();
 	
@@ -92,7 +59,7 @@ public class Names {
 	 * @param userId the user's id, or null
 	 * @return the user; null for a null id or one no user has
 	 */
-	public Who user(Integer userId) {
+	public LogUser user(Integer userId) {
 		return userId == null ? null : memo("user:" + userId, key -> who(dao.getUserById(userId)));
 	}
 	
@@ -102,7 +69,7 @@ public class Names {
 	 * @param uuid the user's uuid, or null
 	 * @return the user; null for a null uuid or one no user has
 	 */
-	public Who user(String uuid) {
+	public LogUser user(String uuid) {
 		return uuid == null ? null : memo("user:" + uuid, key -> who(dao.getUserByUuid(uuid)));
 	}
 	
@@ -122,12 +89,12 @@ public class Names {
 	 * Reads the user of the first row, with their name and their ACT role. The ACT role is the
 	 * organizational one, which the roles CSV names as in "Organizational: ACT Clinician".
 	 */
-	private Who who(List<Map<String, Object>> rows) {
+	private LogUser who(List<Map<String, Object>> rows) {
 		if (rows.isEmpty()) {
 			return null;
 		}
 		Map<String, Object> user = rows.get(0);
-		Who who = new Who();
+		LogUser who = new LogUser();
 		who.uuid = Rows.string(user, "uuid");
 		who.username = StringUtils.defaultIfBlank(Rows.string(user, "username"), Rows.string(user, "system_id"));
 		who.display = StringUtils.defaultIfBlank(personName(dao.getUnvoidedPersonNames(Rows.integer(user, "person_id"))),
@@ -157,7 +124,7 @@ public class Names {
 	 * @param personId the patient's person id, or null
 	 * @return the patient; null for a null id or one no person has
 	 */
-	public Subject patient(Integer personId) {
+	public LogPatient patient(Integer personId) {
 		return personId == null ? null : memo("patient:" + personId, key -> {
 			List<Map<String, Object>> rows = dao.getPersonUuid(personId);
 			return rows.isEmpty() ? null : subject(personId, Rows.string(rows.get(0), "uuid"));
@@ -170,15 +137,15 @@ public class Names {
 	 * @param uuid the patient's uuid, or null
 	 * @return the patient; null for a null uuid or one no person has
 	 */
-	public Subject patient(String uuid) {
+	public LogPatient patient(String uuid) {
 		return uuid == null ? null : memo("patient:" + uuid, key -> {
 			List<Map<String, Object>> rows = dao.getPersonId(uuid);
 			return rows.isEmpty() ? null : subject(Rows.integer(rows.get(0), "person_id"), uuid);
 		});
 	}
 	
-	private Subject subject(int personId, String uuid) {
-		Subject subject = new Subject();
+	private LogPatient subject(int personId, String uuid) {
+		LogPatient subject = new LogPatient();
 		subject.id = personId;
 		subject.uuid = uuid;
 		// A voided patient keeps only voided names, so those are read after the unvoided.

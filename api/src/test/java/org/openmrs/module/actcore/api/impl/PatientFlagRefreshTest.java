@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.tasks;
+package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,7 +34,7 @@ import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
 
-public class PatientFlagRefreshTaskTest {
+public class PatientFlagRefreshTest {
 	
 	private FlagService flagService;
 	
@@ -42,7 +42,7 @@ public class PatientFlagRefreshTaskTest {
 	
 	private Set<Integer> alreadyFlagged;
 	
-	private PatientFlagRefreshTask task;
+	private PatientFlagRefresh task;
 	
 	@Before
 	public void setUp() {
@@ -61,7 +61,7 @@ public class PatientFlagRefreshTaskTest {
 		flag.setEnabled(Boolean.TRUE);
 		alreadyFlagged = new LinkedHashSet<Integer>();
 		
-		task = new PatientFlagRefreshTask() {
+		task = new PatientFlagRefresh() {
 			
 			@Override
 			Map<Integer, String> alreadyFlagged(Flag flag) {

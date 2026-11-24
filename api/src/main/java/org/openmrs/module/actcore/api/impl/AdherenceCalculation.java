@@ -33,7 +33,7 @@ import java.util.SortedSet;
  * of injection prescription does not move it past a dose that is already due.
  * AdherenceCalculationParityTest checks both against ACT 2.0's results.
  */
-public final class AdherenceCalculation {
+final class AdherenceCalculation {
 	
 	private AdherenceCalculation() {
 	}

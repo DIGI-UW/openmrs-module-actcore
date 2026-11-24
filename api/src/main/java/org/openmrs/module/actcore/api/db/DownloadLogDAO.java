@@ -12,7 +12,7 @@ package org.openmrs.module.actcore.api.db;
 import java.util.Date;
 import java.util.List;
 
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadRecord;
 
 /**
@@ -38,5 +38,5 @@ public interface DownloadLogDAO {
 	 *            no upper bound
 	 * @return the matching downloads; an empty list when there are none
 	 */
-	List<DownloadLog.Entry> getDownloads(Integer userId, Date from, Date before);
+	List<DownloadLogEntry> getDownloads(Integer userId, Date from, Date before);
 }

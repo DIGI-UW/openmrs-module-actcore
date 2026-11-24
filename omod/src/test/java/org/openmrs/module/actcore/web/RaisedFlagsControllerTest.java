@@ -40,8 +40,8 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.model.RaisedFlags;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
@@ -127,7 +127,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	@Test
 	public void answersConflictWhileTheFullRefreshHoldsTheRows() throws Exception {
 		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
-		Field field = PatientFlagRefreshTask.class.getDeclaredField("ROWS");
+		Field field = PatientFlagRefresh.class.getDeclaredField("ROWS");
 		field.setAccessible(true);
 		final ReentrantReadWriteLock rows = (ReentrantReadWriteLock) field.get(null);
 		ExecutorService refresh = Executors.newSingleThreadExecutor();
@@ -207,11 +207,11 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
 		Flag risk = raised(saveFlag("overdue", MATCHES_7, null), null);
 		
-		List<RaisedFlags.Raised> flags = Context.getService(RaisedFlagService.class)
+		List<ChartFlag> flags = Context.getService(RaisedFlagService.class)
 		        .getRaisedFlags(Context.getPatientService().getPatient(7));
 		
 		assertEquals(2, flags.size());
-		for (RaisedFlags.Raised flag : flags) {
+		for (ChartFlag flag : flags) {
 			boolean isMissing = flag.flag.equals(missing);
 			assertTrue(isMissing || flag.flag.equals(risk));
 			assertEquals(isMissing, flag.since != null);

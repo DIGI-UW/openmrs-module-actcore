@@ -26,7 +26,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.TooManyResultsException;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityEncounter;
+import org.openmrs.module.actcore.model.ActivityEntry;
+import org.openmrs.module.actcore.model.ActivityField;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.actcore.model.ActivityTarget;
+import org.openmrs.module.actcore.model.LogPatient;
+import org.openmrs.module.actcore.model.LogUser;
 
 /**
  * The activity log behind the Logs page's Activity tab, which lists what ACT's users changed, one
@@ -34,14 +44,7 @@ import org.openmrs.module.actcore.api.db.AuditLogDAO;
  * of flag dismissals. It leaves out the saves the daemon user makes, such as Initializer's loads
  * and the scheduled tasks, and the saves that touch only the server's setup.
  */
-public class ActivityLog {
-	
-	/**
-	 * The kinds of entry the log tells apart, which a request may filter by. Each entry has one of
-	 * them.
-	 */
-	public static final List<String> KINDS = Collections.unmodifiableList(Arrays.asList("saved", "edited", "voided",
-	    "registered", "patientStatus", "user", "role", "clinic", "study", "flag", "other"));
+class ActivityLog {
 	
 	/** The revision types Envers records: 0 for an addition, 1 for a change and 2 for a deletion. */
 	static final int ADD = 0;
@@ -73,7 +76,8 @@ public class ActivityLog {
 	
 	/**
 	 * The most revisions that a request filtering by kind may classify. A broader request is refused
-	 * with {@link Rows.TooMany}, which the endpoint answers with 400, rather than taking minutes.
+	 * with {@link TooManyResultsException}, which the endpoint answers with 400, rather than taking
+	 * minutes.
 	 */
 	static final int MAX_CLASSIFIED = 10000;
 	
@@ -105,81 +109,10 @@ public class ActivityLog {
 	}
 	
 	/**
-	 * The filters that choose which changes to list, and which page of the matching entries to return.
-	 * <p>
-	 * A filter left null is not applied. {@code from} and {@code to} are both included, each as a whole
-	 * day. {@code startIndex} and {@code limit} pick the page, the limit defaulting to
-	 * {@link Rows#DEFAULT_LIMIT}.
+	 * An entry with what the log reads from its revision's audit rows to classify and name it, which
+	 * the page never shows.
 	 */
-	public static class Filter {
-		
-		/** The username, or the system ID of a user without one, of the user whose changes to list. */
-		public String username;
-		
-		/** The first day whose changes to list. */
-		public LocalDate from;
-		
-		/** The last day whose changes to list. */
-		public LocalDate to;
-		
-		/** The kind of entry to list, one of {@link ActivityLog#KINDS}. */
-		public String kind;
-		
-		/** The uuid of the form whose saves to list. */
-		public String formUuid;
-		
-		/** The uuid of the patient whose changes to list. */
-		public String patientUuid;
-		
-		/** The index, from 0, of the first matching entry to return. */
-		public int startIndex;
-		
-		/** The most entries to return. */
-		public int limit = Rows.DEFAULT_LIMIT;
-	}
-	
-	/** One page of the entries a filter matches, with how many entries it matches in all. */
-	public static class Page {
-		
-		/** The entries on the page, newest first. */
-		public final List<Entry> results = new ArrayList<Entry>();
-		
-		/** How many entries the filter matches across every page. */
-		public int totalCount;
-	}
-	
-	/**
-	 * One entry of the activity log, such as a form saved or a flag dismissed. It tells what was done,
-	 * when it was done, which user did it when that is known, and what it was done to.
-	 */
-	public static class Entry {
-		
-		/**
-		 * The id of the Envers revision the save was recorded under, by which its fields can be listed. It
-		 * is null for a flag dismissal, which ACT Core records outside the audit tables.
-		 */
-		public Integer revisionId;
-		
-		/** When the save was made. */
-		public Date time;
-		
-		/** The user who made the save, or null when the user is not known. */
-		public Names.Who user;
-		
-		/** The kind of entry, one of {@link ActivityLog#KINDS}. */
-		public String kind;
-		
-		/** What was done, as the page shows it, such as "Saved RHD Consultation Visit". */
-		public String action;
-		
-		/** A short account of what changed, or null when there is nothing to add to the action. */
-		public String summary;
-		
-		/** What the change was made to, or null when the entry names no target. */
-		public Target target;
-		
-		/** The encounter the change was saved on, or null for a change not saved on an encounter. */
-		public EncounterRef encounter;
+	static class Entry extends ActivityEntry {
 		
 		Integer userId;
 		
@@ -206,85 +139,6 @@ public class ActivityLog {
 		boolean patientVoided;
 		
 		Revision revision;
-	}
-	
-	/**
-	 * What an entry's change was made to: a patient, a person who is not a patient, a user, a role, a
-	 * clinic or a study.
-	 */
-	public static class Target {
-		
-		/** The kind of target: patient, person, user, role, location or program. */
-		public String kind;
-		
-		/** The target's uuid, or null when it is not known, as for a role. */
-		public String uuid;
-		
-		/** The target's name as the page shows it. */
-		public String display;
-		
-		/** The patient's ACT ID for a patient, the username for a user, and null for other targets. */
-		public String actId;
-	}
-	
-	/**
-	 * The encounter an entry's change was saved on, as it stands now, or as the revision recorded it
-	 * once the encounter is purged.
-	 */
-	public static class EncounterRef {
-		
-		/** The encounter's uuid. */
-		public String uuid;
-		
-		/** The uuid of the form the encounter was entered through, or null when no form recorded it. */
-		public String formUuid;
-		
-		/** The name users see for the form, or null when no form recorded the encounter. */
-		public String formName;
-		
-		/** The name users see for the encounter's type. */
-		public String typeName;
-		
-		/** The encounter's date and time. */
-		public Date visitDate;
-	}
-	
-	/**
-	 * One field that a save changed, as an entry's expansion lists it. It gives the field's name, its
-	 * value before the save and its value after the save.
-	 */
-	public static class Field {
-		
-		/** The field's name as a reader would read it, such as "Visit date". */
-		public final String name;
-		
-		/** The value before the save, or null when there was none. */
-		public final String previous;
-		
-		/** The value after the save, or null when there is none. */
-		public final String current;
-		
-		Field(String name, String previous, String current) {
-			this.name = name;
-			this.previous = previous;
-			this.current = current;
-		}
-	}
-	
-	/**
-	 * The expansion of one entry: each field the save changed, with its value before and after, and the
-	 * reason given when the save voided something.
-	 */
-	public static class Details {
-		
-		/** The id of the entry's revision. */
-		public int revisionId;
-		
-		/** The fields the save changed. */
-		public final List<Field> fields = new ArrayList<Field>();
-		
-		/** The reason given for a void, or null when the save voided nothing or gave no reason. */
-		public String voidReason;
 	}
 	
 	/** The audit rows of one Envers revision, grouped by the audit table they come from. */
@@ -340,10 +194,11 @@ public class ActivityLog {
 	 * @param filter the filters that choose the changes and the page of them to return
 	 * @return the page of entries; empty when the filter names a user, patient or form that does not
 	 *         exist
-	 * @throws Rows.TooMany when a kind filter has more than {@link #MAX_CLASSIFIED} changes to sort
+	 * @throws TooManyResultsException when a kind filter has more than {@link #MAX_CLASSIFIED} changes
+	 *             to sort
 	 */
-	public Page list(Filter filter) {
-		Page page = new Page();
+	public ActivityPage list(ActivitySearchCriteria filter) {
+		ActivityPage page = new ActivityPage();
 		Integer userId = null;
 		if (filter.username != null) {
 			userId = names.userId(filter.username);
@@ -353,7 +208,7 @@ public class ActivityLog {
 		}
 		Integer patientId = null;
 		if (filter.patientUuid != null) {
-			Names.Subject patient = names.patient(filter.patientUuid);
+			LogPatient patient = names.patient(filter.patientUuid);
 			if (patient == null) {
 				return page;
 			}
@@ -389,7 +244,7 @@ public class ActivityLog {
 		// A revision found through one kind's tables may be another, so a kind filter classifies all.
 		if (filter.kind != null) {
 			if (entries.size() > MAX_CLASSIFIED) {
-				throw new Rows.TooMany(
+				throw new TooManyResultsException(
 				        "More than " + MAX_CLASSIFIED + " changes to sort by action; narrow the dates or the user");
 			}
 			entries = classified(entries);
@@ -455,7 +310,7 @@ public class ActivityLog {
 	 * @return the entry's fields and void reason; null when no audited table has the revision or the
 	 *         log leaves it out
 	 */
-	public Details details(int revisionId) {
+	public ActivityDetails details(int revisionId) {
 		Map<Integer, Revision> revisions = new HashMap<Integer, Revision>();
 		for (String table : TABLES.keySet()) {
 			collect(revisions, table, rows(table, Collections.singletonList(revisionId)));
@@ -465,7 +320,7 @@ public class ActivityLog {
 		if (entry == null) {
 			return null;
 		}
-		Details details = new Details();
+		ActivityDetails details = new ActivityDetails();
 		details.revisionId = revisionId;
 		details.voidReason = entry.voidReason;
 		details.fields.addAll(fields(entry));
@@ -754,7 +609,7 @@ public class ActivityLog {
 			}
 			case "other": {
 				if (entry.personId != null) {
-					Names.Subject person = names.patient(entry.personId);
+					LogPatient person = names.patient(entry.personId);
 					entry.target = person == null ? null : target("person", person.uuid, person.display);
 					entry.action = "Edited a person's details";
 					entry.summary = changed(fields(entry), "Details changed");
@@ -814,9 +669,9 @@ public class ActivityLog {
 	private void nameUserChange(Entry entry) {
 		Revision revision = entry.revision;
 		Map<String, Object> user = revision.of("users_AUD").isEmpty() ? null : revision.of("users_AUD").get(0);
-		Names.Who who = names.user(entry.targetUserId);
+		LogUser who = names.user(entry.targetUserId);
 		if (who == null && user != null) {
-			who = new Names.Who();
+			who = new LogUser();
 			who.username = Rows.string(user, "username");
 			who.display = who.username;
 		}
@@ -926,9 +781,9 @@ public class ActivityLog {
 	 * Lists the fields of an entry's expansion. They are the same fields its summary counts when it
 	 * says how many fields changed.
 	 */
-	List<Field> fields(Entry entry) {
+	List<ActivityField> fields(Entry entry) {
 		Revision revision = entry.revision;
-		List<Field> fields = new ArrayList<Field>();
+		List<ActivityField> fields = new ArrayList<ActivityField>();
 		switch (entry.kind) {
 			case "saved":
 				return obsFields(entry);
@@ -950,7 +805,7 @@ public class ActivityLog {
 			case "registered":
 				fields.addAll(personFields(entry.patientId, revision));
 				for (Map<String, Object> enrolment : revision.of("patient_program_AUD")) {
-					fields.add(new Field("Enrolled in", null, names.program(Rows.integer(enrolment, "program_id"))));
+					fields.add(new ActivityField("Enrolled in", null, names.program(Rows.integer(enrolment, "program_id"))));
 				}
 				return fields;
 			case "patientStatus":
@@ -974,7 +829,8 @@ public class ActivityLog {
 				}
 				for (Map<String, Object> role : revision.of("user_role_AUD")) {
 					String name = roleName(Rows.string(role, "role"));
-					fields.add(type(role) == DEL ? new Field("Role", name, null) : new Field("Role", null, name));
+					fields.add(
+					    type(role) == DEL ? new ActivityField("Role", name, null) : new ActivityField("Role", null, name));
 				}
 				if (entry.targetUserId != null) {
 					Map<String, Object> user = names.row("users", "user_id", entry.targetUserId);
@@ -989,8 +845,8 @@ public class ActivityLog {
 				}
 				for (Map<String, Object> privilege : revision.of("role_privilege_AUD")) {
 					String name = Rows.string(privilege, "privilege");
-					fields.add(
-					    type(privilege) == DEL ? new Field("Privilege", name, null) : new Field("Privilege", null, name));
+					fields.add(type(privilege) == DEL ? new ActivityField("Privilege", name, null)
+					        : new ActivityField("Privilege", null, name));
 				}
 				return fields;
 			case "clinic":
@@ -1014,7 +870,7 @@ public class ActivityLog {
 	 * edit, it lists what changed, since the platform records an edited answer by voiding the old
 	 * observation and adding a new one in the same save.
 	 */
-	private List<Field> obsFields(Entry entry) {
+	private List<ActivityField> obsFields(Entry entry) {
 		Map<Integer, List<String>> added = new LinkedHashMap<Integer, List<String>>();
 		Map<Integer, List<String>> removed = new LinkedHashMap<Integer, List<String>>();
 		Set<Integer> order = new LinkedHashSet<Integer>();
@@ -1040,7 +896,7 @@ public class ActivityLog {
 				}
 			}
 		}
-		List<Field> fields = new ArrayList<Field>();
+		List<ActivityField> fields = new ArrayList<ActivityField>();
 		for (Integer concept : order) {
 			if (sameValues(added.get(concept), removed.get(concept))) {
 				continue;
@@ -1048,7 +904,7 @@ public class ActivityLog {
 			String current = added.containsKey(concept) ? StringUtils.join(added.get(concept), ", ") : null;
 			String previous = removed.containsKey(concept) ? StringUtils.join(removed.get(concept), ", ") : null;
 			if (current != null || previous != null) {
-				fields.add(new Field(names.concept(concept), previous, current));
+				fields.add(new ActivityField(names.concept(concept), previous, current));
 			}
 		}
 		return fields;
@@ -1111,8 +967,8 @@ public class ActivityLog {
 	 * Lists the patient's details that the revision changed, across the person and their names,
 	 * addresses, attributes and identifiers.
 	 */
-	private List<Field> personFields(Integer personId, Revision revision) {
-		List<Field> fields = new ArrayList<Field>();
+	private List<ActivityField> personFields(Integer personId, Revision revision) {
+		List<ActivityField> fields = new ArrayList<ActivityField>();
 		if (personId == null) {
 			return fields;
 		}
@@ -1143,7 +999,7 @@ public class ActivityLog {
 			String now = Rows.truthy(attribute, "voided") ? null
 			        : names.attributeValue(type, Rows.string(attribute, "value"));
 			if (!StringUtils.equals(was, now)) {
-				fields.add(new Field(StringUtils.defaultString(names.attributeType(type), "Attribute"), was, now));
+				fields.add(new ActivityField(StringUtils.defaultString(names.attributeType(type), "Attribute"), was, now));
 			}
 		}
 		for (Map<String, Object> identifier : revision.of("patient_identifier_AUD")) {
@@ -1157,7 +1013,7 @@ public class ActivityLog {
 			String was = before == null ? null : Rows.string(before, "identifier");
 			String now = Rows.truthy(identifier, "voided") ? null : Rows.string(identifier, "identifier");
 			if (!StringUtils.equals(was, now)) {
-				fields.add(new Field(StringUtils.defaultString(names.identifierType(type), "Identifier"), was, now));
+				fields.add(new ActivityField(StringUtils.defaultString(names.identifierType(type), "Identifier"), was, now));
 			}
 		}
 		return fields;
@@ -1167,9 +1023,9 @@ public class ActivityLog {
 	 * Lists the columns the row changed from the entity's previous revision, each named as a reader
 	 * would read it. A deletion lists none.
 	 */
-	private List<Field> diff(String table, String idColumn, Map<String, Object> row, int revisionId) {
+	private List<ActivityField> diff(String table, String idColumn, Map<String, Object> row, int revisionId) {
 		Map<String, Object> before = type(row) == ADD ? null : previous(table, idColumn, row.get(idColumn), revisionId);
-		List<Field> fields = new ArrayList<Field>();
+		List<ActivityField> fields = new ArrayList<ActivityField>();
 		if (type(row) == DEL) {
 			return fields;
 		}
@@ -1184,7 +1040,7 @@ public class ActivityLog {
 			String now = display(name, column.getValue());
 			String was = before == null ? null : display(name, before.get(column.getKey()));
 			if (!StringUtils.equals(was, now)) {
-				fields.add(new Field(label(name), was, now));
+				fields.add(new ActivityField(label(name), was, now));
 			}
 		}
 		return fields;
@@ -1276,12 +1132,12 @@ public class ActivityLog {
 		}
 	}
 	
-	private static String changed(List<Field> fields, String none) {
+	private static String changed(List<ActivityField> fields, String none) {
 		if (fields.isEmpty()) {
 			return none;
 		}
 		List<String> labels = new ArrayList<String>();
-		for (Field field : fields) {
+		for (ActivityField field : fields) {
 			if (!labels.contains(field.name)) {
 				labels.add(field.name);
 			}
@@ -1304,9 +1160,9 @@ public class ActivityLog {
 	 * Gets the patient as a target, by their name and ACT ID as they are now, or as the audit rows up
 	 * to the revision had them once the patient is purged. It is null for a null id.
 	 */
-	private Target patient(Integer patientId, Revision revision) {
-		Names.Subject subject = names.patient(patientId);
-		Target target = new Target();
+	private ActivityTarget patient(Integer patientId, Revision revision) {
+		LogPatient subject = names.patient(patientId);
+		ActivityTarget target = new ActivityTarget();
 		target.kind = "patient";
 		if (subject != null) {
 			target.uuid = subject.uuid;
@@ -1330,8 +1186,8 @@ public class ActivityLog {
 	 * Gets the entry's encounter, with its form, as it stands now, or as the revision's row had it once
 	 * the encounter is purged.
 	 */
-	private EncounterRef encounter(Entry entry) {
-		EncounterRef ref = new EncounterRef();
+	private ActivityEncounter encounter(Entry entry) {
+		ActivityEncounter ref = new ActivityEncounter();
 		Map<String, Object> row = names.row("encounter", "encounter_id", entry.encounterId);
 		if (row == null) {
 			row = entry.revision.of("encounter_AUD").isEmpty() ? null : entry.revision.of("encounter_AUD").get(0);
@@ -1350,8 +1206,8 @@ public class ActivityLog {
 		return ref;
 	}
 	
-	private static Target target(String kind, String uuid, String display) {
-		Target target = new Target();
+	private static ActivityTarget target(String kind, String uuid, String display) {
+		ActivityTarget target = new ActivityTarget();
 		target.kind = kind;
 		target.uuid = uuid;
 		target.display = display;

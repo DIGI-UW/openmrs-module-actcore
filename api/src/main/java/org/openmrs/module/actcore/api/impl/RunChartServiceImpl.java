@@ -17,6 +17,8 @@ import org.openmrs.Location;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.api.RunChartService;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 
 /**
  * Default implementation of {@link org.openmrs.module.actcore.api.RunChartService}. It has no DAO,
@@ -27,12 +29,12 @@ public class RunChartServiceImpl extends BaseOpenmrsService implements RunChartS
 	
 	/**
 	 * @see org.openmrs.module.actcore.api.RunChartService#getRunCharts(Location, LocalDate, LocalDate,
-	 *      RunCharts.Period)
+	 *      RunChartPeriod)
 	 */
 	@Override
 	// No @Transactional: reporting evaluates a report outside one, each read in its own.
-	public Map<String, List<RunCharts.Point>> getRunCharts(Location clinic, LocalDate start, LocalDate end,
-	        RunCharts.Period period) {
+	public Map<String, List<RunChartPoint>> getRunCharts(Location clinic, LocalDate start, LocalDate end,
+	        RunChartPeriod period) {
 		// Refused here, on the caller's thread, rather than as a failure of the daemon's work.
 		RunCharts.pointDates(start, end, period);
 		return ActCoreActivator.runAsDaemon("calculate the run chart", "The run chart could not be calculated",

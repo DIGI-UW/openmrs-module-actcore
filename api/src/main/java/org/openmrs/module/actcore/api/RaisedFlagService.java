@@ -19,7 +19,8 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.model.RaisedFlags;
+import org.openmrs.module.actcore.model.ChartFlag;
+import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 
@@ -167,7 +168,7 @@ public interface RaisedFlagService extends OpenmrsService {
 	 *             {@link PatientFlagsConstants#PRIV_VIEW_PATIENT_FLAGS}
 	 */
 	@Authorized(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)
-	List<RaisedFlags.Raised> getRaisedFlags(Patient patient);
+	List<ChartFlag> getRaisedFlags(Patient patient);
 	
 	/**
 	 * Dismisses the flag for the patient, which hides it wherever ACT reads flags until ACT Core finds
@@ -187,5 +188,5 @@ public interface RaisedFlagService extends OpenmrsService {
 	 */
 	@Authorized(value = { ActCorePrivileges.DISMISS_FLAGS,
 	        PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS }, requireAll = true)
-	RaisedFlags.Dismissal dismiss(Patient patient, Flag flag);
+	DismissalOutcome dismiss(Patient patient, Flag flag);
 }

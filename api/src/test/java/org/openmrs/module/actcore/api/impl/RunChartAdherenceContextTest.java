@@ -21,6 +21,8 @@ import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
@@ -80,7 +82,7 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		given(consultation, 60);
 		given(encounter(7, 39), 39);
 		
-		List<RunCharts.Point> adherent = new RunCharts().calculate(null, EARLIER, TODAY, RunCharts.Period.DAY)
+		List<RunChartPoint> adherent = new RunCharts().calculate(null, EARLIER, TODAY, RunChartPeriod.DAY)
 		        .get("active_registrants_adherent");
 		
 		// On the earlier day the next injection, due 18 days ago, was not yet late; today it is 18 days late.
@@ -99,7 +101,7 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		prescribe(encounter(7, 60), oralPenicillin, 60, null);
 		estimate(encounter(7, 15), 80.0);
 		
-		RunCharts.Point today = new RunCharts().calculate(null, TODAY, TODAY, RunCharts.Period.DAY)
+		RunChartPoint today = new RunCharts().calculate(null, TODAY, TODAY, RunChartPeriod.DAY)
 		        .get("active_registrants_adherent").get(0);
 		
 		assertEquals(Long.valueOf(1), today.count);

@@ -34,7 +34,7 @@ import org.openmrs.util.PrivilegeConstants;
  * latest Next Consultation Time Amount, counted from its encounter's date in the Time Period
  * recorded on the same encounter.
  */
-public final class NextConsultation {
+final class NextConsultation {
 	
 	private static final String DAYS = "1072AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 	

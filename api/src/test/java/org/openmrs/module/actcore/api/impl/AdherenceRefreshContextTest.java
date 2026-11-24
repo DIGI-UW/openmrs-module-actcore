@@ -20,6 +20,7 @@ import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.model.ProphylaxisSummary;
 
 public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	

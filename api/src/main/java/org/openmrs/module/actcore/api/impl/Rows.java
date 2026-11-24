@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.api.ValidationException;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 
@@ -21,33 +22,9 @@ import org.springframework.validation.Errors;
  * gives, each a map of column name to value, and to page the results, and the factory of the
  * validation errors that ACT Core's services and calculations refuse a request with.
  */
-public final class Rows {
-	
-	/** The number of entries a log page holds when the request does not say how many it wants. */
-	public static final int DEFAULT_LIMIT = 20;
-	
-	/** The most entries a log page holds, whatever the request asks for. */
-	public static final int MAX_LIMIT = 100;
+final class Rows {
 	
 	private Rows() {
-	}
-	
-	/**
-	 * Thrown when a log's filter is too broad for one request to read. It is a validation error with
-	 * its message as the one global error, so the REST layer answers it with 400 and that message.
-	 */
-	public static class TooMany extends ValidationException {
-		
-		private static final long serialVersionUID = 1L;
-		
-		/**
-		 * Creates the exception.
-		 *
-		 * @param message what is too broad and how to narrow it
-		 */
-		public TooMany(String message) {
-			super(message, refusal("logFilter", message).getErrors());
-		}
 	}
 	
 	/**
@@ -68,11 +45,12 @@ public final class Rows {
 	
 	/**
 	 * Cuts out the slice of a list that one page shows. The start index counts from 0, and the limit
-	 * falls back to {@link #DEFAULT_LIMIT} below 1 and is capped at {@link #MAX_LIMIT}.
+	 * falls back to {@link ActCoreConstants#LOG_DEFAULT_LIMIT} below 1 and is capped at
+	 * {@link ActCoreConstants#LOG_MAX_LIMIT}.
 	 */
 	static <T> List<T> page(List<T> all, int startIndex, int limit) {
 		int from = Math.min(Math.max(startIndex, 0), all.size());
-		int size = limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+		int size = limit < 1 ? ActCoreConstants.LOG_DEFAULT_LIMIT : Math.min(limit, ActCoreConstants.LOG_MAX_LIMIT);
 		return all.subList(from, Math.min(from + size, all.size()));
 	}
 	
