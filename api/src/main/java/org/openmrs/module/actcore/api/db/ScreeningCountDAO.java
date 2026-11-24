@@ -13,8 +13,8 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
-import org.openmrs.module.actcore.screening.ScreeningCount;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 
 /**
  * The database access behind {@link org.openmrs.module.actcore.api.ScreeningCountService}, which

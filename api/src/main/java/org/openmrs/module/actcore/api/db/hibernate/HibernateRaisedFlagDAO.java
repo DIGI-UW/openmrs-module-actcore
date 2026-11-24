@@ -20,8 +20,8 @@ import org.hibernate.FlushMode;
 import org.openmrs.api.db.hibernate.DbSession;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
-import org.openmrs.module.actcore.task.FlagDismissal;
-import org.openmrs.module.actcore.task.RaisedFlag;
+import org.openmrs.module.actcore.model.FlagDismissal;
+import org.openmrs.module.actcore.model.RaisedFlag;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.RaisedFlagDAO}. */
 public class HibernateRaisedFlagDAO implements RaisedFlagDAO {

@@ -31,7 +31,7 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.logs.AuditTables;
+import org.openmrs.module.actcore.api.impl.AuditTables;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;

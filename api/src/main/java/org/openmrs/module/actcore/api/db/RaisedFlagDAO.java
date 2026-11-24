@@ -13,8 +13,8 @@ import java.util.Date;
 import java.util.Map;
 import java.util.Set;
 
-import org.openmrs.module.actcore.task.FlagDismissal;
-import org.openmrs.module.actcore.task.RaisedFlag;
+import org.openmrs.module.actcore.model.FlagDismissal;
+import org.openmrs.module.actcore.model.RaisedFlag;
 
 /**
  * The database access behind {@link org.openmrs.module.actcore.api.RaisedFlagService}, which reads,

@@ -25,8 +25,8 @@ import org.openmrs.api.handler.BaseVoidHandler;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
-import org.openmrs.module.actcore.screening.ScreeningCount;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.ScreeningCountService}. */

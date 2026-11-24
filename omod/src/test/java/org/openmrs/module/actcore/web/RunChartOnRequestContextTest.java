@@ -35,7 +35,7 @@ import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.runchart.RunCharts;
+import org.openmrs.module.actcore.api.impl.RunCharts;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;

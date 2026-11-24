@@ -19,7 +19,7 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.api.impl.ProphylaxisSummary;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
