@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.tasks;
+package org.openmrs.module.actcore.api.impl;
 
 import java.util.function.Consumer;
 
@@ -22,8 +22,8 @@ public final class PatientFlagRefreshInTest {
 	private PatientFlagRefreshInTest() {
 	}
 	
-	public static PatientFlagRefreshTask.Result runWithAdherence(final Runnable adherence) {
-		return new PatientFlagRefreshTask() {
+	public static PatientFlagRefresh.Result runWithAdherence(final Runnable adherence) {
+		return new PatientFlagRefresh() {
 			
 			@Override
 			void refreshAdherence() {
@@ -33,7 +33,7 @@ public final class PatientFlagRefreshInTest {
 	}
 	
 	public static void refreshPatient(int patientId) {
-		PatientFlagRefreshTask.refreshPatient(patientId, new Consumer<Runnable>() {
+		PatientFlagRefresh.refreshPatient(patientId, new Consumer<Runnable>() {
 			
 			@Override
 			public void accept(Runnable work) {

@@ -29,8 +29,6 @@ import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.model.FlagDismissal;
 import org.openmrs.module.actcore.model.RaisedFlag;
-import org.openmrs.module.actcore.tasks.FlagListSync;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -180,7 +178,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			return DismissalOutcome.NOT_DISMISSIBLE;
 		}
 		// Not waited on: the full refresh holds it for minutes, and would undo the dismissal.
-		if (!PatientFlagRefreshTask.ROWS.readLock().tryLock()) {
+		if (!PatientFlagRefresh.ROWS.readLock().tryLock()) {
 			return DismissalOutcome.REFRESH_RUNNING;
 		}
 		for (String privilege : DISMISS_PRIVILEGES) {
@@ -202,7 +200,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			for (String privilege : DISMISS_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
-			PatientFlagRefreshTask.ROWS.readLock().unlock();
+			PatientFlagRefresh.ROWS.readLock().unlock();
 		}
 	}
 	

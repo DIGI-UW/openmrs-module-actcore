@@ -44,8 +44,6 @@ import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
 import org.openmrs.module.actcore.model.ActivityPage;
 import org.openmrs.module.actcore.model.DismissalOutcome;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshInTest;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;
@@ -278,7 +276,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 			
 			@Override
 			public void run() {
-				PatientFlagRefreshTask.ROWS.writeLock().lock();
+				PatientFlagRefresh.ROWS.writeLock().lock();
 				held.countDown();
 				try {
 					done.await();
@@ -287,7 +285,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 					Thread.currentThread().interrupt();
 				}
 				finally {
-					PatientFlagRefreshTask.ROWS.writeLock().unlock();
+					PatientFlagRefresh.ROWS.writeLock().unlock();
 				}
 			}
 		});
@@ -308,7 +306,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, shownFlags());
 		assertEquals(1, listMembers());
 		assertEquals(DismissalOutcome.DISMISSED, dismiss());
-		assertEquals(0, PatientFlagRefreshTask.ROWS.getReadLockCount());
+		assertEquals(0, PatientFlagRefresh.ROWS.getReadLockCount());
 	}
 	
 	@Test

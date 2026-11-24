@@ -38,7 +38,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.openmrs.module.actcore.model.ProphylaxisSummary;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
@@ -63,7 +62,7 @@ public class AdherenceRefresh {
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
-	// The handshake PatientFlagRefreshTask uses for flags: a fix to one belongs in both.
+	// The handshake PatientFlagRefresh uses for flags: a fix to one belongs in both.
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
@@ -115,7 +114,7 @@ public class AdherenceRefresh {
 			if (DEFERRED.remove(patientId)) {
 				try {
 					refreshPatient(patientId, today);
-					PatientFlagRefreshTask.refreshPatient(patientId);
+					PatientFlagRefresh.refreshPatient(patientId);
 				}
 				catch (RuntimeException e) {
 					log.error("Could not refresh patient {}, saved during the adherence refresh", patientId, e);

@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.tasks;
+package org.openmrs.module.actcore.api.impl;
 
 import java.util.Collection;
 import java.util.Date;
@@ -54,8 +54,8 @@ public class FlagListSync {
 	private static final Logger log = LoggerFactory.getLogger(FlagListSync.class);
 	
 	/**
-	 * What a run of {@link #syncAll()} changed, and how many flags failed, so that the scheduled task
-	 * can report the run in one line.
+	 * What a run of {@link #syncAll()} changed, and how many flags failed, so that the patient flag
+	 * refresh can report the run in one line.
 	 */
 	public static class Result {
 		
@@ -134,7 +134,7 @@ public class FlagListSync {
 		}
 		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
 		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_FLAG_TAG))
-		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId)
+		        && PatientFlagRefresh.flaggedMessages(flag, patientId).containsKey(patientId)
 		        && !Context.getService(RaisedFlagService.class).isDismissed(flagId, patientId);
 		
 		CohortMemberService memberService = Context.getService(CohortMemberService.class);
@@ -229,7 +229,7 @@ public class FlagListSync {
 		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		Set<Integer> flagged = new HashSet<Integer>();
 		if (listed) {
-			flagged.addAll(PatientFlagRefreshTask.flaggedMessages(flag).keySet());
+			flagged.addAll(PatientFlagRefresh.flaggedMessages(flag).keySet());
 			flagged.removeAll(raisedFlags.getDismissedPatients(flag.getFlagId()));
 		}
 		setMembers(list, flagged, raisedFlags.getRaisedSinceByPatient(flag.getFlagId()), result);

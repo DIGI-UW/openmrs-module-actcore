@@ -20,7 +20,7 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.AdherenceService;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +66,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			// Not in one transaction: it runs each flag in its own, so one that fails loses no other.
 			@Override
 			public void accept(int patientId) {
-				PatientFlagRefreshTask.refreshPatient(patientId);
+				PatientFlagRefresh.refreshPatient(patientId);
 			}
 		});
 	}

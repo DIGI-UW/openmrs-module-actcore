@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.tasks;
+package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
 
@@ -49,7 +49,7 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 		saveFlag("broken", "select x.patient_id from no_such_table x");
 		Flag flag = saveFlag("overdue", "select p.patient_id from patient p where p.patient_id = " + PATIENT);
 		
-		PatientFlagRefreshTask.refreshPatient(PATIENT);
+		PatientFlagRefresh.refreshPatient(PATIENT);
 		
 		assertEquals(1,
 		    ((Number) Context.getAdministrationService()
