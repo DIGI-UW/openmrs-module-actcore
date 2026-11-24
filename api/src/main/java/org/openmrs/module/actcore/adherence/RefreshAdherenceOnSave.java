@@ -18,7 +18,9 @@ import java.util.function.IntConsumer;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +57,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 					
 					@Override
 					public void run() {
-						new AdherenceRefresh().refreshPatient(patientId, LocalDate.now());
+						Context.getService(AdherenceService.class).refreshPatient(patientId, LocalDate.now());
 					}
 				});
 			}

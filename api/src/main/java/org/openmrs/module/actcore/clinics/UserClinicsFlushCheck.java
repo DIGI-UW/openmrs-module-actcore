@@ -15,6 +15,9 @@ import org.hibernate.EmptyInterceptor;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.UserClinicsService;
+import org.openmrs.module.actcore.api.db.UserClinicsDAO;
+import org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl;
 
 /**
  * A Hibernate interceptor that checks a limited administrator's change to a user's clinics or roles
@@ -74,11 +77,23 @@ public class UserClinicsFlushCheck extends EmptyInterceptor {
 			return;
 		}
 		User user = (User) persistent.getOwner();
-		boolean clinicsChange = !UserClinics.of(user).equals(UserClinics.stored(user.getUserId()));
-		boolean rolesChange = !UserClinics.roleUuids(user).equals(UserClinics.storedRoles(user.getUserId()));
+		UserClinicsService clinics = storedReads();
+		boolean clinicsChange = !UserClinics.of(user).equals(clinics.getStoredClinics(user.getUserId()));
+		boolean rolesChange = !UserClinics.roleUuids(user).equals(clinics.getStoredRoles(user.getUserId()));
 		if (clinicsChange || rolesChange) {
 			// A new user has nothing stored, so is checked as it will be saved.
-			ClinicScopedUserAdministration.refuseUnlessMayChange(me, user, null);
+			ClinicScopedUserAdministration.refuseUnlessMayChange(me, user, null, clinics);
 		}
+	}
+	
+	/**
+	 * Gets the service's implementation without its proxy, reading through the DAO, so that no
+	 * transaction begins or joins in the middle of the flush. The DAO cannot be injected: core builds
+	 * the session factory from the interceptors, and the DAO needs the session factory.
+	 */
+	private static UserClinicsService storedReads() {
+		UserClinicsServiceImpl reads = new UserClinicsServiceImpl();
+		reads.setDao(Context.getRegisteredComponents(UserClinicsDAO.class).get(0));
+		return reads;
 	}
 }

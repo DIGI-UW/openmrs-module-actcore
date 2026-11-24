@@ -17,6 +17,7 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.Names;
 import org.openmrs.module.actcore.logs.Rows;
@@ -92,7 +93,7 @@ public class ActivityController extends ActCoreRestController {
 		
 		ActivityLog.Page page;
 		try {
-			page = new ActivityLog().list(filter);
+			page = Context.getService(AuditLogService.class).getActivity(filter);
 		}
 		catch (Rows.TooMany e) {
 			throw new IllegalRequestException(e.getMessage());
@@ -121,7 +122,7 @@ public class ActivityController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {
 		Context.requirePrivilege(ActivityLog.VIEW_PRIVILEGE);
-		ActivityLog.Details details = new ActivityLog().details(revisionId);
+		ActivityLog.Details details = Context.getService(AuditLogService.class).getActivityDetails(revisionId);
 		if (details == null) {
 			throw new ObjectNotFoundException();
 		}

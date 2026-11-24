@@ -26,6 +26,7 @@ import java.util.TreeMap;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 
@@ -330,12 +331,25 @@ public class ActivityLog {
 		}
 	}
 	
-	private final Names names = new Names();
+	private final AuditLogDAO dao;
+	
+	private final Names names;
+	
+	/**
+	 * Creates a log that reads through the DAO.
+	 *
+	 * @param dao the DAO
+	 */
+	public ActivityLog(AuditLogDAO dao) {
+		this.dao = dao;
+		this.names = new Names(dao);
+	}
 	
 	/**
 	 * Lists the changes the filter matches, newest first, including ACT Core's flag dismissals unless
-	 * the filter names a form or a kind other than flag. This method does not check a privilege, so the
-	 * caller must check {@link #VIEW_PRIVILEGE} first.
+	 * the filter names a form or a kind other than flag. This method does not check a privilege:
+	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks {@link #VIEW_PRIVILEGE} before it
+	 * calls it.
 	 *
 	 * @param filter the filters that choose the changes and the page of them to return
 	 * @return the page of entries; empty when the filter names a user, patient or form that does not
@@ -346,7 +360,7 @@ public class ActivityLog {
 		Page page = new Page();
 		Integer userId = null;
 		if (filter.username != null) {
-			userId = Names.userId(filter.username);
+			userId = names.userId(filter.username);
 			if (userId == null) {
 				return page;
 			}
@@ -361,7 +375,7 @@ public class ActivityLog {
 		}
 		Integer formId = null;
 		if (filter.formUuid != null) {
-			List<Map<String, Object>> forms = Rows.select("select form_id from form where uuid = ?", filter.formUuid);
+			List<Map<String, Object>> forms = dao.select("select form_id from form where uuid = ?", filter.formUuid);
 			if (forms.isEmpty()) {
 				return page;
 			}
@@ -510,7 +524,7 @@ public class ActivityLog {
 	 * and form filters in the query. It leaves out the daemon user's revisions, such as Initializer's
 	 * loads and the scheduled tasks, since no user made them.
 	 */
-	private static List<Map<String, Object>> revisions(List<String> tables, Integer userId, LocalDate from, LocalDate to,
+	private List<Map<String, Object>> revisions(List<String> tables, Integer userId, LocalDate from, LocalDate to,
 	        Integer patientId, Integer formId) {
 		StringBuilder sql = new StringBuilder(
 		        "select r.id, r.changedOn as rev_time, r.changedBy as rev_user from revision_entity r where 1 = 1");
@@ -551,11 +565,11 @@ public class ActivityLog {
 			sql.append(")");
 		}
 		sql.append(") order by r.changedOn desc, r.id desc");
-		return Rows.select(sql.toString(), params.toArray());
+		return dao.select(sql.toString(), params.toArray());
 	}
 	
-	private static List<Map<String, Object>> rows(String table, List<Integer> revisionIds) {
-		return Rows.select(select(table) + " where a.REV in (" + Rows.placeholders(revisionIds) + ")" + groupBy(table),
+	private List<Map<String, Object>> rows(String table, List<Integer> revisionIds) {
+		return dao.select(select(table) + " where a.REV in (" + Rows.placeholders(revisionIds) + ")" + groupBy(table),
 		    revisionIds.toArray());
 	}
 	
@@ -581,7 +595,7 @@ public class ActivityLog {
 			params.add(patientId);
 		}
 		List<Entry> entries = new ArrayList<Entry>();
-		for (Map<String, Object> row : Rows.select(sql.append(order).toString(), params.toArray())) {
+		for (Map<String, Object> row : dao.select(sql.append(order).toString(), params.toArray())) {
 			Entry entry = new Entry();
 			entry.time = Rows.date(row, "date_dismissed");
 			entry.userId = Rows.integer(row, "dismissed_by");
@@ -678,7 +692,7 @@ public class ActivityLog {
 			return entry;
 		}
 		if (personId != null) {
-			List<Map<String, Object>> owners = Rows.select("select user_id from users where person_id = ?", personId);
+			List<Map<String, Object>> owners = dao.select("select user_id from users where person_id = ?", personId);
 			if (owners.isEmpty()) {
 				entry.kind = "other";
 				entry.personId = personId;
@@ -718,7 +732,7 @@ public class ActivityLog {
 	 * was not set in the entity's previous revision. A later edit of an entity already flagged does not
 	 * count.
 	 */
-	private static boolean became(Map<String, Object> row, String table, String idColumn, String flag, int revisionId) {
+	private boolean became(Map<String, Object> row, String table, String idColumn, String flag, int revisionId) {
 		if (!Rows.truthy(row, flag)) {
 			return false;
 		}
@@ -727,14 +741,14 @@ public class ActivityLog {
 	}
 	
 	/** Returns the row when the revision voids the row's entity, and null otherwise. */
-	private static Map<String, Object> voiding(Map<String, Object> row, String table, String idColumn, int revisionId) {
+	private Map<String, Object> voiding(Map<String, Object> row, String table, String idColumn, int revisionId) {
 		return row != null && became(row, table, idColumn, "voided", revisionId) ? row : null;
 	}
 	
 	/**
 	 * Tells whether the row's column holds a value where the entity's previous revision had none.
 	 */
-	private static boolean gained(Map<String, Object> row, String table, String idColumn, String column, int revisionId) {
+	private boolean gained(Map<String, Object> row, String table, String idColumn, String column, int revisionId) {
 		if (row.get(column) == null) {
 			return false;
 		}
@@ -1087,9 +1101,8 @@ public class ActivityLog {
 		Map<Integer, List<String>> added = new LinkedHashMap<Integer, List<String>>();
 		Map<Integer, List<String>> removed = new LinkedHashMap<Integer, List<String>>();
 		Set<Integer> order = new LinkedHashSet<Integer>();
-		for (Map<String, Object> obs : Rows.select(
-		    "select * from obs_AUD where REV = ? and encounter_id = ? order by obs_id", entry.revisionId,
-		    entry.encounterId)) {
+		for (Map<String, Object> obs : dao.select("select * from obs_AUD where REV = ? and encounter_id = ? order by obs_id",
+		    entry.revisionId, entry.encounterId)) {
 			String value = obsValue(obs);
 			if (value == null) {
 				continue;
@@ -1265,8 +1278,8 @@ public class ActivityLog {
 	 * Gets the entity's audit row as it stood before the revision, or null when the revision is the
 	 * first that recorded the entity.
 	 */
-	private static Map<String, Object> previous(String table, String idColumn, Object id, int revisionId) {
-		List<Map<String, Object>> rows = Rows.select(
+	private Map<String, Object> previous(String table, String idColumn, Object id, int revisionId) {
+		List<Map<String, Object>> rows = dao.select(
 		    "select * from " + table + " where " + idColumn + " = ? and REV < ? order by REV desc", id, revisionId);
 		return rows.isEmpty() ? null : rows.get(0);
 	}
@@ -1390,12 +1403,12 @@ public class ActivityLog {
 			return null;
 		}
 		target.display = StringUtils.defaultIfBlank(
-		    Names.personName(
+		    names.personName(
 		        "select given_name, middle_name, family_name from person_name_AUD where person_id = ? and REV <= ?"
 		                + " order by REV desc",
 		        patientId, revision == null ? Integer.MAX_VALUE : revision.id),
 		    "Patient " + patientId);
-		List<Map<String, Object>> identifiers = Rows.select(
+		List<Map<String, Object>> identifiers = dao.select(
 		    "select identifier from patient_identifier_AUD where patient_id = ? and REV <= ? order by preferred desc, REV desc",
 		    patientId, revision == null ? Integer.MAX_VALUE : revision.id);
 		target.actId = identifiers.isEmpty() ? null : Rows.string(identifiers.get(0), "identifier");
@@ -1465,8 +1478,8 @@ public class ActivityLog {
 	 * Gets the daemon user's id, or null when there is no daemon user. The daemon's saves are the
 	 * server's own, such as Initializer's loads at startup and the scheduled tasks.
 	 */
-	private static Integer daemonUserId() {
-		List<Map<String, Object>> rows = Rows.select("select user_id from users where uuid = ?", Daemon.getDaemonUserUuid());
+	private Integer daemonUserId() {
+		List<Map<String, Object>> rows = dao.select("select user_id from users where uuid = ?", Daemon.getDaemonUserUuid());
 		return rows.isEmpty() ? null : Rows.integer(rows.get(0), "user_id");
 	}
 	

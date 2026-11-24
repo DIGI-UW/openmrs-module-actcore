@@ -36,6 +36,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.cohort.CohortType;
@@ -337,7 +338,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		
 		ActivityLog.Filter filter = new ActivityLog.Filter();
 		filter.kind = "flag";
-		ActivityLog.Page page = new ActivityLog().list(filter);
+		ActivityLog.Page page = Context.getService(AuditLogService.class).getActivity(filter);
 		
 		assertEquals(0, rows());
 		assertEquals(2, page.totalCount);

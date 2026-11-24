@@ -110,4 +110,130 @@
             </list>
         </property>
     </bean>
+    <!-- A bean of its own, as UserClinicsFlushCheck looks it up to read without starting a transaction mid-flush -->
+    <bean id="actcoreUserClinicsDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateUserClinicsDAO">
+        <property name="sessionFactory" ref="dbSessionFactory"/>
+    </bean>
+
+    <bean id="actcore.UserClinicsService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl">
+                <property name="dao" ref="actcoreUserClinicsDAO"/>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.UserClinicsService</value>
+                <ref bean="actcore.UserClinicsService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.AdherenceService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.AdherenceServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateAdherenceDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.AdherenceService</value>
+                <ref bean="actcore.AdherenceService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.AuditLogService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.AuditLogServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateAuditLogDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.AuditLogService</value>
+                <ref bean="actcore.AuditLogService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.FlagGapService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.FlagGapServiceImpl">
+                <property name="dao">
+                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateFlagGapDAO">
+                        <property name="sessionFactory" ref="dbSessionFactory"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.FlagGapService</value>
+                <ref bean="actcore.FlagGapService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.RunChartService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.RunChartServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.RunChartService</value>
+                <ref bean="actcore.RunChartService"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="actcore.NextStepsService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.NextStepsServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.NextStepsService</value>
+                <ref bean="actcore.NextStepsService"/>
+            </list>
+        </property>
+    </bean>
 </beans>

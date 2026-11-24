@@ -37,6 +37,7 @@ import org.openmrs.Visit;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
+import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -435,7 +436,7 @@ public class NextSteps {
 	}
 	
 	private void dose() {
-		summary = ProphylaxisSummary.of(patient, today);
+		summary = Context.getService(AdherenceService.class).getProphylaxisSummary(patient, today);
 		String key = "BPG".equals(summary.getType()) ? "bpg" : "Oral".equals(summary.getType()) ? "oral" : null;
 		if (key == null) {
 			return;

@@ -37,7 +37,6 @@ import org.openmrs.Visit;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.adherence.AdherenceContextTest;
-import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.actcore.registry.EnrolOnRegistration;
 import org.openmrs.module.actcore.task.RaisedFlags;
@@ -156,7 +155,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		assertEquals(false, steps.get(0).isDone());
 		assertEquals(true, steps.get(1).isDone());
 		// The dose is done, and the banner holds the next one.
-		assertEquals(true, ProphylaxisSummary.of(patient, TODAY).isBpgOnHold());
+		assertEquals(true, refresh.getProphylaxisSummary(patient, TODAY).isBpgOnHold());
 	}
 	
 	@Test
@@ -333,7 +332,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		NextStep dose = step("bpg");
 		assertFalse("the BPG step is done this visit", dose.isDone());
 		assertEquals(held, dose.isOnHold());
-		assertEquals(held, ProphylaxisSummary.of(patient, TODAY).isBpgOnHold());
+		assertEquals(held, refresh.getProphylaxisSummary(patient, TODAY).isBpgOnHold());
 	}
 	
 	@Test

@@ -16,7 +16,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
-import org.openmrs.module.actcore.consultation.NextConsultation;
+import org.openmrs.module.actcore.api.NextStepsService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -56,7 +56,7 @@ public class CardiologyController extends ActCoreRestController {
 		}
 		Context.requirePrivilege(PrivilegeConstants.GET_OBS);
 		
-		LocalDate nextDue = NextConsultation.of(patient);
+		LocalDate nextDue = Context.getService(NextStepsService.class).getNextConsultationDate(patient);
 		return new SimpleObject().add("nextDue", nextDue == null ? null : nextDue.toString());
 	}
 }

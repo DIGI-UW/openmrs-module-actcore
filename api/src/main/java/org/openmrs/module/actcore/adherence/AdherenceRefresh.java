@@ -22,28 +22,29 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
-import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The adherence refresh, which recomputes patients' prophylaxis adherence and next due date into
  * actcore_prophylaxis_adherence, and whether each of their injections was on time into
  * actcore_injection_timing. It runs for every patient on a schedule, and for one patient when a
- * form of theirs is saved.
+ * form of theirs is saved. {@link org.openmrs.module.actcore.api.AdherenceService} runs it, reading
+ * and writing through the DAO it is given.
  */
 public class AdherenceRefresh {
 	
@@ -103,13 +104,21 @@ public class AdherenceRefresh {
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
 	
+	private final AdherenceDAO dao;
+	
 	private final int rowsPerInsert;
 	
-	public AdherenceRefresh() {
-		this(200);
+	/**
+	 * Creates a refresh that reads and writes through the DAO.
+	 *
+	 * @param dao the DAO
+	 */
+	public AdherenceRefresh(AdherenceDAO dao) {
+		this(dao, 200);
 	}
 	
-	AdherenceRefresh(int rowsPerInsert) {
+	AdherenceRefresh(AdherenceDAO dao, int rowsPerInsert) {
+		this.dao = dao;
 		this.rowsPerInsert = rowsPerInsert;
 	}
 	
@@ -126,11 +135,9 @@ public class AdherenceRefresh {
 	public int refreshAll(LocalDate today) {
 		ROWS.writeLock().lock();
 		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			return refresh(Context.getAdministrationService(), today);
+			return refresh(today);
 		}
 		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 			ROWS.writeLock().unlock();
 			refreshDeferred(today);
 		}
@@ -173,48 +180,57 @@ public class AdherenceRefresh {
 			}
 		}
 		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			AdministrationService admin = Context.getAdministrationService();
-			List<String> rows = new ArrayList<String>();
-			List<String> timings = new ArrayList<String>();
-			compute(read(admin, patientId), today, rows, timings);
-			rewrite(admin, " where patient_id = " + patientId, rows, timings);
+			List<Object[]> rows = new ArrayList<Object[]>();
+			List<Object[]> timings = new ArrayList<Object[]>();
+			compute(read(patientId), today, rows, timings);
+			rewrite(patientId, rows, timings);
 		}
 		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
 			ROWS.readLock().unlock();
 		}
 	}
 	
 	/**
-	 * Reads one patient's history as it stands now, through the same queries the full refresh runs. The
-	 * history is empty when nothing the refresh reads is recorded for the patient.
+	 * Computes the patient's prophylaxis summary from their history as it stands now, read through the
+	 * same queries the full refresh runs.
+	 *
+	 * @param patient the patient
+	 * @param today the day to compute the summary as of
+	 * @return the summary, as {@link ProphylaxisSummary} describes it
 	 */
-	AdherenceReplay.History historyOf(int patientId) {
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			AdherenceReplay.History h = read(Context.getAdministrationService(), patientId).get(patientId);
-			return h == null ? new AdherenceReplay.History() : h;
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
+	public ProphylaxisSummary summaryOf(Patient patient, LocalDate today) {
+		AdherenceReplay.History history = read(patient.getPatientId()).get(patient.getPatientId());
+		return ProphylaxisSummary.of(patient, history == null ? new AdherenceReplay.History() : history, today);
 	}
 	
-	private int refresh(AdministrationService admin, LocalDate today) {
-		List<String> rows = new ArrayList<String>();
-		List<String> timings = new ArrayList<String>();
-		compute(read(admin, (Integer) null), today, rows, timings);
-		rewrite(admin, "", rows, timings);
+	/**
+	 * Gets the adherence each patient held on each of the days, reading each patient's history once.
+	 *
+	 * @param patientIds the patients to replay
+	 * @param days the days to replay each patient on
+	 * @return each patient's adherence by day, as {@link AdherenceSeries} gives it
+	 */
+	public Map<Integer, Map<LocalDate, Double>> adherenceOn(Collection<Integer> patientIds, SortedSet<LocalDate> days) {
+		if (patientIds.isEmpty() || days.isEmpty()) {
+			return new HashMap<Integer, Map<LocalDate, Double>>();
+		}
+		return AdherenceSeries.adherenceOn(read(patientIds), days);
+	}
+	
+	private int refresh(LocalDate today) {
+		List<Object[]> rows = new ArrayList<Object[]>();
+		List<Object[]> timings = new ArrayList<Object[]>();
+		compute(read((Integer) null), today, rows, timings);
+		rewrite(null, rows, timings);
 		return rows.size();
 	}
 	
 	/**
-	 * Computes each history's adherence row and injection timings and adds them to the lists given, as
-	 * SQL value lists ready to insert. A patient without a prescription gets neither.
+	 * Computes each history's adherence row and injection timings and adds them to the lists given,
+	 * ready to insert. A patient without a prescription gets neither.
 	 */
-	private void compute(Map<Integer, AdherenceReplay.History> histories, LocalDate today, List<String> rows,
-	        List<String> timings) {
+	private void compute(Map<Integer, AdherenceReplay.History> histories, LocalDate today, List<Object[]> rows,
+	        List<Object[]> timings) {
 		Timestamp computedAt = new Timestamp(System.currentTimeMillis());
 		Integer oralFirstDueDays = oralFirstDueDays();
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
@@ -224,15 +240,13 @@ public class AdherenceRefresh {
 			for (ProphylaxisSummary.Injection injection : ProphylaxisSummary.timings(entry.getValue().prescriptions,
 			    entry.getValue().injections, today)) {
 				if (injection.getOnTime() != null) {
-					timings.add("(" + entry.getKey() + ", " + sqlValue(injection.getDate()) + ", "
-					        + sqlValue(injection.getOnTime()) + ")");
+					timings.add(new Object[] { entry.getKey(), injection.getDate(), injection.getOnTime() });
 				}
 			}
 			AdherenceReplay.Row row = AdherenceReplay.replay(entry.getValue(), today, oralFirstDueDays);
 			if (row != null) {
-				rows.add("(" + entry.getKey() + ", " + sqlValue(row.regimen) + ", " + sqlValue(row.interval) + ", "
-				        + sqlValue(row.adherence) + ", " + sqlValue(row.lastGiven) + ", " + sqlValue(row.nextDue) + ", "
-				        + sqlValue(computedAt) + ")");
+				rows.add(new Object[] { entry.getKey(), row.regimen, row.interval, row.adherence, row.lastGiven, row.nextDue,
+				        computedAt });
 			}
 		}
 	}
@@ -241,60 +255,54 @@ public class AdherenceRefresh {
 	 * Reads the history of the patient given, or of every patient when the id is null, keyed by patient
 	 * id.
 	 */
-	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
-		return read(admin, patientId == null ? null : Collections.singletonList(patientId));
+	Map<Integer, AdherenceReplay.History> read(Integer patientId) {
+		return read(patientId == null ? null : Collections.singletonList(patientId));
 	}
 	
 	/**
 	 * Reads the histories of the patients given, or of every patient when the collection is null, keyed
 	 * by patient id. An empty collection reads nothing.
 	 */
-	Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Collection<Integer> patientIds) {
+	Map<Integer, AdherenceReplay.History> read(Collection<Integer> patientIds) {
 		Map<Integer, AdherenceReplay.History> histories = new LinkedHashMap<Integer, AdherenceReplay.History>();
 		if (patientIds != null && patientIds.isEmpty()) {
 			return histories;
 		}
-		readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS),
-		    only("g.person_id", patientIds), histories);
-		readInjections(admin, only("o.person_id", patientIds), histories);
-		readEstimates(admin, daysByUuid(admin, GP_DURATIONS), only("e.patient_id", patientIds), histories);
-		readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), only("o.person_id", patientIds), histories);
-		return histories;
-	}
-	
-	private static String only(String column, Collection<Integer> patientIds) {
-		return patientIds == null ? "" : " and " + column + " in (" + StringUtils.join(patientIds, ", ") + ")";
+		// One transaction gives the four reads one snapshot, and a session on a thread with none bound.
+		return inTransaction(() -> {
+			AdministrationService admin = Context.getAdministrationService();
+			readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS), patientIds,
+			    histories);
+			readInjections(admin, patientIds, histories);
+			readEstimates(admin, daysByUuid(admin, GP_DURATIONS), patientIds, histories);
+			readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), patientIds, histories);
+			return histories;
+		});
 	}
 	
 	/**
-	 * Replaces the rows of both tables that the where clause selects with the rows given, in one
-	 * transaction, so that a run cannot leave either table empty or partly filled. An empty where
-	 * clause replaces every row.
+	 * Replaces the rows of both tables of the patient, or of every patient when the id is null, with
+	 * the rows given, in one transaction, so that a run cannot leave either table empty or partly
+	 * filled.
 	 */
-	private void rewrite(final AdministrationService admin, final String where, final List<String> rows,
-	        final List<String> timings) {
-		PlatformTransactionManager transactions = Context.getRegisteredComponent("transactionManager",
-		    PlatformTransactionManager.class);
-		new TransactionTemplate(transactions).execute(new TransactionCallbackWithoutResult() {
-			
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				admin.executeSQL("delete from " + TABLE + where, false);
-				for (int i = 0; i < rows.size(); i += rowsPerInsert) {
-					admin.executeSQL("insert into " + TABLE + " (patient_id, regimen_concept_id, injection_interval_days,"
-					        + " adherence, last_given, next_due, date_computed) values "
-					        + StringUtils.join(rows.subList(i, Math.min(rows.size(), i + rowsPerInsert)), ", "),
-					    false);
-				}
-				admin.executeSQL("delete from " + TIMING_TABLE + where, false);
-				for (int i = 0; i < timings.size(); i += rowsPerInsert) {
-					admin.executeSQL(
-					    "insert into " + TIMING_TABLE + " (patient_id, injection_date, on_time) values "
-					            + StringUtils.join(timings.subList(i, Math.min(timings.size(), i + rowsPerInsert)), ", "),
-					    false);
-				}
-			}
+	private void rewrite(Integer patientId, List<Object[]> rows, List<Object[]> timings) {
+		inTransaction(() -> {
+			dao.replaceRows(patientId, rows, timings, rowsPerInsert);
+			return null;
 		});
+	}
+	
+	/** Runs the work in the current transaction, or in a new one when none is in progress. */
+	private static <T> T inTransaction(Transactions.Work<T> work) {
+		try {
+			return Transactions.inTransaction(work);
+		}
+		catch (RuntimeException | Error e) {
+			throw e;
+		}
+		catch (Throwable e) {
+			throw new APIException(e);
+		}
 	}
 	
 	private static AdherenceReplay.History history(Map<Integer, AdherenceReplay.History> histories, Object patientId) {
@@ -312,22 +320,12 @@ public class AdherenceRefresh {
 	 * include the stopped ones too.
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, Set<String> noProphylaxis,
-	        String patientFilter, Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select g.person_id, coalesce(cd.value_datetime, e.encounter_datetime),"
-		        + " e.encounter_id, rc.uuid, rc.concept_id, s.value_datetime, x.value_datetime"
-		        + " from obs g join encounter e on e.encounter_id = g.encounter_id and e.voided = false"
-		        + " left join obs cd on cd.encounter_id = g.encounter_id and cd.voided = false and cd.concept_id = "
-		        + concept(admin, GP_CONSULTATION_DATE)
-		        + " left join obs r on r.obs_group_id = g.obs_id and r.voided = false and r.concept_id = g.concept_id"
-		        + " left join concept rc on rc.concept_id = r.value_coded"
-		        + " left join obs s on s.obs_group_id = g.obs_id and s.voided = false and s.concept_id = "
-		        + concept(admin, GP_DATE_STARTED)
-		        + " left join obs x on x.obs_group_id = g.obs_id and x.voided = false and x.concept_id = "
-		        + concept(admin, GP_DATE_STOPPED) + " where g.voided = false and g.obs_group_id is null and g.concept_id = "
-		        + concept(admin, GP_PRESCRIPTION) + patientFilter
-		        + " order by g.person_id, coalesce(cd.value_datetime, e.encounter_datetime), e.encounter_id, g.obs_id,"
-		        + " r.obs_id",
-		    true);
+	        Collection<Integer> patientIds, Map<Integer, AdherenceReplay.History> histories) {
+		String consultationDate = concept(admin, GP_CONSULTATION_DATE);
+		String dateStarted = concept(admin, GP_DATE_STARTED);
+		String dateStopped = concept(admin, GP_DATE_STOPPED);
+		List<List<Object>> rows = dao.getPrescriptions(concept(admin, GP_PRESCRIPTION), consultationDate, dateStarted,
+		    dateStopped, patientIds);
 		// ACT 2.0 kept the first consultation of a day.
 		Map<Integer, Map<LocalDate, Integer>> encounterOfDay = new HashMap<Integer, Map<LocalDate, Integer>>();
 		for (List<Object> row : rows) {
@@ -365,13 +363,9 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	private void readInjections(AdministrationService admin, String patientFilter,
+	private void readInjections(AdministrationService admin, Collection<Integer> patientIds,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime from obs o"
-		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		        + concept(admin, GP_INJECTION_DATE) + patientFilter,
-		    true);
+		List<List<Object>> rows = dao.getInjections(concept(admin, GP_INJECTION_DATE), patientIds);
 		for (List<Object> row : rows) {
 			history(histories, row.get(0)).injections.add(localDate(row.get(1)));
 		}
@@ -382,22 +376,14 @@ public class AdherenceRefresh {
 	 * its encounter's date when it has none, just as a BPG form counts by its injection date. A form
 	 * saved without an estimate is still read, as ACT 2.0 counted it.
 	 */
-	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, String patientFilter,
+	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, Collection<Integer> patientIds,
 	        Map<Integer, AdherenceReplay.History> histories) {
 		// With no date concept set, every form counts from its encounter's date, as before the form had one.
-		boolean dated = StringUtils.isNotBlank(admin.getGlobalProperty(GP_ESTIMATE_DATE));
-		String dayColumn = dated ? "coalesce(dt.value_datetime, e.encounter_datetime)" : "e.encounter_datetime";
-		List<List<Object>> rows = admin.executeSQL("select e.patient_id, " + dayColumn + ", est.value_numeric, dc.uuid"
-		        + " from encounter e"
-		        + (dated ? " left join obs dt on dt.encounter_id = e.encounter_id and dt.voided = false and dt.concept_id = "
-		                + concept(admin, GP_ESTIMATE_DATE) : "")
-		        + " left join obs est on est.encounter_id = e.encounter_id and est.voided = false and est.concept_id = "
-		        + concept(admin, GP_ESTIMATE)
-		        + " left join obs d on d.encounter_id = e.encounter_id and d.voided = false and d.concept_id = "
-		        + concept(admin, GP_DURATION) + " left join concept dc on dc.concept_id = d.value_coded"
-		        + " where e.voided = false and (est.obs_id is not null or d.obs_id is not null)" + patientFilter
-		        + " order by e.patient_id, " + dayColumn + ", e.encounter_id, est.obs_id, d.obs_id",
-		    true);
+		String estimateDate = StringUtils.isNotBlank(admin.getGlobalProperty(GP_ESTIMATE_DATE))
+		        ? concept(admin, GP_ESTIMATE_DATE)
+		        : null;
+		String estimateConcept = concept(admin, GP_ESTIMATE);
+		List<List<Object>> rows = dao.getEstimates(estimateDate, estimateConcept, concept(admin, GP_DURATION), patientIds);
 		for (List<Object> row : rows) {
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral = history(histories, row.get(0)).oral;
 			LocalDate day = localDate(row.get(1));
@@ -414,16 +400,10 @@ public class AdherenceRefresh {
 	 * it records for how injections are entered. ACT 2.0 read that answer from the latest consultation
 	 * alone, so a consultation that leaves it blank is read as continuous entry, recorded as 0.
 	 */
-	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals, String patientFilter,
-	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = admin.executeSQL("select o.person_id, o.value_datetime, c.uuid from obs o"
-		        + " join encounter e on e.encounter_id = o.encounter_id and e.voided = false"
-		        + " left join obs d on d.encounter_id = o.encounter_id and d.voided = false and d.concept_id = "
-		        + concept(admin, GP_DATA_ENTRY) + " left join concept c on c.concept_id = d.value_coded"
-		        + " where o.voided = false and o.value_datetime is not null and o.concept_id = "
-		        + concept(admin, GP_CONSULTATION_DATE) + patientFilter
-		        + " order by o.person_id, o.value_datetime, e.encounter_id, o.obs_id, d.obs_id",
-		    true);
+	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals,
+	        Collection<Integer> patientIds, Map<Integer, AdherenceReplay.History> histories) {
+		String dataEntry = concept(admin, GP_DATA_ENTRY);
+		List<List<Object>> rows = dao.getConsultations(concept(admin, GP_CONSULTATION_DATE), dataEntry, patientIds);
 		for (List<Object> row : rows) {
 			AdherenceReplay.History h = history(histories, row.get(0));
 			LocalDate day = localDate(row.get(1));
@@ -434,12 +414,9 @@ public class AdherenceRefresh {
 		}
 	}
 	
-	/**
-	 * Builds a SQL subquery that selects the concept_id of the concept the global property names by
-	 * uuid.
-	 */
-	private String concept(AdministrationService admin, String property) {
-		return "(select concept_id from concept where uuid = '" + uuid(admin.getGlobalProperty(property), property) + "')";
+	/** Gets the uuid of the concept the global property names, checked to be safe to write into SQL. */
+	private static String concept(AdministrationService admin, String property) {
+		return uuid(admin.getGlobalProperty(property), property);
 	}
 	
 	/**
@@ -515,18 +492,5 @@ public class AdherenceRefresh {
 			return (LocalDate) value;
 		}
 		return new Timestamp(((Date) value).getTime()).toLocalDateTime().toLocalDate();
-	}
-	
-	static String sqlValue(Object value) {
-		if (value == null) {
-			return "null";
-		}
-		if (value instanceof Number) {
-			return value.toString();
-		}
-		if (value instanceof Boolean) {
-			return (Boolean) value ? "true" : "false";
-		}
-		return "'" + value + "'";
 	}
 }

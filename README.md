@@ -93,8 +93,8 @@ descriptions. Grant them with care, as several run work with wider access on the
 | `App: act.dashboard` | Reading the Dashboard's run charts and screening counts |
 | `App: act.screeningCounts` | Reading screening counts |
 
-The gap look-up runs flag SQL with SQL Level Access, so grant Manage Flags only to roles you would trust
-with that.
+The gap look-up runs a flag's SQL criteria on the database connection for any user who may view flags,
+with no SQL Level Access check, so grant Manage Flags only to roles you would trust with that.
 
 ## Building
 

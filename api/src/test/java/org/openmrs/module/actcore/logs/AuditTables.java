@@ -12,11 +12,15 @@ package org.openmrs.module.actcore.logs;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
+import org.openmrs.module.actcore.api.db.hibernate.HibernateAuditLogDAO;
 
 /**
  * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
@@ -38,6 +42,15 @@ public final class AuditTables {
 				}
 			}
 		});
+	}
+	
+	/**
+	 * Runs a query as the logs run theirs, giving each row as a map of column label to value.
+	 */
+	public static List<Map<String, Object>> select(String sql, Object... params) {
+		HibernateAuditLogDAO dao = new HibernateAuditLogDAO();
+		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
+		return dao.select(sql, params);
 	}
 	
 	private static String script() {

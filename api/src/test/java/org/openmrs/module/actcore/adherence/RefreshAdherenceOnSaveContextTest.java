@@ -33,6 +33,7 @@ import org.openmrs.Obs;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.task.FlagListSync;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
@@ -438,11 +439,11 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	 * RefreshAdherenceOnSave does, on another thread, after the refresh has read every patient.
 	 */
 	private AdherenceRefresh racingADose(final List<Throwable> failed) {
-		return new AdherenceRefresh() {
+		return new AdherenceRefresh(dao()) {
 			
 			@Override
-			Map<Integer, AdherenceReplay.History> read(AdministrationService admin, Integer patientId) {
-				Map<Integer, AdherenceReplay.History> histories = super.read(admin, patientId);
+			Map<Integer, AdherenceReplay.History> read(Integer patientId) {
+				Map<Integer, AdherenceReplay.History> histories = super.read(patientId);
 				if (patientId == null) {
 					given(committed(encounter(7, 0)), 0);
 					Thread save = new Thread(new Runnable() {
@@ -452,7 +453,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 							Context.openSession();
 							try {
 								Context.authenticate("admin", "test");
-								new AdherenceRefresh().refreshPatient(7, TODAY);
+								Context.getService(AdherenceService.class).refreshPatient(7, TODAY);
 								PatientFlagRefreshTask.refreshPatient(7);
 							}
 							catch (Throwable e) {

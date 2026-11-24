@@ -21,14 +21,18 @@ import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.api.db.AdherenceDAO;
+import org.openmrs.module.actcore.api.db.hibernate.HibernateAdherenceDAO;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTest {
 	
 	protected static final LocalDate TODAY = LocalDate.of(2026, 9, 29);
 	
-	protected final AdherenceRefresh refresh = new AdherenceRefresh();
+	protected AdherenceService refresh;
 	
 	protected Concept prescription;
 	
@@ -65,6 +69,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	@Before
 	public void setUp() {
 		ModuleTables.create();
+		refresh = Context.getService(AdherenceService.class);
 		prescription = concept("Prophylaxis", "Coded");
 		q21 = concept("Q21 day BPG", "N/A");
 		q28 = concept("Q28 day BPG", "N/A");
@@ -228,5 +233,12 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	
 	protected static LocalDate date(Object value) {
 		return new Timestamp(((Date) value).getTime()).toLocalDateTime().toLocalDate();
+	}
+	
+	/** Gets a DAO for a test that runs the refresh itself rather than through the service. */
+	protected static AdherenceDAO dao() {
+		HibernateAdherenceDAO dao = new HibernateAdherenceDAO();
+		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
+		return dao;
 	}
 }

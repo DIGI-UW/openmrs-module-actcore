@@ -9,24 +9,13 @@
  */
 package org.openmrs.module.actcore.logs;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-
-import org.hibernate.SessionFactory;
-import org.openmrs.api.context.Context;
 
 /**
- * Helpers the logs use to run SQL over JDBC on the current session, reading each row as a map of
- * column name to value, and to page the results.
+ * Helpers the logs use to read the rows that {@link org.openmrs.module.actcore.api.db.AuditLogDAO}
+ * gives, each a map of column name to value, and to page the results.
  */
 public final class Rows {
 	
@@ -58,45 +47,6 @@ public final class Rows {
 		int from = Math.min(Math.max(startIndex, 0), all.size());
 		int size = limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
 		return all.subList(from, Math.min(from + size, all.size()));
-	}
-	
-	/**
-	 * Runs a query over JDBC on the current session and returns its rows, each as a map of column label
-	 * to value. The maps look columns up ignoring case, so code reads H2's upper-case names and
-	 * MariaDB's declared names alike, and date and datetime values come back as java.sql.Date and
-	 * Timestamp from both databases.
-	 */
-	static List<Map<String, Object>> select(final String sql, final Object... params) {
-		SessionFactory sessionFactory = Context.getRegisteredComponents(SessionFactory.class).get(0);
-		return sessionFactory.getCurrentSession().doReturningWork(connection -> {
-			List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-			PreparedStatement statement = connection.prepareStatement(sql);
-			try {
-				for (int i = 0; i < params.length; i++) {
-					statement.setObject(i + 1, params[i]);
-				}
-				ResultSet results = statement.executeQuery();
-				ResultSetMetaData columns = results.getMetaData();
-				while (results.next()) {
-					Map<String, Object> row = new TreeMap<String, Object>(String.CASE_INSENSITIVE_ORDER);
-					for (int i = 1; i <= columns.getColumnCount(); i++) {
-						Object value = results.getObject(i);
-						// MariaDB's driver gives datetime columns as LocalDateTime, H2 as Timestamp.
-						if (value instanceof LocalDateTime) {
-							value = Timestamp.valueOf((LocalDateTime) value);
-						} else if (value instanceof LocalDate) {
-							value = java.sql.Date.valueOf((LocalDate) value);
-						}
-						row.put(columns.getColumnLabel(i), value);
-					}
-					rows.add(row);
-				}
-				return rows;
-			}
-			finally {
-				statement.close();
-			}
-		});
 	}
 	
 	/** Builds the placeholders of an in-list for the values, such as "?, ?, ?" for three of them. */

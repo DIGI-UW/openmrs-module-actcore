@@ -13,8 +13,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collections;
+import java.util.TreeSet;
 
 import org.junit.After;
 import org.junit.Before;
@@ -31,6 +33,9 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.download.DownloadLog;
+import org.openmrs.module.actcore.logs.ActivityLog;
+import org.openmrs.module.actcore.logs.ReadLog;
+import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -39,6 +44,8 @@ import org.openmrs.util.PrivilegeConstants;
 public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final YearMonth MONTH = YearMonth.of(2026, 9);
+	
+	private static final LocalDate TODAY = LocalDate.of(2026, 9, 15);
 	
 	private Location clinic;
 	
@@ -155,10 +162,109 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void userClinicsService_shouldRefuseAUserWhoDoesNotAdministerUsers() {
+		UserClinicsService service = Context.getService(UserClinicsService.class);
+		assertNotNull(service);
+		for (Runnable call : userClinicsCalls(service)) {
+			refused(call, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS);
+			holding(PrivilegeConstants.GET_USERS,
+			    () -> refused(call, PrivilegeConstants.ADD_USERS, PrivilegeConstants.EDIT_USERS));
+		}
+	}
+	
+	@Test
+	public void adherenceService_shouldRefuseAUserWithoutTheAdherencePrivileges() {
+		AdherenceService service = Context.getService(AdherenceService.class);
+		assertNotNull(service);
+		refused(() -> service.refreshAll(TODAY), ActCorePrivileges.REFRESH_FLAGS);
+		refused(() -> service.getProphylaxisSummary(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+		refused(() -> service.getAdherenceOn(Collections.singleton(2), new TreeSet<LocalDate>(Collections.singleton(TODAY))),
+		    PrivilegeConstants.GET_OBS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getProphylaxisSummary(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+			refused(
+			    () -> service.getAdherenceOn(Collections.singleton(2), new TreeSet<LocalDate>(Collections.singleton(TODAY))),
+			    PrivilegeConstants.GET_OBS);
+		});
+		holding(PatientFlagsConstants.PRIV_TEST_FLAGS,
+		    () -> refused(() -> service.refreshAll(TODAY), ActCorePrivileges.REFRESH_FLAGS));
+	}
+	
+	@Test
+	public void auditLogService_shouldRefuseAUserWithoutTheLogPrivileges() {
+		AuditLogService service = Context.getService(AuditLogService.class);
+		assertNotNull(service);
+		refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
+		refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
+		refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getUsers(Collections.singleton("uuid")), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
+	}
+	
+	@Test
+	public void auditLogService_shouldRefuseAUserWhoMayReadOnlyTheOtherLog() {
+		AuditLogService service = Context.getService(AuditLogService.class);
+		holding(ReadLog.VIEW_PRIVILEGE, () -> {
+			refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
+			refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
+		});
+		holding(ActivityLog.VIEW_PRIVILEGE,
+		    () -> refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE));
+		holding("View Security Audit Logs",
+		    () -> refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE));
+	}
+	
+	@Test
+	public void flagGapService_shouldRefuseAUserWhoMayNotViewFlags() {
+		FlagGapService service = Context.getService(FlagGapService.class);
+		assertNotNull(service);
+		refused(() -> service.getFlag("uuid"), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		refused(() -> service.getGaps(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getFlag("uuid"), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+			refused(() -> service.getGaps(new Patient(2), new Flag()), PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		});
+	}
+	
+	@Test
+	public void runChartService_shouldRefuseAUserWithoutTheDashboard() {
+		RunChartService service = Context.getService(RunChartService.class);
+		assertNotNull(service);
+		refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY), ActCorePrivileges.DASHBOARD);
+		holding(ActCorePrivileges.SCREENING_COUNTS,
+		    () -> refused(() -> service.getRunCharts(null, TODAY, TODAY, RunCharts.Period.DAY),
+		        ActCorePrivileges.DASHBOARD));
+	}
+	
+	@Test
+	public void nextStepsService_shouldRefuseAUserWhoMayNotReadObservations() {
+		NextStepsService service = Context.getService(NextStepsService.class);
+		assertNotNull(service);
+		refused(() -> service.getNextSteps(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+		refused(() -> service.getNextConsultationDate(new Patient(2)), PrivilegeConstants.GET_OBS);
+		holding(PrivilegeConstants.GET_PATIENTS, () -> {
+			refused(() -> service.getNextSteps(new Patient(2), TODAY), PrivilegeConstants.GET_OBS);
+			refused(() -> service.getNextConsultationDate(new Patient(2)), PrivilegeConstants.GET_OBS);
+		});
+	}
+	
+	@Test
+	public void refreshPatient_shouldRefuseACallerWhoIsNotSignedIn() {
+		Context.logout();
+		refusedSignedOut(() -> Context.getService(AdherenceService.class).refreshPatient(2, TODAY));
+	}
+	
+	@Test
 	public void getDismissedFlagsAndIsStudy_shouldRefuseACallerWhoIsNotSignedIn() {
 		Context.logout();
 		refusedSignedOut(() -> Context.getService(RaisedFlagService.class).getDismissedFlags(2));
 		refusedSignedOut(() -> Context.getService(StudyService.class).isStudy(new Program(1)));
+	}
+	
+	private static Runnable[] userClinicsCalls(UserClinicsService service) {
+		return new Runnable[] { () -> service.getStoredClinics(1), () -> service.getStoredRoles(1),
+		        () -> service.getRolesIn("actcore.users.siteAdministratorRoles"),
+		        () -> service.getRoleNames(Collections.singleton("uuid")) };
 	}
 	
 	private static void holding(String privilege, Runnable call) {

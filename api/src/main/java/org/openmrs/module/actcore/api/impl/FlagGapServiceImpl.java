@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.gap;
+package org.openmrs.module.actcore.api.impl;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,38 +19,41 @@ import java.util.regex.Pattern;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.api.FlagGapService;
+import org.openmrs.module.actcore.api.db.FlagGapDAO;
+import org.openmrs.module.actcore.gap.FlagGap;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
-import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Looks up the gaps behind a patient's flag, so the chart can say which questions to answer. It
- * reruns a SQL flag's criteria for the one patient and reads each row they return as a patient_id,
- * the uuid of the encounter missing an answer, and the uuid of the question missing.
- */
-public class FlagGapLookup {
+/** Default implementation of {@link org.openmrs.module.actcore.api.FlagGapService}. */
+public class FlagGapServiceImpl extends BaseOpenmrsService implements FlagGapService {
 	
 	private static final Pattern PATIENT_COLUMN = Pattern.compile("(\\w+\\.patient_id)");
 	
-	private static final Logger log = LoggerFactory.getLogger(FlagGapLookup.class);
+	private static final Logger log = LoggerFactory.getLogger(FlagGapServiceImpl.class);
+	
+	private static final Comparator<FlagGap> BY_ENCOUNTER_DATE = Comparator
+	        .comparing(gap -> gap.getEncounter().getEncounterDatetime());
+	
+	private FlagGapDAO dao;
+	
+	public void setDao(FlagGapDAO dao) {
+		this.dao = dao;
+	}
 	
 	/**
-	 * Gets a flag by uuid for a user who holds View Patient Flags. Reading a flag definition normally
-	 * takes Test Flags, which a clinician who sees flags on the chart need not hold, so this reads it
-	 * with that privilege as a proxy.
-	 *
-	 * @param uuid the flag's uuid
-	 * @return the flag, or null when none has the uuid
-	 * @throws APIAuthenticationException when the user lacks View Patient Flags
+	 * @see org.openmrs.module.actcore.api.FlagGapService#getFlag(String)
 	 */
+	@Override
+	@Transactional(readOnly = true)
 	public Flag getFlag(String uuid) {
-		requireViewPatientFlags();
 		try {
 			Context.addProxyPrivilege(PatientFlagsConstants.PRIV_TEST_FLAGS);
 			return Context.getService(FlagService.class).getFlagByUuid(uuid);
@@ -61,21 +64,11 @@ public class FlagGapLookup {
 	}
 	
 	/**
-	 * Finds the gaps behind the flag for the patient, in the order of their encounters' dates. It
-	 * returns null when the flag is not a SQL flag whose criteria name a patient_id column, when the
-	 * patient is voided, or when the criteria return no row for the patient or rows of fewer than three
-	 * columns. A row is left out when either uuid is missing or names nothing, or when its encounter is
-	 * voided, belongs to another patient, or is one the user may not view.
-	 *
-	 * @param patient the patient whose gaps to find
-	 * @param flag the flag whose criteria to run
-	 * @return the gaps, oldest encounter first; empty when rows come back but each is left out, and
-	 *         null in the cases described
-	 * @throws APIAuthenticationException when the user lacks View Patient Flags, or lacks Get
-	 *             Encounters or Get Concepts once the criteria return a row with both uuids to look up
+	 * @see org.openmrs.module.actcore.api.FlagGapService#getGaps(Patient, Flag)
 	 */
-	public List<FlagGap> find(Patient patient, Flag flag) {
-		requireViewPatientFlags();
+	@Override
+	@Transactional(readOnly = true)
+	public List<FlagGap> getGaps(Patient patient, Flag flag) {
 		if (!SQLFlagEvaluator.class.getName().equals(flag.getEvaluator()) || patient.getVoided()) {
 			return null;
 		}
@@ -88,15 +81,7 @@ public class FlagGapLookup {
 		String query = criteria + (criteria.matches("(?i)(?s).*where.*") ? " and " : " where ") + column.group() + " = "
 		        + patient.getPatientId();
 		
-		List<List<Object>> rows;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-			rows = Context.getAdministrationService().executeSQL(query, true);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
-		
+		List<List<Object>> rows = dao.getCriteriaRows(query);
 		if (rows.isEmpty()) {
 			return null;
 		}
@@ -134,23 +119,5 @@ public class FlagGapLookup {
 		}
 		Collections.sort(gaps, BY_ENCOUNTER_DATE);
 		return gaps;
-	}
-	
-	private static final Comparator<FlagGap> BY_ENCOUNTER_DATE = new Comparator<FlagGap>() {
-		
-		@Override
-		public int compare(FlagGap a, FlagGap b) {
-			return a.getEncounter().getEncounterDatetime().compareTo(b.getEncounter().getEncounterDatetime());
-		}
-	};
-	
-	/**
-	 * Refuses a user without View Patient Flags, throwing the exception the platform's authorization
-	 * advice throws rather than the one Context.requirePrivilege does.
-	 */
-	private static void requireViewPatientFlags() {
-		if (!Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS)) {
-			throw new APIAuthenticationException("Privilege required: " + PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
-		}
 	}
 }

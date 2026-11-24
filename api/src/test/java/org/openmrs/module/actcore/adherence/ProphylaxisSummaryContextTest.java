@@ -29,7 +29,7 @@ public class ProphylaxisSummaryContextTest extends AdherenceContextTest {
 	
 	private ProphylaxisSummary summary(int patientId) {
 		Patient patient = Context.getPatientService().getPatient(patientId);
-		return ProphylaxisSummary.of(patient, TODAY);
+		return refresh.getProphylaxisSummary(patient, TODAY);
 	}
 	
 	@Test

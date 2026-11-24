@@ -34,6 +34,7 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 
@@ -271,7 +272,9 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	@Test
 	public void readsTheClinicsOfAnAccount() {
 		assertThat(new ArrayList<String>(UserClinics.parse(" a, ,b,a ")), containsInAnyOrder("a", "b"));
-		assertThat(new ArrayList<String>(UserClinics.stored(clinicianAtAAndB.getUserId())),
+		assertThat(
+		    new ArrayList<String>(
+		            Context.getService(UserClinicsService.class).getStoredClinics(clinicianAtAAndB.getUserId())),
 		    containsInAnyOrder(CLINIC_A, CLINIC_B));
 		assertTrue(UserClinics.isLimited(siteAdminAtA));
 		assertFalse(UserClinics.isLimited(clinicianAtA));

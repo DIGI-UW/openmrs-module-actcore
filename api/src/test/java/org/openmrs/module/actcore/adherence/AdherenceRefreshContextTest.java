@@ -31,7 +31,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		
 		assertEquals(0, refresh.refreshAll(TODAY));
 		
-		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		ProphylaxisSummary summary = refresh.getProphylaxisSummary(Context.getPatientService().getPatient(7), TODAY);
 		assertEquals("none", summary.getStatus());
 		assertNull(summary.getType());
 	}
@@ -209,7 +209,8 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		List<Object> row = row(7);
 		assertNull(row.get(3));
 		assertEquals(TODAY.minusDays(12), date(row.get(5)));
-		assertEquals(date(row.get(5)), ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY).getNextDue());
+		assertEquals(date(row.get(5)),
+		    refresh.getProphylaxisSummary(Context.getPatientService().getPatient(7), TODAY).getNextDue());
 	}
 	
 	@Test
@@ -223,7 +224,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		List<Object> row = row(7);
 		assertEquals(TODAY.minusDays(20), date(row.get(4)));
 		assertEquals(TODAY.minusDays(20).plusDays(90), date(row.get(5)));
-		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		ProphylaxisSummary summary = refresh.getProphylaxisSummary(Context.getPatientService().getPatient(7), TODAY);
 		assertEquals(TODAY.minusDays(20), summary.getLastGiven());
 		assertEquals(TODAY.minusDays(20).plusDays(90), summary.getNextDue());
 	}
@@ -275,7 +276,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		assertNull(row.get(3));
 		assertNull(row.get(4));
 		assertEquals(TODAY.minusDays(40), date(row.get(5)));
-		ProphylaxisSummary summary = ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY);
+		ProphylaxisSummary summary = refresh.getProphylaxisSummary(Context.getPatientService().getPatient(7), TODAY);
 		assertEquals(TODAY.minusDays(40), summary.getNextDue());
 		assertEquals("overdue", summary.getStatus());
 	}
@@ -289,7 +290,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		
 		// Due in 27 days: not yet on the due list, and the chart's status is ok rather than null.
 		assertEquals(TODAY.plusDays(27), date(row(7).get(5)));
-		assertEquals("ok", ProphylaxisSummary.of(Context.getPatientService().getPatient(7), TODAY).getStatus());
+		assertEquals("ok", refresh.getProphylaxisSummary(Context.getPatientService().getPatient(7), TODAY).getStatus());
 	}
 	
 	@Test
@@ -618,7 +619,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		prescribe(encounter(7, 27), q21, 27, null);
 		prescribe(encounter(2, 27), q28, 27, null);
 		
-		assertEquals(2, new AdherenceRefresh(1).refreshAll(TODAY));
+		assertEquals(2, new AdherenceRefresh(dao(), 1).refreshAll(TODAY));
 		
 		assertEquals(2, rows().size());
 	}
