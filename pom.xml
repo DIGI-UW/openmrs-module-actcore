@@ -16,8 +16,7 @@
   <packaging>pom</packaging>
 
   <name>ACT Core</name>
-  <description>Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, and a look-up of the data missing behind a flag.</description>
-
+  <description>The server side of ACT 3.0, the OpenMRS 3 edition of the ACT rheumatic heart disease (RHD) registry.</description>
   <url>https://github.com/DIGI-UW/openmrs-module-actcore</url>
 
   <scm>
