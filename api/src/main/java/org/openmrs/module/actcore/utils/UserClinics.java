@@ -28,9 +28,9 @@ import org.openmrs.util.PrivilegeConstants;
 /**
  * Helpers that read the clinics on a user's account, kept in the
  * {@value ActCoreConstants#USER_PROPERTY_CLINICS} user property, and tell whether a user is an
- * administrator limited to their clinics. The README describes both. The clinics and roles saved in
- * the database are read through {@link UserClinicsService}. They also hold the rules that limit
- * such an administrator's changes to a user.
+ * administrator limited to their clinics. The README describes both. The class also holds the rules
+ * that limit such an administrator's changes to a user. The clinics and roles saved in the database
+ * are read through {@link UserClinicsService}.
  */
 public final class UserClinics {
 	
@@ -121,7 +121,12 @@ public final class UserClinics {
 	
 	/**
 	 * Refuses a limited administrator's change to a user unless the rules allow it, comparing the user
-	 * as changed with what is saved, which it reads through the service given.
+	 * as changed with what is saved, which it reads through the service given. On their own account the
+	 * administrator may not change their clinics or roles. On another user's, a user already saved must
+	 * share one of their clinics, the administrator may give or take away only their own clinics, and
+	 * the user must keep at least one of them. There too, when
+	 * {@value ActCoreConstants#GP_USERS_SITE_ADMINISTRATOR_ROLES} lists roles, a user already saved
+	 * must hold only those roles, and the user as changed may have only those.
 	 *
 	 * @param me the limited administrator making the change
 	 * @param user the user as changed

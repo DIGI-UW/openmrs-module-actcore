@@ -18,7 +18,7 @@ import org.openmrs.module.actcore.api.db.AdherenceDAO;
 /**
  * A full adherence refresh that runs a step after it has read every patient's history and before it
  * computes their rows, given as the function that runs it as of a day and returns how many patients
- * it wrote a row.
+ * it wrote a row for.
  */
 public final class AdherenceRefreshInTest {
 	
