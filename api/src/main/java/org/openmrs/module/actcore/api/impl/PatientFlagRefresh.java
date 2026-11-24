@@ -29,7 +29,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
-import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -336,7 +335,7 @@ public class PatientFlagRefresh {
 	}
 	
 	void refreshAdherence() {
-		AdherenceRefreshTask.refreshBeforeFlags();
+		FullAdherenceRefresh.refreshBeforeFlags();
 	}
 	
 	FlagListSync.Result syncLists() {
