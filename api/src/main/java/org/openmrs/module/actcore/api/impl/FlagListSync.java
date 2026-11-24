@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * uuid and name. Keying each list by the flag's uuid lets the list follow a rename of the flag, and
  * leaves alone a hand-made cohort that happens to share its name.
  */
-public class FlagListSync {
+class FlagListSync {
 	
 	private static final String DEFAULT_COHORT_TYPE = "System List";
 	

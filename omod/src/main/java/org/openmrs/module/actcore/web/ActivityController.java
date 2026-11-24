@@ -19,7 +19,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.TooManyResultsException;
-import org.openmrs.module.actcore.api.impl.ActivityLog;
 import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
 import org.openmrs.module.actcore.model.ActivityDetails;
 import org.openmrs.module.actcore.model.ActivityEncounter;
@@ -49,7 +48,7 @@ public class ActivityController extends ActCoreRestController {
 	
 	/**
 	 * How many days back a request with a kind filter but no start date reads. The span is short so
-	 * that such a request rarely reaches ActivityLog.MAX_CLASSIFIED.
+	 * that such a request rarely reaches the most changes the log will sort.
 	 */
 	static final int KIND_DEFAULT_DAYS = 30;
 	

@@ -22,7 +22,7 @@ import org.springframework.validation.Errors;
  * gives, each a map of column name to value, and to page the results, and the factory of the
  * validation errors that ACT Core's services and calculations refuse a request with.
  */
-public final class Rows {
+final class Rows {
 	
 	private Rows() {
 	}

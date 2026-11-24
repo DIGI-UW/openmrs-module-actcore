@@ -44,7 +44,7 @@ import org.openmrs.module.actcore.model.LogUser;
  * of flag dismissals. It leaves out the saves the daemon user makes, such as Initializer's loads
  * and the scheduled tasks, and the saves that touch only the server's setup.
  */
-public class ActivityLog {
+class ActivityLog {
 	
 	/** The revision types Envers records: 0 for an addition, 1 for a change and 2 for a deletion. */
 	static final int ADD = 0;

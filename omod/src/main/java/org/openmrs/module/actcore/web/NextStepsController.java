@@ -17,7 +17,6 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.NextStepsService;
-import org.openmrs.module.actcore.api.impl.NextSteps;
 import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -35,8 +34,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class NextStepsController extends ActCoreRestController {
 	
 	/**
-	 * Gets the patient's next steps, as {@link NextSteps#of(Patient, LocalDate)} gives them as of
-	 * today.
+	 * Gets the patient's next steps, as {@link NextStepsService#getNextSteps(Patient, LocalDate)} gives
+	 * them as of today.
 	 *
 	 * @param patientUuid the patient's uuid
 	 * @return the steps as {@code steps}, each with its key, form, title, reason, referral type and

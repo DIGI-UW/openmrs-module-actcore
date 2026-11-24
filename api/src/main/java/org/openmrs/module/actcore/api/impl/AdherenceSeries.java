@@ -19,7 +19,7 @@ import java.util.SortedSet;
  * over the records as they stand now and writes nothing, so the run charts can show adherence on
  * days no refresh stored.
  */
-public final class AdherenceSeries {
+final class AdherenceSeries {
 	
 	private AdherenceSeries() {
 	}

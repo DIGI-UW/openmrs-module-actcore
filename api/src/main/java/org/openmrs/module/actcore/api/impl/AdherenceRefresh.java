@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
  * form of theirs is saved. {@link org.openmrs.module.actcore.api.AdherenceService} runs it, reading
  * and writing through the DAO it is given.
  */
-public class AdherenceRefresh {
+class AdherenceRefresh {
 	
 	private static final Logger log = LoggerFactory.getLogger(AdherenceRefresh.class);
 	

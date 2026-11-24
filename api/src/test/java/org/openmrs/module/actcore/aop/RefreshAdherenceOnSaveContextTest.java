@@ -13,10 +13,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 
 import org.apache.logging.log4j.Level;
@@ -35,7 +37,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
-import org.openmrs.module.actcore.api.impl.AdherenceRefresh;
 import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
@@ -311,7 +312,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		Flag overdue = overdueDoseNotYetGiven();
 		List<Throwable> failed = new ArrayList<Throwable>();
 		
-		racingADose(failed).refreshAll(TODAY);
+		racingADose(failed).apply(TODAY);
 		
 		assertTrue(failed.toString(), failed.isEmpty());
 		assertEquals(TODAY.plusDays(28), date(row(7).get(5)));
@@ -324,7 +325,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	public void refreshAll_shouldKeepTheDoseAndClearTheOverdueFlagOfAPatientSavedWhileThePatientFlagRefreshRuns() {
 		Flag overdue = overdueDoseNotYetGiven();
 		final List<Throwable> failed = new ArrayList<Throwable>();
-		final AdherenceRefresh racing = racingADose(failed);
+		final Function<LocalDate, Integer> racing = racingADose(failed);
 		// No flag carries the tag, so the run creates no list to clean up.
 		property(ActCoreConstants.GP_LIST_FLAG_TAG, "no flag carries this " + UUID.randomUUID());
 		
@@ -332,7 +333,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 			
 			@Override
 			public void run() {
-				racing.refreshAll(TODAY);
+				racing.apply(TODAY);
 			}
 		});
 		
@@ -439,7 +440,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	 * A full refresh in which a dose for patient 7 commits, and its save refreshes the patient as
 	 * RefreshAdherenceOnSave does, on another thread, after the refresh has read every patient.
 	 */
-	private AdherenceRefresh racingADose(final List<Throwable> failed) {
+	private Function<LocalDate, Integer> racingADose(final List<Throwable> failed) {
 		return AdherenceRefreshInTest.afterReadingEveryPatient(dao(), new Runnable() {
 			
 			@Override

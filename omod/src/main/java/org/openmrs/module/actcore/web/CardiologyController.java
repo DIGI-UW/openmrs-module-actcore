@@ -35,7 +35,7 @@ public class CardiologyController extends ActCoreRestController {
 	 *
 	 * @param patientUuid the patient's uuid
 	 * @return the due date as an ISO date, or a null nextDue when
-	 *         {@link org.openmrs.module.actcore.api.impl.NextConsultation#of(Patient)} gives none
+	 *         {@link NextStepsService#getNextConsultationDate(Patient)} gives none
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
 	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations

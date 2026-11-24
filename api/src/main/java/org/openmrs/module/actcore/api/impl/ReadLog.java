@@ -42,7 +42,7 @@ import org.openmrs.module.actcore.utils.UserClinics;
  * record. It reads the audit log module's read audit, and folds a user's reads of one patient that
  * fall within an hour of the first of them into one row.
  */
-public class ReadLog {
+class ReadLog {
 	
 	/**
 	 * How long after a row's first read, in milliseconds, a later read by the same user of the same
