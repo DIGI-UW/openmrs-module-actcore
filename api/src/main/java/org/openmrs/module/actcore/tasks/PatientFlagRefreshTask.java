@@ -28,7 +28,6 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.api.impl.FlagListSync;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -446,23 +445,16 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * patient id to message. A patient with more than one row maps to null, so that the rows are
 	 * rewritten as one. A voided row must not count, or the flag would never be raised again for that
 	 * patient.
-	 *
-	 * @param flag the flag whose rows to read
-	 * @return each flagged patient's id, mapped to the row's message
 	 */
-	public static Map<Integer, String> flaggedMessages(Flag flag) {
+	static Map<Integer, String> flaggedMessages(Flag flag) {
 		return flaggedMessages(flag, "");
 	}
 	
 	/**
 	 * Reads the flag's unvoided row for one patient, as {@link #flaggedMessages(Flag)} reads every
 	 * patient's. The map is empty when the patient has no row.
-	 *
-	 * @param flag the flag whose row to read
-	 * @param patientId the patient whose row to read
-	 * @return the patient's id mapped to the row's message, or an empty map
 	 */
-	public static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
+	static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
 		return flaggedMessages(flag, " and patient_id = " + patientId);
 	}
 	

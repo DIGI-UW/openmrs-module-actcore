@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.api.impl;
+package org.openmrs.module.actcore.tasks;
 
 import java.util.Collection;
 import java.util.Date;
@@ -22,7 +22,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.cohort.CohortAttribute;
 import org.openmrs.module.cohort.CohortAttributeType;
 import org.openmrs.module.cohort.CohortM;
@@ -58,23 +57,17 @@ public class FlagListSync {
 	 */
 	public static class Result {
 		
-		/** How many lists the run created. */
-		public int created;
+		int created;
 		
-		/** How many lists of purged flags the run restored once the flag existed again. */
-		public int restored;
+		int restored;
 		
-		/** How many lists the run voided because their flag no longer exists. */
-		public int retired;
+		int retired;
 		
-		/** How many patients the run added to lists. */
-		public int membersAdded;
+		int membersAdded;
 		
-		/** How many patients' list memberships the run ended. */
-		public int membersEnded;
+		int membersEnded;
 		
-		/** How many flags' lists failed to sync. */
-		public int failures;
+		int failures;
 	}
 	
 	/**
