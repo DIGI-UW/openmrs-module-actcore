@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -362,7 +361,7 @@ public class ActivityLog {
 		}
 		Integer formId = null;
 		if (filter.formUuid != null) {
-			List<Map<String, Object>> forms = dao.select("select form_id from form where uuid = ?", filter.formUuid);
+			List<Map<String, Object>> forms = dao.getFormId(filter.formUuid);
 			if (forms.isEmpty()) {
 				return page;
 			}
@@ -492,20 +491,6 @@ public class ActivityLog {
 		}
 	}
 	
-	private static String select(String table) {
-		if (table.equals("obs_AUD")) {
-			return "select a.REV, a.REVTYPE, a.encounter_id, a.person_id, count(*) as n, r.changedOn as rev_time,"
-			        + " r.changedBy as rev_user from obs_AUD a join revision_entity r on r.id = a.REV";
-		}
-		return "select a.*, r.changedOn as rev_time, r.changedBy as rev_user from " + table
-		        + " a join revision_entity r on r.id = a.REV";
-	}
-	
-	private static String groupBy(String table) {
-		return table.equals("obs_AUD") ? " group by a.REV, a.REVTYPE, a.encounter_id, a.person_id, r.changedOn, r.changedBy"
-		        : "";
-	}
-	
 	/**
 	 * Finds the revisions that touch any of the tables, newest first, applying the user, date, patient
 	 * and form filters in the query. It leaves out the daemon user's revisions, such as Initializer's
@@ -513,77 +498,20 @@ public class ActivityLog {
 	 */
 	private List<Map<String, Object>> revisions(List<String> tables, Integer userId, LocalDate from, LocalDate to,
 	        Integer patientId, Integer formId) {
-		StringBuilder sql = new StringBuilder(
-		        "select r.id, r.changedOn as rev_time, r.changedBy as rev_user from revision_entity r where 1 = 1");
-		List<Object> params = new ArrayList<Object>();
-		if (userId != null) {
-			sql.append(" and r.changedBy = ?");
-			params.add(userId);
+		Map<String, String> patientColumns = new LinkedHashMap<String, String>();
+		for (String table : tables) {
+			patientColumns.put(table, PATIENT_COLUMNS.get(table));
 		}
-		Integer daemon = daemonUserId();
-		if (daemon != null) {
-			sql.append(" and (r.changedBy is null or r.changedBy <> ?)");
-			params.add(daemon);
-		}
-		if (from != null) {
-			sql.append(" and r.changedOn >= ?");
-			params.add(Timestamp.valueOf(from.atStartOfDay()));
-		}
-		if (to != null) {
-			sql.append(" and r.changedOn < ?");
-			params.add(Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
-		}
-		sql.append(" and (");
-		for (int i = 0; i < tables.size(); i++) {
-			String table = tables.get(i);
-			sql.append(i == 0 ? "" : " or ").append("exists (select 1 from ").append(table).append(" a where a.REV = r.id");
-			if (patientId != null) {
-				sql.append(table.equals("patient_state_AUD")
-				        ? " and a.patient_program_id in (select patient_program_id from patient_program where patient_id = ?)"
-				        : " and a." + PATIENT_COLUMNS.get(table) + " = ?");
-				params.add(patientId);
-			}
-			if (formId != null) {
-				sql.append(
-				    table.equals("obs_AUD") ? " and a.encounter_id in (select encounter_id from encounter where form_id = ?)"
-				            : " and a.form_id = ?");
-				params.add(formId);
-			}
-			sql.append(")");
-		}
-		sql.append(") order by r.changedOn desc, r.id desc");
-		return dao.select(sql.toString(), params.toArray());
+		return dao.getRevisions(patientColumns, userId, daemonUserId(), from, to, patientId, formId);
 	}
 	
 	private List<Map<String, Object>> rows(String table, List<Integer> revisionIds) {
-		return dao.select(select(table) + " where a.REV in (" + Rows.placeholders(revisionIds) + ")" + groupBy(table),
-		    revisionIds.toArray());
+		return dao.getRevisionRows(table, revisionIds);
 	}
 	
 	private List<Entry> dismissals(Integer userId, LocalDate from, LocalDate to, Integer patientId) {
-		StringBuilder sql = new StringBuilder("select f.patient_id, f.dismissed_by, f.date_dismissed, g.name" + " from "
-		        + ActCoreConstants.FLAG_DISMISSAL_TABLE
-		        + " f left join patientflags_flag g on g.flag_id = f.flag_id where 1 = 1");
-		StringBuilder order = new StringBuilder(" order by f.date_dismissed desc, f.dismissal_id desc");
-		List<Object> params = new ArrayList<Object>();
-		if (userId != null) {
-			sql.append(" and f.dismissed_by = ?");
-			params.add(userId);
-		}
-		if (from != null) {
-			sql.append(" and f.date_dismissed >= ?");
-			params.add(Timestamp.valueOf(from.atStartOfDay()));
-		}
-		if (to != null) {
-			sql.append(" and f.date_dismissed < ?");
-			params.add(Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
-		}
-		if (patientId != null) {
-			sql.append(" and f.patient_id = ?");
-			params.add(patientId);
-		}
 		List<Entry> entries = new ArrayList<Entry>();
-		for (Map<String, Object> row : dao.select(sql.append(order).toString(), params.toArray())) {
+		for (Map<String, Object> row : dao.getFlagDismissals(userId, from, to, patientId)) {
 			Entry entry = new Entry();
 			entry.time = Rows.date(row, "date_dismissed");
 			entry.userId = Rows.integer(row, "dismissed_by");
@@ -680,7 +608,7 @@ public class ActivityLog {
 			return entry;
 		}
 		if (personId != null) {
-			List<Map<String, Object>> owners = dao.select("select user_id from users where person_id = ?", personId);
+			List<Map<String, Object>> owners = dao.getUserIdsByPerson(personId);
 			if (owners.isEmpty()) {
 				entry.kind = "other";
 				entry.personId = personId;
@@ -1090,8 +1018,7 @@ public class ActivityLog {
 		Map<Integer, List<String>> added = new LinkedHashMap<Integer, List<String>>();
 		Map<Integer, List<String>> removed = new LinkedHashMap<Integer, List<String>>();
 		Set<Integer> order = new LinkedHashSet<Integer>();
-		for (Map<String, Object> obs : dao.select("select * from obs_AUD where REV = ? and encounter_id = ? order by obs_id",
-		    entry.revisionId, entry.encounterId)) {
+		for (Map<String, Object> obs : dao.getAuditedObs(entry.revisionId, entry.encounterId)) {
 			String value = obsValue(obs);
 			if (value == null) {
 				continue;
@@ -1268,8 +1195,7 @@ public class ActivityLog {
 	 * first that recorded the entity.
 	 */
 	private Map<String, Object> previous(String table, String idColumn, Object id, int revisionId) {
-		List<Map<String, Object>> rows = dao.select(
-		    "select * from " + table + " where " + idColumn + " = ? and REV < ? order by REV desc", id, revisionId);
+		List<Map<String, Object>> rows = dao.getPreviousAuditRows(table, idColumn, id, revisionId);
 		return rows.isEmpty() ? null : rows.get(0);
 	}
 	
@@ -1392,14 +1318,10 @@ public class ActivityLog {
 			return null;
 		}
 		target.display = StringUtils.defaultIfBlank(
-		    names.personName(
-		        "select given_name, middle_name, family_name from person_name_AUD where person_id = ? and REV <= ?"
-		                + " order by REV desc",
-		        patientId, revision == null ? Integer.MAX_VALUE : revision.id),
+		    Names.personName(dao.getAuditedPersonNames(patientId, revision == null ? Integer.MAX_VALUE : revision.id)),
 		    "Patient " + patientId);
-		List<Map<String, Object>> identifiers = dao.select(
-		    "select identifier from patient_identifier_AUD where patient_id = ? and REV <= ? order by preferred desc, REV desc",
-		    patientId, revision == null ? Integer.MAX_VALUE : revision.id);
+		List<Map<String, Object>> identifiers = dao.getAuditedIdentifiers(patientId,
+		    revision == null ? Integer.MAX_VALUE : revision.id);
 		target.actId = identifiers.isEmpty() ? null : Rows.string(identifiers.get(0), "identifier");
 		return target;
 	}
@@ -1468,7 +1390,7 @@ public class ActivityLog {
 	 * server's own, such as Initializer's loads at startup and the scheduled tasks.
 	 */
 	private Integer daemonUserId() {
-		List<Map<String, Object>> rows = dao.select("select user_id from users where uuid = ?", Daemon.getDaemonUserUuid());
+		List<Map<String, Object>> rows = dao.getUserIdByUuid(Daemon.getDaemonUserUuid());
 		return rows.isEmpty() ? null : Rows.integer(rows.get(0), "user_id");
 	}
 	

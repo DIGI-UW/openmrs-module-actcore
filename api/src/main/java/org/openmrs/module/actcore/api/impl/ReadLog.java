@@ -12,7 +12,6 @@ package org.openmrs.module.actcore.api.impl;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -219,56 +218,23 @@ public class ReadLog {
 	 */
 	public Page list(Filter filter) {
 		Page page = new Page();
-		StringBuilder sql = new StringBuilder(" where (l.entity_name in (" + Rows.placeholders(PATIENT_DATA)
-		        + ") or exists (select 1 from read_audit_entity_metadata p"
-		        + " where p.read_audit_id = l.id and p.patient_uuid is not null))");
-		List<Object> params = new ArrayList<Object>(PATIENT_DATA);
-		if (filter.username != null) {
-			sql.append(" and l.username = ?");
-			params.add(filter.username);
-		}
-		StringBuilder dates = new StringBuilder();
-		List<Object> dateParams = new ArrayList<Object>();
-		if (filter.from != null) {
-			dates.append(" and l.event_time >= ?");
-			dateParams.add(Timestamp.valueOf(filter.from.atStartOfDay()));
-		}
-		if (filter.to != null) {
-			dates.append(" and l.event_time < ?");
-			dateParams.add(Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
-		}
-		sql.append(dates);
-		params.addAll(dateParams);
+		List<String> uuids = null;
 		if (StringUtils.isNotBlank(filter.patient)) {
-			List<String> uuids = patientUuids(filter.patient.trim());
+			uuids = patientUuids(filter.patient.trim());
 			if (uuids.isEmpty()) {
 				return page;
 			}
-			sql.append(" and l.id in (select read_audit_id from read_audit_entity_metadata where patient_uuid in (")
-			        .append(Rows.placeholders(uuids)).append("))");
-			params.addAll(uuids);
 		}
-		Map<String, Object> ids = dao
-		        .select("select min(l.id) as lowest, max(l.id) as highest from read_audit_log l where 1 = 1" + dates,
-		            dateParams.toArray())
-		        .get(0);
+		Map<String, Object> ids = dao.getReadIdRange(filter.from, filter.to).get(0);
 		if (ids.get("lowest") == null) {
 			return page;
 		}
 		long highest = Rows.integer(ids, "highest");
-		String fetch = "select l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
-		        + " l.user_agent, l.read_success, count(m.id) as targets, count(distinct m.patient_uuid) as patients,"
-		        + " min(m.patient_uuid) as patient_uuid, min(m.patient_name) as patient_name from read_audit_log l"
-		        + " left join read_audit_entity_metadata m on m.read_audit_id = l.id" + sql + " and l.id > ? and l.id <= ?"
-		        + " group by l.id, l.username, l.user_uuid, l.event_time, l.entity_name, l.session_id, l.ip_address,"
-		        + " l.user_agent, l.read_success";
 		
 		List<Raw> reads = new ArrayList<Raw>();
 		for (long after = Rows.integer(ids, "lowest") - 1L; after < highest; after += READ_SPAN) {
-			List<Object> fetchParams = new ArrayList<Object>(params);
-			fetchParams.add(after);
-			fetchParams.add(after + READ_SPAN);
-			for (Map<String, Object> read : dao.select(fetch, fetchParams.toArray())) {
+			for (Map<String, Object> read : dao.getReads(PATIENT_DATA, filter.username, filter.from, filter.to, uuids, after,
+			    after + READ_SPAN)) {
 				reads.add(new Raw(read));
 			}
 		}
@@ -454,10 +420,7 @@ public class ReadLog {
 		}
 		List<String> clinicTypes = FormDownload.uuids(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES);
 		Set<String> patientClinics = new LinkedHashSet<String>();
-		for (Map<String, Object> attribute : dao.select("select a.value, t.uuid as type_uuid from person_attribute a"
-		        + " join person_attribute_type t on t.person_attribute_type_id = a.person_attribute_type_id"
-		        + " where a.person_id = ? and a.voided = false and t.format = 'org.openmrs.Location'",
-		    found.id)) {
+		for (Map<String, Object> attribute : dao.getLocationAttributes(found.id)) {
 			String value = Rows.string(attribute, "value");
 			int which = clinicTypes.indexOf(Rows.string(attribute, "type_uuid"));
 			if (which < 0 || value == null || !value.matches("\\d+")) {
@@ -472,10 +435,7 @@ public class ReadLog {
 			}
 		}
 		patientClinics.remove(null);
-		List<Map<String, Object>> property = dao
-		        .select("select p.property_value from user_property p join users u on u.user_id = p.user_id"
-		                + " where u.uuid = ? and p.property = ?",
-		            row.userUuid, ActCoreConstants.USER_PROPERTY_CLINICS);
+		List<Map<String, Object>> property = dao.getUserProperty(row.userUuid, ActCoreConstants.USER_PROPERTY_CLINICS);
 		Set<String> userClinics = UserClinics
 		        .parse(property.isEmpty() ? null : Rows.string(property.get(0), "property_value"));
 		row.sameClinicAsUser = userClinics.isEmpty() || patientClinics.isEmpty() ? null
@@ -494,15 +454,7 @@ public class ReadLog {
 			uuids.add(query);
 			return uuids;
 		}
-		String part = "%" + query.toLowerCase().replaceAll("[!%_]", "!$0") + "%";
-		for (Map<String, Object> row : dao.select(
-		    "select distinct p.uuid from person p join patient t on t.patient_id = p.person_id and t.voided = false"
-		            + " left join patient_identifier i on i.patient_id = p.person_id and i.voided = false"
-		            + " left join person_name n on n.person_id = p.person_id and n.voided = false"
-		            + " where p.voided = false and (i.identifier = ? or lower(n.given_name) like ? escape '!'"
-		            + " or lower(n.middle_name) like ? escape '!' or lower(n.family_name) like ? escape '!') limit "
-		            + (PATIENT_MATCHES + 1),
-		    query, part, part, part)) {
+		for (Map<String, Object> row : dao.findPatientUuids(query, PATIENT_MATCHES + 1)) {
 			uuids.add(Rows.string(row, "uuid"));
 		}
 		if (uuids.size() > PATIENT_MATCHES) {

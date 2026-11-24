@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.actcore.api.db.hibernate;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,6 +24,7 @@ import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.actcore.model.FlagDismissal;
 import org.openmrs.module.actcore.model.RaisedFlag;
+import org.openmrs.util.DatabaseUtil;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.RaisedFlagDAO}. */
 public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
@@ -120,6 +123,40 @@ public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
 	@Override
 	public Set<Integer> getDismissedFlags(Integer patientId) {
 		return ids("select key.flagId from RaisedFlag where key.patientId = :id and dateDismissed is not null", patientId);
+	}
+	
+	/**
+	 * Reads by SQL on the current session's connection, as AdministrationService.executeSQL does,
+	 * without the SQL Level Access privilege that service asks for.
+	 *
+	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#getPatientFlagRows(Integer, Integer)
+	 */
+	@Override
+	public List<List<Object>> getPatientFlagRows(Integer flagId, Integer patientId) {
+		return sql("select patient_id, message from patientflags_patient_flag where flag_id = " + flagId
+		        + " and voided = false" + (patientId == null ? "" : " and patient_id = " + patientId));
+	}
+	
+	/**
+	 * Reads by SQL on the current session's connection, with the uuid bound as a parameter.
+	 *
+	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#hasCohort(String)
+	 */
+	@Override
+	public boolean hasCohort(String uuid) {
+		return session().doReturningWork(connection -> {
+			try (PreparedStatement statement = connection.prepareStatement("select count(*) from cohort where uuid = ?")) {
+				statement.setString(1, uuid);
+				try (ResultSet result = statement.executeQuery()) {
+					result.next();
+					return result.getInt(1) > 0;
+				}
+			}
+		});
+	}
+	
+	private List<List<Object>> sql(String sql) {
+		return session().doReturningWork(connection -> DatabaseUtil.executeSQL(connection, sql, true));
 	}
 	
 	private Set<Integer> ids(String hql, Integer id) {

@@ -30,7 +30,6 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
-import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -230,7 +229,7 @@ public class AdherenceRefresh {
 			return histories;
 		}
 		// One transaction gives the four reads one snapshot, and a session on a thread with none bound.
-		return inTransaction(() -> {
+		return Transactions.supplyInTransaction(() -> {
 			AdministrationService admin = Context.getAdministrationService();
 			readPrescriptions(admin, daysByUuid(admin, ActCoreConstants.GP_ADHERENCE_INJECTION_INTERVALS),
 			    uuids(admin, ActCoreConstants.GP_ADHERENCE_NO_PROPHYLAXIS_ANSWERS), patientIds, histories);
@@ -249,23 +248,10 @@ public class AdherenceRefresh {
 	 * filled.
 	 */
 	private void rewrite(Integer patientId, List<Object[]> rows, List<Object[]> timings) {
-		inTransaction(() -> {
+		Transactions.supplyInTransaction(() -> {
 			dao.replaceRows(patientId, rows, timings, rowsPerInsert);
 			return null;
 		});
-	}
-	
-	/** Runs the work in the current transaction, or in a new one when none is in progress. */
-	private static <T> T inTransaction(Transactions.Work<T> work) {
-		try {
-			return Transactions.inTransaction(work);
-		}
-		catch (RuntimeException | Error e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException(e);
-		}
 	}
 	
 	private static AdherenceReplay.History history(Map<Integer, AdherenceReplay.History> histories, Object patientId) {

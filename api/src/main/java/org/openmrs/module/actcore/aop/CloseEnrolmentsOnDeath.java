@@ -28,6 +28,8 @@ import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.StudyService;
+import org.openmrs.module.actcore.api.db.RegistryDAO;
+import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,21 +74,10 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		if (programIds.isEmpty()) {
 			return 0;
 		}
-		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		List<List<Object>> rows;
-		try {
-			rows = Context.getAdministrationService().executeSQL("select distinct pp.patient_id from patient_program pp"
-			        + " join person p on p.person_id = pp.patient_id where p.dead = true and p.voided = false and pp.voided = false"
-			        + " and pp.date_completed is null and pp.program_id in ("
-			        + programIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")",
-			    true);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
+		List<Integer> personIds = Transactions.supplyInTransaction(
+		    () -> Context.getRegisteredComponents(RegistryDAO.class).get(0).getDeadPatientsWithOpenEnrolments(programIds));
 		int ended = 0;
-		for (List<Object> row : rows) {
-			Integer personId = ((Number) row.get(0)).intValue();
+		for (Integer personId : personIds) {
 			try {
 				Person person = Context.getPersonService().getPerson(personId);
 				if (person != null) {
