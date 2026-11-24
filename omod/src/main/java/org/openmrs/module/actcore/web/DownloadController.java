@@ -65,10 +65,6 @@ public class DownloadController extends ActCoreRestController {
 	
 	static final int MAX_LABEL = 255;
 	
-	static final int DEFAULT_LIMIT = 100;
-	
-	static final int MAX_LIMIT = 500;
-	
 	static final int MAX_COLUMNS = 200;
 	
 	/**
@@ -76,12 +72,6 @@ public class DownloadController extends ActCoreRestController {
 	 * longer record is refused.
 	 */
 	static final int MAX_DETAIL_BYTES = 65535;
-	
-	/**
-	 * How many months back a log reads when the request gives no start date, unless the log has a
-	 * default of its own.
-	 */
-	static final int DEFAULT_MONTHS = 12;
 	
 	/**
 	 * The names the Logs page gives its tabs, keyed by the name the app records a tab's CSV under.
@@ -134,8 +124,8 @@ public class DownloadController extends ActCoreRestController {
 		}
 		FormDownload.Filters filters = new FormDownload.Filters(status == null ? null : status.toString(),
 		        clinic(body.get("cardiacClinic")), clinic(body.get("primaryCareClinic")));
-		LocalDate from = date(body.get("startDate"));
-		LocalDate to = date(body.get("endDate"));
+		LocalDate from = date("startDate", body.get("startDate"), null);
+		LocalDate to = date("endDate", body.get("endDate"), null);
 		if (from != null && to != null && from.isAfter(to)) {
 			throw new IllegalRequestException("The start date is after the end date");
 		}
@@ -198,15 +188,15 @@ public class DownloadController extends ActCoreRestController {
 	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
 	 * @param identifiers with, without or research, or null for no identifiers filter
 	 * @param startIndex the first download to give, from 0; null for 0
-	 * @param limit the most downloads to give, capped at {@value #MAX_LIMIT}; null or below 1 for
-	 *            {@value #DEFAULT_LIMIT}
+	 * @param limit the most downloads to give, capped at {@value DownloadLog#MAX_LIMIT}; null or below
+	 *            1 for {@value DownloadLog#DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
 	 *         no user has the username or no form has the uuid
-	 * @throws ContextAuthenticationException when the user lacks
+	 * @throws APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
 	 *             after the end
-	 * @throws IOException when a recorded download's detail cannot be read as JSON
+	 * @throws org.openmrs.api.APIException when a recorded download's detail cannot be read as JSON
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -216,61 +206,31 @@ public class DownloadController extends ActCoreRestController {
 	        @RequestParam(value = "form", required = false) String formUuid,
 	        @RequestParam(value = "identifiers", required = false) String identifiers,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
-	        @RequestParam(value = "limit", required = false) Integer limit) throws IOException {
-		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
-		LocalDate to = date(endDate);
-		LocalDate from = from(startDate, to);
-		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
-		        .add("from", from.toString()).add("to", to == null ? null : to.toString());
-		Integer userId = null;
-		if (StringUtils.isNotBlank(username)) {
-			userId = Context.getService(AuditLogService.class).getUserId(username.trim());
-			if (userId == null) {
-				return none;
-			}
-		}
-		String chosenForm = null;
-		if (StringUtils.isNotBlank(formUuid)) {
-			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
-			    () -> Context.getFormService().getFormByUuid(formUuid.trim()));
-			if (form == null) {
-				return none;
-			}
-			chosenForm = form.getUuid();
-		}
+	        @RequestParam(value = "limit", required = false) Integer limit) {
 		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
-		ObjectMapper json = new ObjectMapper();
-		List<DownloadLog.Entry> entries = Context.getService(DownloadLogService.class).getDownloads(userId, from, to);
-		Set<String> userUuids = new HashSet<String>();
-		for (DownloadLog.Entry entry : entries) {
-			userUuids.add(entry.userUuid);
-		}
-		Map<String, Names.Who> users = Context.getService(AuditLogService.class).getUsers(userUuids);
-		List<SimpleObject> matching = new ArrayList<SimpleObject>();
-		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : entries) {
-			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
-			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
-				continue;
-			}
-			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
-				continue;
-			}
-			Object list = detail == null ? null : detail.get("list");
-			matching.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
-			        .add("user", ActivityController.who(users.get(entry.userUuid)))
+		DownloadLog.Filter filter = new DownloadLog.Filter();
+		filter.username = username;
+		filter.to = date("endDate", endDate, null);
+		filter.from = from(startDate, filter.to, Period.ofMonths(DEFAULT_MONTHS));
+		filter.formUuid = formUuid;
+		filter.identifiers = identifiers;
+		filter.startIndex = startIndex == null ? 0 : startIndex;
+		filter.limit = limit == null ? DownloadLog.DEFAULT_LIMIT : limit;
+		DownloadLog.Page page = Context.getService(DownloadLogService.class).getDownloads(filter);
+		List<SimpleObject> results = new ArrayList<SimpleObject>();
+		for (DownloadLog.Download download : page.results) {
+			Object list = download.detail == null ? null : download.detail.get("list");
+			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.date, null))
+			        .add("user", who(download.user))
 			        .add("form",
-			            entry.formName == null ? null
-			                    : new SimpleObject().add("uuid", entry.formUuid).add("name", entry.formName))
-			        .add("list", list == null ? null : list(list.toString())).add("detail", detail));
+			            download.formName == null ? null
+			                    : new SimpleObject().add("uuid", download.formUuid).add("name", download.formName))
+			        .add("list", list == null ? null : list(list.toString())).add("detail", download.detail));
 		}
-		int start = Math.min(startIndex == null ? 0 : Math.max(startIndex, 0), matching.size());
-		int size = limit == null || limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
-		return new SimpleObject().add("results", matching.subList(start, Math.min(start + size, matching.size())))
-		        .add("totalCount", matching.size()).add("from", from.toString())
-		        .add("to", to == null ? null : to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
+		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
 	}
 	
 	/**
@@ -399,30 +359,11 @@ public class DownloadController extends ActCoreRestController {
 		if (uuid == null || StringUtils.isBlank(uuid.toString())) {
 			return null;
 		}
-		// A clinic is configuration, so a downloader needs no privilege to read it.
-		Location clinic = Names.proxied(PrivilegeConstants.GET_LOCATIONS,
-		    () -> Context.getLocationService().getLocationByUuid(uuid.toString().trim()));
+		Location clinic = location(uuid.toString());
 		if (clinic == null) {
 			throw new IllegalRequestException("Not a clinic: " + uuid);
 		}
 		return clinic;
-	}
-	
-	/**
-	 * Gets the uuids of the forms a recorded download held. The list is empty for a list the app made
-	 * itself, and for an entry recorded before the forms were.
-	 */
-	private static List<String> formsOf(Map<?, ?> detail) {
-		List<String> uuids = new ArrayList<String>();
-		Object forms = detail == null ? null : detail.get("forms");
-		if (forms instanceof List) {
-			for (Object form : (List<?>) forms) {
-				if (form instanceof Map && ((Map<?, ?>) form).get("uuid") != null) {
-					uuids.add(((Map<?, ?>) form).get("uuid").toString());
-				}
-			}
-		}
-		return uuids;
 	}
 	
 	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
@@ -431,21 +372,6 @@ public class DownloadController extends ActCoreRestController {
 			throw new IllegalRequestException("Too many or too long columns and filters to record");
 		}
 		Context.getService(DownloadLogService.class).recordDownload(formId, json);
-	}
-	
-	/**
-	 * Tells what a recorded download held, in the identifiers filter's terms. It is "research" for a
-	 * download of research data only, "with" for any other download that gave identifiers, and
-	 * "without" for the rest, a download with no detail recorded among them.
-	 */
-	private static String identifiersOf(Map<?, ?> detail) {
-		if (detail == null) {
-			return "without";
-		}
-		if (Boolean.TRUE.equals(detail.get("researchOnly"))) {
-			return "research";
-		}
-		return Boolean.TRUE.equals(detail.get("identifiers")) ? "with" : "without";
 	}
 	
 	/**
@@ -467,37 +393,5 @@ public class DownloadController extends ActCoreRestController {
 			        .add("kind", "logs");
 		}
 		return new SimpleObject().add("name", list).add("kind", "other");
-	}
-	
-	static LocalDate from(String startDate, LocalDate to) {
-		return from(startDate, to, Period.ofMonths(DEFAULT_MONTHS));
-	}
-	
-	/**
-	 * Works out the first day a log reads: the start date given, or else the span {@code back} before
-	 * the end date, or before today without one, so that a request without dates does not read the
-	 * whole log. A start after the end is refused.
-	 */
-	static LocalDate from(String startDate, LocalDate to, Period back) {
-		LocalDate from = date(startDate);
-		if (from == null) {
-			return (to == null ? LocalDate.now() : to).minus(back);
-		}
-		if (to != null && from.isAfter(to)) {
-			throw new IllegalRequestException("The start date is after the end date");
-		}
-		return from;
-	}
-	
-	static LocalDate date(Object value) {
-		if (value == null || StringUtils.isBlank(value.toString())) {
-			return null;
-		}
-		try {
-			return LocalDate.parse(value.toString().trim());
-		}
-		catch (DateTimeParseException e) {
-			throw new IllegalRequestException("Not a date (yyyy-MM-dd): " + value);
-		}
 	}
 }

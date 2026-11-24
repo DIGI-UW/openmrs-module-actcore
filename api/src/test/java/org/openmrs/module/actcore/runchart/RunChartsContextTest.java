@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
@@ -354,7 +355,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_POINTS), END, RunCharts.Period.DAY);
 			fail("expected the range to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(String.valueOf(RunCharts.MOST_POINTS)));
 		}
 		useReportSelecting("select cast(dateadd('DAY', -x, date '2026-10-21') as date) as point_date, null as clinic_uuid,"
@@ -409,7 +410,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			RunCharts.Period.of("year");
 			fail("expected the period to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage().contains("day, week or month"));
 		}
 	}

@@ -31,12 +31,12 @@ import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.StudyService;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.util.PrivilegeConstants;
@@ -117,7 +117,7 @@ public class StudiesControllerTest extends BaseModuleWebContextSensitiveTest {
 			controller.create(Collections.singletonMap("name", "ARC"));
 			fail("expected the study to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ActCorePrivileges.MANAGE_STUDIES));
 		}
 	}

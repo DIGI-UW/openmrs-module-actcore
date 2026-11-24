@@ -28,8 +28,8 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
@@ -109,7 +109,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 			controller.save(CLINIC_A, "2026-08", body(40, null));
 			fail("expected the save to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains(ActCorePrivileges.ENTER_SCREENING_COUNTS));
 		}
 	}
@@ -231,7 +231,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 			request.run();
 			fail("expected a bad request");
 		}
-		catch (IllegalRequestException e) {
+		catch (IllegalRequestException | ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(naming));
 		}
 	}

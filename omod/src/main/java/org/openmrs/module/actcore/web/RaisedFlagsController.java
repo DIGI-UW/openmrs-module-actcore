@@ -10,23 +10,18 @@
 package org.openmrs.module.actcore.web;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
-import org.openmrs.module.patientflags.PatientFlag;
-import org.openmrs.module.patientflags.PatientFlagsConstants;
-import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -58,30 +53,21 @@ public class RaisedFlagsController extends ActCoreRestController {
 	 * @param patientUuid the patient's uuid
 	 * @return the flags as {@code results}, one per flag, empty when none is shown; a flag's
 	 *         raisedSince is null when ACT Core has no date for it
-	 * @throws ContextAuthenticationException when the user lacks View Patient Flags
-	 * @throws APIAuthenticationException when the user lacks Get Patients
+	 * @throws APIAuthenticationException when the user lacks Get Patients or View Patient Flags
 	 * @throws IllegalRequestException when no patient is given
 	 * @throws ObjectNotFoundException when no patient has the uuid
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getRaisedFlags(@RequestParam(value = "patient", required = false) String patientUuid) {
-		Context.requirePrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		Patient patient = patient(patientUuid);
-		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
-		Map<Integer, Date> raisedSince = raisedFlags.getRaisedSinceByFlag(patient.getPatientId());
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		Set<Integer> seen = new HashSet<Integer>();
-		for (PatientFlag row : Context.getService(FlagService.class).getPatientFlags(patient)) {
-			Flag flag = row.getFlag();
-			if (Boolean.TRUE.equals(row.getVoided()) || flag == null || !seen.add(flag.getFlagId())) {
-				continue;
-			}
-			Date since = raisedSince.get(flag.getFlagId());
-			results.add(new SimpleObject().add("flag", flag.getUuid()).add("display", flag.getName())
+		for (RaisedFlags.Raised raised : Context.getService(RaisedFlagService.class).getRaisedFlags(patient)) {
+			results.add(new SimpleObject().add("flag", raised.flag.getUuid()).add("display", raised.flag.getName())
 			        .add("raisedSince",
-			            since == null ? null : ConversionUtil.convertToRepresentation(since, Representation.REF))
-			        .add("dismissible", raisedFlags.mayDismiss(flag)));
+			            raised.since == null ? null
+			                    : ConversionUtil.convertToRepresentation(raised.since, Representation.REF))
+			        .add("dismissible", raised.dismissible));
 		}
 		return new SimpleObject().add("results", results);
 	}
@@ -107,7 +93,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 		if (StringUtils.isBlank(flagUuid)) {
 			throw new IllegalRequestException("The flag is required");
 		}
-		Flag flag = FlagGapController.flag(flagUuid);
+		Flag flag = Context.getService(FlagGapService.class).getFlag(flagUuid);
 		if (flag == null) {
 			throw new ObjectNotFoundException();
 		}
@@ -135,17 +121,6 @@ public class RaisedFlagsController extends ActCoreRestController {
 		RefreshRunning() {
 			super("The patient flag refresh is running; dismiss the flag again once it has finished");
 		}
-	}
-	
-	private static Patient patient(String uuid) {
-		if (StringUtils.isBlank(uuid)) {
-			throw new IllegalRequestException("The patient is required");
-		}
-		Patient patient = Context.getPatientService().getPatientByUuid(uuid);
-		if (patient == null) {
-			throw new ObjectNotFoundException();
-		}
-		return patient;
 	}
 	
 	private static String value(Map<String, Object> body, String key) {

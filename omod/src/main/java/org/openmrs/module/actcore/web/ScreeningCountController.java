@@ -11,10 +11,8 @@ package org.openmrs.module.actcore.web;
 
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,8 +23,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
@@ -34,7 +32,6 @@ import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,7 +42,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 /**
  * Serves the monthly screening counts: a clinic's counts for a month, read and saved on the
  * Screening counts page, and their sums over clinics and months for the Dashboard. A site
- * administrator works only with the clinics on their account.
+ * administrator works only with the clinics on their account, which {@link ScreeningCountService}
+ * enforces.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
@@ -70,7 +68,6 @@ public class ScreeningCountController extends ActCoreRestController {
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject get(@RequestParam("clinic") String clinic, @RequestParam("month") String month) {
-		requireReader();
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
 		return describe(location, yearMonth, service().getMonth(location, yearMonth));
@@ -84,29 +81,22 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @param body the request body, holding each column's count as {@code counts}, a column not given
 	 *            being zero, and optional {@code notes}
 	 * @return the month as saved, as {@link #get(String, String)} gives it
-	 * @throws ContextAuthenticationException when the user lacks
-	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
-	 * @throws APIAuthenticationException when the user is a site administrator without the clinic on
-	 *             their account
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
 	 * @throws IllegalRequestException when the clinic or month is blank or not recognised, the counts
-	 *             are missing, a count is not a whole number, or the counts or month are refused,
-	 *             saying why; a request without the clinic or month is answered with 400 before this
-	 *             method runs
+	 *             are missing, or a count is not a whole number; a request without the clinic or month
+	 *             is answered with 400 before this method runs
+	 * @throws ValidationException when the service refuses the counts, notes or month, saying why
 	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject save(@RequestParam("clinic") String clinic, @RequestParam("month") String month,
 	        @RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(ActCorePrivileges.ENTER_SCREENING_COUNTS);
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
 		Object notes = body == null ? null : body.get("notes");
-		try {
-			service().saveMonth(location, yearMonth, counts(body), notes == null ? null : notes.toString());
-		}
-		catch (IllegalArgumentException e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
+		service().saveMonth(location, yearMonth, counts(body), notes == null ? null : notes.toString());
 		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
@@ -115,7 +105,8 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * of every clinic. Without months, the range is the twelve months up to and including this one.
 	 *
 	 * @param clinics the clinics' location uuids, or none for no clinic filter; a site administrator's
-	 *            are limited to the clinics on their account, which none stands for
+	 *            are limited to the clinics on their account, which none stands for, and one of those
+	 *            that names no location any more is skipped
 	 * @param startMonth the first month as YYYY-MM; blank for eleven months before the end
 	 * @param endMonth the last month as YYYY-MM; blank for this month
 	 * @return the months, how many clinic months were saved, the totals screened, female, positive,
@@ -131,7 +122,6 @@ public class ScreeningCountController extends ActCoreRestController {
 	public SimpleObject summary(@RequestParam(value = "clinic", required = false) String[] clinics,
 	        @RequestParam(value = "startMonth", required = false) String startMonth,
 	        @RequestParam(value = "endMonth", required = false) String endMonth) {
-		requireReader();
 		YearMonth end = month("endMonth", endMonth, YearMonth.now());
 		YearMonth start = month("startMonth", startMonth, end.minusMonths(11));
 		if (start.isAfter(end)) {
@@ -177,19 +167,9 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Works out the location ids of the clinics to sum.
-	 * <p>
-	 * When clinics are given, the ids are those of the clinics given. For a site administrator, who is
-	 * limited to their own clinics, the clinics given are cut down to their own, so the result may be
-	 * empty.
-	 * <p>
-	 * When none is given to a user who is not limited to their clinics, the result is null, which means
-	 * every clinic.
-	 * <p>
-	 * When none is given to a site administrator, the ids are those of the administrator's own clinics.
-	 * <p>
-	 * A uuid given that names no location is a bad request, unless it is one of the site
-	 * administrator's own clinics.
+	 * Gets the location ids of the clinics given, or null for none, which stands for every clinic the
+	 * user may sum. A uuid that names no location is a bad request, unless it is a clinic on a site
+	 * administrator's account, which is skipped.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();
@@ -200,80 +180,28 @@ public class ScreeningCountController extends ActCoreRestController {
 				}
 			}
 		}
-		User user = Context.getAuthenticatedUser();
-		boolean limited = UserClinics.isLimited(user);
-		Set<String> own = limited ? UserClinics.of(user) : Collections.<String> emptySet();
-		for (String uuid : uuids) {
-			if (!own.contains(uuid) && location(uuid) == null) {
-				throw new IllegalRequestException("No location has the uuid " + uuid);
-			}
-		}
-		if (limited) {
-			if (uuids.isEmpty()) {
-				uuids.addAll(own);
-			} else {
-				uuids.retainAll(own);
-			}
-		} else if (uuids.isEmpty()) {
+		if (uuids.isEmpty()) {
 			return null;
 		}
+		User user = Context.getAuthenticatedUser();
 		List<Integer> ids = new ArrayList<Integer>();
 		for (String uuid : uuids) {
 			Location location = location(uuid);
 			if (location != null) {
 				ids.add(location.getLocationId());
+			} else if (!UserClinics.isLimited(user) || !UserClinics.of(user).contains(uuid)) {
+				throw new IllegalRequestException("No location has the uuid " + uuid);
 			}
 		}
 		return ids;
 	}
 	
-	/**
-	 * Gets the clinic by uuid, refusing a uuid that names no location, and refusing a site
-	 * administrator a clinic that is not on their account.
-	 */
 	private static Location clinicOf(String uuid) {
-		Location location = StringUtils.isBlank(uuid) ? null : location(uuid.trim());
+		Location location = location(uuid);
 		if (location == null) {
 			throw new IllegalRequestException("No location has the uuid " + uuid);
 		}
-		User user = Context.getAuthenticatedUser();
-		if (UserClinics.isLimited(user) && !UserClinics.of(user).contains(location.getUuid())) {
-			throw new APIAuthenticationException(location.getName() + " is not one of your clinics");
-		}
 		return location;
-	}
-	
-	private static Location location(String uuid) {
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-			return Context.getLocationService().getLocationByUuid(uuid);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-		}
-	}
-	
-	private static YearMonth month(String name, String value, YearMonth fallback) {
-		if (StringUtils.isBlank(value)) {
-			if (fallback == null) {
-				throw new IllegalRequestException(name + " must be a month as YYYY-MM");
-			}
-			return fallback;
-		}
-		try {
-			return YearMonth.parse(value.trim(), MONTH);
-		}
-		catch (DateTimeParseException e) {
-			throw new IllegalRequestException(name + " must be a month as YYYY-MM");
-		}
-	}
-	
-	private static void requireReader() {
-		if (!Context.hasPrivilege(ActCorePrivileges.SCREENING_COUNTS) && !Context.hasPrivilege(ActCorePrivileges.DASHBOARD)
-		        && !Context.hasPrivilege(ActCorePrivileges.ENTER_SCREENING_COUNTS)) {
-			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.SCREENING_COUNTS + ", "
-			        + ActCorePrivileges.DASHBOARD + " or " + ActCorePrivileges.ENTER_SCREENING_COUNTS);
-		}
 	}
 	
 	private static ScreeningCountService service() {

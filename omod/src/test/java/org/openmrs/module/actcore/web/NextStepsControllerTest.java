@@ -25,9 +25,9 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -113,7 +113,7 @@ public class NextStepsControllerTest extends BaseModuleWebContextSensitiveTest {
 			controller.getNextSteps(PATIENT_7);
 			throw new AssertionError("expected the request to be refused");
 		}
-		catch (ContextAuthenticationException e) {
+		catch (APIAuthenticationException e) {
 			assertTrue(e.getMessage().contains("Get Observations"));
 		}
 	}

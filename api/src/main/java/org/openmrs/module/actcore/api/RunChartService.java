@@ -23,8 +23,9 @@ import org.openmrs.module.actcore.runchart.RunCharts;
 /**
  * The service that calculates ACT 2.0's run charts for the Dashboard when they are asked for,
  * without storing them. It evaluates the report that {@value ActCoreConstants#GP_RUN_CHARTS_REPORT}
- * names and has {@link AdherenceService} replay the adherence of the patients on BPG. The run chart
- * endpoint calls it on a daemon thread, so that the report reads every clinic's records.
+ * names and has {@link AdherenceService} replay the adherence of the patients on BPG. It checks the
+ * caller's privilege and the range on the caller's thread, then evaluates the report as the daemon
+ * user, so that the report reads every clinic's records.
  */
 public interface RunChartService extends OpenmrsService {
 	
@@ -37,10 +38,12 @@ public interface RunChartService extends OpenmrsService {
 	 * @param end the range's last day
 	 * @param period the period each point closes
 	 * @return each metric's points, earliest first, by metric in the order of {@link RunCharts#METRICS}
-	 * @throws IllegalArgumentException when the range has more than {@link RunCharts#MOST_POINTS}
-	 *             points
-	 * @throws org.openmrs.api.APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no
-	 *             report, or the report cannot be evaluated or gives rows ACT Core cannot read
+	 * @throws org.openmrs.api.ValidationException when the points are daily over a range longer than
+	 *             {@link RunCharts#MOST_DAILY_DAYS} days, or the range has more than
+	 *             {@link RunCharts#MOST_POINTS} points
+	 * @throws org.openmrs.api.APIException when the module has not started, or the calculation fails,
+	 *             as when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the report
+	 *             cannot be evaluated or gives rows ACT Core cannot read; the cause says which
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#DASHBOARD}
 	 */

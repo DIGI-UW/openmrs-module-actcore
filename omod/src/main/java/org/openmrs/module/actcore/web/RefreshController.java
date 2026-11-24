@@ -13,8 +13,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
-import org.openmrs.api.context.Daemon;
-import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
@@ -68,31 +66,12 @@ public class RefreshController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject refresh() {
 		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
-		DaemonToken token = ActCoreActivator.getDaemonToken();
-		if (token == null) {
-			throw new APIException("ACT Core has not started, so it cannot run the refresh");
-		}
-		final PatientFlagRefreshTask.Result[] ran = new PatientFlagRefreshTask.Result[1];
-		final RuntimeException[] failure = new RuntimeException[1];
-		Daemon.runInDaemonThreadAndWait(new Runnable() {
-			
-			@Override
-			public void run() {
-				try {
-					ran[0] = new PatientFlagRefreshTask().runIfIdle();
-				}
-				catch (RuntimeException e) {
-					failure[0] = e;
-				}
-			}
-		}, token);
-		if (failure[0] != null) {
-			throw new APIException("The patient flag refresh failed", failure[0]);
-		}
-		SimpleObject response = status().add("refreshed", ran[0] != null);
-		if (ran[0] != null) {
-			response.add("flagsFailed", ran[0].flagsFailed).add("listsFailed", ran[0].listsFailed).add("adherenceFailed",
-			    ran[0].adherenceFailed);
+		PatientFlagRefreshTask.Result ran = ActCoreActivator.runAsDaemon("run the refresh",
+		    "The patient flag refresh failed", () -> new PatientFlagRefreshTask().runIfIdle());
+		SimpleObject response = status().add("refreshed", ran != null);
+		if (ran != null) {
+			response.add("flagsFailed", ran.flagsFailed).add("listsFailed", ran.listsFailed).add("adherenceFailed",
+			    ran.adherenceFailed);
 		}
 		return response;
 	}

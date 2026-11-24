@@ -13,6 +13,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import org.openmrs.api.ValidationException;
+import org.springframework.validation.BindException;
+import org.springframework.validation.Errors;
+
 /**
  * Helpers the logs use to read the rows that {@link org.openmrs.module.actcore.api.db.AuditLogDAO}
  * gives, each a map of column name to value, and to page the results.
@@ -29,13 +33,26 @@ public final class Rows {
 	}
 	
 	/**
-	 * Thrown when a log's filter is too broad for one request to read. The log endpoints answer it with
-	 * 400 and its message.
+	 * Thrown when a log's filter is too broad for one request to read. It is a validation error with
+	 * its message as the one global error, so the REST layer answers it with 400 and that message.
 	 */
-	public static class TooMany extends RuntimeException {
+	public static class TooMany extends ValidationException {
 		
+		private static final long serialVersionUID = 1L;
+		
+		/**
+		 * Creates the exception.
+		 *
+		 * @param message what is too broad and how to narrow it
+		 */
 		public TooMany(String message) {
-			super(message);
+			super(message, errors(message));
+		}
+		
+		private static Errors errors(String message) {
+			Errors errors = new BindException(new Object(), "filter");
+			errors.reject("actcore.logFilter", message);
+			return errors;
 		}
 	}
 	

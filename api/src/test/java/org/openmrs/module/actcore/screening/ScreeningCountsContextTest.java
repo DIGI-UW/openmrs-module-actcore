@@ -25,11 +25,22 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.Location;
+import org.openmrs.Person;
+import org.openmrs.PersonName;
+import org.openmrs.Privilege;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 
 public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -143,7 +154,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.now().plusMonths(1), september(138), null);
 			fail("expected a month to come to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("has not started"));
 		}
 	}
@@ -168,7 +179,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(138), most + "n");
 			fail("expected notes too long to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("Notes may be at most"));
 		}
 		assertFalse(screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
@@ -214,18 +225,84 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Long.valueOf(0), none.sums.get("school_screened"));
 	}
 	
+	@Test
+	public void getMonthAndSaveMonth_shouldRefuseASiteAdministratorAClinicNotOnTheirAccount() {
+		Location theirs = location(CLINIC_A);
+		Location other = location(CLINIC_B);
+		screeningCounts.saveMonth(other, YearMonth.of(2026, 9), september(20), null);
+		signInAsSiteAdministratorOf(theirs.getUuid());
+		
+		screeningCounts.saveMonth(theirs, YearMonth.of(2026, 9), september(10), null);
+		assertTrue(screeningCounts.getMonth(theirs, YearMonth.of(2026, 9)).saved);
+		notTheirs(() -> screeningCounts.getMonth(other, YearMonth.of(2026, 9)));
+		notTheirs(() -> screeningCounts.saveMonth(other, YearMonth.of(2026, 9), september(30), null));
+	}
+	
+	@Test
+	public void summary_shouldSumOnlyTheClinicsOnASiteAdministratorsAccount() {
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(10), null);
+		screeningCounts.saveMonth(location(CLINIC_B), YearMonth.of(2026, 9), september(20), null);
+		signInAsSiteAdministratorOf(location(CLINIC_A).getUuid() + ",gone-clinic");
+		
+		YearMonth september = YearMonth.of(2026, 9);
+		assertEquals(Long.valueOf(412 + 10), screeningCounts.getSummary(null, september, september).screened());
+		assertEquals(Long.valueOf(412 + 10),
+		    screeningCounts.getSummary(Arrays.asList(CLINIC_A, CLINIC_B), september, september).screened());
+		assertEquals(0, screeningCounts.getSummary(Collections.singletonList(CLINIC_B), september, september).months);
+	}
+	
+	@Test
+	public void summary_shouldSumNothingForASiteAdministratorWithoutClinics() {
+		screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), september(10), null);
+		signInAsSiteAdministratorOf("");
+		
+		assertEquals(0, screeningCounts.getSummary(null, YearMonth.of(2026, 9), YearMonth.of(2026, 9)).months);
+	}
+	
+	private static void notTheirs(Runnable call) {
+		try {
+			call.run();
+			fail("expected the clinic to be refused");
+		}
+		catch (APIAuthenticationException e) {
+			assertTrue(e.getMessage(), e.getMessage().endsWith("is not one of your clinics"));
+		}
+	}
+	
+	/** Signs in a site administrator who may read and enter the counts, with these clinics. */
+	private static void signInAsSiteAdministratorOf(String clinics) {
+		UserService users = Context.getUserService();
+		Role role = new Role("screening site administrator");
+		for (String name : new String[] { ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.ENTER_SCREENING_COUNTS,
+		        PrivilegeConstants.EDIT_USERS }) {
+			Privilege privilege = users.getPrivilege(name);
+			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
+		}
+		users.saveRole(role);
+		Person person = new Person();
+		person.addName(new PersonName("Site", null, "Administrator"));
+		person.setGender("F");
+		User user = new User(person);
+		user.setUsername("siteadministrator");
+		user.addRole(role);
+		user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, clinics);
+		users.createUser(user, "Screening123");
+		Context.logout();
+		Context.authenticate("siteadministrator", "Screening123");
+	}
+	
 	private void refused(Map<String, Integer> counts, String naming) {
 		try {
 			screeningCounts.saveMonth(location(CLINIC_A), YearMonth.of(2026, 9), counts, null);
 			fail("expected the counts to be refused");
 		}
-		catch (IllegalArgumentException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains(naming));
 		}
 		assertFalse(screeningCounts.getMonth(location(CLINIC_A), YearMonth.of(2026, 9)).saved);
 	}
 	
-	private static org.openmrs.Location location(int id) {
+	private static Location location(int id) {
 		return Context.getLocationService().getLocation(id);
 	}
 }

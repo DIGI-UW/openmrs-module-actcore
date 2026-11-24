@@ -9,9 +9,6 @@
  */
 package org.openmrs.module.actcore.api;
 
-import java.time.LocalDate;
-import java.util.List;
-
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -43,15 +40,16 @@ public interface DownloadLogService extends OpenmrsService {
 	void recordDownload(Integer formId, String detail);
 	
 	/**
-	 * Gets the downloads that match the filters, newest first. A filter left null is not applied.
+	 * Gets a page of the downloads that match the filter, newest first, each with its user named and
+	 * its detail read.
 	 *
-	 * @param userId the id of the user who downloaded, or null for every user
-	 * @param from the first day to include, from its start, or null for no lower bound
-	 * @param to the last day to include, to its end, or null for no upper bound
-	 * @return the matching downloads; an empty list when there are none
+	 * @param filter the user, days, form, identifiers and page to list
+	 * @return the page and how many downloads match in all; empty when none matches, as when no user
+	 *         has the username or no form has the uuid
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
+	 * @throws org.openmrs.api.APIException when a recorded download's detail cannot be read as JSON
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
-	List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to);
+	DownloadLog.Page getDownloads(DownloadLog.Filter filter);
 }

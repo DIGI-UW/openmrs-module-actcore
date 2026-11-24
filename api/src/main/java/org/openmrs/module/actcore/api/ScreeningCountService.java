@@ -22,7 +22,9 @@ import org.openmrs.module.actcore.screening.ScreeningCounts;
 /**
  * The service that reads, saves and sums the monthly screening counts that each clinic enters, as
  * ACT 2.0 kept them. The Screening counts page reads and saves a clinic's month through it, and the
- * Dashboard reads the sums.
+ * Dashboard reads the sums. A site administrator, an administrator limited to the clinics on their
+ * account as {@link org.openmrs.module.actcore.clinics.UserClinics#isLimited(org.openmrs.User)}
+ * tells, reads, saves and sums only those clinics.
  */
 public interface ScreeningCountService extends OpenmrsService {
 	
@@ -35,7 +37,8 @@ public interface ScreeningCountService extends OpenmrsService {
 	 *         zero, the notes are null and the month is marked as not saved
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds none of
 	 *             {@link ActCorePrivileges#SCREENING_COUNTS}, {@link ActCorePrivileges#DASHBOARD} and
-	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
 	 */
 	@Authorized({ ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD,
 	        ActCorePrivileges.ENTER_SCREENING_COUNTS })
@@ -50,12 +53,13 @@ public interface ScreeningCountService extends OpenmrsService {
 	 * @param counts each column's count, keyed by a column of {@link ScreeningCounts#COLUMNS}; a column
 	 *            not given is saved as zero
 	 * @param notes free text saved with the counts, trimmed, or null for none
-	 * @throws IllegalArgumentException when the month has not started, a column is not recognised, a
-	 *             count is negative, the notes are too long, a setting's age groups do not add up to
-	 *             its people screened, or its females or positives outnumber them; the message says
-	 *             which
+	 * @throws org.openmrs.api.ValidationException when the month has not started, a column is not
+	 *             recognised, a count is negative, the notes are too long, a setting's age groups do
+	 *             not add up to its people screened, or its females or positives outnumber them; the
+	 *             message says which
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
-	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
 	 */
 	@Authorized(ActCorePrivileges.ENTER_SCREENING_COUNTS)
 	void saveMonth(Location clinic, YearMonth month, Map<String, Integer> counts, String notes);
@@ -64,7 +68,8 @@ public interface ScreeningCountService extends OpenmrsService {
 	 * Gets the sums of the clinics' current counts over the months from start to end, both included.
 	 *
 	 * @param clinics the location ids of the clinics to sum; null sums every clinic, and an empty
-	 *            collection sums none
+	 *            collection sums none. For a site administrator, only the clinics on their account are
+	 *            summed, and null sums those
 	 * @param start the first month to sum
 	 * @param end the last month to sum
 	 * @return each column's sum and how many clinic months were saved in the range; every sum is zero

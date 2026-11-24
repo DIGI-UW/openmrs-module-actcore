@@ -9,19 +9,31 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
+import java.io.IOException;
 import java.sql.Timestamp;
-import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
+import org.openmrs.Form;
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.DownloadRecord;
+import org.openmrs.module.actcore.logs.Names;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.DownloadLogService}. */
 @Transactional
@@ -44,13 +56,103 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	}
 	
 	/**
-	 * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(Integer, LocalDate,
-	 *      LocalDate)
+	 * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(DownloadLog.Filter)
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to) {
-		return dao.getDownloads(userId, from == null ? null : Timestamp.valueOf(from.atStartOfDay()),
-		    to == null ? null : Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+	public DownloadLog.Page getDownloads(DownloadLog.Filter filter) {
+		DownloadLog.Page page = new DownloadLog.Page();
+		AuditLogService logs = Context.getService(AuditLogService.class);
+		Integer userId = null;
+		if (StringUtils.isNotBlank(filter.username)) {
+			userId = logs.getUserId(filter.username.trim());
+			if (userId == null) {
+				return page;
+			}
+		}
+		String chosenForm = null;
+		if (StringUtils.isNotBlank(filter.formUuid)) {
+			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
+			    () -> Context.getFormService().getFormByUuid(filter.formUuid.trim()));
+			if (form == null) {
+				return page;
+			}
+			chosenForm = form.getUuid();
+		}
+		List<DownloadLog.Entry> entries = dao.getDownloads(userId,
+		    filter.from == null ? null : Timestamp.valueOf(filter.from.atStartOfDay()),
+		    filter.to == null ? null : Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
+		Set<String> userUuids = new HashSet<String>();
+		for (DownloadLog.Entry entry : entries) {
+			userUuids.add(entry.userUuid);
+		}
+		Map<String, Names.Who> users = logs.getUsers(userUuids);
+		List<DownloadLog.Download> matching = new ArrayList<DownloadLog.Download>();
+		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
+		for (DownloadLog.Entry entry : entries) {
+			Map<?, ?> detail = read(entry.detail);
+			if (filter.identifiers != null && !filter.identifiers.equals(identifiersOf(detail))) {
+				continue;
+			}
+			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
+				continue;
+			}
+			DownloadLog.Download download = new DownloadLog.Download();
+			download.date = entry.date;
+			download.user = users.get(entry.userUuid);
+			download.formUuid = entry.formUuid;
+			download.formName = entry.formName;
+			download.detail = detail;
+			matching.add(download);
+		}
+		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
+		int size = filter.limit < 1 ? DownloadLog.DEFAULT_LIMIT : Math.min(filter.limit, DownloadLog.MAX_LIMIT);
+		page.results.addAll(matching.subList(start, Math.min(start + size, matching.size())));
+		page.totalCount = matching.size();
+		return page;
+	}
+	
+	private static Map<?, ?> read(String detail) {
+		if (detail == null) {
+			return null;
+		}
+		try {
+			return new ObjectMapper().readValue(detail, Map.class);
+		}
+		catch (IOException e) {
+			throw new APIException("A recorded download's detail cannot be read as JSON", e);
+		}
+	}
+	
+	/**
+	 * Tells what a recorded download held, in the identifiers filter's terms. It is "research" for a
+	 * download of research data only, "with" for any other download that gave identifiers, and
+	 * "without" for the rest, a download with no detail recorded among them.
+	 */
+	private static String identifiersOf(Map<?, ?> detail) {
+		if (detail == null) {
+			return "without";
+		}
+		if (Boolean.TRUE.equals(detail.get("researchOnly"))) {
+			return "research";
+		}
+		return Boolean.TRUE.equals(detail.get("identifiers")) ? "with" : "without";
+	}
+	
+	/**
+	 * Gets the uuids of the forms a recorded download held. The list is empty for a list the app made
+	 * itself, and for an entry recorded before the forms were.
+	 */
+	private static List<String> formsOf(Map<?, ?> detail) {
+		List<String> uuids = new ArrayList<String>();
+		Object forms = detail == null ? null : detail.get("forms");
+		if (forms instanceof List) {
+			for (Object form : (List<?>) forms) {
+				if (form instanceof Map && ((Map<?, ?>) form).get("uuid") != null) {
+					uuids.add(((Map<?, ?>) form).get("uuid").toString());
+				}
+			}
+		}
+		return uuids;
 	}
 }

@@ -29,6 +29,7 @@ import java.util.TreeSet;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
@@ -39,6 +40,8 @@ import org.openmrs.module.reporting.evaluation.EvaluationException;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
+import org.springframework.validation.BindException;
+import org.springframework.validation.Errors;
 
 /**
  * Calculates ACT 2.0's run charts when they are asked for, without storing them. Each request
@@ -135,7 +138,7 @@ public class RunCharts {
 		 *
 		 * @param name day, week or month, ignoring case, or blank
 		 * @return the period; WEEK for a blank name
-		 * @throws IllegalArgumentException when the name is none of them
+		 * @throws ValidationException when the name is none of them
 		 */
 		public static Period of(String name) {
 			if (StringUtils.isBlank(name)) {
@@ -146,7 +149,7 @@ public class RunCharts {
 					return period;
 				}
 			}
-			throw new IllegalArgumentException("points must be day, week or month");
+			throw refusal("points must be day, week or month");
 		}
 		
 		/**
@@ -207,7 +210,7 @@ public class RunCharts {
 	 * @param end the range's last day
 	 * @param period the period each point closes
 	 * @return the points' days; empty when the end is before the start
-	 * @throws IllegalArgumentException when the range has more than {@link #MOST_POINTS} points
+	 * @throws ValidationException when the range has more than {@link #MOST_POINTS} points
 	 */
 	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
 		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
@@ -215,7 +218,7 @@ public class RunCharts {
 			dates.addFirst(day);
 		}
 		if (dates.size() > MOST_POINTS) {
-			throw new IllegalArgumentException("The range has " + dates.size() + " points; at most " + MOST_POINTS
+			throw refusal("The range has " + dates.size() + " points; at most " + MOST_POINTS
 			        + " can be charted, so shorten it or ask for longer periods");
 		}
 		return dates;
@@ -231,7 +234,7 @@ public class RunCharts {
 	 * @param end the range's last day
 	 * @param period the period each point closes
 	 * @return each of {@link #METRICS}' points, earliest first, by metric in that order
-	 * @throws IllegalArgumentException when the range has more than {@link #MOST_POINTS} points
+	 * @throws ValidationException when the range has more than {@link #MOST_POINTS} points
 	 * @throws APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the
 	 *             report cannot be evaluated or gives rows ACT Core cannot read
 	 */
@@ -401,6 +404,12 @@ public class RunCharts {
 		Collections.sort(values);
 		int middle = values.size() / 2;
 		return values.size() % 2 == 1 ? values.get(middle) : (values.get(middle - 1) + values.get(middle)) / 2;
+	}
+	
+	private static ValidationException refusal(String message) {
+		Errors errors = new BindException(new Object(), "runChart");
+		errors.reject("actcore.runChart", message);
+		return new ValidationException(message, errors);
 	}
 	
 	private static LocalDate toLocalDate(Object value) {

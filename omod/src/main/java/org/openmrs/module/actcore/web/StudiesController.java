@@ -20,13 +20,11 @@ import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -47,13 +45,12 @@ public class StudiesController extends ActCoreRestController {
 	 * the initial states first.
 	 *
 	 * @return the studies as {@code results}; empty when there are none
-	 * @throws ContextAuthenticationException when the user lacks Get Programs
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Programs
 	 * @throws org.openmrs.api.APIException when the study template program is not configured
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStudies() {
-		Context.requirePrivilege(PrivilegeConstants.GET_PROGRAMS);
 		List<SimpleObject> results = new ArrayList<>();
 		for (Program study : Context.getService(StudyService.class).getStudies()) {
 			results.add(toJson(study));
@@ -66,7 +63,7 @@ public class StudiesController extends ActCoreRestController {
 	 *
 	 * @param body the request body, holding the study's name as {@code name}
 	 * @return the new study, with its uuid, name and states
-	 * @throws ContextAuthenticationException when the user lacks
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
 	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
 	 * @throws org.openmrs.api.APIException when the study template program is not configured
@@ -74,7 +71,6 @@ public class StudiesController extends ActCoreRestController {
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(ActCorePrivileges.MANAGE_STUDIES);
 		return toJson(Context.getService(StudyService.class).createStudy(name(body)));
 	}
 	
@@ -84,8 +80,9 @@ public class StudiesController extends ActCoreRestController {
 	 * @param uuid the study's uuid
 	 * @param body the request body, holding the new name as {@code name}
 	 * @return the renamed study, with its uuid, name and states
-	 * @throws ContextAuthenticationException when the user lacks
-	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Programs and
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES}, or lacks
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES} once the study is found
 	 * @throws ObjectNotFoundException when no unretired study has the uuid
 	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
 	 * @throws org.openmrs.api.APIException when the study template program is not configured
@@ -93,7 +90,6 @@ public class StudiesController extends ActCoreRestController {
 	@RequestMapping(value = "/{uuid}", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(ActCorePrivileges.MANAGE_STUDIES);
 		StudyService studies = Context.getService(StudyService.class);
 		Program study = studies.getStudyByUuid(uuid);
 		if (study == null) {

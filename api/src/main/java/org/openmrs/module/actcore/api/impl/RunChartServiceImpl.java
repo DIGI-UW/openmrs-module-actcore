@@ -10,13 +10,18 @@
 package org.openmrs.module.actcore.api.impl;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
 import org.openmrs.Location;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.runchart.RunCharts;
+import org.springframework.validation.BindException;
+import org.springframework.validation.Errors;
 
 /**
  * Default implementation of {@link org.openmrs.module.actcore.api.RunChartService}. It has no DAO,
@@ -33,6 +38,19 @@ public class RunChartServiceImpl extends BaseOpenmrsService implements RunChartS
 	// No @Transactional: reporting evaluates a report outside one, each read in its own.
 	public Map<String, List<RunCharts.Point>> getRunCharts(Location clinic, LocalDate start, LocalDate end,
 	        RunCharts.Period period) {
-		return new RunCharts().calculate(clinic, start, end, period);
+		if (period == RunCharts.Period.DAY && ChronoUnit.DAYS.between(start, end) > RunCharts.MOST_DAILY_DAYS) {
+			throw refusal(
+			    "points=day is for a range of up to " + RunCharts.MOST_DAILY_DAYS + " days; ask for weeks or months");
+		}
+		// Refused here, on the caller's thread, rather than as a failure of the daemon's work.
+		RunCharts.pointDates(start, end, period);
+		return ActCoreActivator.runAsDaemon("calculate the run chart", "The run chart could not be calculated",
+		    () -> new RunCharts().calculate(clinic, start, end, period));
+	}
+	
+	private static ValidationException refusal(String message) {
+		Errors errors = new BindException(new Object(), "runChart");
+		errors.reject("actcore.runChart", message);
+		return new ValidationException(message, errors);
 	}
 }
