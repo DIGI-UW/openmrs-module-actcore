@@ -25,7 +25,6 @@ import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.actcore.model.FlagDismissal;
 import org.openmrs.module.actcore.model.RaisedFlag;
 import org.openmrs.module.actcore.model.RaisedFlags;
-import org.openmrs.module.actcore.task.FlagListSync;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;

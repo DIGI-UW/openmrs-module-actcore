@@ -13,7 +13,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.adherence.AdherenceContextTest;
+import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;

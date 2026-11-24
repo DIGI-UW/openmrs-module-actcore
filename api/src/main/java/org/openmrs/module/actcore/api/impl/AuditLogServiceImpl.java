@@ -16,9 +16,6 @@ import java.util.Map;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.logs.Names;
-import org.openmrs.module.actcore.logs.ReadLog;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.AuditLogService}. */

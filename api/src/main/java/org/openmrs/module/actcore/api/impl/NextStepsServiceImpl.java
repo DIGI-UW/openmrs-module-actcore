@@ -15,9 +15,7 @@ import java.util.List;
 import org.openmrs.Patient;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.NextStepsService;
-import org.openmrs.module.actcore.consultation.NextConsultation;
 import org.openmrs.module.actcore.model.NextStep;
-import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.springframework.transaction.annotation.Transactional;
 
 /**

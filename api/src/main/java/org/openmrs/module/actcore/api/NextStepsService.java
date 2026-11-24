@@ -15,9 +15,9 @@ import java.util.List;
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
-import org.openmrs.module.actcore.consultation.NextConsultation;
+import org.openmrs.module.actcore.api.impl.NextConsultation;
+import org.openmrs.module.actcore.api.impl.NextSteps;
 import org.openmrs.module.actcore.model.NextStep;
-import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.openmrs.util.PrivilegeConstants;
 
 /**

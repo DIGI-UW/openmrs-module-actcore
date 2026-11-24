@@ -15,10 +15,10 @@ import java.util.Map;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.logs.Names;
-import org.openmrs.module.actcore.logs.ReadLog;
-import org.openmrs.module.actcore.logs.Rows;
+import org.openmrs.module.actcore.api.impl.ActivityLog;
+import org.openmrs.module.actcore.api.impl.Names;
+import org.openmrs.module.actcore.api.impl.ReadLog;
+import org.openmrs.module.actcore.api.impl.Rows;
 
 /**
  * The service behind the Logs page: what ACT's users changed, read from the audit log module's and
