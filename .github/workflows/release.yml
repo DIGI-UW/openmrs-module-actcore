@@ -24,6 +24,9 @@ jobs:
       development_version: ${{ inputs.development_version }}
       branch: ${{ inputs.branch }}
       java_version: '8'
+      # Release commits show as uwdigi-bot, with the uwdigi account's avatar through its no-reply address.
+      git_user_name: uwdigi-bot
+      git_user_email: 207759346+uwdigi@users.noreply.github.com
       # Outside the openmrs org the shared workflow refuses to release unless this is true.
       publish: ${{ github.repository_owner == 'DIGI-UW' }}
     secrets:
