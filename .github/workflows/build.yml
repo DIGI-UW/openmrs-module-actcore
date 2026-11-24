@@ -15,27 +15,9 @@ jobs:
   build:
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     with:
-      # The shared deploy job's GITHUB_TOKEN has no packages: write, so the deploy job below publishes here.
-      deploy_snapshots: false
-
-  deploy:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'DIGI-UW/openmrs-module-actcore'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
-          cache: maven
-          server-id: github-snapshots
-          server-username: GITHUB_ACTOR
-          server-password: GITHUB_TOKEN
-      - name: Deploy the SNAPSHOT
-        run: mvn --batch-mode deploy -DskipTests
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Outside the openmrs org the shared workflow deploys SNAPSHOTs only when this is true.
+      deploy_snapshots: ${{ github.repository_owner == 'DIGI-UW' }}
+    secrets:
+      # The same account and token the release publishes to GitHub Packages with.
+      MAVEN_REPO_USERNAME: uwdigi
+      MAVEN_REPO_API_KEY: ${{ secrets.GH_BOT_TOKEN }}
