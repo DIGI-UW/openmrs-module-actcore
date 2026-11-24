@@ -146,6 +146,11 @@ public final class ActCoreConstants {
 	/** The table that holds the screening counts, one row per saved clinic month. */
 	public static final String SCREENING_COUNT_TABLE = "actcore_screening_count";
 	
+	/**
+	 * The void reason given to a month's screening counts when a later save of the month replaces them.
+	 */
+	public static final String SCREENING_COUNT_REPLACED_REASON = "Replaced by a later save of the month";
+	
 	/** The audit log module's privilege for reading its audit logs, which the activity log needs. */
 	public static final String AUDITLOGWEB_VIEW_AUDIT_LOGS = "View Audit Logs";
 	

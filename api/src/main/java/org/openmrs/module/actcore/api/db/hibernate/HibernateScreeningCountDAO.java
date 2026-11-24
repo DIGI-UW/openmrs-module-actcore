@@ -20,7 +20,7 @@ import org.openmrs.Location;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.ScreeningCountDAO;
 import org.openmrs.module.actcore.model.ScreeningCount;
-import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.ScreeningCountDAO}. */
 public class HibernateScreeningCountDAO implements ScreeningCountDAO {
@@ -62,9 +62,9 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 	 * @see org.openmrs.module.actcore.api.db.ScreeningCountDAO#getSummary(Collection, Date, Date)
 	 */
 	@Override
-	public ScreeningCounts.Summary getSummary(Collection<Integer> locationIds, Date start, Date end) {
+	public ScreeningCountSummary getSummary(Collection<Integer> locationIds, Date start, Date end) {
 		StringBuilder select = new StringBuilder("select count(*)");
-		for (String column : ScreeningCounts.COLUMNS) {
+		for (String column : ScreeningCount.COLUMNS) {
 			select.append(", coalesce(sum(").append(property(column)).append("), 0)");
 		}
 		select.append(" from ScreeningCount where voided = false and month >= :start and month <= :end");
@@ -77,10 +77,10 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 			query.setParameterList("clinics", locationIds);
 		}
 		Object[] row = (Object[]) query.uniqueResult();
-		ScreeningCounts.Summary summary = new ScreeningCounts.Summary();
+		ScreeningCountSummary summary = new ScreeningCountSummary();
 		summary.months = ((Number) row[0]).intValue();
-		for (int i = 0; i < ScreeningCounts.COLUMNS.size(); i++) {
-			summary.sums.put(ScreeningCounts.COLUMNS.get(i), ((Number) row[i + 1]).longValue());
+		for (int i = 0; i < ScreeningCount.COLUMNS.size(); i++) {
+			summary.sums.put(ScreeningCount.COLUMNS.get(i), ((Number) row[i + 1]).longValue());
 		}
 		return summary;
 	}

@@ -9,8 +9,12 @@
  */
 package org.openmrs.module.actcore.model;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.persistence.Column;
@@ -26,13 +30,43 @@ import org.openmrs.BaseOpenmrsData;
 import org.openmrs.module.actcore.ActCoreConstants;
 
 /**
- * One saved set of a clinic's screening counts for a month, with a count field for each column of
- * {@link ScreeningCounts#COLUMNS}, which {@link #getCounts()} returns keyed by column name. A later
- * save of the month voids this one rather than changing it.
+ * One saved set of a clinic's screening counts for a month, in the shape of ACT 2.0's monthly
+ * screening counts. For each setting where people were screened, the counts record the people
+ * screened, how many were children, adolescents and adults, how many were female, and how many
+ * screened positive. It has a count field for each column of {@link #COLUMNS}, which
+ * {@link #getCounts()} returns keyed by column name. A later save of the month voids this one
+ * rather than changing it.
  */
 @Entity
 @Table(name = ActCoreConstants.SCREENING_COUNT_TABLE)
 public class ScreeningCount extends BaseOpenmrsData {
+	
+	/** The settings where people are screened, in the order their columns take. */
+	public static final List<String> SETTINGS = Collections
+	        .unmodifiableList(Arrays.asList("school", "community", "facility"));
+	
+	/** The figures counted for each setting, in the order their columns take. */
+	public static final List<String> METRICS = Collections
+	        .unmodifiableList(Arrays.asList("screened", "children", "adolescents", "adults", "females", "positive"));
+	
+	/**
+	 * The table's count columns, each named setting_metric, such as school_screened, in the order of
+	 * {@link #SETTINGS} and then of {@link #METRICS}.
+	 */
+	public static final List<String> COLUMNS;
+	
+	static {
+		List<String> columns = new ArrayList<String>();
+		for (String setting : SETTINGS) {
+			for (String metric : METRICS) {
+				columns.add(setting + "_" + metric);
+			}
+		}
+		COLUMNS = Collections.unmodifiableList(columns);
+	}
+	
+	/** The most characters a month's notes may hold, after trimming. */
+	public static final int NOTES_LENGTH = 1000;
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -100,7 +134,7 @@ public class ScreeningCount extends BaseOpenmrsData {
 	@Column(name = "facility_positive", nullable = false)
 	private int facilityPositive;
 	
-	@Column(name = "notes", length = ScreeningCounts.NOTES_LENGTH)
+	@Column(name = "notes", length = NOTES_LENGTH)
 	private String notes;
 	
 	protected ScreeningCount() {
@@ -114,7 +148,7 @@ public class ScreeningCount extends BaseOpenmrsData {
 	}
 	
 	/**
-	 * Gets every count keyed by its column name, in the order of {@link ScreeningCounts#COLUMNS}.
+	 * Gets every count keyed by its column name, in the order of {@link #COLUMNS}.
 	 */
 	public Map<String, Integer> getCounts() {
 		Map<String, Integer> counts = new LinkedHashMap<String, Integer>();

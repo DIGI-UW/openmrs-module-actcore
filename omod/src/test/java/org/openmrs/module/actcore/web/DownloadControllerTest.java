@@ -55,7 +55,10 @@ import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.model.Download;
+import org.openmrs.module.actcore.model.DownloadLogEntry;
+import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -251,8 +254,11 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			    question.getUuid());
 			authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 			controller.download(body());
+			signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 			
-			assertEquals("Echocardiogram", logged().get(0).formName);
+			SimpleObject entry = (SimpleObject) ((List<?>) controller.getDownloads(null, null, null, null, null, null, null)
+			        .get("results")).get(0);
+			assertEquals("Echocardiogram", ((SimpleObject) entry.get("form")).get("name"));
 		}
 		finally {
 			service.setActiveMessageSource(previous);
@@ -423,7 +429,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		
-		DownloadLog.Page every = service.getDownloads(new DownloadLog.Filter());
+		DownloadPage every = service.getDownloads(new DownloadSearchCriteria());
 		assertEquals(3, every.totalCount);
 		assertEquals("researcher", every.results.get(0).user.username);
 		assertEquals(Boolean.TRUE, every.results.get(0).detail.get("researchOnly"));
@@ -434,7 +440,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(0, service.getDownloads(filter(f -> f.formUuid = "no-such-form")).totalCount);
 		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "research")).totalCount);
 		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "without")).totalCount);
-		DownloadLog.Page page = service.getDownloads(filter(f -> {
+		DownloadPage page = service.getDownloads(filter(f -> {
 			f.startIndex = 1;
 			f.limit = 1;
 		}));
@@ -443,8 +449,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("registry", page.results.get(0).detail.get("list"));
 	}
 	
-	private static DownloadLog.Filter filter(Consumer<DownloadLog.Filter> settings) {
-		DownloadLog.Filter filter = new DownloadLog.Filter();
+	private static DownloadSearchCriteria filter(Consumer<DownloadSearchCriteria> settings) {
+		DownloadSearchCriteria filter = new DownloadSearchCriteria();
 		settings.accept(filter);
 		return filter;
 	}
@@ -509,7 +515,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(headers.toString(), headers.contains("RHD Echocardiogram 1: Mitral regurgitation"));
 		assertTrue(headers.toString(), headers.contains("RHD Consultation Visit 1: Mitral regurgitation"));
 		assertEquals(1, ((List<?>) result.get("rows")).size());
-		DownloadLog.Entry logged = logged().get(0);
+		DownloadLogEntry logged = logged().get(0);
 		assertNull(logged.formName);
 		assertTrue(logged.detail, logged.detail.contains("\"rowPerPatient\":true"));
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
@@ -765,7 +771,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	/** The log as it was recorded, its detail as the JSON saved, whoever is signed in. */
-	private static List<DownloadLog.Entry> logged() {
+	private static List<DownloadLogEntry> logged() {
 		HibernateDownloadLogDAO dao = new HibernateDownloadLogDAO();
 		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
 		return dao.getDownloads(null, null, null);

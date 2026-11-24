@@ -26,7 +26,10 @@ import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.model.Download;
+import org.openmrs.module.actcore.model.DownloadLogEntry;
+import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.model.DownloadRecord;
 import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.util.PrivilegeConstants;
@@ -56,12 +59,12 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	}
 	
 	/**
-	 * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(DownloadLog.Filter)
+	 * @see org.openmrs.module.actcore.api.DownloadLogService#getDownloads(DownloadSearchCriteria)
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public DownloadLog.Page getDownloads(DownloadLog.Filter filter) {
-		DownloadLog.Page page = new DownloadLog.Page();
+	public DownloadPage getDownloads(DownloadSearchCriteria filter) {
+		DownloadPage page = new DownloadPage();
 		AuditLogService logs = Context.getService(AuditLogService.class);
 		Integer userId = null;
 		if (StringUtils.isNotBlank(filter.username)) {
@@ -79,17 +82,17 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			}
 			chosenForm = form.getUuid();
 		}
-		List<DownloadLog.Entry> entries = dao.getDownloads(userId,
+		List<DownloadLogEntry> entries = dao.getDownloads(userId,
 		    filter.from == null ? null : Timestamp.valueOf(filter.from.atStartOfDay()),
 		    filter.to == null ? null : Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
 		Set<String> userUuids = new HashSet<String>();
-		for (DownloadLog.Entry entry : entries) {
+		for (DownloadLogEntry entry : entries) {
 			userUuids.add(entry.userUuid);
 		}
 		Map<String, LogUser> users = logs.getUsers(userUuids);
-		List<DownloadLog.Download> matching = new ArrayList<DownloadLog.Download>();
+		List<Download> matching = new ArrayList<Download>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : entries) {
+		for (DownloadLogEntry entry : entries) {
 			Map<?, ?> detail = read(entry.detail);
 			if (filter.identifiers != null && !filter.identifiers.equals(identifiersOf(detail))) {
 				continue;
@@ -97,16 +100,17 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
 				continue;
 			}
-			DownloadLog.Download download = new DownloadLog.Download();
+			Download download = new Download();
 			download.date = entry.date;
 			download.user = users.get(entry.userUuid);
 			download.formUuid = entry.formUuid;
-			download.formName = entry.formName;
+			download.formName = Names.shown("Form", entry.formUuid, entry.formName);
 			download.detail = detail;
 			matching.add(download);
 		}
 		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
-		int size = filter.limit < 1 ? DownloadLog.DEFAULT_LIMIT : Math.min(filter.limit, DownloadLog.MAX_LIMIT);
+		int size = filter.limit < 1 ? DownloadSearchCriteria.DEFAULT_LIMIT
+		        : Math.min(filter.limit, DownloadSearchCriteria.MAX_LIMIT);
 		page.results.addAll(matching.subList(start, Math.min(start + size, matching.size())));
 		page.totalCount = matching.size();
 		return page;

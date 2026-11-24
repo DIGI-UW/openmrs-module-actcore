@@ -14,7 +14,7 @@ import java.util.Date;
 import java.util.List;
 
 import org.openmrs.module.actcore.model.ScreeningCount;
-import org.openmrs.module.actcore.model.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
 
 /**
  * The database access behind {@link org.openmrs.module.actcore.api.ScreeningCountService}, which
@@ -57,5 +57,5 @@ public interface ScreeningCountDAO {
 	 * @return each column's sum and the number of clinic months summed; every sum is zero when nothing
 	 *         matches
 	 */
-	ScreeningCounts.Summary getSummary(Collection<Integer> locationIds, Date start, Date end);
+	ScreeningCountSummary getSummary(Collection<Integer> locationIds, Date start, Date end);
 }

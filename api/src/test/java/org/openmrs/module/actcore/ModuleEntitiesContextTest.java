@@ -32,7 +32,6 @@ import org.openmrs.module.actcore.model.InjectionTiming;
 import org.openmrs.module.actcore.model.ProphylaxisAdherence;
 import org.openmrs.module.actcore.model.RaisedFlag;
 import org.openmrs.module.actcore.model.ScreeningCount;
-import org.openmrs.module.actcore.model.ScreeningCounts;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -117,7 +116,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void readsEachScreeningCountFromItsOwnColumn() throws Exception {
 		Map<String, Integer> written = new LinkedHashMap<String, Integer>();
-		for (String column : ScreeningCounts.COLUMNS) {
+		for (String column : ScreeningCount.COLUMNS) {
 			written.put(column, written.size() + 1);
 		}
 		StringBuilder values = new StringBuilder();
@@ -144,7 +143,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void writesEachScreeningCountToItsOwnColumn() throws Exception {
 		Map<String, Integer> written = new LinkedHashMap<String, Integer>();
-		for (String column : ScreeningCounts.COLUMNS) {
+		for (String column : ScreeningCount.COLUMNS) {
 			written.put(column, written.size() + 1);
 		}
 		session().save(new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"), written, null));
@@ -181,7 +180,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static Map<String, Integer> zeros() {
 		Map<String, Integer> zeros = new LinkedHashMap<String, Integer>();
-		for (String column : ScreeningCounts.COLUMNS) {
+		for (String column : ScreeningCount.COLUMNS) {
 			zeros.put(column, 0);
 		}
 		return zeros;

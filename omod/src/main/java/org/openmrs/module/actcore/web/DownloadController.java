@@ -30,7 +30,9 @@ import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.impl.FormDownload;
 import org.openmrs.module.actcore.api.impl.Names;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.model.Download;
+import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -181,8 +183,8 @@ public class DownloadController extends ActCoreRestController {
 	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
 	 * @param identifiers with, without or research, or null for no identifiers filter
 	 * @param startIndex the first download to give, from 0; null for 0
-	 * @param limit the most downloads to give, capped at {@value DownloadLog#MAX_LIMIT}; null or below
-	 *            1 for {@value DownloadLog#DEFAULT_LIMIT}
+	 * @param limit the most downloads to give, capped at {@value DownloadSearchCriteria#MAX_LIMIT};
+	 *            null or below 1 for {@value DownloadSearchCriteria#DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
 	 *         no user has the username or no form has the uuid
 	 * @throws APIAuthenticationException when the user lacks
@@ -203,17 +205,17 @@ public class DownloadController extends ActCoreRestController {
 		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
-		DownloadLog.Filter filter = new DownloadLog.Filter();
+		DownloadSearchCriteria filter = new DownloadSearchCriteria();
 		filter.username = username;
 		filter.to = date("endDate", endDate, null);
 		filter.from = from(startDate, filter.to, Period.ofMonths(DEFAULT_MONTHS));
 		filter.formUuid = formUuid;
 		filter.identifiers = identifiers;
 		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? DownloadLog.DEFAULT_LIMIT : limit;
-		DownloadLog.Page page = Context.getService(DownloadLogService.class).getDownloads(filter);
+		filter.limit = limit == null ? DownloadSearchCriteria.DEFAULT_LIMIT : limit;
+		DownloadPage page = Context.getService(DownloadLogService.class).getDownloads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (DownloadLog.Download download : page.results) {
+		for (Download download : page.results) {
 			Object list = download.detail == null ? null : download.detail.get("list");
 			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.date, null))
 			        .add("user", who(download.user))

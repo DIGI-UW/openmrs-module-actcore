@@ -13,7 +13,8 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.model.DownloadPage;
 
 /**
  * The service that records each download of patient data and lists the downloads recorded, as ACT
@@ -51,5 +52,5 @@ public interface DownloadLogService extends OpenmrsService {
 	 * @throws org.openmrs.api.APIException when a recorded download's detail cannot be read as JSON
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
-	DownloadLog.Page getDownloads(DownloadLog.Filter filter);
+	DownloadPage getDownloads(DownloadSearchCriteria filter);
 }

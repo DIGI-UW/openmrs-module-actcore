@@ -26,7 +26,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.model.RaisedFlags;
+import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -119,7 +119,7 @@ public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest
 		Patient patient = Context.getPatientService().getPatient(PATIENT);
 		
 		Context.addAdvice(AdministrationService.class, readThroughTheSession);
-		RaisedFlags.Dismissal dismissal;
+		DismissalOutcome dismissal;
 		try {
 			dismissal = Context.getService(RaisedFlagService.class).dismiss(patient, flag);
 		}
@@ -127,7 +127,7 @@ public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest
 			Context.removeAdvice(AdministrationService.class, readThroughTheSession);
 		}
 		
-		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismissal);
+		assertEquals(DismissalOutcome.DISMISSED, dismissal);
 	}
 	
 	// Nothing rolls this test back.

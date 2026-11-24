@@ -20,7 +20,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.model.RaisedFlags;
+import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
@@ -62,7 +62,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 	public SimpleObject getRaisedFlags(@RequestParam(value = "patient", required = false) String patientUuid) {
 		Patient patient = patient(patientUuid);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (RaisedFlags.Raised raised : Context.getService(RaisedFlagService.class).getRaisedFlags(patient)) {
+		for (ChartFlag raised : Context.getService(RaisedFlagService.class).getRaisedFlags(patient)) {
 			results.add(new SimpleObject().add("flag", raised.flag.getUuid()).add("display", raised.flag.getName())
 			        .add("raisedSince",
 			            raised.since == null ? null

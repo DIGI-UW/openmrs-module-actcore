@@ -34,8 +34,8 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
-import org.openmrs.module.actcore.model.DownloadLog;
 import org.openmrs.module.actcore.model.RunChartPeriod;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -85,7 +85,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		assertNotNull(service);
 		refused(() -> service.recordDownload(null, "{}"), ActCorePrivileges.DOWNLOAD_DATA);
-		refused(() -> service.getDownloads(new DownloadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getDownloads(new DownloadSearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 	}
 	
 	@Test
@@ -102,7 +102,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		for (String download : new String[] { ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA }) {
-			holding(download, () -> refused(() -> service.getDownloads(new DownloadLog.Filter()),
+			holding(download, () -> refused(() -> service.getDownloads(new DownloadSearchCriteria()),
 			    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
