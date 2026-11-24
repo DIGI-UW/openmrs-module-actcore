@@ -43,10 +43,10 @@ public class ActCoreConstantsTest {
 	private static final Pattern TOKEN = Pattern
 	        .compile("//[^\\n]*|/\\*.*?\\*/|'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"", Pattern.DOTALL);
 	
-	private static final Pattern NAME = Pattern.compile("\\bactcore[._][A-Za-z._]+\\b|View Audit Logs|View Read Audit Logs"
+	private static final Pattern NAME = Pattern.compile("\\bactcore[._][\\w.]*|View Audit Logs|View Read Audit Logs"
 	        + "|View Cohorts In Cohort Module|Edit Cohorts in Cohort Module");
 	
-	private static final Pattern ALIAS = Pattern.compile("static final String (\\w+) = "
+	private static final Pattern ALIAS = Pattern.compile("(?:final\\s+)?static\\s+(?:final\\s+)?String (\\w+) = "
 	        + "(?:(?:org\\.openmrs\\.module\\.actcore\\.)?(ActCorePrivileges|ActCoreConstants)\\.)?(\\w+);");
 	
 	@Test
@@ -74,8 +74,9 @@ public class ActCoreConstantsTest {
 	 * Reads each string literal of the main sources for an ACT Core name or one of the upstream
 	 * privilege names, whether the literal is the name alone or SQL or text around it. It skips the
 	 * literal passed straight to reject whatever it holds, since ACT Core's Errors codes are shared
-	 * with no other class or the database. It does not see a name split across concatenated literals or
-	 * one read from a resource file.
+	 * with no other class or the database. A name split across concatenated literals is seen when one
+	 * literal holds the actcore prefix and its separator. It does not see a name whose prefix is itself
+	 * split, or one read from a resource file.
 	 */
 	@Test
 	public void spellsEachNameOnlyInActCoreConstants() throws IOException {
@@ -106,9 +107,9 @@ public class ActCoreConstantsTest {
 	}
 	
 	/**
-	 * Finds a String constant set to a field of ActCoreConstants or ActCorePrivileges, named through
-	 * its class, its fully qualified class, or a static import of either class. It does not see an
-	 * alias split across lines or one assigned outside its declaration.
+	 * Finds a static String field set to a field of ActCoreConstants or ActCorePrivileges, named
+	 * through its class, its fully qualified class, or a static import of either class. It does not see
+	 * an alias whose declaration breaks a line after its type, or one assigned outside its declaration.
 	 */
 	@Test
 	public void keepsNoConstantThatOnlyRenamesAnother() throws IOException {

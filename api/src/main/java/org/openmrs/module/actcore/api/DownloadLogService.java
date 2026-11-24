@@ -21,7 +21,9 @@ import org.openmrs.module.actcore.download.DownloadLog;
 /**
  * The service that records each download of patient data and lists the downloads recorded, as ACT
  * 2.0's audit log did. The download endpoints record through it, and the Logs page's Downloads tab
- * lists through it.
+ * lists through it. The audit log module records reads and changes, but offers no way for another
+ * module to record an event of its own, so ACT Core keeps the downloads in
+ * {@link ActCoreConstants#DOWNLOAD_LOG_TABLE}.
  */
 public interface DownloadLogService extends OpenmrsService {
 	

@@ -20,7 +20,7 @@ import java.util.Map;
  * The shape of ACT 2.0's monthly screening counts. For each clinic and month, and for each setting
  * where people were screened, the counts record the people screened, how many were children,
  * adolescents and adults, how many were female, and how many screened positive. They are kept in
- * actcore_screening_count.
+ * {@link org.openmrs.module.actcore.ActCoreConstants#SCREENING_COUNT_TABLE}.
  */
 public class ScreeningCounts {
 	
