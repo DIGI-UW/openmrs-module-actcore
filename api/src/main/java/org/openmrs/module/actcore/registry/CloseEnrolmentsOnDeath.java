@@ -24,10 +24,13 @@ import org.openmrs.Person;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
+import org.openmrs.api.APIException;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.StudyService;
+import org.openmrs.module.actcore.api.db.RegistryDAO;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,21 +75,10 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 		if (programIds.isEmpty()) {
 			return 0;
 		}
-		Context.addProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		List<List<Object>> rows;
-		try {
-			rows = Context.getAdministrationService().executeSQL("select distinct pp.patient_id from patient_program pp"
-			        + " join person p on p.person_id = pp.patient_id where p.dead = true and p.voided = false and pp.voided = false"
-			        + " and pp.date_completed is null and pp.program_id in ("
-			        + programIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")",
-			    true);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.SQL_LEVEL_ACCESS);
-		}
+		List<Integer> personIds = inTransaction(
+		    () -> Context.getRegisteredComponents(RegistryDAO.class).get(0).getDeadPatientsWithOpenEnrolments(programIds));
 		int ended = 0;
-		for (List<Object> row : rows) {
-			Integer personId = ((Number) row.get(0)).intValue();
+		for (Integer personId : personIds) {
 			try {
 				Person person = Context.getPersonService().getPerson(personId);
 				if (person != null) {
@@ -241,5 +233,21 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	private static Date later(Date date, Date other) {
 		return other != null && other.after(date) ? other : date;
+	}
+	
+	/**
+	 * Runs the work in the current transaction, or in a new one, as AdministrationService.executeSQL
+	 * ran the read before it moved to the DAO.
+	 */
+	private static <T> T inTransaction(Transactions.Work<T> work) {
+		try {
+			return Transactions.inTransaction(work);
+		}
+		catch (RuntimeException | Error e) {
+			throw e;
+		}
+		catch (Throwable e) {
+			throw new APIException(e);
+		}
 	}
 }

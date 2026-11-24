@@ -25,11 +25,13 @@ import java.util.function.Consumer;
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -448,7 +450,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * patient.
 	 */
 	static Map<Integer, String> flaggedMessages(Flag flag) {
-		return flaggedMessages(flag, "");
+		return messages(flag, null);
 	}
 	
 	/**
@@ -456,15 +458,13 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	 * patient's. The map is empty when the patient has no row.
 	 */
 	static Map<Integer, String> flaggedMessages(Flag flag, int patientId) {
-		return flaggedMessages(flag, " and patient_id = " + patientId);
+		return messages(flag, patientId);
 	}
 	
-	private static Map<Integer, String> flaggedMessages(Flag flag, String andWhere) {
+	private static Map<Integer, String> messages(Flag flag, Integer onlyPatientId) {
 		Map<Integer, String> messages = new HashMap<Integer, String>();
-		List<List<Object>> rows = Context.getAdministrationService()
-		        .executeSQL("select patient_id, message from patientflags_patient_flag where flag_id = " + flag.getFlagId()
-		                + " and voided = false" + andWhere,
-		            true);
+		List<List<Object>> rows = inTransaction(() -> Context.getRegisteredComponents(RaisedFlagDAO.class).get(0)
+		        .getPatientFlagRows(flag.getFlagId(), onlyPatientId));
 		if (rows != null) {
 			for (List<Object> row : rows) {
 				if (row != null && !row.isEmpty() && row.get(0) != null) {
@@ -475,6 +475,22 @@ public class PatientFlagRefreshTask extends AbstractTask {
 			}
 		}
 		return messages;
+	}
+	
+	/**
+	 * Runs the work in the current transaction, or in a new one, as AdministrationService.executeSQL
+	 * ran the reads of the flag rows and cohorts before they moved to the DAO.
+	 */
+	static <T> T inTransaction(Transactions.Work<T> work) {
+		try {
+			return Transactions.inTransaction(work);
+		}
+		catch (RuntimeException | Error e) {
+			throw e;
+		}
+		catch (Throwable e) {
+			throw new APIException(e);
+		}
 	}
 	
 	/**

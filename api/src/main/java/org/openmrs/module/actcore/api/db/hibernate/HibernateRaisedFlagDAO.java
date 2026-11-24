@@ -22,6 +22,7 @@ import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.actcore.task.FlagDismissal;
 import org.openmrs.module.actcore.task.RaisedFlag;
+import org.openmrs.util.DatabaseUtil;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.RaisedFlagDAO}. */
 public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
@@ -120,6 +121,33 @@ public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
 	@Override
 	public Set<Integer> getDismissedFlags(Integer patientId) {
 		return ids("select key.flagId from RaisedFlag where key.patientId = :id and dateDismissed is not null", patientId);
+	}
+	
+	/**
+	 * Reads by SQL on the current session's connection, as AdministrationService.executeSQL does,
+	 * without the SQL Level Access privilege that service asks for.
+	 *
+	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#getPatientFlagRows(Integer, Integer)
+	 */
+	@Override
+	public List<List<Object>> getPatientFlagRows(Integer flagId, Integer patientId) {
+		return sql("select patient_id, message from patientflags_patient_flag where flag_id = " + flagId
+		        + " and voided = false" + (patientId == null ? "" : " and patient_id = " + patientId));
+	}
+	
+	/**
+	 * Reads by SQL as {@link #getPatientFlagRows(Integer, Integer)} does.
+	 *
+	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#hasCohort(String)
+	 */
+	@Override
+	public boolean hasCohort(String uuid) {
+		List<List<Object>> rows = sql("select count(*) from cohort where uuid = '" + uuid.replace("'", "''") + "'");
+		return ((Number) rows.get(0).get(0)).intValue() > 0;
+	}
+	
+	private List<List<Object>> sql(String sql) {
+		return session().doReturningWork(connection -> DatabaseUtil.executeSQL(connection, sql, true));
 	}
 	
 	private Set<Integer> ids(String hql, Integer id) {

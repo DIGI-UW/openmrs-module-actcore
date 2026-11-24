@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.api.db;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -20,7 +21,8 @@ import org.openmrs.module.actcore.task.RaisedFlag;
  * The database access behind {@link org.openmrs.module.actcore.api.RaisedFlagService}, which reads,
  * saves, dismisses and deletes the raised flags and saves the dismissals. Its reads leave the
  * session unflushed, since a raised flag changes only by a bulk statement or a save that is flushed
- * at once.
+ * at once. The flag refresh and the flag lists also read the patientflags module's flag rows and
+ * the cohort module's cohorts through it.
  */
 public interface RaisedFlagDAO {
 	
@@ -99,4 +101,23 @@ public interface RaisedFlagDAO {
 	 * @return the ids of the flags; empty when there are none
 	 */
 	Set<Integer> getDismissedFlags(Integer patientId);
+	
+	/**
+	 * Gets the patientflags module's unvoided rows of the flag, by SQL, since FlagService cannot list a
+	 * flag's patients.
+	 *
+	 * @param flagId the id of the flag
+	 * @param patientId the id of the one patient whose rows to get, or null for every patient's
+	 * @return each row as its patient_id and message, in that order; empty when there are none
+	 */
+	List<List<Object>> getPatientFlagRows(Integer flagId, Integer patientId);
+	
+	/**
+	 * Tells whether a cohort with the uuid exists, voided or not. It reads by SQL, because the cohort
+	 * module's CohortService finds only unvoided cohorts by uuid.
+	 *
+	 * @param uuid the cohort's uuid
+	 * @return true when a cohort has the uuid
+	 */
+	boolean hasCohort(String uuid);
 }

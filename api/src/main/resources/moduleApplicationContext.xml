@@ -65,15 +65,16 @@
         </property>
     </bean>
 
+    <!-- A bean of its own, as the flag refresh and the flag lists look it up to read the flag rows and cohorts -->
+    <bean id="actcoreRaisedFlagDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateRaisedFlagDAO">
+        <property name="sessionFactory" ref="dbSessionFactory"/>
+    </bean>
+
     <bean id="actcore.RaisedFlagService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
         <property name="transactionManager" ref="transactionManager"/>
         <property name="target">
             <bean class="org.openmrs.module.actcore.api.impl.RaisedFlagServiceImpl">
-                <property name="dao">
-                    <bean class="org.openmrs.module.actcore.api.db.hibernate.HibernateRaisedFlagDAO">
-                        <property name="sessionFactory" ref="dbSessionFactory"/>
-                    </bean>
-                </property>
+                <property name="dao" ref="actcoreRaisedFlagDAO"/>
             </bean>
         </property>
         <property name="preInterceptors" ref="serviceInterceptors"/>
@@ -110,6 +111,11 @@
             </list>
         </property>
     </bean>
+    <!-- Looked up by the registry's advice and start-up work, which no service wraps -->
+    <bean id="actcoreRegistryDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateRegistryDAO">
+        <property name="sessionFactory" ref="dbSessionFactory"/>
+    </bean>
+
     <!-- A bean of its own, as UserClinicsFlushCheck looks it up to read without starting a transaction mid-flush -->
     <bean id="actcoreUserClinicsDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateUserClinicsDAO">
         <property name="sessionFactory" ref="dbSessionFactory"/>
