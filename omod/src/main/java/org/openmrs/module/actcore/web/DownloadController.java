@@ -9,19 +9,15 @@
  */
 package org.openmrs.module.actcore.web;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.Period;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
@@ -29,10 +25,8 @@ import org.openmrs.Form;
 import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -42,7 +36,6 @@ import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
