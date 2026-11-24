@@ -18,6 +18,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
+import org.openmrs.module.actcore.model.ProphylaxisSummary;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.AdherenceService}. */

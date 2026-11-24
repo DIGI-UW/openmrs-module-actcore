@@ -23,6 +23,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.api.impl.RunCharts;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -76,15 +78,15 @@ public class RunChartController extends ActCoreRestController {
 		if (start.isAfter(end)) {
 			throw new IllegalRequestException("startDate is after endDate");
 		}
-		RunCharts.Period period = RunCharts.Period.of(points);
+		RunChartPeriod period = RunCharts.period(points);
 		Location location = location(clinic);
 		if (StringUtils.isNotBlank(clinic) && location == null) {
 			throw new IllegalRequestException("No location has the uuid " + clinic);
 		}
-		Map<String, List<RunCharts.Point>> series = Context.getService(RunChartService.class).getRunCharts(location, start,
+		Map<String, List<RunChartPoint>> series = Context.getService(RunChartService.class).getRunCharts(location, start,
 		    end, period);
 		SimpleObject metrics = new SimpleObject();
-		for (Map.Entry<String, List<RunCharts.Point>> entry : series.entrySet()) {
+		for (Map.Entry<String, List<RunChartPoint>> entry : series.entrySet()) {
 			metrics.add(entry.getKey(), new SimpleObject().add("points", describe(entry.getValue())).add("median",
 			    RunCharts.median(entry.getValue())));
 		}
@@ -97,9 +99,9 @@ public class RunChartController extends ActCoreRestController {
 		return response.add("metrics", metrics);
 	}
 	
-	private static List<SimpleObject> describe(List<RunCharts.Point> points) {
+	private static List<SimpleObject> describe(List<RunChartPoint> points) {
 		List<SimpleObject> values = new ArrayList<SimpleObject>();
-		for (RunCharts.Point point : points) {
+		for (RunChartPoint point : points) {
 			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value)
 			        .add("count", point.count).add("total", point.total));
 		}

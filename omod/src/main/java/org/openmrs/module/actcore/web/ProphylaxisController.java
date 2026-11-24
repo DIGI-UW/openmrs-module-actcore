@@ -17,7 +17,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.AdherenceService;
-import org.openmrs.module.actcore.api.impl.ProphylaxisSummary;
+import org.openmrs.module.actcore.model.ProphylaxisSummary;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;

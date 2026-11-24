@@ -18,7 +18,8 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.api.impl.RunCharts;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 
 /**
  * The service that calculates ACT 2.0's run charts for the Dashboard when they are asked for,
@@ -30,17 +31,17 @@ import org.openmrs.module.actcore.api.impl.RunCharts;
 public interface RunChartService extends OpenmrsService {
 	
 	/**
-	 * Calculates the points of every metric of {@link RunCharts#METRICS} over the range, as
-	 * {@link RunCharts#calculate(Location, LocalDate, LocalDate, RunCharts.Period)} describes.
+	 * Calculates the points of each of ACT 2.0's run chart metrics over the range, one point per
+	 * period, for a clinic or for every clinic. At a point where the report gives the clinic no row,
+	 * every count is zero and every percent is null.
 	 *
 	 * @param clinic the clinic, or null for every clinic
 	 * @param start the range's first day
 	 * @param end the range's last day
 	 * @param period the period each point closes
-	 * @return each metric's points, earliest first, by metric in the order of {@link RunCharts#METRICS}
+	 * @return each metric's points, earliest first, by metric in the order the metrics are charted
 	 * @throws org.openmrs.api.ValidationException when the points are daily over a range longer than
-	 *             {@link RunCharts#MOST_DAILY_DAYS} days, or the range has more than
-	 *             {@link RunCharts#MOST_POINTS} points
+	 *             daily points may cover, or the range has more points than one request may calculate
 	 * @throws org.openmrs.api.APIException when the module has not started, or the calculation fails,
 	 *             as when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the report
 	 *             cannot be evaluated or gives rows ACT Core cannot read; the cause says which
@@ -48,6 +49,5 @@ public interface RunChartService extends OpenmrsService {
 	 *             {@link ActCorePrivileges#DASHBOARD}
 	 */
 	@Authorized(ActCorePrivileges.DASHBOARD)
-	Map<String, List<RunCharts.Point>> getRunCharts(Location clinic, LocalDate start, LocalDate end,
-	        RunCharts.Period period);
+	Map<String, List<RunChartPoint>> getRunCharts(Location clinic, LocalDate start, LocalDate end, RunChartPeriod period);
 }

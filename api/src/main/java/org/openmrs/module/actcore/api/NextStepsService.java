@@ -15,8 +15,6 @@ import java.util.List;
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
-import org.openmrs.module.actcore.api.impl.NextConsultation;
-import org.openmrs.module.actcore.api.impl.NextSteps;
 import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.util.PrivilegeConstants;
 
@@ -28,8 +26,9 @@ import org.openmrs.util.PrivilegeConstants;
 public interface NextStepsService extends OpenmrsService {
 	
 	/**
-	 * Gets the steps the signed-in user may take for the patient, as
-	 * {@link NextSteps#of(Patient, LocalDate)} gives them.
+	 * Gets the steps the signed-in user may take for the patient: the referrals, and the forms the user
+	 * may record. Steps still to do come before steps done, new steps before the rest, and otherwise
+	 * the steps keep the order of the rules.
 	 *
 	 * @param patient the patient
 	 * @param today the day the steps are for
@@ -41,11 +40,12 @@ public interface NextStepsService extends OpenmrsService {
 	List<NextStep> getNextSteps(Patient patient, LocalDate today);
 	
 	/**
-	 * Gets the date the patient's next cardiology review is due, as
-	 * {@link NextConsultation#of(Patient)} works it out.
+	 * Gets the date the patient's next cardiology review is due.
 	 *
 	 * @param patient the patient
-	 * @return the due date; null in the cases {@link NextConsultation#of(Patient)} lists
+	 * @return the due date. It is null when the amount and period concepts are not configured, when the
+	 *         patient is not enrolled in the registry now, when the patient has died, when no review
+	 *         date is recorded, and when the recorded period is not days, weeks, months or years.
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link PrivilegeConstants#GET_OBS}
 	 */

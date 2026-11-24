@@ -27,6 +27,8 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
@@ -100,9 +102,9 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		    new Parameter("endDate", "To", java.util.Date.class), new Parameter("points", "Points", String.class));
 	}
 	
-	private static List<LocalDate> dates(List<RunCharts.Point> points) {
+	private static List<LocalDate> dates(List<RunChartPoint> points) {
 		List<LocalDate> dates = new java.util.ArrayList<LocalDate>();
-		for (RunCharts.Point point : points) {
+		for (RunChartPoint point : points) {
 			dates.add(point.date);
 		}
 		return dates;
@@ -111,41 +113,41 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void pointDates_shouldEndOnTheEndDateAndStepBackADayAWeekToSundayOrAMonthToItsLastDay() {
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 20), END),
-		    RunCharts.pointDates(LocalDate.of(2026, 10, 19), END, RunCharts.Period.DAY));
+		    RunCharts.pointDates(LocalDate.of(2026, 10, 19), END, RunChartPeriod.DAY));
 		// 21 October 2026 is a Wednesday; the weeks before it end on Sundays 18, 11 and 4 October.
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 4), LocalDate.of(2026, 10, 11), LocalDate.of(2026, 10, 18), END),
-		    RunCharts.pointDates(LocalDate.of(2026, 10, 1), END, RunCharts.Period.WEEK));
+		    RunCharts.pointDates(LocalDate.of(2026, 10, 1), END, RunChartPeriod.WEEK));
 		assertEquals(Arrays.asList(LocalDate.of(2026, 8, 31), LocalDate.of(2026, 9, 30), END),
-		    RunCharts.pointDates(LocalDate.of(2026, 8, 31), END, RunCharts.Period.MONTH));
+		    RunCharts.pointDates(LocalDate.of(2026, 8, 31), END, RunChartPeriod.MONTH));
 	}
 	
 	@Test
 	public void pointDates_shouldNotRepeatAnEndThatIsASundayAndShouldStepAMonthEndToTheShorterMonthsEnd() {
 		LocalDate sunday = LocalDate.of(2026, 10, 18);
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 4), LocalDate.of(2026, 10, 11), sunday),
-		    RunCharts.pointDates(LocalDate.of(2026, 10, 1), sunday, RunCharts.Period.WEEK));
+		    RunCharts.pointDates(LocalDate.of(2026, 10, 1), sunday, RunChartPeriod.WEEK));
 		assertEquals(
 		    Arrays.asList(LocalDate.of(2025, 12, 31), LocalDate.of(2026, 1, 31), LocalDate.of(2026, 2, 28),
 		        LocalDate.of(2026, 3, 31)),
-		    RunCharts.pointDates(LocalDate.of(2025, 12, 31), LocalDate.of(2026, 3, 31), RunCharts.Period.MONTH));
+		    RunCharts.pointDates(LocalDate.of(2025, 12, 31), LocalDate.of(2026, 3, 31), RunChartPeriod.MONTH));
 	}
 	
 	@Test
 	public void pointDates_shouldLeaveOutAPeriodEndingBeforeTheStartAndGiveOnePointForOneDay() {
-		assertEquals(Arrays.asList(END), RunCharts.pointDates(END, END, RunCharts.Period.WEEK));
+		assertEquals(Arrays.asList(END), RunCharts.pointDates(END, END, RunChartPeriod.WEEK));
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 18), END),
-		    RunCharts.pointDates(LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK));
+		    RunCharts.pointDates(LocalDate.of(2026, 10, 12), END, RunChartPeriod.WEEK));
 	}
 	
 	@Test
 	public void calculate_shouldGiveEachMetricAPointPerDayFromTheReportsRowOfTheClinicOrOfEveryClinic() {
 		saveReportOf(clinic.getUuid(), 19, 20, 21);
 		
-		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, LocalDate.of(2026, 10, 19), END,
-		    RunCharts.Period.DAY);
+		Map<String, List<RunChartPoint>> series = runCharts.calculate(clinic, LocalDate.of(2026, 10, 19), END,
+		    RunChartPeriod.DAY);
 		
 		assertEquals(RunCharts.METRICS, new java.util.ArrayList<String>(series.keySet()));
-		List<RunCharts.Point> active = series.get("active_registrants");
+		List<RunChartPoint> active = series.get("active_registrants");
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 20), END), dates(active));
 		assertEquals(Double.valueOf(19), active.get(0).value);
 		assertEquals(Long.valueOf(19), active.get(0).count);
@@ -156,7 +158,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Long.valueOf(5), series.get("active_registrants_seen_last_7_months").get(2).count);
 		assertEquals(Long.valueOf(21), series.get("active_registrants_seen_last_7_months").get(2).total);
 		assertEquals(Double.valueOf(25), series.get("consultation_visits_with_echocardiogram_resulted").get(2).value);
-		List<RunCharts.Point> everyClinic = runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunCharts.Period.DAY)
+		List<RunChartPoint> everyClinic = runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunChartPeriod.DAY)
 		        .get("consultation_visits_with_echocardiogram_resulted");
 		assertNull(everyClinic.get(2).value);
 		assertEquals(Long.valueOf(0), everyClinic.get(2).total);
@@ -168,13 +170,13 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		useReportSelecting(row(clinicRow, 19) + " union all " + row(clinicRow, 21) + " union all " + row("null", 19)
 		        + " union all " + row("null", 20) + " union all " + row("null", 21));
 		
-		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic, LocalDate.of(2026, 10, 19), END,
-		    RunCharts.Period.DAY);
+		Map<String, List<RunChartPoint>> series = runCharts.calculate(clinic, LocalDate.of(2026, 10, 19), END,
+		    RunChartPeriod.DAY);
 		
-		RunCharts.Point count = series.get("active_registrants").get(1);
+		RunChartPoint count = series.get("active_registrants").get(1);
 		assertEquals(LocalDate.of(2026, 10, 20), count.date);
 		assertEquals(Double.valueOf(0), count.value);
-		RunCharts.Point percent = series.get("active_registrants_prescribed_prophylaxis").get(1);
+		RunChartPoint percent = series.get("active_registrants_prescribed_prophylaxis").get(1);
 		assertNull(percent.value);
 		assertEquals(Long.valueOf(0), percent.count);
 		assertEquals(Long.valueOf(0), percent.total);
@@ -184,8 +186,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	public void calculate_shouldGiveNoAdherentWithNoBpgPatientsListed() {
 		saveReportOf(clinic.getUuid(), 21);
 		
-		RunCharts.Point adherent = runCharts.calculate(clinic, END, END, RunCharts.Period.DAY)
-		        .get("active_registrants_adherent").get(0);
+		RunChartPoint adherent = runCharts.calculate(clinic, END, END, RunChartPeriod.DAY).get("active_registrants_adherent")
+		        .get(0);
 		
 		assertEquals(Double.valueOf(0), adherent.value);
 		assertEquals(Long.valueOf(0), adherent.count);
@@ -197,7 +199,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		useReportSelecting("select date '2026-10-21' as point_date, null as clinic_uuid, 1 as total_registrants");
 		
 		try {
-			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
+			runCharts.calculate(null, END, END, RunChartPeriod.DAY);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -214,7 +216,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		        + " 0 as active_registrants_on_bpg, null as bpg_patient_ids");
 		
 		try {
-			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
+			runCharts.calculate(null, END, END, RunChartPeriod.DAY);
 			fail("expected the row to be refused");
 		}
 		catch (APIException e) {
@@ -231,7 +233,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		        + " 0 as interventions_completed, 3 as active_registrants_on_bpg, '7,8' as bpg_patient_ids");
 		
 		try {
-			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
+			runCharts.calculate(null, END, END, RunChartPeriod.DAY);
 			fail("expected the list to be refused");
 		}
 		catch (APIException e) {
@@ -268,7 +270,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		        + row("'another-clinic'", 21).replace("date '2026-10-21' as point_date", "null as point_date"));
 		
 		try {
-			runCharts.calculate(clinic, END, END, RunCharts.Period.DAY);
+			runCharts.calculate(clinic, END, END, RunChartPeriod.DAY);
 			fail("expected the row to be refused");
 		}
 		catch (APIException e) {
@@ -282,7 +284,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		        + " union all " + row("null", 21));
 		
 		try {
-			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunChartPeriod.WEEK);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -296,7 +298,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		saveReportOf(clinic.getUuid(), 21);
 		
 		try {
-			runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunCharts.Period.DAY);
+			runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunChartPeriod.DAY);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -322,7 +324,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void assertRefusedAsDuplicate(Location asked, String day) {
 		try {
-			runCharts.calculate(asked, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			runCharts.calculate(asked, LocalDate.of(2026, 10, 12), END, RunChartPeriod.WEEK);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -340,7 +342,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void assertRefusedNaming(String day) {
 		try {
-			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunCharts.Period.WEEK);
+			runCharts.calculate(clinic, LocalDate.of(2026, 10, 12), END, RunChartPeriod.WEEK);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -352,7 +354,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void calculate_shouldRefuseDailyPointsOverMoreThanTheMostDailyDaysBeforeEvaluatingTheReport() {
 		try {
-			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_DAILY_DAYS + 1), END, RunCharts.Period.DAY);
+			runCharts.calculate(clinic, END.minusDays(RunCharts.MOST_DAILY_DAYS + 1), END, RunChartPeriod.DAY);
 			fail("expected the range to be refused");
 		}
 		catch (ValidationException e) {
@@ -366,7 +368,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	public void calculate_shouldRefuseMoreThanAThousandPointsBeforeEvaluatingTheReportAndAllowAThousand() {
 		LocalDate lastSunday = LocalDate.of(2026, 10, 18);
 		try {
-			runCharts.calculate(clinic, lastSunday.minusWeeks(RunCharts.MOST_POINTS - 1), END, RunCharts.Period.WEEK);
+			runCharts.calculate(clinic, lastSunday.minusWeeks(RunCharts.MOST_POINTS - 1), END, RunChartPeriod.WEEK);
 			fail("expected the range to be refused");
 		}
 		catch (ValidationException e) {
@@ -380,8 +382,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		        + " 0 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"
 		        + " from system_range(0, " + (RunCharts.MOST_POINTS - 1) + ")");
 		
-		Map<String, List<RunCharts.Point>> series = runCharts.calculate(clinic,
-		    lastSunday.minusWeeks(RunCharts.MOST_POINTS - 2), END, RunCharts.Period.WEEK);
+		Map<String, List<RunChartPoint>> series = runCharts.calculate(clinic,
+		    lastSunday.minusWeeks(RunCharts.MOST_POINTS - 2), END, RunChartPeriod.WEEK);
 		
 		assertEquals(RunCharts.MOST_POINTS, series.get("total_registrants").size());
 	}
@@ -389,7 +391,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void calculate_shouldSayWhenNoReportHasTheConfiguredUuid() {
 		try {
-			runCharts.calculate(null, END, END, RunCharts.Period.DAY);
+			runCharts.calculate(null, END, END, RunChartPeriod.DAY);
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
@@ -406,11 +408,11 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		assertNull(RunCharts.median(points()));
 	}
 	
-	private static List<RunCharts.Point> points(Integer... values) {
-		List<RunCharts.Point> points = new java.util.ArrayList<RunCharts.Point>();
+	private static List<RunChartPoint> points(Integer... values) {
+		List<RunChartPoint> points = new java.util.ArrayList<RunChartPoint>();
 		LocalDate day = LocalDate.of(2026, 10, 1);
 		for (Integer value : values) {
-			points.add(new RunCharts.Point(day, value == null ? null : value.doubleValue()));
+			points.add(new RunChartPoint(day, value == null ? null : value.doubleValue()));
 			day = day.plusDays(1);
 		}
 		return points;
@@ -418,11 +420,11 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void period_shouldBeNamedByTheRequestAndRefuseAnythingElse() {
-		assertEquals(RunCharts.Period.WEEK, RunCharts.Period.of(null));
-		assertEquals(RunCharts.Period.DAY, RunCharts.Period.of("day"));
-		assertEquals(RunCharts.Period.MONTH, RunCharts.Period.of("month"));
+		assertEquals(RunChartPeriod.WEEK, RunCharts.period(null));
+		assertEquals(RunChartPeriod.DAY, RunCharts.period("day"));
+		assertEquals(RunChartPeriod.MONTH, RunCharts.period("month"));
 		try {
-			RunCharts.Period.of("year");
+			RunCharts.period("year");
 			fail("expected the period to be refused");
 		}
 		catch (ValidationException e) {

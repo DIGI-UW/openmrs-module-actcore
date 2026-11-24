@@ -34,6 +34,8 @@ import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
@@ -124,79 +126,36 @@ public class RunCharts {
 	public static final int MOST_DAILY_DAYS = 92;
 	
 	/**
-	 * How a range is cut into points. Each point gives the figures as of the last day of its period.
+	 * Gets the period a request names, which is a week when it names none.
+	 *
+	 * @param name day, week or month, ignoring case, or blank
+	 * @return the period; WEEK for a blank name
+	 * @throws ValidationException when the name is none of them
 	 */
-	public enum Period {
-		
-		DAY,
-		WEEK,
-		MONTH;
-		
-		/**
-		 * Gets the period a request names, which is a week when it names none.
-		 *
-		 * @param name day, week or month, ignoring case, or blank
-		 * @return the period; WEEK for a blank name
-		 * @throws ValidationException when the name is none of them
-		 */
-		public static Period of(String name) {
-			if (StringUtils.isBlank(name)) {
-				return WEEK;
-			}
-			for (Period period : values()) {
-				if (period.name().equalsIgnoreCase(name.trim())) {
-					return period;
-				}
-			}
-			throw refusal("points must be day, week or month");
+	public static RunChartPeriod period(String name) {
+		if (StringUtils.isBlank(name)) {
+			return RunChartPeriod.WEEK;
 		}
-		
-		/**
-		 * Gets the last day of the period before the one holding the day, stepping back as the report's SQL
-		 * does. A week ends on a Sunday.
-		 */
-		LocalDate previous(LocalDate day) {
-			switch (this) {
-				case WEEK:
-					return day.with(TemporalAdjusters.previous(DayOfWeek.SUNDAY));
-				case MONTH:
-					return day.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth());
-				default:
-					return day.minusDays(1);
+		for (RunChartPeriod period : RunChartPeriod.values()) {
+			if (period.name().equalsIgnoreCase(name.trim())) {
+				return period;
 			}
 		}
+		throw refusal("points must be day, week or month");
 	}
 	
-	/** One point of a metric's series. */
-	public static class Point {
-		
-		/**
-		 * The day the figure is as of: the last day of the point's period, or the end of the range for the
-		 * last point.
-		 */
-		public final LocalDate date;
-		
-		/**
-		 * The figure charted: the count for a count, or the percent rounded to one decimal for a percent.
-		 * It is null for a percent whose denominator is zero.
-		 */
-		public final Double value;
-		
-		/** The count for a count, or the numerator for a percent. */
-		public final Long count;
-		
-		/** The denominator for a percent, or null for a count. */
-		public final Long total;
-		
-		Point(LocalDate date, Double value) {
-			this(date, value, null, null);
-		}
-		
-		Point(LocalDate date, Double value, Long count, Long total) {
-			this.date = date;
-			this.value = value;
-			this.count = count;
-			this.total = total;
+	/**
+	 * Gets the last day of the period before the one holding the day, stepping back as the report's SQL
+	 * does. A week ends on a Sunday.
+	 */
+	private static LocalDate previous(RunChartPeriod period, LocalDate day) {
+		switch (period) {
+			case WEEK:
+				return day.with(TemporalAdjusters.previous(DayOfWeek.SUNDAY));
+			case MONTH:
+				return day.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth());
+			default:
+				return day.minusDays(1);
 		}
 	}
 	
@@ -212,12 +171,12 @@ public class RunCharts {
 	 * @throws ValidationException when the points are daily over a range longer than
 	 *             {@link #MOST_DAILY_DAYS} days, or the range has more than {@link #MOST_POINTS} points
 	 */
-	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, Period period) {
-		if (period == Period.DAY && ChronoUnit.DAYS.between(start, end) > MOST_DAILY_DAYS) {
+	public static List<LocalDate> pointDates(LocalDate start, LocalDate end, RunChartPeriod period) {
+		if (period == RunChartPeriod.DAY && ChronoUnit.DAYS.between(start, end) > MOST_DAILY_DAYS) {
 			throw refusal("points=day is for a range of up to " + MOST_DAILY_DAYS + " days; ask for weeks or months");
 		}
 		LinkedList<LocalDate> dates = new LinkedList<LocalDate>();
-		for (LocalDate day = end; !day.isBefore(start); day = period.previous(day)) {
+		for (LocalDate day = end; !day.isBefore(start); day = previous(period, day)) {
 			dates.addFirst(day);
 		}
 		if (dates.size() > MOST_POINTS) {
@@ -242,23 +201,24 @@ public class RunCharts {
 	 * @throws APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the
 	 *             report cannot be evaluated or gives rows ACT Core cannot read
 	 */
-	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
+	public Map<String, List<RunChartPoint>> calculate(Location clinic, LocalDate start, LocalDate end,
+	        RunChartPeriod period) {
 		List<LocalDate> days = pointDates(start, end, period);
 		Map<LocalDate, DataSetRow> rows = rowsOf(clinic, start, end, period, new HashSet<LocalDate>(days));
 		Map<LocalDate, Long> adherent = adherentOf(rows, days);
-		Map<String, List<Point>> series = new LinkedHashMap<String, List<Point>>();
+		Map<String, List<RunChartPoint>> series = new LinkedHashMap<String, List<RunChartPoint>>();
 		for (String metric : METRICS) {
 			String denominator = PERCENT_OF.get(metric);
-			List<Point> points = new ArrayList<Point>();
+			List<RunChartPoint> points = new ArrayList<RunChartPoint>();
 			for (LocalDate day : days) {
 				DataSetRow row = rows.get(day);
 				long numerator = ADHERENT.equals(metric) ? adherent.get(day) : number(row, metric);
 				if (denominator == null) {
-					points.add(new Point(day, Double.valueOf(numerator), Long.valueOf(numerator), null));
+					points.add(new RunChartPoint(day, Double.valueOf(numerator), Long.valueOf(numerator), null));
 				} else {
 					long total = number(row, denominator);
 					Double value = total == 0 ? null : Double.valueOf(Math.round(1000.0 * numerator / total) / 10.0);
-					points.add(new Point(day, value, Long.valueOf(numerator), Long.valueOf(total)));
+					points.add(new RunChartPoint(day, value, Long.valueOf(numerator), Long.valueOf(total)));
 				}
 			}
 			series.put(metric, points);
@@ -271,7 +231,7 @@ public class RunCharts {
 	 * the report's rows when one has no date, a date that is not a point, or no number in a number
 	 * column, when two rows of the clinic share a day, and when a point has no row of every clinic.
 	 */
-	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, Period period,
+	private Map<LocalDate, DataSetRow> rowsOf(Location clinic, LocalDate start, LocalDate end, RunChartPeriod period,
 	        Set<LocalDate> days) {
 		String wanted = clinic == null ? "" : clinic.getUuid();
 		Map<LocalDate, DataSetRow> rows = new HashMap<LocalDate, DataSetRow>();
@@ -365,7 +325,7 @@ public class RunCharts {
 		return row == null ? 0 : ((Number) row.getColumnValue(column)).longValue();
 	}
 	
-	private DataSet evaluate(LocalDate start, LocalDate end, Period period) {
+	private DataSet evaluate(LocalDate start, LocalDate end, RunChartPeriod period) {
 		String uuid = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_RUN_CHARTS_REPORT);
 		ReportDefinitionService reports = Context.getService(ReportDefinitionService.class);
 		ReportDefinition report = StringUtils.isBlank(uuid) ? null : reports.getDefinitionByUuid(uuid.trim());
@@ -395,9 +355,9 @@ public class RunCharts {
 	 * @param points the points
 	 * @return the median, or null when no point has a value
 	 */
-	public static Double median(List<Point> points) {
+	public static Double median(List<RunChartPoint> points) {
 		List<Double> values = new ArrayList<Double>();
-		for (Point point : points) {
+		for (RunChartPoint point : points) {
 			if (point.value != null) {
 				values.add(point.value);
 			}

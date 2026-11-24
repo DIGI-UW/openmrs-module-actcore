@@ -40,6 +40,8 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RunChartService;
 import org.openmrs.module.actcore.api.impl.RunCharts;
+import org.openmrs.module.actcore.model.RunChartPeriod;
+import org.openmrs.module.actcore.model.RunChartPoint;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
@@ -238,8 +240,8 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	public void service_shouldCalculateAsTheDaemonForACallerWithOnlyTheDashboardPrivilege() {
 		authenticateWith(ActCorePrivileges.DASHBOARD);
 		
-		Map<String, List<RunCharts.Point>> series = Context.getService(RunChartService.class).getRunCharts(null,
-		    LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 21), RunCharts.Period.DAY);
+		Map<String, List<RunChartPoint>> series = Context.getService(RunChartService.class).getRunCharts(null,
+		    LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 21), RunChartPeriod.DAY);
 		
 		assertEquals(3, series.get("active_registrants").size());
 		assertEquals(21.0, series.get("active_registrants").get(2).value, 0);
@@ -252,7 +254,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		
 		try {
 			Context.getService(RunChartService.class).getRunCharts(null, LocalDate.of(2026, 1, 1),
-			    LocalDate.of(2026, 10, 21), RunCharts.Period.DAY);
+			    LocalDate.of(2026, 10, 21), RunChartPeriod.DAY);
 			fail("expected the range to be refused");
 		}
 		catch (ValidationException e) {
