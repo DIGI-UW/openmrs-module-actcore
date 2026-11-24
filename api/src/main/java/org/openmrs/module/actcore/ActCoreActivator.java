@@ -181,7 +181,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 				// A task saved under a class that has since moved (rhdflags' before the rename) could not load.
 				if (moved) {
 					log.warn("Moved '{}' to {}", name, taskClass);
-					// Its started flag is stale, as it never ran; at boot core schedules it after this anyway.
+					// Core's scheduler started before this, on the old class, so this call is what schedules the task.
 					if (Boolean.TRUE.equals(existing.getStarted()) || Boolean.TRUE.equals(existing.getStartOnStartup())) {
 						schedulerService.rescheduleTask(existing);
 					}

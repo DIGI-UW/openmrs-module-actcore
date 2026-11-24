@@ -28,9 +28,9 @@ import org.openmrs.util.PrivilegeConstants;
 /**
  * Helpers that read the clinics on a user's account, kept in the
  * {@value ActCoreConstants#USER_PROPERTY_CLINICS} user property, and tell whether a user is an
- * administrator limited to their clinics. The README describes both. The class also holds the rules
- * that limit such an administrator's changes to a user. The clinics and roles saved in the database
- * are read through {@link UserClinicsService}.
+ * administrator limited to their clinics. The class also holds, in {@link #refuseUnlessMayChange},
+ * the rules that limit such an administrator's changes to a user. The clinics and roles saved in
+ * the database are read through {@link UserClinicsService}.
  */
 public final class UserClinics {
 	

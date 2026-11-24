@@ -69,11 +69,21 @@ public class HibernateAuditLogDAOTest extends BaseModuleContextSensitiveTest {
 		sql("insert into person_attribute (person_id, value, person_attribute_type_id, creator, date_created, voided, uuid)"
 		        + " values (%d, '1', %d, 1, now(), false, '%s')",
 		    PATIENT, clinic.getPersonAttributeTypeId(), UUID.randomUUID());
+		sql("insert into person_attribute (person_id, value, person_attribute_type_id, creator, date_created, voided, uuid)"
+		        + " values (%d, '2', %d, 1, now(), true, '%s')",
+		    PATIENT, clinic.getPersonAttributeTypeId(), UUID.randomUUID());
 		sql("insert into user_property (user_id, property, property_value) values (1, 'actcore.clinics', 'abc')");
 		sql("insert into person_name (person_id, preferred, given_name, family_name, creator, date_created, voided, uuid)"
 		        + " values (%d, true, 'Voided', 'Name', 1, now(), true, '%s')",
 		    PATIENT, UUID.randomUUID());
 		sql("update person set voided = true where person_id = 6");
+		sql("update patient set voided = true where patient_id = 8");
+		sql("insert into person_name (person_id, preferred, given_name, family_name, creator, date_created, voided, uuid)"
+		        + " values (2, false, 'Voided', 'Chebaskwony', 1, now(), true, '%s')",
+		    UUID.randomUUID());
+		sql("insert into patient_identifier (patient_id, identifier, identifier_type, preferred, location_id, creator,"
+		        + " date_created, voided, uuid) values (2, '6TS-4', 1, false, 1, 1, now(), true, '%s')",
+		    UUID.randomUUID());
 		
 		revision(10, "2026-10-21 10:52:14", 1);
 		revision(11, "2026-10-22 11:10:00", 501);
@@ -109,6 +119,12 @@ public class HibernateAuditLogDAOTest extends BaseModuleContextSensitiveTest {
 		dismissal(PATIENT, flagId, 501, "2026-10-22 09:00:00");
 		dismissal(2, flagId, 1, "2026-10-22 09:00:00");
 		dismissal(2, 9999, 1, "2026-10-23 09:00:00");
+		dismissal(PATIENT, flagId, 1, "2026-10-23 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-24 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-21 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-22 00:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-23 09:00:00");
+		dismissal(PATIENT, flagId, 501, "2026-10-24 00:00:00");
 		
 		read(1, "Patient", "admin", "2026-10-21 09:00:00", patientUuid);
 		read(2, "Cohort", "admin", "2026-10-22 09:00:00", null);
