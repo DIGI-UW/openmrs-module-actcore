@@ -42,9 +42,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/studies")
 public class StudiesController extends ActCoreRestController {
 	
-	/** The privilege a user needs, unless they are a superuser, to create or rename a study. */
-	public static final String MANAGE_PRIVILEGE = ActCorePrivileges.MANAGE_STUDIES;
-	
 	/**
 	 * Gets the studies that are not retired, by name, each with its uuid, name and Study status states,
 	 * the initial states first.
@@ -69,14 +66,15 @@ public class StudiesController extends ActCoreRestController {
 	 *
 	 * @param body the request body, holding the study's name as {@code name}
 	 * @return the new study, with its uuid, name and states
-	 * @throws ContextAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
 	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
 	 * @throws org.openmrs.api.APIException when the study template program is not configured
 	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(MANAGE_PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.MANAGE_STUDIES);
 		return toJson(Context.getService(StudyService.class).createStudy(name(body)));
 	}
 	
@@ -86,7 +84,8 @@ public class StudiesController extends ActCoreRestController {
 	 * @param uuid the study's uuid
 	 * @param body the request body, holding the new name as {@code name}
 	 * @return the renamed study, with its uuid, name and states
-	 * @throws ContextAuthenticationException when the user lacks {@link #MANAGE_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
 	 * @throws ObjectNotFoundException when no unretired study has the uuid
 	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
 	 * @throws org.openmrs.api.APIException when the study template program is not configured
@@ -94,7 +93,7 @@ public class StudiesController extends ActCoreRestController {
 	@RequestMapping(value = "/{uuid}", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(MANAGE_PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.MANAGE_STUDIES);
 		StudyService studies = Context.getService(StudyService.class);
 		Program study = studies.getStudyByUuid(uuid);
 		if (study == null) {

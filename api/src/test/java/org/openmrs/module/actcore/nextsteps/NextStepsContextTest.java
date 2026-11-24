@@ -36,10 +36,8 @@ import org.openmrs.User;
 import org.openmrs.Visit;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.adherence.AdherenceContextTest;
-import org.openmrs.module.actcore.consultation.NextConsultation;
-import org.openmrs.module.actcore.registry.EnrolOnRegistration;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -100,7 +98,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		inr = type("INR Monitoring");
 		patientInfo = type("Patient Information");
 		pregnancy = type("Pregnancy");
-		property(NextSteps.GP_ENCOUNTER_TYPES,
+		property(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES,
 		    "bpg:" + bpg.getUuid() + ",oral:" + oral.getUuid() + ",consult:" + consult.getUuid() + ",echo:" + echo.getUuid()
 		            + ",procedures:" + procedures.getUuid() + ",inr:" + inr.getUuid() + ",patientInfo:"
 		            + patientInfo.getUuid() + ",pregnancy:" + pregnancy.getUuid());
@@ -110,15 +108,15 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		anaphylaxis = concept("Anaphylaxis", "N/A");
 		nextInrDate = concept("Next INR date", "Datetime");
 		reasonStopped = concept("Reason stopped", "Coded");
-		property(NextSteps.GP_ECHO_DATE, echoDate.getUuid());
-		property(NextSteps.GP_ANAPHYLAXIS, anaphylaxis.getUuid());
-		property(NextSteps.GP_NEXT_INR_DATE, nextInrDate.getUuid());
+		property(ActCoreConstants.GP_NEXT_STEPS_ECHO_DATE_CONCEPT, echoDate.getUuid());
+		property(ActCoreConstants.GP_NEXT_STEPS_ANAPHYLAXIS_ANSWER, anaphylaxis.getUuid());
+		property(ActCoreConstants.GP_NEXT_STEPS_NEXT_INR_DATE_CONCEPT, nextInrDate.getUuid());
 		notPrescribed = flag("RHD prophylaxis not prescribed");
 		followUp = flag("RHD 30-day follow-up due");
 		inrDue = flag("RHD INR review due");
 		deliveryOverdue = flag("RHD delivery outcome overdue");
-		property(NextSteps.GP_FLAGS, "notPrescribed:" + notPrescribed.getUuid() + ",followUp:" + followUp.getUuid() + ",inr:"
-		        + inrDue.getUuid() + ",deliveryOverdue:" + deliveryOverdue.getUuid());
+		property(ActCoreConstants.GP_NEXT_STEPS_FLAGS, "notPrescribed:" + notPrescribed.getUuid() + ",followUp:"
+		        + followUp.getUuid() + ",inr:" + inrDue.getUuid() + ",deliveryOverdue:" + deliveryOverdue.getUuid());
 		patient.setGender("F");
 		Context.getPatientService().savePatient(patient);
 	}
@@ -822,8 +820,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldNameNoReferralTypeWhenTheMappedTypeDoesNotExist() {
-		property(NextSteps.GP_ENCOUNTER_TYPES,
-		    Context.getAdministrationService().getGlobalProperty(NextSteps.GP_ENCOUNTER_TYPES) + ",refer:"
+		property(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES,
+		    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES) + ",refer:"
 		            + UUID.randomUUID());
 		listTheDoseAnyway();
 		lastGiven(36);
@@ -1329,7 +1327,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void of_shouldFallBackToTheDefaultForAThresholdTooLargeForAnInt() {
-		property(NextSteps.GP_ECHO_MONTHS, "99999999999");
+		property(ActCoreConstants.GP_NEXT_STEPS_ECHO_MONTHS, "99999999999");
 		echoed(at(395));
 		
 		assertEquals("Last echo was over 12 months ago (30-Aug-2025)", steps().get(0).getReason());
@@ -1765,8 +1763,8 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	/** Maps the referral step to an encounter type, as ``refer:`` in the setting does. */
 	private void mapReferral() {
 		referral = type("Referral");
-		property(NextSteps.GP_ENCOUNTER_TYPES,
-		    Context.getAdministrationService().getGlobalProperty(NextSteps.GP_ENCOUNTER_TYPES) + ",refer:"
+		property(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES,
+		    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES) + ",refer:"
 		            + referral.getUuid());
 	}
 	
@@ -1789,9 +1787,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	
 	private void raisedSince(Flag flag, java.util.Date when) {
 		Context.getAdministrationService()
-		        .executeSQL("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values ("
-		                + patient.getPatientId() + ", " + flag.getFlagId() + ", '" + new java.sql.Timestamp(when.getTime())
-		                + "')",
+		        .executeSQL("insert into " + ActCoreConstants.RAISED_FLAG_TABLE
+		                + " (patient_id, flag_id, raised_since) values (" + patient.getPatientId() + ", " + flag.getFlagId()
+		                + ", '" + new java.sql.Timestamp(when.getTime()) + "')",
 		            false);
 	}
 	
@@ -1980,9 +1978,9 @@ public class NextStepsContextTest extends AdherenceContextTest {
 		inMonths.setDatatype(Context.getConceptService().getConceptDatatypeByName("N/A"));
 		inMonths.setConceptClass(Context.getConceptService().getConceptClass(1));
 		Context.getConceptService().saveConcept(inMonths);
-		property(NextConsultation.GP_AMOUNT, amount.getUuid());
-		property(NextConsultation.GP_PERIOD, period.getUuid());
-		property(EnrolOnRegistration.PROGRAM_PROPERTY, Context.getProgramWorkflowService().getProgram(1).getUuid());
+		property(ActCoreConstants.GP_CONSULTATION_NEXT_AMOUNT_CONCEPT, amount.getUuid());
+		property(ActCoreConstants.GP_CONSULTATION_NEXT_PERIOD_CONCEPT, period.getUuid());
+		property(ActCoreConstants.GP_REGISTRY_PROGRAM, Context.getProgramWorkflowService().getProgram(1).getUuid());
 		PatientProgram enrolment = new PatientProgram();
 		enrolment.setPatient(patient);
 		enrolment.setProgram(Context.getProgramWorkflowService().getProgram(1));
@@ -2100,7 +2098,7 @@ public class NextStepsContextTest extends AdherenceContextTest {
 	}
 	
 	private void listTheDoseAnyway() {
-		property(NextSteps.GP_DOSE_AFTER_EARLIER_STEPS, "false");
+		property(ActCoreConstants.GP_NEXT_STEPS_DOSE_AFTER_EARLIER_STEPS, "false");
 	}
 	
 	private void flagged(Flag flag) {

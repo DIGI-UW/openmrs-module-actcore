@@ -19,6 +19,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -77,8 +78,8 @@ public class PatientFlagRefreshPatientCommitContextTest extends BaseModuleContex
 		for (Flag flag : saved) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);
-			Context.getAdministrationService()
-			        .executeSQL("delete from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId(), false);
+			Context.getAdministrationService().executeSQL(
+			    "delete from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
 		}
 	}

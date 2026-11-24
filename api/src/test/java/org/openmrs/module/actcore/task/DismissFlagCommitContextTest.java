@@ -23,6 +23,7 @@ import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.patientflags.Flag;
@@ -136,9 +137,9 @@ public class DismissFlagCommitContextTest extends BaseModuleContextSensitiveTest
 		Context.clearSession();
 		if (flag != null) {
 			Context.getAdministrationService().executeSQL(
-			    "delete from " + RaisedFlags.DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId(), false);
-			Context.getAdministrationService()
-			        .executeSQL("delete from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId(), false);
+			    "delete from " + ActCoreConstants.FLAG_DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId(), false);
+			Context.getAdministrationService().executeSQL(
+			    "delete from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
 		}
 	}

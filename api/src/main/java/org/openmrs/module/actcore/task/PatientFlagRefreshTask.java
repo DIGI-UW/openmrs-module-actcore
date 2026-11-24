@@ -26,6 +26,7 @@ import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.adherence.AdherenceRefreshTask;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -50,13 +51,6 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefreshTask.class);
 	
 	/**
-	 * The name of the global property that records when the last refresh finished, as an ISO-8601
-	 * instant, for scheduled and on-demand runs alike. It is written even when some flags failed, as
-	 * otherwise one broken flag would hide every run after it.
-	 */
-	public static final String LAST_FINISHED_PROPERTY = "actcore.refresh.lastFinished";
-	
-	/**
 	 * The lock held while a full refresh runs. It is static because the REST taskaction resource and
 	 * the refresh endpoint each run a new instance of the task alongside the scheduler's.
 	 */
@@ -75,7 +69,7 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	// What one patient's refresh needs from a user who saved an encounter, the lists included.
 	private static final String[] PATIENT_PRIVILEGES = { PatientFlagsConstants.PRIV_TEST_FLAGS,
 	        PrivilegeConstants.SQL_LEVEL_ACCESS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_GLOBAL_PROPERTIES,
-	        "View Cohorts In Cohort Module", "Edit Cohorts in Cohort Module" };
+	        ActCoreConstants.COHORT_VIEW_COHORTS, ActCoreConstants.COHORT_EDIT_COHORTS };
 	
 	// Counted per row raised or cleared, not per flag, so a flag that fails partway still counts.
 	int raised;
@@ -356,7 +350,8 @@ public class PatientFlagRefreshTask extends AbstractTask {
 	
 	private static void recordFinished() {
 		try {
-			Context.getAdministrationService().setGlobalProperty(LAST_FINISHED_PROPERTY, Instant.now().toString());
+			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED,
+			    Instant.now().toString());
 		}
 		catch (RuntimeException e) {
 			log.error("Could not record when the patient flag refresh finished", e);

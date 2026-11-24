@@ -33,6 +33,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
@@ -47,46 +48,6 @@ import org.slf4j.LoggerFactory;
  * and writing through the DAO it is given.
  */
 public class AdherenceRefresh {
-	
-	/**
-	 * The table holding one row per patient with a prescription: their regimen, adherence, last
-	 * injection and next due date, as the latest refresh computed them.
-	 */
-	public static final String TABLE = "actcore_prophylaxis_adherence";
-	
-	/**
-	 * The table holding whether each injection was on time, timed as the chart times it, for reports
-	 * that count on-time injections over a period.
-	 */
-	public static final String TIMING_TABLE = "actcore_injection_timing";
-	
-	static final String GP_PRESCRIPTION = "actcore.adherence.prescriptionConcept";
-	
-	static final String GP_INJECTION_INTERVALS = "actcore.adherence.injectionIntervals";
-	
-	static final String GP_DATE_STARTED = "actcore.adherence.dateStartedConcept";
-	
-	static final String GP_DATE_STOPPED = "actcore.adherence.dateStoppedConcept";
-	
-	static final String GP_INJECTION_DATE = "actcore.adherence.injectionDateConcept";
-	
-	static final String GP_ESTIMATE = "actcore.adherence.estimateConcept";
-	
-	static final String GP_ESTIMATE_DATE = "actcore.adherence.estimateDateConcept";
-	
-	static final String GP_ORAL_FIRST_DUE = "actcore.adherence.oralFirstDueDays";
-	
-	static final String GP_DURATION = "actcore.adherence.prescriptionDurationConcept";
-	
-	static final String GP_DURATIONS = "actcore.adherence.prescriptionDurations";
-	
-	static final String GP_CONSULTATION_DATE = "actcore.adherence.consultationDateConcept";
-	
-	static final String GP_DATA_ENTRY = "actcore.adherence.dataEntryConcept";
-	
-	static final String GP_DATA_ENTRY_INTERVALS = "actcore.adherence.dataEntryIntervals";
-	
-	static final String GP_NO_PROPHYLAXIS = "actcore.adherence.noProphylaxisAnswers";
 	
 	private static final Logger log = LoggerFactory.getLogger(AdherenceRefresh.class);
 	
@@ -271,11 +232,13 @@ public class AdherenceRefresh {
 		// One transaction gives the four reads one snapshot, and a session on a thread with none bound.
 		return inTransaction(() -> {
 			AdministrationService admin = Context.getAdministrationService();
-			readPrescriptions(admin, daysByUuid(admin, GP_INJECTION_INTERVALS), uuids(admin, GP_NO_PROPHYLAXIS), patientIds,
-			    histories);
+			readPrescriptions(admin, daysByUuid(admin, ActCoreConstants.GP_ADHERENCE_INJECTION_INTERVALS),
+			    uuids(admin, ActCoreConstants.GP_ADHERENCE_NO_PROPHYLAXIS_ANSWERS), patientIds, histories);
 			readInjections(admin, patientIds, histories);
-			readEstimates(admin, daysByUuid(admin, GP_DURATIONS), patientIds, histories);
-			readConsultations(admin, daysByUuid(admin, GP_DATA_ENTRY_INTERVALS), patientIds, histories);
+			readEstimates(admin, daysByUuid(admin, ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_DURATIONS), patientIds,
+			    histories);
+			readConsultations(admin, daysByUuid(admin, ActCoreConstants.GP_ADHERENCE_DATA_ENTRY_INTERVALS), patientIds,
+			    histories);
 			return histories;
 		});
 	}
@@ -321,11 +284,11 @@ public class AdherenceRefresh {
 	 */
 	private void readPrescriptions(AdministrationService admin, Map<String, Integer> intervals, Set<String> noProphylaxis,
 	        Collection<Integer> patientIds, Map<Integer, AdherenceReplay.History> histories) {
-		String consultationDate = concept(admin, GP_CONSULTATION_DATE);
-		String dateStarted = concept(admin, GP_DATE_STARTED);
-		String dateStopped = concept(admin, GP_DATE_STOPPED);
-		List<List<Object>> rows = dao.getPrescriptions(concept(admin, GP_PRESCRIPTION), consultationDate, dateStarted,
-		    dateStopped, patientIds);
+		String consultationDate = concept(admin, ActCoreConstants.GP_ADHERENCE_CONSULTATION_DATE_CONCEPT);
+		String dateStarted = concept(admin, ActCoreConstants.GP_ADHERENCE_DATE_STARTED_CONCEPT);
+		String dateStopped = concept(admin, ActCoreConstants.GP_ADHERENCE_DATE_STOPPED_CONCEPT);
+		List<List<Object>> rows = dao.getPrescriptions(concept(admin, ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_CONCEPT),
+		    consultationDate, dateStarted, dateStopped, patientIds);
 		// ACT 2.0 kept the first consultation of a day.
 		Map<Integer, Map<LocalDate, Integer>> encounterOfDay = new HashMap<Integer, Map<LocalDate, Integer>>();
 		for (List<Object> row : rows) {
@@ -365,7 +328,8 @@ public class AdherenceRefresh {
 	
 	private void readInjections(AdministrationService admin, Collection<Integer> patientIds,
 	        Map<Integer, AdherenceReplay.History> histories) {
-		List<List<Object>> rows = dao.getInjections(concept(admin, GP_INJECTION_DATE), patientIds);
+		List<List<Object>> rows = dao.getInjections(concept(admin, ActCoreConstants.GP_ADHERENCE_INJECTION_DATE_CONCEPT),
+		    patientIds);
 		for (List<Object> row : rows) {
 			history(histories, row.get(0)).injections.add(localDate(row.get(1)));
 		}
@@ -379,11 +343,13 @@ public class AdherenceRefresh {
 	private void readEstimates(AdministrationService admin, Map<String, Integer> durations, Collection<Integer> patientIds,
 	        Map<Integer, AdherenceReplay.History> histories) {
 		// With no date concept set, every form counts from its encounter's date, as before the form had one.
-		String estimateDate = StringUtils.isNotBlank(admin.getGlobalProperty(GP_ESTIMATE_DATE))
-		        ? concept(admin, GP_ESTIMATE_DATE)
-		        : null;
-		String estimateConcept = concept(admin, GP_ESTIMATE);
-		List<List<Object>> rows = dao.getEstimates(estimateDate, estimateConcept, concept(admin, GP_DURATION), patientIds);
+		String estimateDate = StringUtils
+		        .isNotBlank(admin.getGlobalProperty(ActCoreConstants.GP_ADHERENCE_ESTIMATE_DATE_CONCEPT))
+		                ? concept(admin, ActCoreConstants.GP_ADHERENCE_ESTIMATE_DATE_CONCEPT)
+		                : null;
+		String estimateConcept = concept(admin, ActCoreConstants.GP_ADHERENCE_ESTIMATE_CONCEPT);
+		List<List<Object>> rows = dao.getEstimates(estimateDate, estimateConcept,
+		    concept(admin, ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_DURATION_CONCEPT), patientIds);
 		for (List<Object> row : rows) {
 			TreeMap<LocalDate, AdherenceCalculation.OralEntry> oral = history(histories, row.get(0)).oral;
 			LocalDate day = localDate(row.get(1));
@@ -402,8 +368,9 @@ public class AdherenceRefresh {
 	 */
 	private void readConsultations(AdministrationService admin, Map<String, Integer> batchIntervals,
 	        Collection<Integer> patientIds, Map<Integer, AdherenceReplay.History> histories) {
-		String dataEntry = concept(admin, GP_DATA_ENTRY);
-		List<List<Object>> rows = dao.getConsultations(concept(admin, GP_CONSULTATION_DATE), dataEntry, patientIds);
+		String dataEntry = concept(admin, ActCoreConstants.GP_ADHERENCE_DATA_ENTRY_CONCEPT);
+		List<List<Object>> rows = dao.getConsultations(
+		    concept(admin, ActCoreConstants.GP_ADHERENCE_CONSULTATION_DATE_CONCEPT), dataEntry, patientIds);
 		for (List<Object> row : rows) {
 			AdherenceReplay.History h = history(histories, row.get(0));
 			LocalDate day = localDate(row.get(1));
@@ -443,7 +410,7 @@ public class AdherenceRefresh {
 	 * past year, or has none.
 	 */
 	static Integer oralFirstDueDays() {
-		return days(Context.getAdministrationService(), GP_ORAL_FIRST_DUE);
+		return days(Context.getAdministrationService(), ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS);
 	}
 	
 	/**

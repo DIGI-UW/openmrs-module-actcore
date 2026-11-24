@@ -36,6 +36,7 @@ import org.openmrs.Patient;
 import org.openmrs.Visit;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -51,32 +52,6 @@ import org.openmrs.util.PrivilegeConstants;
  * keeps the steps the signed-in user may take.
  */
 public class NextSteps {
-	
-	static final String GP_ENCOUNTER_TYPES = "actcore.nextSteps.encounterTypes";
-	
-	static final String GP_FLAGS = "actcore.nextSteps.flags";
-	
-	static final String GP_DOSE_WITHIN_DAYS = "actcore.nextSteps.doseWithinDays";
-	
-	static final String GP_ECHO_MONTHS = "actcore.nextSteps.echoMonths";
-	
-	static final String GP_ADHERENCE_BELOW = "actcore.nextSteps.adherenceBelow";
-	
-	static final String GP_DOSE_AFTER_EARLIER_STEPS = "actcore.nextSteps.doseAfterEarlierSteps";
-	
-	static final String GP_ECHO_DATE = "actcore.nextSteps.echoDateConcept";
-	
-	static final String GP_ANAPHYLAXIS = "actcore.nextSteps.anaphylaxisAnswer";
-	
-	static final String GP_NEXT_INR_DATE = "actcore.nextSteps.nextInrDateConcept";
-	
-	static final String GP_INJECTION_DATE = "actcore.adherence.injectionDateConcept";
-	
-	static final String GP_ESTIMATE = "actcore.adherence.estimateConcept";
-	
-	static final String GP_PRESCRIPTION = "actcore.adherence.prescriptionConcept";
-	
-	static final String GP_INJECTION_INTERVALS = "actcore.adherence.injectionIntervals";
 	
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
 	
@@ -194,7 +169,7 @@ public class NextSteps {
 	
 	private void read() {
 		types = new HashMap<String, EncounterType>();
-		for (Map.Entry<String, String> entry : pairs(GP_ENCOUNTER_TYPES).entrySet()) {
+		for (Map.Entry<String, String> entry : pairs(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES).entrySet()) {
 			EncounterType type = Context.getEncounterService().getEncounterTypeByUuid(entry.getValue());
 			if (type != null) {
 				types.put(entry.getKey(), type);
@@ -248,7 +223,7 @@ public class NextSteps {
 	private void evaluate(boolean seesFlags, Set<String> enterable) {
 		boolean mayConsult = enterable.contains("consult");
 		Set<String> flags = seesFlags ? activeFlags() : Collections.<String> emptySet();
-		Map<String, String> flagKeys = pairs(GP_FLAGS);
+		Map<String, String> flagKeys = pairs(ActCoreConstants.GP_NEXT_STEPS_FLAGS);
 		
 		dose();
 		if (latest("patientInfo") == null) {
@@ -284,7 +259,7 @@ public class NextSteps {
 		Encounter anaphylaxisTrigger = anaphylaxis();
 		Review anaphylaxis = review(mayConsult, anaphylaxisTrigger, ANAPHYLAXIS_REVIEW, ANAPHYLAXIS_REFERRAL);
 		addReferTrigger(mayConsult, anaphylaxisTrigger, anaphylaxis);
-		String below = "Oral adherence below " + threshold(GP_ADHERENCE_BELOW, 80) + "%: ";
+		String below = "Oral adherence below " + threshold(ActCoreConstants.GP_NEXT_STEPS_ADHERENCE_BELOW, 80) + "%: ";
 		Encounter lowEstimate = lowAdherence();
 		addReferTrigger(mayConsult, lowEstimate, review(mayConsult, lowEstimate, below
 		        + (lowEstimate != null && bpgAnaphylaxis() ? "a clinician to review the plan" : "consider switching to BPG"),
@@ -311,7 +286,7 @@ public class NextSteps {
 			}
 		}
 		// Only a review this user is listed holds the BPG dose back; Patient Information never does.
-		if (!"false".equalsIgnoreCase(StringUtils.trim(property(GP_DOSE_AFTER_EARLIER_STEPS)))) {
+		if (!"false".equalsIgnoreCase(StringUtils.trim(property(ActCoreConstants.GP_NEXT_STEPS_DOSE_AFTER_EARLIER_STEPS)))) {
 			boolean reviewToDo = holdsDose("consult", enterable) || holdsDose("refer", enterable);
 			if (reviewToDo && toDo("bpg") && !steps.get("bpg").onHold) {
 				steps.remove("bpg");
@@ -449,7 +424,7 @@ public class NextSteps {
 				reason = "Overdue: was due " + DAY.format(due);
 			} else if (days == 0) {
 				reason = "Due today";
-			} else if (days <= threshold(GP_DOSE_WITHIN_DAYS, 2)) {
+			} else if (days <= threshold(ActCoreConstants.GP_NEXT_STEPS_DOSE_WITHIN_DAYS, 2)) {
 				reason = days == 1 ? "Due tomorrow" : "Due in " + days + " days";
 			}
 		}
@@ -460,7 +435,7 @@ public class NextSteps {
 	}
 	
 	private boolean injectionThisVisit() {
-		String injectionDate = property(GP_INJECTION_DATE);
+		String injectionDate = property(ActCoreConstants.GP_ADHERENCE_INJECTION_DATE_CONCEPT);
 		for (Encounter encounter : thisVisit) {
 			if (types.containsKey("bpg") && types.get("bpg").equals(encounter.getEncounterType())) {
 				// An earlier dose recorded today, such as from a paper record, is not today's dose.
@@ -476,7 +451,7 @@ public class NextSteps {
 	}
 	
 	private void echo() {
-		String echoDate = property(GP_ECHO_DATE);
+		String echoDate = property(ActCoreConstants.GP_NEXT_STEPS_ECHO_DATE_CONCEPT);
 		LocalDate last = null;
 		for (Encounter encounter : encounters) {
 			if (thisVisit.contains(encounter)) {
@@ -500,14 +475,15 @@ public class NextSteps {
 			put("echo", "Entered this visit", false);
 		} else if (last == null) {
 			put("echo", "No echocardiogram recorded", false);
-		} else if (last.isBefore(today.minusMonths(threshold(GP_ECHO_MONTHS, 12)))) {
-			put("echo", "Last echo was over " + threshold(GP_ECHO_MONTHS, 12) + " months ago (" + DAY.format(last) + ")",
+		} else if (last.isBefore(today.minusMonths(threshold(ActCoreConstants.GP_NEXT_STEPS_ECHO_MONTHS, 12)))) {
+			put("echo", "Last echo was over " + threshold(ActCoreConstants.GP_NEXT_STEPS_ECHO_MONTHS, 12) + " months ago ("
+			        + DAY.format(last) + ")",
 			    false);
 		}
 	}
 	
 	private String inrReason() {
-		String nextInr = property(GP_NEXT_INR_DATE);
+		String nextInr = property(ActCoreConstants.GP_NEXT_STEPS_NEXT_INR_DATE_CONCEPT);
 		Obs latest = null;
 		for (Encounter encounter : encounters) {
 			for (Obs obs : obsOf(encounter)) {
@@ -529,7 +505,7 @@ public class NextSteps {
 	 * only a consultation reviews an anaphylaxis. It is null when no BPG form reported one.
 	 */
 	private Encounter anaphylaxis() {
-		String anaphylaxis = property(GP_ANAPHYLAXIS);
+		String anaphylaxis = property(ActCoreConstants.GP_NEXT_STEPS_ANAPHYLAXIS_ANSWER);
 		Encounter latest = null;
 		for (Encounter encounter : encounters) {
 			if (types.containsKey("bpg") && types.get("bpg").equals(encounter.getEncounterType())) {
@@ -552,9 +528,9 @@ public class NextSteps {
 		if (anaphylaxis() != null) {
 			return true;
 		}
-		String answer = property(GP_ANAPHYLAXIS);
-		String prescription = property(GP_PRESCRIPTION);
-		Set<String> injections = pairs(GP_INJECTION_INTERVALS).keySet();
+		String answer = property(ActCoreConstants.GP_NEXT_STEPS_ANAPHYLAXIS_ANSWER);
+		String prescription = property(ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_CONCEPT);
+		Set<String> injections = pairs(ActCoreConstants.GP_ADHERENCE_INJECTION_INTERVALS).keySet();
 		for (Encounter encounter : encounters) {
 			for (Obs obs : obsOf(encounter)) {
 				if (obs.getValueCoded() == null || !obs.getValueCoded().getUuid().equals(answer)
@@ -577,7 +553,7 @@ public class NextSteps {
 	 * that estimate is below the threshold. It is null otherwise.
 	 */
 	private Encounter lowAdherence() {
-		String estimate = property(GP_ESTIMATE);
+		String estimate = property(ActCoreConstants.GP_ADHERENCE_ESTIMATE_CONCEPT);
 		Obs latest = null;
 		for (Encounter encounter : encounters) {
 			for (Obs obs : obsOf(encounter)) {
@@ -588,7 +564,9 @@ public class NextSteps {
 			}
 		}
 		return "Oral".equals(summary.getType()) && latest != null
-		        && latest.getValueNumeric() < threshold(GP_ADHERENCE_BELOW, 80) ? latest.getEncounter() : null;
+		        && latest.getValueNumeric() < threshold(ActCoreConstants.GP_NEXT_STEPS_ADHERENCE_BELOW, 80)
+		                ? latest.getEncounter()
+		                : null;
 	}
 	
 	/**

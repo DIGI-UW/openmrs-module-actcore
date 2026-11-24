@@ -49,13 +49,12 @@ import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.download.FormDownload;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
@@ -100,7 +99,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected the download to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(DownloadController.DOWNLOAD_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.DOWNLOAD_DATA));
 		}
 		catch (Exception e) {
 			fail(e.toString());
@@ -109,7 +108,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void leavesOutTheIdentifiersWithoutTheIdentifiersPrivilege() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		
 		SimpleObject download = controller.download(body());
 		
@@ -121,7 +120,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void keepsTheIdentifiersWithBothPrivileges() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		
 		SimpleObject download = controller.download(body());
 		
@@ -131,7 +130,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void givesTheResearchPrivilegeAloneOnlyAResearchDownloadNeverIdentified() throws Exception {
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		
 		SimpleObject download = controller.download(body());
 		
@@ -141,8 +140,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void withholdsAnIdentifyingQuestionFromAResearchDownloadAndSaysWhich() throws Exception {
-		Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, question.getUuid());
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS,
+		    question.getUuid());
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		
 		SimpleObject download = controller.download(body());
 		
@@ -157,13 +157,14 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		optIn.setFormat("org.openmrs.Concept");
 		Context.getPersonService().savePersonAttributeType(optIn);
 		Concept yes = Context.getConceptService().getConceptByName("Yes");
-		Context.getAdministrationService().setGlobalProperty(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
-		Context.getAdministrationService().setGlobalProperty(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE,
+		    optIn.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
 		encounter(7);
 		Patient optedIn = encounter(2).getPatient();
 		optedIn.addAttribute(new PersonAttribute(optIn, yes.getConceptId().toString()));
 		Context.getPatientService().savePatient(optedIn);
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		
 		List<?> rows = (List<?>) controller.download(body()).get("rows");
 		
@@ -174,19 +175,20 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void failsTheDownloadWhenItCannotBeRecorded() throws Exception {
 		// Set aside, not dropped: the changelog runs once, so a dropped table would not come back.
-		renameDownloadLog(DownloadLog.TABLE, ASIDE);
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+		renameDownloadLog(ActCoreConstants.DOWNLOAD_LOG_TABLE, ASIDE);
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		try {
 			controller.download(body());
 			fail("expected the download to fail without its record");
 		}
 		catch (RuntimeException expected) {
-			assertTrue(expected.toString(), causes(expected).toUpperCase().contains(DownloadLog.TABLE.toUpperCase()));
+			assertTrue(expected.toString(),
+			    causes(expected).toUpperCase().contains(ActCoreConstants.DOWNLOAD_LOG_TABLE.toUpperCase()));
 		}
 		finally {
 			Context.logout();
 			Context.authenticate("admin", "test");
-			renameDownloadLog(ASIDE, DownloadLog.TABLE);
+			renameDownloadLog(ASIDE, ActCoreConstants.DOWNLOAD_LOG_TABLE);
 		}
 	}
 	
@@ -198,11 +200,12 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void recordsEachDownloadForWhoeverMayReadTheReadAuditLog() throws Exception {
-		Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, question.getUuid());
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS,
+		    question.getUuid());
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		controller.download(body());
 		String downloader = Context.getAuthenticatedUser().getUuid();
-		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		
 		List<?> results = (List<?>) controller.getDownloads(null, null, null, null, null, null, null).get("results");
 		
@@ -242,8 +245,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		    new PresentationMessage("ui.i18n.Form.name." + form.getUuid(), Context.getLocale(), "Echocardiogram", null));
 		service.setActiveMessageSource(shown);
 		try {
-			Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, question.getUuid());
-			authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS,
+			    question.getUuid());
+			authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 			controller.download(body());
 			
 			assertEquals("Echocardiogram", logged().get(0).formName);
@@ -255,7 +259,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void recordsTheFieldsADownloadGave() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		controller.download(body());
 		
 		String detail = logged().get(0).detail;
@@ -265,19 +269,19 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesTheDownloadsToAUserWhoMayNotReadTheReadAuditLog() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		try {
 			controller.getDownloads(null, null, null, null, null, null, null);
 			fail("expected the downloads to be refused");
 		}
 		catch (ContextAuthenticationException e) {
-			assertTrue(e.getMessage().contains(DownloadLog.VIEW_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
 	
 	@Test
 	public void recordsAListTheAppDownloadedItselfForTheReadAuditLogReaders() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		Map<String, Object> body = new HashMap<String, Object>();
 		body.put("list", "registry");
 		body.put("columns", Arrays.asList("ACT ID", "Name", "Primary Phone"));
@@ -287,7 +291,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertEquals(Boolean.TRUE, controller.record(body).get("recorded"));
 		
-		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		SimpleObject page = controller.getDownloads(null, null, null, null, null, null, null);
 		assertEquals(Integer.valueOf(1), page.get("totalCount"));
 		SimpleObject entry = (SimpleObject) ((List<?>) page.get("results")).get(0);
@@ -309,7 +313,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void recordsAListAResearcherDownloadedAsNotResearchOnly() throws Exception {
-		authenticateWith(with(DownloadController.RESEARCH_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		Map<String, Object> body = new HashMap<String, Object>();
 		body.put("list", "registry");
 		body.put("columns", Collections.singletonList("ACT ID"));
@@ -322,7 +326,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesToRecordFiltersLongerThanTheLogHolds() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> body = new HashMap<String, Object>();
 		body.put("list", "registry");
 		body.put("columns", Collections.singletonList("ACT ID"));
@@ -347,7 +351,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			fail("expected the record to be refused");
 		}
 		catch (APIAuthenticationException expected) {}
-		signInAs("researcher", with(DownloadController.RESEARCH_PRIVILEGE));
+		signInAs("researcher", with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		try {
 			controller.record(Collections.<String, Object> singletonMap("columns", Collections.singletonList("ACT ID")));
 			fail("expected a record without a list to be refused");
@@ -358,16 +362,16 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void filtersTheDownloadsByUserFormIdentifiersAndDates() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		controller.download(body());
 		Map<String, Object> list = new HashMap<String, Object>();
 		list.put("list", "registry");
 		list.put("columns", Collections.singletonList("ACT ID"));
 		list.put("identifiers", true);
 		controller.record(list);
-		signInAs("researcher", with(DownloadController.RESEARCH_PRIVILEGE));
+		signInAs("researcher", with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
 		controller.download(body());
-		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		
 		assertEquals(Integer.valueOf(3),
 		    controller.getDownloads(null, null, null, null, null, null, null).get("totalCount"));
@@ -406,7 +410,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void namesAUserWithNoUsernameByTheirSystemIdAndName() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> list = new HashMap<String, Object>();
 		list.put("list", "dashboard:pdf");
 		list.put("columns", Collections.singletonList("Registrant status"));
@@ -416,7 +420,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		Context.authenticate("admin", "test");
 		Context.getAdministrationService().executeSQL(
 		    "update users set username = '', system_id = 'caller-system' where username = 'downloadcaller'", false);
-		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		
 		SimpleObject user = (SimpleObject) ((SimpleObject) ((List<?>) controller
 		        .getDownloads(null, null, null, null, null, null, null).get("results")).get(0)).get("user");
@@ -428,7 +432,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesAnUnknownConceptOrAStartAfterTheEnd() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> unknown = body();
 		unknown.put("fields", Collections.singletonList(Collections.singletonMap("concept", "no-such-concept")));
 		Map<String, Object> backwards = body();
@@ -452,7 +456,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		visit.setForm(consult);
 		Context.getEncounterService().saveEncounter(visit);
 		Form other = secondForm();
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> body = body();
 		body.remove("form");
 		body.remove("fields");
@@ -467,7 +471,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		DownloadLog.Entry logged = logged().get(0);
 		assertNull(logged.formName);
 		assertTrue(logged.detail, logged.detail.contains("\"rowPerPatient\":true"));
-		signInAs("reader", DownloadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		for (Form each : Arrays.asList(form, consult)) {
 			assertEquals(Integer.valueOf(1),
 			    controller.getDownloads(null, null, null, each.getUuid(), null, null, null).get("totalCount"));
@@ -480,7 +484,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	public void givesOneFormAsARowPerPatientWhenAsked() throws Exception {
 		encounter(7);
 		encounter(7);
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> body = body();
 		body.put("rowPerPatient", true);
 		
@@ -494,7 +498,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	public void appliesAndRecordsTheStatusAndClinicFilters() throws Exception {
 		PersonAttributeType primaryCare = locationAttributeType("Primary care clinic");
 		PersonAttributeType cardiac = locationAttributeType("Cardiac clinic");
-		Context.getAdministrationService().setGlobalProperty(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY,
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES,
 		    primaryCare.getUuid() + "," + cardiac.getUuid());
 		Patient seven = Context.getPatientService().getPatient(7);
 		seven.addAttribute(new PersonAttribute(cardiac, "1"));
@@ -502,7 +506,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		encounter(7);
 		encounter(2);
 		org.openmrs.Location one = Context.getLocationService().getLocation(1);
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> body = body();
 		body.put("cardiacClinic", one.getUuid());
 		body.put("status", "inactive");
@@ -517,7 +521,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesAnUnknownStatusOrClinic() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> status = body();
 		status.put("status", "deceased");
 		Map<String, Object> clinic = body();
@@ -536,7 +540,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void givesOnlyThePatientFieldsChosenWithholdingTheIdentifyingOnesUnlessIdentified() throws Exception {
 		encounter(7);
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		Map<String, Object> body = body();
 		body.put("patient", Arrays.asList("age", "givenName"));
 		
@@ -548,7 +552,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(detail, detail.contains("\"withheld\":[\"Given name\"]"));
 		assertTrue(detail, detail.contains("\"patient\":[\"age\"]"));
 		
-		signInAs("identified", with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		signInAs("identified", with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		body.put("rowPerPatient", true);
 		result = controller.download(body);
 		
@@ -560,7 +564,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void recordsIdentifiersOnlyWhenAnIdentifyingPatientFieldOrQuestionWasGiven() throws Exception {
 		encounter(7);
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		Map<String, Object> body = body();
 		for (Object rowPerPatient : Arrays.asList(false, true)) {
 			body.put("rowPerPatient", rowPerPatient);
@@ -574,7 +578,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			assertIdentifiers(true, controller.download(body));
 		}
 		
-		signInAs("deidentified", with(DownloadController.DOWNLOAD_PRIVILEGE));
+		signInAs("deidentified", with(ActCorePrivileges.DOWNLOAD_DATA));
 		body.put("patient", Arrays.asList("age", "givenName"));
 		assertIdentifiers(false, controller.download(body));
 	}
@@ -582,7 +586,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	private static void identifyingQuestions(String uuids) {
 		Context.addProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
 		try {
-			Context.getAdministrationService().setGlobalProperty(FormDownload.CONCEPTS_PROPERTY, uuids);
+			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS, uuids);
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
@@ -597,7 +601,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesAPatientFieldItDoesNotKnow() throws Exception {
-		authenticateWith(with(DownloadController.DOWNLOAD_PRIVILEGE, DownloadController.IDENTIFIERS_PRIVILEGE));
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		Map<String, Object> unknown = body();
 		unknown.put("patient", Collections.singletonList("address"));
 		Map<String, Object> notAList = body();
@@ -722,11 +726,11 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	/** The log, read as someone who may read it, whoever is signed in. */
 	private static List<DownloadLog.Entry> logged() {
 		try {
-			Context.addProxyPrivilege(DownloadLog.VIEW_PRIVILEGE);
+			Context.addProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 			return Context.getService(DownloadLogService.class).getDownloads(null, null, null);
 		}
 		finally {
-			Context.removeProxyPrivilege(DownloadLog.VIEW_PRIVILEGE);
+			Context.removeProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		}
 	}
 }

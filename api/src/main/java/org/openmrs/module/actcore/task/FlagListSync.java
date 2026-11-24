@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.cohort.CohortAttribute;
 import org.openmrs.module.cohort.CohortAttributeType;
@@ -40,18 +41,6 @@ import org.slf4j.LoggerFactory;
  * leaves alone a hand-made cohort that happens to share its name.
  */
 public class FlagListSync {
-	
-	/**
-	 * The name of the global property that holds the tag a flag must carry to get a list. While it is
-	 * blank, every enabled and unretired flag gets one.
-	 */
-	public static final String TAG_PROPERTY = "actcore.listFlagTag";
-	
-	/**
-	 * The name of the global property that holds the name of the cohort type given to the lists. While
-	 * it is blank, the lists are of the System List type.
-	 */
-	public static final String COHORT_TYPE_PROPERTY = "actcore.listCohortType";
 	
 	private static final String DEFAULT_COHORT_TYPE = "System List";
 	
@@ -85,15 +74,15 @@ public class FlagListSync {
 	 * Brings every flag's list into line with the flag. It voids the lists of purged flags; creates,
 	 * restores or renames the list of each flag that should have one; and sets each list's members to
 	 * the patients the flag is raised for and not dismissed for. A flag has a list while it is enabled,
-	 * unretired and, when {@value #TAG_PROPERTY} is set, carries that tag. A flag whose list fails to
-	 * sync is logged and counted, and the run goes on with the next flag.
+	 * unretired and, when {@value ActCoreConstants#GP_LIST_FLAG_TAG} is set, carries that tag. A flag
+	 * whose list fails to sync is logged and counted, and the run goes on with the next flag.
 	 *
 	 * @return what the run changed, and how many flags failed
 	 */
 	public Result syncAll() {
 		Result result = new Result();
 		FlagService flagService = Context.getService(FlagService.class);
-		String requiredTag = Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY);
+		String requiredTag = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_FLAG_TAG);
 		List<Flag> flags = flagService.getAllFlags();
 		Set<String> flagUuids = new HashSet<String>();
 		for (Flag flag : flags) {
@@ -142,7 +131,7 @@ public class FlagListSync {
 			return;
 		}
 		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
-		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(TAG_PROPERTY))
+		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_FLAG_TAG))
 		        && PatientFlagRefreshTask.flaggedMessages(flag, patientId).containsKey(patientId)
 		        && !Context.getService(RaisedFlagService.class).isDismissed(flagId, patientId);
 		
@@ -354,7 +343,7 @@ public class FlagListSync {
 	}
 	
 	private CohortType cohortType() {
-		String configured = Context.getAdministrationService().getGlobalProperty(COHORT_TYPE_PROPERTY);
+		String configured = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_COHORT_TYPE);
 		String wanted = (configured == null || configured.trim().isEmpty()) ? DEFAULT_COHORT_TYPE : configured.trim();
 		CohortTypeService cohortTypeService = Context.getService(CohortTypeService.class);
 		for (CohortType type : cohortTypeService.findAllCohortTypes()) {

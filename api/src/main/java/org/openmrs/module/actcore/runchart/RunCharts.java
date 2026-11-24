@@ -30,6 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
@@ -45,9 +46,6 @@ import org.openmrs.module.reporting.report.definition.service.ReportDefinitionSe
  * patients on BPG to each point's day to count those who were adherent.
  */
 public class RunCharts {
-	
-	/** The name of the global property that holds the uuid of the run chart report. */
-	public static final String GP_REPORT = "actcore.runCharts.report";
 	
 	/** The report's column naming the clinic a row is of; it is empty in the row of every clinic. */
 	static final String CLINIC_COLUMN = "clinic_uuid";
@@ -234,8 +232,8 @@ public class RunCharts {
 	 * @param period the period each point closes
 	 * @return each of {@link #METRICS}' points, earliest first, by metric in that order
 	 * @throws IllegalArgumentException when the range has more than {@link #MOST_POINTS} points
-	 * @throws APIException when {@value #GP_REPORT} names no report, or the report cannot be evaluated
-	 *             or gives rows ACT Core cannot read
+	 * @throws APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no report, or the
+	 *             report cannot be evaluated or gives rows ACT Core cannot read
 	 */
 	public Map<String, List<Point>> calculate(Location clinic, LocalDate start, LocalDate end, Period period) {
 		List<LocalDate> days = pointDates(start, end, period);
@@ -361,11 +359,11 @@ public class RunCharts {
 	}
 	
 	private DataSet evaluate(LocalDate start, LocalDate end, Period period) {
-		String uuid = Context.getAdministrationService().getGlobalProperty(GP_REPORT);
+		String uuid = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_RUN_CHARTS_REPORT);
 		ReportDefinitionService reports = Context.getService(ReportDefinitionService.class);
 		ReportDefinition report = StringUtils.isBlank(uuid) ? null : reports.getDefinitionByUuid(uuid.trim());
 		if (report == null) {
-			throw new APIException("No report has the uuid " + GP_REPORT + " names: " + uuid);
+			throw new APIException("No report has the uuid " + ActCoreConstants.GP_RUN_CHARTS_REPORT + " names: " + uuid);
 		}
 		EvaluationContext context = new EvaluationContext();
 		context.addParameterValue("startDate", Date.valueOf(start));

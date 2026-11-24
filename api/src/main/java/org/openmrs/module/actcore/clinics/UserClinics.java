@@ -16,42 +16,24 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Role;
 import org.openmrs.User;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * Helpers that read the clinics on a user's account, kept in the {@value #PROPERTY} user property,
- * and tell whether a user is an administrator limited to their clinics. The README describes both.
- * The clinics and roles saved in the database are read through
- * {@link org.openmrs.module.actcore.api.UserClinicsService}.
+ * Helpers that read the clinics on a user's account, kept in the
+ * {@value ActCoreConstants#USER_PROPERTY_CLINICS} user property, and tell whether a user is an
+ * administrator limited to their clinics. The README describes both. The clinics and roles saved in
+ * the database are read through {@link org.openmrs.module.actcore.api.UserClinicsService}.
  */
 public final class UserClinics {
-	
-	/**
-	 * The name of the user property that holds the user's clinics, as location uuids separated by
-	 * commas.
-	 */
-	public static final String PROPERTY = "actcore.clinics";
-	
-	/**
-	 * The privilege that lets a user who administers users work with every clinic. The instance and
-	 * global administrators hold it; an administrator of users without it is limited to their clinics.
-	 */
-	public static final String ALL_CLINICS_PRIVILEGE = ActCorePrivileges.ALL_CLINICS;
-	
-	/**
-	 * The name of the global property that lists, by uuid and separated by commas, the roles that an
-	 * administrator limited to their clinics may give out. When it is unset or blank, ACT Core does not
-	 * restrict the roles, and leaves them to OpenMRS's own checks.
-	 */
-	public static final String ASSIGNABLE_ROLES_PROPERTY = "actcore.users.siteAdministratorRoles";
 	
 	private UserClinics() {
 	}
 	
 	/**
-	 * Parses a {@value #PROPERTY} value into its location uuids, keeping their order and dropping
-	 * blanks and repeats.
+	 * Parses a {@value ActCoreConstants#USER_PROPERTY_CLINICS} value into its location uuids, keeping
+	 * their order and dropping blanks and repeats.
 	 *
 	 * @param value the property value, or null
 	 * @return the uuids, trimmed; empty when the value is null or blank
@@ -77,12 +59,13 @@ public final class UserClinics {
 	 * @return the clinics' location uuids; empty for a null user or one without the property
 	 */
 	public static Set<String> of(User user) {
-		return user == null ? Collections.<String> emptySet() : parse(user.getUserProperty(PROPERTY));
+		return user == null ? Collections.<String> emptySet()
+		        : parse(user.getUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS));
 	}
 	
 	/**
 	 * Tells whether the user is an administrator limited to their clinics: one who may add or edit
-	 * users but lacks {@value #ALL_CLINICS_PRIVILEGE}. A super user is not limited.
+	 * users but lacks {@value ActCorePrivileges#ALL_CLINICS}. A super user is not limited.
 	 *
 	 * @param user the user, or null
 	 * @return true for an administrator limited to their clinics; false for anyone else, a super user
@@ -94,7 +77,7 @@ public final class UserClinics {
 		}
 		boolean administersUsers = user.hasPrivilege(PrivilegeConstants.EDIT_USERS)
 		        || user.hasPrivilege(PrivilegeConstants.ADD_USERS);
-		return administersUsers && !user.hasPrivilege(ALL_CLINICS_PRIVILEGE);
+		return administersUsers && !user.hasPrivilege(ActCorePrivileges.ALL_CLINICS);
 	}
 	
 	/**

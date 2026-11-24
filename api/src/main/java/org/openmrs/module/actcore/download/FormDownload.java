@@ -39,8 +39,7 @@ import org.openmrs.PersonAttribute;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.Program;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.registry.EnrolOnRegistration;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.parameter.EncounterSearchCriteriaBuilder;
 import org.openmrs.util.OpenmrsUtil;
@@ -56,25 +55,6 @@ import org.openmrs.util.PrivilegeConstants;
  * and questions that identify the patient, as the global properties named here configure them.
  */
 public class FormDownload {
-	
-	/**
-	 * The name of the global property listing, by uuid, the identifier types that identify a patient,
-	 * such as the National ID. A download without identifiers leaves them out, and the ACT ID is never
-	 * taken from one of them.
-	 */
-	public static final String IDENTIFIER_TYPES_PROPERTY = "actcore.download.identifyingIdentifierTypes";
-	
-	/**
-	 * The name of the global property listing, by uuid, the person attribute types that identify a
-	 * patient, such as the phone numbers. Only a download with identifiers gives them.
-	 */
-	public static final String ATTRIBUTE_TYPES_PROPERTY = "actcore.download.identifyingAttributeTypes";
-	
-	/**
-	 * The name of the global property listing, by uuid, the questions that identify a patient, such as
-	 * the Home Address. A download without identifiers leaves them out.
-	 */
-	public static final String CONCEPTS_PROPERTY = "actcore.download.identifyingConcepts";
 	
 	private static final int OBS_BATCH = 500;
 	
@@ -223,7 +203,7 @@ public class FormDownload {
 			}
 			if (registry == null) {
 				registry = programByUuid(
-				    Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY));
+				    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM));
 			}
 			if (registry == null) {
 				return false;
@@ -243,7 +223,7 @@ public class FormDownload {
 				return true;
 			}
 			if (clinicTypes == null) {
-				clinicTypes = uuids(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY);
+				clinicTypes = uuids(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES);
 			}
 			PersonAttributeType type = which < clinicTypes.size() ? attributeType(clinicTypes.get(which)) : null;
 			PersonAttribute attribute = type == null ? null : patient.getAttribute(type);
@@ -330,7 +310,7 @@ public class FormDownload {
 		
 		Table table = new Table();
 		patientFields(table, chosen, identified);
-		List<String> identifyingConcepts = uuids(CONCEPTS_PROPERTY);
+		List<String> identifyingConcepts = uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS);
 		List<Concept> concepts = new ArrayList<Concept>();
 		List<String> labels = new ArrayList<String>();
 		for (int i = 0; i < asked.size(); i++) {
@@ -411,7 +391,7 @@ public class FormDownload {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
-		List<String> identifyingConcepts = uuids(CONCEPTS_PROPERTY);
+		List<String> identifyingConcepts = uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS);
 		Table table = new Table();
 		patientFields(table, chosen, identified);
 		patientHeaders(table, identifying, attributeTypes);
@@ -557,8 +537,9 @@ public class FormDownload {
 		                .createEncounterSearchCriteria()));
 		if (researchOnly) {
 			PersonAttributeType optIn = attributeType(
-			    Context.getAdministrationService().getGlobalProperty(StudyEnrolmentRules.OPT_IN_PROPERTY));
-			Concept yes = concept(Context.getAdministrationService().getGlobalProperty(StudyEnrolmentRules.YES_PROPERTY));
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE));
+			Concept yes = concept(
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT));
 			// Unlike the enrolment rules, an unset opt-in or Yes admits no one.
 			encounters.removeIf(encounter -> optIn == null || yes == null
 			        || !StudyEnrolmentRules.answeredYes(encounter.getPatient(), optIn, yes));
@@ -642,7 +623,7 @@ public class FormDownload {
 		List<PatientIdentifierType> types = new ArrayList<PatientIdentifierType>();
 		Context.addProxyPrivilege(PrivilegeConstants.GET_IDENTIFIER_TYPES);
 		try {
-			for (String uuid : uuids(IDENTIFIER_TYPES_PROPERTY)) {
+			for (String uuid : uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_IDENTIFIER_TYPES)) {
 				PatientIdentifierType type = Context.getPatientService().getPatientIdentifierTypeByUuid(uuid);
 				if (type != null) {
 					types.add(type);
@@ -657,7 +638,7 @@ public class FormDownload {
 	
 	private static List<PersonAttributeType> attributeTypes() {
 		List<PersonAttributeType> types = new ArrayList<PersonAttributeType>();
-		for (String uuid : uuids(ATTRIBUTE_TYPES_PROPERTY)) {
+		for (String uuid : uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_ATTRIBUTE_TYPES)) {
 			PersonAttributeType type = attributeType(uuid);
 			if (type != null) {
 				types.add(type);

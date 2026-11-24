@@ -44,6 +44,7 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.cohort.CohortM;
 import org.openmrs.module.cohort.CohortMember;
@@ -100,7 +101,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		assertEquals(0, ran.listsFailed);
 		assertTrue(!ran.adherenceFailed);
 		Instant finished = Instant
-		        .parse(Context.getAdministrationService().getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY));
+		        .parse(Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED));
 		assertTrue(!finished.isBefore(before) && !finished.isAfter(Instant.now()));
 		assertTrue(!PatientFlagRefreshTask.isRunning());
 	}
@@ -133,7 +134,7 @@ public class PatientFlagRefreshTaskContextTest extends BaseModuleContextSensitiv
 		assertEquals(1, ran.flagsFailed);
 		assertEquals(2, ran.listsFailed);
 		assertTrue(ran.adherenceFailed);
-		assertNotNull(Context.getAdministrationService().getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY));
+		assertNotNull(Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED));
 	}
 	
 	@Test

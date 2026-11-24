@@ -19,6 +19,7 @@ import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +30,6 @@ import org.slf4j.LoggerFactory;
  * is not configured.
  */
 public class EnrolOnRegistration implements MethodInterceptor {
-	
-	/** The name of the global property that holds the uuid of the RHD Registry program. */
-	public static final String PROGRAM_PROPERTY = "actcore.registryProgram";
 	
 	private static final Logger log = LoggerFactory.getLogger(EnrolOnRegistration.class);
 	
@@ -50,19 +48,19 @@ public class EnrolOnRegistration implements MethodInterceptor {
 	
 	/**
 	 * Tells whether the program is the RHD Registry, by comparing its uuid with the one in
-	 * {@value #PROGRAM_PROPERTY}.
+	 * {@value ActCoreConstants#GP_REGISTRY_PROGRAM}.
 	 *
 	 * @param program the program, or null
 	 * @return true when the program's uuid is the property's; false for a null program or when the
 	 *         property is blank
 	 */
 	public static boolean isRegistry(Program program) {
-		String registry = Context.getAdministrationService().getGlobalProperty(PROGRAM_PROPERTY);
+		String registry = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM);
 		return program != null && StringUtils.isNotBlank(registry) && registry.trim().equals(program.getUuid());
 	}
 	
 	private static void enrol(Patient patient) {
-		String uuid = Context.getAdministrationService().getGlobalProperty(PROGRAM_PROPERTY);
+		String uuid = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM);
 		if (StringUtils.isBlank(uuid)) {
 			return;
 		}
@@ -76,8 +74,8 @@ public class EnrolOnRegistration implements MethodInterceptor {
 			ProgramWorkflowService programs = Context.getProgramWorkflowService();
 			Program registry = programs.getProgramByUuid(uuid.trim());
 			if (registry == null) {
-				log.warn("{} names no program ({}); {} is registered but not enrolled", PROGRAM_PROPERTY, uuid,
-				    patient.getUuid());
+				log.warn("{} names no program ({}); {} is registered but not enrolled", ActCoreConstants.GP_REGISTRY_PROGRAM,
+				    uuid, patient.getUuid());
 				return;
 			}
 			PatientProgram enrolment = new PatientProgram();

@@ -30,6 +30,7 @@ import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.DownloadLogService;
@@ -55,27 +56,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Serves ACT 2.0's Download, which exports saved forms as CSV, and the download log. Every download
  * is recorded in the download log before its data is returned. A download gives the patient fields
- * and questions that identify a patient only to a user who also holds IDENTIFIERS_PRIVILEGE, and a
- * research download never gives them.
+ * and questions that identify a patient only to a user who also holds
+ * ActCorePrivileges.DOWNLOAD_IDENTIFIERS, and a research download never gives them.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/download")
 public class DownloadController extends ActCoreRestController {
-	
-	/** The privilege to download the forms of any patient, without what identifies them. */
-	public static final String DOWNLOAD_PRIVILEGE = ActCorePrivileges.DOWNLOAD_DATA;
-	
-	/**
-	 * The privilege that, held with DOWNLOAD_PRIVILEGE, lets a download also give what identifies the
-	 * patient, as FormDownload configures it.
-	 */
-	public static final String IDENTIFIERS_PRIVILEGE = ActCorePrivileges.DOWNLOAD_IDENTIFIERS;
-	
-	/**
-	 * The privilege that lets a user without DOWNLOAD_PRIVILEGE download the forms of the patients who
-	 * opted in to research, without what identifies them.
-	 */
-	public static final String RESEARCH_PRIVILEGE = ActCorePrivileges.DOWNLOAD_RESEARCH_DATA;
 	
 	static final int MAX_LABEL = 255;
 	
@@ -111,8 +97,8 @@ public class DownloadController extends ActCoreRestController {
 	
 	/**
 	 * Gets the CSV of the forms asked for and records the download: a row per save of one form, or a
-	 * row per patient across several forms or when asked. Without {@link #DOWNLOAD_PRIVILEGE} it is of
-	 * the patients who opted in to research.
+	 * row per patient across several forms or when asked. Without
+	 * {@link ActCorePrivileges#DOWNLOAD_DATA} it is of the patients who opted in to research.
 	 *
 	 * @param body the request body: {@code forms}, each a form uuid and its chosen fields, or one
 	 *            {@code form} and its {@code fields}; and optionally {@code rowPerPatient},
@@ -120,10 +106,11 @@ public class DownloadController extends ActCoreRestController {
 	 *            {@code endDate} and the {@code patient} fields
 	 * @return the headers and rows, whether identifiers were given, whether it is research only, and
 	 *         the labels of the fields withheld
-	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
-	 *             {@link #RESEARCH_PRIVILEGE}; lacks Get Forms, Get Concepts, Get Encounters or Get
-	 *             Observations, which the forms and their answers are read with; or, with a status
-	 *             filter, lacks Get Patient Programs
+	 * @throws APIAuthenticationException when the user lacks both
+	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} and
+	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}; lacks Get Forms, Get Concepts, Get
+	 *             Encounters or Get Observations, which the forms and their answers are read with; or,
+	 *             with a status filter, lacks Get Patient Programs
 	 * @throws ObjectNotFoundException when a form is missing or no form has its uuid
 	 * @throws IllegalRequestException when no form is asked for, a form is asked for twice or has no
 	 *             field, a field, status, clinic, date or patient field is not recognised, the start is
@@ -133,11 +120,11 @@ public class DownloadController extends ActCoreRestController {
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject download(@RequestBody Map<String, Object> body) throws JsonProcessingException {
-		boolean all = Context.hasPrivilege(DOWNLOAD_PRIVILEGE);
-		if (!all && !Context.hasPrivilege(RESEARCH_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DOWNLOAD_PRIVILEGE);
+		boolean all = Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA);
+		if (!all && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
+			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.DOWNLOAD_DATA);
 		}
-		boolean identified = all && Context.hasPrivilege(IDENTIFIERS_PRIVILEGE);
+		boolean identified = all && Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_IDENTIFIERS);
 		boolean researchOnly = !all;
 		List<FormDownload.Choice> choices = choices(body);
 		boolean rowPerPatient = choices.size() > 1 || Boolean.TRUE.equals(body.get("rowPerPatient"));
@@ -215,7 +202,8 @@ public class DownloadController extends ActCoreRestController {
 	 *            {@value #DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
 	 *         no user has the username or no form has the uuid
-	 * @throws ContextAuthenticationException when the user lacks {@link DownloadLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
 	 *             after the end
 	 * @throws IOException when a recorded download's detail cannot be read as JSON
@@ -229,7 +217,7 @@ public class DownloadController extends ActCoreRestController {
 	        @RequestParam(value = "identifiers", required = false) String identifiers,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) throws IOException {
-		Context.requirePrivilege(DownloadLog.VIEW_PRIVILEGE);
+		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		LocalDate to = date(endDate);
 		LocalDate from = from(startDate, to);
 		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
@@ -293,8 +281,9 @@ public class DownloadController extends ActCoreRestController {
 	 *            logs:&lt;tab&gt;, its {@code columns}, and optionally the number of {@code rows},
 	 *            whether it holds {@code identifiers} and its {@code filters}
 	 * @return {@code recorded} true
-	 * @throws APIAuthenticationException when the user lacks both {@link #DOWNLOAD_PRIVILEGE} and
-	 *             {@link #RESEARCH_PRIVILEGE}
+	 * @throws APIAuthenticationException when the user lacks both
+	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} and
+	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}
 	 * @throws IllegalRequestException when the list or columns are missing, there are more than
 	 *             {@value #MAX_COLUMNS} columns, or the record would be too long
 	 * @throws JsonProcessingException when the record cannot be written as JSON
@@ -302,9 +291,9 @@ public class DownloadController extends ActCoreRestController {
 	@RequestMapping(value = "/record", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject record(@RequestBody Map<String, Object> body) throws JsonProcessingException {
-		boolean all = Context.hasPrivilege(DOWNLOAD_PRIVILEGE);
-		if (!all && !Context.hasPrivilege(RESEARCH_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DOWNLOAD_PRIVILEGE);
+		boolean all = Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA);
+		if (!all && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
+			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.DOWNLOAD_DATA);
 		}
 		Object list = body == null ? null : body.get("list");
 		if (list == null || StringUtils.isBlank(list.toString())) {

@@ -38,12 +38,12 @@ import org.openmrs.User;
 import org.openmrs.VisitType;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
 import org.openmrs.messagesource.PresentationMessage;
 import org.openmrs.messagesource.impl.CachedMessageSource;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -642,9 +642,11 @@ public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
 	private void registration() {
 		PersonAttributeType clinic = attributeType("Primary Care Clinic", "org.openmrs.Location");
 		PersonAttributeType consent = attributeType("Registry Consent", "org.openmrs.Concept");
-		Context.getAdministrationService().setGlobalProperty(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY, clinic.getUuid());
-		Context.getAdministrationService().setGlobalProperty(StudyEnrolmentRules.CONSENT_PROPERTY, consent.getUuid());
-		Context.getAdministrationService().setGlobalProperty(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES,
+		    clinic.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE,
+		    consent.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
 		Program program = Context.getProgramWorkflowService().getProgram(1);
 		revision(REGISTERED, "2026-10-21 08:58:00", clinician.getUserId());
 		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, birthdate, dead, voided) values (%d, %d, 0, 'F', '1976-08-25 00:00:00', false, false)",

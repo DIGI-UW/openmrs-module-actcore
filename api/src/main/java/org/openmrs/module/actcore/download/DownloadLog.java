@@ -12,20 +12,11 @@ package org.openmrs.module.actcore.download;
 import java.util.Date;
 
 /**
- * The log of downloads of patient data, kept as ACT 2.0's audit log kept them. The audit log module
- * records reads and changes, but offers no way for another module to record an event of its own, so
- * ACT Core keeps the downloads in a table of its own.
+ * Holds the {@link Entry} that
+ * {@link org.openmrs.module.actcore.api.DownloadLogService#getDownloads(Integer, java.time.LocalDate, java.time.LocalDate)}
+ * lists.
  */
 public class DownloadLog {
-	
-	/** The table that holds one row per download recorded. */
-	public static final String TABLE = "actcore_download_log";
-	
-	/**
-	 * The privilege needed to list the downloads. It is the audit log module's privilege for reading
-	 * the read audit, since a download is a read of patients' data.
-	 */
-	public static final String VIEW_PRIVILEGE = "View Read Audit Logs";
 	
 	/** One recorded download, as the Logs page lists it. */
 	public static class Entry {

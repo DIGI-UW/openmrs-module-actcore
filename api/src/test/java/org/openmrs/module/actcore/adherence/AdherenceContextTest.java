@@ -22,6 +22,7 @@ import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
@@ -75,7 +76,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		q28 = concept("Q28 day BPG", "N/A");
 		oralPenicillin = concept("Oral penicillin V", "N/A");
 		none = concept("None", "N/A");
-		property(AdherenceRefresh.GP_NO_PROPHYLAXIS, none.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_NO_PROPHYLAXIS_ANSWERS, none.getUuid());
 		started = concept("Date started", "Datetime");
 		stopped = concept("Date stopped", "Datetime");
 		injectionDate = concept("Date of injection", "Datetime");
@@ -83,23 +84,23 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 		estimateDate = concept("Date of adherence estimate", "Datetime");
 		duration = concept("Prescription duration", "Coded");
 		threeMonths = concept("3 months", "N/A");
-		property(AdherenceRefresh.GP_PRESCRIPTION, prescription.getUuid());
-		property(AdherenceRefresh.GP_INJECTION_INTERVALS, q21.getUuid() + ":21, " + q28.getUuid() + ":28");
-		property(AdherenceRefresh.GP_DATE_STARTED, started.getUuid());
-		property(AdherenceRefresh.GP_DATE_STOPPED, stopped.getUuid());
-		property(AdherenceRefresh.GP_INJECTION_DATE, injectionDate.getUuid());
-		property(AdherenceRefresh.GP_ESTIMATE, estimate.getUuid());
-		property(AdherenceRefresh.GP_ESTIMATE_DATE, estimateDate.getUuid());
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "");
-		property(AdherenceRefresh.GP_DURATION, duration.getUuid());
-		property(AdherenceRefresh.GP_DURATIONS, threeMonths.getUuid() + ":90");
+		property(ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_CONCEPT, prescription.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_INJECTION_INTERVALS, q21.getUuid() + ":21, " + q28.getUuid() + ":28");
+		property(ActCoreConstants.GP_ADHERENCE_DATE_STARTED_CONCEPT, started.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_DATE_STOPPED_CONCEPT, stopped.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_INJECTION_DATE_CONCEPT, injectionDate.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_ESTIMATE_CONCEPT, estimate.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_ESTIMATE_DATE_CONCEPT, estimateDate.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "");
+		property(ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_DURATION_CONCEPT, duration.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_PRESCRIPTION_DURATIONS, threeMonths.getUuid() + ":90");
 		consultationDate = concept("Date of consultation", "Datetime");
 		dataEntry = concept("Prophylaxis data entry", "Coded");
 		everyThreeMonths = concept("Every 3 months", "N/A");
 		continuous = concept("Continuous", "N/A");
-		property(AdherenceRefresh.GP_CONSULTATION_DATE, consultationDate.getUuid());
-		property(AdherenceRefresh.GP_DATA_ENTRY, dataEntry.getUuid());
-		property(AdherenceRefresh.GP_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":90");
+		property(ActCoreConstants.GP_ADHERENCE_CONSULTATION_DATE_CONCEPT, consultationDate.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_DATA_ENTRY_CONCEPT, dataEntry.getUuid());
+		property(ActCoreConstants.GP_ADHERENCE_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":90");
 	}
 	
 	protected Concept concept(String name, String datatype) {
@@ -210,7 +211,7 @@ public abstract class AdherenceContextTest extends BaseModuleContextSensitiveTes
 	protected List<List<Object>> rows() {
 		return Context.getAdministrationService().executeSQL(
 		    "select patient_id, regimen_concept_id, injection_interval_days, adherence, last_given, next_due from "
-		            + AdherenceRefresh.TABLE + " order by patient_id",
+		            + ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE + " order by patient_id",
 		    true);
 	}
 	

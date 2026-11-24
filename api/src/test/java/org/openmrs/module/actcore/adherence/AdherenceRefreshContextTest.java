@@ -19,6 +19,7 @@ import org.junit.Test;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 
 public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
@@ -47,7 +48,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		refresh.refreshAll(TODAY);
 		
 		List<List<Object>> timings = Context.getAdministrationService().executeSQL("select injection_date, on_time from "
-		        + AdherenceRefresh.TIMING_TABLE + " where patient_id = 7 order by injection_date",
+		        + ActCoreConstants.INJECTION_TIMING_TABLE + " where patient_id = 7 order by injection_date",
 		    true);
 		assertEquals(3, timings.size());
 		assertEquals(TODAY.minusDays(80), date(timings.get(0).get(0)));
@@ -67,8 +68,8 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		
 		refresh.refreshAll(TODAY);
 		
-		List<List<Object>> timings = Context.getAdministrationService()
-		        .executeSQL("select injection_date from " + AdherenceRefresh.TIMING_TABLE + " where patient_id = 7", true);
+		List<List<Object>> timings = Context.getAdministrationService().executeSQL(
+		    "select injection_date from " + ActCoreConstants.INJECTION_TIMING_TABLE + " where patient_id = 7", true);
 		assertEquals(1, timings.size());
 		assertEquals(TODAY.minusDays(20), date(timings.get(0).get(0)));
 	}
@@ -162,10 +163,9 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	}
 	
 	private static int timings(int patientId) {
-		return Context.getAdministrationService()
-		        .executeSQL(
-		            "select injection_date from " + AdherenceRefresh.TIMING_TABLE + " where patient_id = " + patientId, true)
-		        .size();
+		return Context.getAdministrationService().executeSQL(
+		    "select injection_date from " + ActCoreConstants.INJECTION_TIMING_TABLE + " where patient_id = " + patientId,
+		    true).size();
 	}
 	
 	@Test
@@ -241,7 +241,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldDateEveryOralVisitByItsEncounterWhenNoDateConceptIsSet() {
-		property(AdherenceRefresh.GP_ESTIMATE_DATE, "");
+		property(ActCoreConstants.GP_ADHERENCE_ESTIMATE_DATE_CONCEPT, "");
 		prescribe(encounter(7, 60), oralPenicillin, 60, null);
 		estimate(encounter(7, 0), 70.0, 20);
 		
@@ -266,7 +266,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldMakeAnOralRegimenNeverRecordedDueOnItsStartWhenTheFirstDueIsZeroDays() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "0");
 		prescribe(encounter(7, 40), oralPenicillin, 40, null);
 		
 		refresh.refreshAll(TODAY);
@@ -283,7 +283,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldMakeAnOralRegimenNeverRecordedDueAfterTheFirstDueGrace() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "30");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "30");
 		prescribe(encounter(7, 3), oralPenicillin, 3, null);
 		
 		refresh.refreshAll(TODAY);
@@ -295,7 +295,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldLetTheFirstOralVisitSetTheDueDateOnceItIsRecorded() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "0");
 		prescribe(encounter(7, 40), oralPenicillin, 40, null);
 		estimate(encounter(7, 30), 80.0, 30);
 		
@@ -306,7 +306,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldNotCountAnOralVisitBeforeTheRegimenStartedAsItsFirst() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "0");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "0");
 		// An oral visit under an earlier oral course, then a new oral course started 20 days ago with nothing since.
 		prescribe(encounter(7, 100), oralPenicillin, 100, 30);
 		estimate(encounter(7, 50), 80.0, 50);
@@ -319,7 +319,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test
 	public void refreshAll_shouldMakeTheFirstVisitOfAnOralRegimenReprescribedOnOneConsultationDueAfterTheGrace() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "30");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "30");
 		// One consultation records an earlier oral course, with a visit under it, and a new oral course 10 days ago.
 		Encounter consultation = encounter(7, 10);
 		prescribe(consultation, oralPenicillin, 100, null);
@@ -334,7 +334,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 	
 	@Test(expected = IllegalStateException.class)
 	public void refreshAll_shouldRefuseAFirstDueThatIsNotANumberOfDays() {
-		property(AdherenceRefresh.GP_ORAL_FIRST_DUE, "a week");
+		property(ActCoreConstants.GP_ADHERENCE_ORAL_FIRST_DUE_DAYS, "a week");
 		prescribe(encounter(7, 40), oralPenicillin, 40, null);
 		
 		refresh.refreshAll(TODAY);
@@ -415,7 +415,7 @@ public class AdherenceRefreshContextTest extends AdherenceContextTest {
 		for (int daysAgo = 500; daysAgo >= 192; daysAgo -= 28) {
 			given(encounter(7, daysAgo), daysAgo);
 		}
-		property(AdherenceRefresh.GP_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":365");
+		property(ActCoreConstants.GP_ADHERENCE_DATA_ENTRY_INTERVALS, everyThreeMonths.getUuid() + ":365");
 		consulted(encounter(7, 400), 400, everyThreeMonths);
 		Obs date = obs(encounter(7, 200), consultationDate);
 		date.setValueDatetime(at(200));

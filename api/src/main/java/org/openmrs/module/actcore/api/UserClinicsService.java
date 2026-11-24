@@ -14,7 +14,7 @@ import java.util.Set;
 
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -32,7 +32,7 @@ public interface UserClinicsService extends OpenmrsService {
 	 *
 	 * @param userId the user's id, or null for a user not yet saved
 	 * @return the clinics' location uuids, in order and without blanks or repeats; empty for a null id
-	 *         or a user without the {@value UserClinics#PROPERTY} property
+	 *         or a user without the {@value ActCoreConstants#USER_PROPERTY_CLINICS} property
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link PrivilegeConstants#ADD_USERS} nor {@link PrivilegeConstants#EDIT_USERS}
 	 */

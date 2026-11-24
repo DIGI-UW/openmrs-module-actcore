@@ -49,6 +49,7 @@ import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
@@ -94,7 +95,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		template.setRetired(true);
 		Context.getProgramWorkflowService().saveProgram(template);
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(Studies.TEMPLATE_PROPERTY, template.getUuid()));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM, template.getUuid()));
 	}
 	
 	@Test
@@ -173,7 +174,8 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void isStudy_shouldBeFalseForEveryProgramWithoutATemplate() {
 		Program study = studies().createStudy("ARC");
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(Studies.TEMPLATE_PROPERTY, ""));
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM, ""));
 		
 		assertFalse(studies().isStudy(study));
 	}
@@ -243,10 +245,10 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
 		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
-		property(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
-		property(StudyEnrolmentRules.CONSENT_PROPERTY, consent.getUuid());
-		property(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
+		property(ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE, consent.getUuid());
+		property(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE, optIn.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -281,7 +283,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
 		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -310,7 +312,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
 		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -334,7 +336,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
 		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -371,9 +373,9 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		Concept no = concept("Declined");
 		PersonAttributeType consent = attributeType("Consent Given");
 		PersonAttributeType optIn = attributeType("Research Opt-In");
-		property(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
-		property(StudyEnrolmentRules.CONSENT_PROPERTY, consent.getUuid());
-		property(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
+		property(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
+		property(ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE, consent.getUuid());
+		property(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE, optIn.getUuid());
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());
 		proxy.addInterface(ProgramWorkflowService.class);
 		proxy.addAdvice(new StudyEnrolmentRules());
@@ -456,7 +458,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void savePerson_shouldEndOpenStudyEnrolmentsOfAPatientWhoDiedInInactiveDeathOnTheirDeathDate() {
 		Program arc = studies().createStudy("ARC");
 		Program miller = studies().createStudy("Miller");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		ProgramWorkflowService programs = Context.getProgramWorkflowService();
 		Patient patient = Context.getPatientService().getPatient(2);
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
@@ -539,7 +541,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 		studyId.setName("Study Participant ID");
 		studyId.setDatatypeClassname(FreeTextDatatype.class.getName());
 		Context.getProgramWorkflowService().saveProgramAttributeType(studyId);
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		adviseAsTheModuleDoes();
 		PatientProgram enrolment = enrolment(Context.getPatientService().getPatient(6), study);
 		PatientProgramAttribute id = new PatientProgramAttribute();
@@ -558,7 +560,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePerson_shouldEndBothOfTwoOverlappingOpenEnrolmentsInAStudy() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		Patient patient = Context.getPatientService().getPatient(2);
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		PatientProgram first = enrolment(patient, study);
@@ -582,7 +584,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndOpenStudyEnrolmentsOfAPatientWhoDied() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);
@@ -602,7 +604,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedStudyEnrolmentOfAPatientWhoDied() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);
@@ -627,7 +629,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheWithdrawalOfAReopenedEnrolmentWhenItDiedBefore() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -646,7 +648,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheEndOfAReopenedEnrolmentCompletedByDateWhenItDiedBefore() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -665,7 +667,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldCompleteAReopenedEnrolmentAlreadyInDeathNoEarlierThanThatDeath() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -684,7 +686,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void savePatient_shouldEndAStudyEnrolmentNoEarlierThanAnEndedStatusInAnotherWorkflow() {
 		Program study = studies().createStudy("ARC");
 		ProgramWorkflowState control = addArmWorkflow(study);
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -702,7 +704,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldRecordDeathOnTheDeathDateWhenItFollowsTheWithdrawalOfAReopenedEnrolment() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -721,7 +723,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldDateTheDeathOfAPatientWhoDiedWithoutRegardToVoidedStatuses() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -745,7 +747,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathStartsWithItsWithdrawal() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrolment(patient, study);
@@ -767,7 +769,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndAgainAReopenedEnrolmentWhoseDeathSharesADayWithAnotherStatusInEitherOrder() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		Date day = DateUtils.truncate(daysAgo(5), Calendar.DATE);
 		PatientProgram activeFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(2), study, day, false);
 		PatientProgram deathFirst = reopenedOnTheDayItDied(Context.getPatientService().getPatient(6), study, day, true);
@@ -836,7 +838,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void mergePatients_shouldEndTheStudyEnrolmentsAPatientWhoDiedGainsFromTheDuplicate() throws Exception {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		Patient preferred = Context.getPatientService().getPatient(2);
@@ -890,7 +892,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	public void mergePatients_shouldFoldOverlappingStudyEnrolmentsIntoOneEndedOnThePreferredPatientsDeath()
 	        throws Exception {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Date enrolled = new Date(System.currentTimeMillis() / 1000 * 1000 - 10 * 86400000L);
 		Date died = new Date(enrolled.getTime() + 5 * 86400000L);
@@ -919,7 +921,7 @@ public class StudiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void savePatient_shouldEndOpenEnrolmentsInARetiredStudyOfAPatientWhoDied() {
 		Program study = studies().createStudy("ARC");
-		property(CloseEnrolmentsOnDeath.STUDY_DEATH_STATE_PROPERTY, death.getUuid());
+		property(ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT, death.getUuid());
 		adviseAsTheModuleDoes();
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram open = enrolment(patient, study);

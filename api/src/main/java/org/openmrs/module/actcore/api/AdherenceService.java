@@ -17,17 +17,18 @@ import java.util.SortedSet;
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.adherence.AdherenceRefresh;
 import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
  * The service that computes patients' prophylaxis adherence from their saved forms. It rewrites the
- * rows of {@value AdherenceRefresh#TABLE} and {@value AdherenceRefresh#TIMING_TABLE}, which the
- * registry and the overdue flag read, for every patient on a schedule and for one patient when a
- * form of theirs is saved. It also computes a patient's prophylaxis summary for the chart, and
- * patients' adherence on past days for the run charts.
+ * rows of {@value ActCoreConstants#PROPHYLAXIS_ADHERENCE_TABLE} and
+ * {@value ActCoreConstants#INJECTION_TIMING_TABLE}, which the registry and the overdue flag read,
+ * for every patient on a schedule and for one patient when a form of theirs is saved. It also
+ * computes a patient's prophylaxis summary for the chart, and patients' adherence on past days for
+ * the run charts.
  */
 public interface AdherenceService extends OpenmrsService {
 	

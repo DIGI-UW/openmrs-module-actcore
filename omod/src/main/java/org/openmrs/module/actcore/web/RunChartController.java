@@ -45,9 +45,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RunChartController extends ActCoreRestController {
 	
-	/** The privilege needed to read the run charts, which is the Dashboard's own privilege. */
-	public static final String READ_PRIVILEGE = ActCorePrivileges.DASHBOARD;
-	
 	/**
 	 * Gets the run charts of a clinic, or of every clinic, over a range that defaults to the year up to
 	 * today, in weekly points unless the request asks for daily or monthly ones. Every metric is given
@@ -61,7 +58,7 @@ public class RunChartController extends ActCoreRestController {
 	 * @param points day, week or month; blank for week
 	 * @return the range, the period and each metric's points and median, with the named metric's too; a
 	 *         median is null when no point has a value
-	 * @throws ContextAuthenticationException when the user lacks {@link #READ_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks {@link ActCorePrivileges#DASHBOARD}
 	 * @throws IllegalRequestException when the metric, a date, the points or the clinic is not
 	 *             recognised, the start is after the end, a daily range is longer than
 	 *             {@link RunCharts#MOST_DAILY_DAYS} days, or the range has more than
@@ -75,7 +72,7 @@ public class RunChartController extends ActCoreRestController {
 	        @RequestParam(value = "startDate", required = false) String startDate,
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "points", required = false) String points) {
-		Context.requirePrivilege(READ_PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.DASHBOARD);
 		if (StringUtils.isNotBlank(metric) && !RunCharts.METRICS.contains(metric)) {
 			throw new IllegalRequestException("metric must be one of " + RunCharts.METRICS);
 		}

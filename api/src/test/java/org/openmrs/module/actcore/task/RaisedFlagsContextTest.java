@@ -35,6 +35,8 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -71,7 +73,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	public void setUp() {
 		ModuleTables.create();
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, "Critical data"));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_DISMISS_FLAG_TAG, "Critical data"));
 		flagService = Context.getService(FlagService.class);
 		CohortType type = new CohortType();
 		type.setName("System List");
@@ -101,24 +103,25 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void forgetsThePatientsAFlagWasRaisedForWhenTheFlagIsPurgedButKeepsItsDismissals() {
-		execute("insert into " + RaisedFlags.TABLE + " (patient_id, flag_id, raised_since) values (" + PATIENT + ", "
-		        + flag.getFlagId() + ", '2026-01-05 10:00:00')");
-		execute("insert into " + RaisedFlags.DISMISSAL_TABLE + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
-		        + " values ('" + UUID.randomUUID() + "', " + PATIENT + ", " + flag.getFlagId()
-		        + ", 1, '2026-01-06 10:00:00')");
+		execute("insert into " + ActCoreConstants.RAISED_FLAG_TABLE + " (patient_id, flag_id, raised_since) values ("
+		        + PATIENT + ", " + flag.getFlagId() + ", '2026-01-05 10:00:00')");
+		execute("insert into " + ActCoreConstants.FLAG_DISMISSAL_TABLE
+		        + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)" + " values ('" + UUID.randomUUID() + "', "
+		        + PATIENT + ", " + flag.getFlagId() + ", 1, '2026-01-06 10:00:00')");
 		
 		flagService.purgeFlag(flag.getFlagId());
 		
-		assertEquals(0L, count("select count(*) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId()));
+		assertEquals(0L,
+		    count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId()));
 		assertEquals(1L,
-		    count("select count(*) from " + RaisedFlags.DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId()));
+		    count("select count(*) from " + ActCoreConstants.FLAG_DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId()));
 	}
 	
 	@Test
 	public void keepsTheDateAFlagWasRaisedWhenPatientflagsRewritesItsRow() {
 		matching(true);
 		runFullRefresh();
-		execute("update " + RaisedFlags.TABLE + " set raised_since = '2026-01-05 10:00:00'");
+		execute("update " + ActCoreConstants.RAISED_FLAG_TABLE + " set raised_since = '2026-01-05 10:00:00'");
 		
 		regenerateAsPatientflagsDoes();
 		refreshPatient();
@@ -131,7 +134,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	public void startsAPatientsListMembershipOnTheDayTheFlagWasRaised() {
 		matching(true);
 		runFullRefresh();
-		execute("update " + RaisedFlags.TABLE + " set raised_since = '2026-01-05 10:00:00'");
+		execute("update " + ActCoreConstants.RAISED_FLAG_TABLE + " set raised_since = '2026-01-05 10:00:00'");
 		execute("delete from cohort_member");
 		
 		runFullRefresh();
@@ -146,7 +149,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	public void forgetsTheDateOnceTheFlagStopsMatchingAndDatesARecurrenceAfresh() {
 		matching(true);
 		runFullRefresh();
-		execute("update " + RaisedFlags.TABLE + " set raised_since = '2026-01-05 10:00:00'");
+		execute("update " + ActCoreConstants.RAISED_FLAG_TABLE + " set raised_since = '2026-01-05 10:00:00'");
 		
 		matching(false);
 		refreshPatient();
@@ -195,7 +198,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(1, shownFlags());
 		assertEquals(1, listMembers());
-		assertEquals(0L, count("select count(*) from " + RaisedFlags.TABLE + " where date_dismissed is not null"));
+		assertEquals(0L,
+		    count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where date_dismissed is not null"));
 	}
 	
 	@Test
@@ -294,7 +298,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		}
 		
 		assertEquals(RaisedFlags.Dismissal.REFRESH_RUNNING, refused);
-		assertEquals(0L, count("select count(*) from " + RaisedFlags.TABLE + " where date_dismissed is not null"));
+		assertEquals(0L,
+		    count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where date_dismissed is not null"));
 		assertEquals(1, shownFlags());
 		assertEquals(1, listMembers());
 		assertEquals(RaisedFlags.Dismissal.DISMISSED, dismiss());
@@ -313,7 +318,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void letsAnyFlagBeDismissedWhenTheTagPropertyIsEmpty() {
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, ""));
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_DISMISS_FLAG_TAG, ""));
 		matching(true);
 		Flag untagged = saveFlag("risk", null);
 		runFullRefresh();
@@ -359,7 +364,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		matching(true);
 		runFullRefresh();
 		Patient patient = patient();
-		User user = authenticateWith(RaisedFlags.DISMISS_PRIVILEGE, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
+		User user = authenticateWith(ActCorePrivileges.DISMISS_FLAGS, PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS);
 		
 		assertTrue(raisedFlags().mayDismiss(flag));
 		assertEquals(RaisedFlags.Dismissal.DISMISSED, raisedFlags().dismiss(patient, flag));
@@ -367,7 +372,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		Context.logout();
 		authenticate();
 		assertEquals(user.getUserId().intValue(),
-		    ((Number) single("select dismissed_by from " + RaisedFlags.TABLE)).intValue());
+		    ((Number) single("select dismissed_by from " + ActCoreConstants.RAISED_FLAG_TABLE)).intValue());
 	}
 	
 	@Test
@@ -383,7 +388,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 			fail("expected the dismissal to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(RaisedFlags.DISMISS_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.DISMISS_FLAGS));
 		}
 	}
 	
@@ -463,13 +468,14 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	private long rows() {
-		return ((Number) single("select count(*) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId()))
-		        .longValue();
+		Number count = (Number) single(
+		    "select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId());
+		return count.longValue();
 	}
 	
 	private String raisedSince() {
-		return single("select cast(raised_since as date) from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId())
-		        .toString();
+		return single("select cast(raised_since as date) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = "
+		        + flag.getFlagId()).toString();
 	}
 	
 	private User authenticateWith(String... privileges) {

@@ -26,6 +26,7 @@ import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
@@ -36,18 +37,6 @@ import org.slf4j.LoggerFactory;
  * state, when the patient is saved or has a duplicate merged into them.
  */
 public class CloseEnrolmentsOnDeath implements MethodInterceptor {
-	
-	/**
-	 * The name of the global property that holds the uuid of the concept whose state a study enrolment
-	 * ends in when the patient dies. A blank value leaves study enrolments open.
-	 */
-	public static final String STUDY_DEATH_STATE_PROPERTY = "actcore.studies.deathStateConcept";
-	
-	/**
-	 * The name of the global property that holds the uuid of the concept whose state an RHD Registry
-	 * enrolment ends in when the patient dies. A blank value leaves registry enrolments open.
-	 */
-	public static final String REGISTRY_DEATH_STATE_PROPERTY = "actcore.registry.deathStateConcept";
 	
 	private static final Logger log = LoggerFactory.getLogger(CloseEnrolmentsOnDeath.class);
 	
@@ -174,9 +163,10 @@ public class CloseEnrolmentsOnDeath implements MethodInterceptor {
 	
 	private static String deathPropertyFor(Program program) {
 		if (EnrolOnRegistration.isRegistry(program)) {
-			return REGISTRY_DEATH_STATE_PROPERTY;
+			return ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT;
 		}
-		return program != null && Context.getService(StudyService.class).isStudy(program) ? STUDY_DEATH_STATE_PROPERTY
+		return program != null && Context.getService(StudyService.class).isStudy(program)
+		        ? ActCoreConstants.GP_STUDIES_DEATH_STATE_CONCEPT
 		        : null;
 	}
 	

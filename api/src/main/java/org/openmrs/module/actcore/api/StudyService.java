@@ -15,8 +15,8 @@ import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -32,8 +32,8 @@ public interface StudyService extends OpenmrsService {
 	 * Gets the studies that are not retired, sorted by name.
 	 *
 	 * @return the studies, sorted by name ignoring case; empty when there are none
-	 * @throws org.openmrs.api.APIException when {@value Studies#TEMPLATE_PROPERTY} names no program
-	 *             with a workflow
+	 * @throws org.openmrs.api.APIException when {@value ActCoreConstants#GP_STUDY_TEMPLATE_PROGRAM}
+	 *             names no program with a workflow
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link PrivilegeConstants#GET_PROGRAMS}
 	 */
@@ -46,8 +46,8 @@ public interface StudyService extends OpenmrsService {
 	 *
 	 * @param uuid the study's uuid
 	 * @return the study; null when no program has the uuid, or the program is retired or not a study
-	 * @throws org.openmrs.api.APIException when {@value Studies#TEMPLATE_PROPERTY} names no program
-	 *             with a workflow
+	 * @throws org.openmrs.api.APIException when {@value ActCoreConstants#GP_STUDY_TEMPLATE_PROGRAM}
+	 *             names no program with a workflow
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link PrivilegeConstants#GET_PROGRAMS} nor {@link ActCorePrivileges#MANAGE_STUDIES}
 	 */
@@ -78,8 +78,8 @@ public interface StudyService extends OpenmrsService {
 	 * @return the saved program
 	 * @throws org.openmrs.api.ValidationException when the name is blank, longer than 50 characters, or
 	 *             already used by another program or another study's concept
-	 * @throws org.openmrs.api.APIException when {@value Studies#TEMPLATE_PROPERTY} names no program
-	 *             with a workflow
+	 * @throws org.openmrs.api.APIException when {@value ActCoreConstants#GP_STUDY_TEMPLATE_PROGRAM}
+	 *             names no program with a workflow
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
 	 */
@@ -96,7 +96,7 @@ public interface StudyService extends OpenmrsService {
 	 * @throws org.openmrs.api.ValidationException when the name is blank, longer than 50 characters, or
 	 *             already used by another program or another study's concept
 	 * @throws org.openmrs.api.APIException when the program is not a study, or
-	 *             {@value Studies#TEMPLATE_PROPERTY} names no program with a workflow
+	 *             {@value ActCoreConstants#GP_STUDY_TEMPLATE_PROGRAM} names no program with a workflow
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
 	 */

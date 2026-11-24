@@ -18,6 +18,8 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
@@ -42,7 +44,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	// What evaluating the flag's criteria and updating the patient's place on its list need.
 	private static final String[] DISMISS_PRIVILEGES = { PatientFlagsConstants.PRIV_TEST_FLAGS,
 	        PrivilegeConstants.SQL_LEVEL_ACCESS, PrivilegeConstants.GET_PATIENTS, PrivilegeConstants.GET_GLOBAL_PROPERTIES,
-	        "View Cohorts In Cohort Module", "Edit Cohorts in Cohort Module" };
+	        ActCoreConstants.COHORT_VIEW_COHORTS, ActCoreConstants.COHORT_EDIT_COHORTS };
 	
 	private RaisedFlagDAO dao;
 	
@@ -139,7 +141,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	@Override
 	@Transactional(readOnly = true)
 	public boolean mayDismiss(Flag flag) {
-		return Context.hasPrivilege(RaisedFlags.DISMISS_PRIVILEGE)
+		return Context.hasPrivilege(ActCorePrivileges.DISMISS_FLAGS)
 		        && Context.hasPrivilege(PatientFlagsConstants.PRIV_VIEW_PATIENT_FLAGS) && carriesDismissTag(flag);
 	}
 	
@@ -200,7 +202,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	}
 	
 	private static boolean carriesDismissTag(Flag flag) {
-		String tag = Context.getAdministrationService().getGlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY);
+		String tag = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_DISMISS_FLAG_TAG);
 		if (tag == null || tag.trim().isEmpty()) {
 			return true;
 		}

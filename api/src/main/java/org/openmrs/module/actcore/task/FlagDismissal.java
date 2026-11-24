@@ -21,13 +21,14 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsObject;
+import org.openmrs.module.actcore.ActCoreConstants;
 
 /**
  * One dismissal of a patient's flag: who dismissed which flag for which patient, and when. A
  * dismissal is kept after the flag lowers for the patient, and after the flag is purged.
  */
 @Entity
-@Table(name = RaisedFlags.DISMISSAL_TABLE)
+@Table(name = ActCoreConstants.FLAG_DISMISSAL_TABLE)
 public class FlagDismissal extends BaseOpenmrsObject {
 	
 	@Id

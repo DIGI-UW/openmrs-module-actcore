@@ -37,9 +37,7 @@ import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.Location;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.registry.EnrolOnRegistration;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
@@ -82,10 +80,10 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		nationalId = new PatientIdentifierType();
 		nationalId.setName("National ID");
 		Context.getPatientService().savePatientIdentifierType(nationalId);
-		property(FormDownload.ATTRIBUTE_TYPES_PROPERTY, phone.getUuid());
-		property(FormDownload.IDENTIFIER_TYPES_PROPERTY, nationalId.getUuid());
-		property(StudyEnrolmentRules.OPT_IN_PROPERTY, optIn.getUuid());
-		property(StudyEnrolmentRules.YES_PROPERTY, yes.getUuid());
+		property(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_ATTRIBUTE_TYPES, phone.getUuid());
+		property(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_IDENTIFIER_TYPES, nationalId.getUuid());
+		property(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE, optIn.getUuid());
+		property(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
 		
 		Patient patient = Context.getPatientService().getPatient(7);
 		patient.addAttribute(new PersonAttribute(phone, "+256 700 000001"));
@@ -212,7 +210,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		Patient patient = Context.getPatientService().getPatient(2);
 		patient.addAttribute(new PersonAttribute(optIn, yes.getConceptId().toString()));
 		Context.getPatientService().savePatient(patient);
-		property(StudyEnrolmentRules.OPT_IN_PROPERTY, "");
+		property(ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE, "");
 		
 		assertTrue(build(false, true, null, null).rows.isEmpty());
 	}
@@ -220,7 +218,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void build_shouldLeaveOutAnIdentifyingQuestionUnlessIdentified() {
 		Concept address = concept("Home Address", "Text");
-		property(FormDownload.CONCEPTS_PROPERTY, "some-other-uuid, " + address.getUuid());
+		property(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS, "some-other-uuid, " + address.getUuid());
 		Encounter encounter = encounter(2, 0);
 		Patient patient = encounter.getPatient();
 		patient.addAttribute(new PersonAttribute(optIn, yes.getConceptId().toString()));
@@ -302,7 +300,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void buildPerPatient_shouldLeaveOutAnIdentifyingQuestionNamingItsForm() {
 		Concept address = concept("Home Address", "Text");
-		property(FormDownload.CONCEPTS_PROPERTY, address.getUuid());
+		property(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS, address.getUuid());
 		encounter(form, 7, 0);
 		FormDownload.Choice echo = new FormDownload.Choice(form, "Echo", Arrays.asList(ejection, address),
 		        Arrays.asList("EF", "Home Address"));
@@ -385,7 +383,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	public void filters_shouldKeepThePatientsOfTheChosenClinics() {
 		PersonAttributeType primaryCare = attributeType("Primary care clinic", "org.openmrs.Location");
 		PersonAttributeType cardiac = attributeType("Cardiac clinic", "org.openmrs.Location");
-		property(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY, primaryCare.getUuid() + "," + cardiac.getUuid());
+		property(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES, primaryCare.getUuid() + "," + cardiac.getUuid());
 		Location one = Context.getLocationService().getLocation(1);
 		Location two = Context.getLocationService().getLocation(2);
 		clinic(7, cardiac, one);
@@ -448,7 +446,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		program.setDescription("RHD Registry");
 		program.setConcept(concept("RHD Registry", "N/A"));
 		program = Context.getProgramWorkflowService().saveProgram(program);
-		property(EnrolOnRegistration.PROGRAM_PROPERTY, program.getUuid());
+		property(ActCoreConstants.GP_REGISTRY_PROGRAM, program.getUuid());
 		return program;
 	}
 	

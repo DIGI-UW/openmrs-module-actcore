@@ -30,6 +30,7 @@ import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.customdatatype.datatype.FreeTextDatatype;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,8 +117,8 @@ public class StudyEnrolmentRulesCommitContextTest extends BaseModuleContextSensi
 		template.setRetired(true);
 		Context.getProgramWorkflowService().saveProgram(template);
 		study = Context.getProgramWorkflowService().saveProgram(program("ARC"));
-		property(Studies.TEMPLATE_PROPERTY, template.getUuid());
-		property(StudyEnrolmentRules.STUDY_ID_PROPERTY, studyId.getUuid());
+		property(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM, template.getUuid());
+		property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE, studyId.getUuid());
 		Context.addAdvice(ProgramWorkflowService.class, rules);
 		
 		PatientProgram enrolment = new PatientProgram();
@@ -205,8 +206,8 @@ public class StudyEnrolmentRulesCommitContextTest extends BaseModuleContextSensi
 			sql("delete from program_attribute_type where program_attribute_type_id = "
 			        + studyId.getProgramAttributeTypeId());
 		}
-		sql("delete from global_property where property in ('" + Studies.TEMPLATE_PROPERTY + "', '"
-		        + StudyEnrolmentRules.STUDY_ID_PROPERTY + "')");
+		sql("delete from global_property where property in ('" + ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM + "', '"
+		        + ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE + "')");
 	}
 	
 	private static void sql(String statement) {

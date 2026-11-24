@@ -21,12 +21,14 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.openmrs.module.actcore.ActCoreConstants;
+
 /**
- * A flag raised for a patient, as {@link RaisedFlags} keeps it: since when it has been raised, and,
- * once it is dismissed, who dismissed it and when.
+ * A flag raised for a patient, as {@link org.openmrs.module.actcore.api.RaisedFlagService} keeps
+ * it: since when it has been raised, and, once it is dismissed, who dismissed it and when.
  */
 @Entity
-@Table(name = RaisedFlags.TABLE)
+@Table(name = ActCoreConstants.RAISED_FLAG_TABLE)
 public class RaisedFlag {
 	
 	/** The key of a raised flag: the patient and the flag, which together identify it. */

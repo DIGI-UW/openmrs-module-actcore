@@ -21,12 +21,14 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.openmrs.module.actcore.ActCoreConstants;
+
 /**
  * Whether a patient's injection on a day was on time, as the latest adherence refresh found. The
  * refresh writes these rows in bulk by SQL rather than through this entity.
  */
 @Entity
-@Table(name = AdherenceRefresh.TIMING_TABLE)
+@Table(name = ActCoreConstants.INJECTION_TIMING_TABLE)
 public class InjectionTiming {
 	
 	/** The key of a timing: the patient and the day of the injection, which together identify it. */

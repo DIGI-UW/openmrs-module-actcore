@@ -33,11 +33,10 @@ import org.openmrs.Obs;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
-import org.openmrs.module.actcore.task.FlagListSync;
 import org.openmrs.module.actcore.task.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -325,7 +324,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		final List<Throwable> failed = new ArrayList<Throwable>();
 		final AdherenceRefresh racing = racingADose(failed);
 		// No flag carries the tag, so the run creates no list to clean up.
-		property(FlagListSync.TAG_PROPERTY, "no flag carries this " + UUID.randomUUID());
+		property(ActCoreConstants.GP_LIST_FLAG_TAG, "no flag carries this " + UUID.randomUUID());
 		
 		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
 			
@@ -525,12 +524,12 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		for (Encounter encounter : committed) {
 			Context.getEncounterService().purgeEncounter(encounter, true);
 		}
-		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TABLE, false);
-		Context.getAdministrationService().executeSQL("delete from " + AdherenceRefresh.TIMING_TABLE, false);
-		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.TABLE, false);
+		Context.getAdministrationService().executeSQL("delete from " + ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE, false);
+		Context.getAdministrationService().executeSQL("delete from " + ActCoreConstants.INJECTION_TIMING_TABLE, false);
+		Context.getAdministrationService().executeSQL("delete from " + ActCoreConstants.RAISED_FLAG_TABLE, false);
 		if (!committedFlags.isEmpty()) {
-			property(FlagListSync.TAG_PROPERTY, "");
-			property(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY, "");
+			property(ActCoreConstants.GP_LIST_FLAG_TAG, "");
+			property(ActCoreConstants.GP_REFRESH_LAST_FINISHED, "");
 		}
 		for (Flag flag : committedFlags) {
 			Context.getAdministrationService()

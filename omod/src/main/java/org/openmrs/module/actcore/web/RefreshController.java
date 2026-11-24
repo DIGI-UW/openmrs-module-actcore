@@ -16,6 +16,7 @@ import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
 import org.openmrs.module.webservices.rest.SimpleObject;
@@ -35,20 +36,18 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RefreshController extends ActCoreRestController {
 	
-	/** The privilege a user needs, unless they are a superuser, to see or run the refresh. */
-	public static final String PRIVILEGE = ActCorePrivileges.REFRESH_FLAGS;
-	
 	/**
 	 * Gets when the refresh last finished and whether it is running now.
 	 *
 	 * @return {@code lastRefreshed}, an ISO-8601 instant or null before the first run finishes, and
 	 *         {@code running}
-	 * @throws ContextAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#REFRESH_FLAGS}
 	 */
 	@RequestMapping(value = "/refresh", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStatus() {
-		Context.requirePrivilege(PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
 		return status();
 	}
 	
@@ -60,14 +59,15 @@ public class RefreshController extends ActCoreRestController {
 	 * @return the status, as {@link #getStatus()} gives it, with {@code refreshed}, false when another
 	 *         run was in progress; after a run, also how many flags and lists failed and whether the
 	 *         adherence refresh failed
-	 * @throws ContextAuthenticationException when the user lacks {@link #PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#REFRESH_FLAGS}
 	 * @throws APIException when the module has not started or the refresh throws
 	 */
 	// JSON only: another site's page can post a form here with the user's cookie, but not JSON.
 	@RequestMapping(value = "/refresh", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public SimpleObject refresh() {
-		Context.requirePrivilege(PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
 		DaemonToken token = ActCoreActivator.getDaemonToken();
 		if (token == null) {
 			throw new APIException("ACT Core has not started, so it cannot run the refresh");
@@ -101,8 +101,7 @@ public class RefreshController extends ActCoreRestController {
 		String lastFinished;
 		try {
 			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-			lastFinished = Context.getAdministrationService()
-			        .getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY);
+			lastFinished = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED);
 		}
 		finally {
 			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);

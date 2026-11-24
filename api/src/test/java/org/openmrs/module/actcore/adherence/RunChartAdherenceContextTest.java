@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.openmrs.Encounter;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
@@ -68,7 +69,8 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		report.addParameter(new Parameter("points", "Points", String.class));
 		report.addDataSetDefinition("metrics", Mapped.mapStraightThrough(sql));
 		Context.getService(ReportDefinitionService.class).saveDefinition(report);
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_RUN_CHARTS_REPORT, REPORT_UUID));
 	}
 	
 	@Test

@@ -25,6 +25,7 @@ import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
@@ -45,7 +46,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Before
 	public void pointAtAReport() {
 		clinic = Context.getLocationService().getLocation(1);
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_RUN_CHARTS_REPORT, REPORT_UUID));
 	}
 	
 	/**
@@ -375,7 +377,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			fail("expected the report to be refused");
 		}
 		catch (APIException e) {
-			assertTrue(e.getMessage().contains(RunCharts.GP_REPORT));
+			assertTrue(e.getMessage().contains(ActCoreConstants.GP_RUN_CHARTS_REPORT));
 		}
 	}
 	
