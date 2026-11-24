@@ -30,7 +30,7 @@ import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.module.actcore.clinics.UserClinics;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;

@@ -18,8 +18,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.DownloadLogDAO;
-import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.download.DownloadRecord;
+import org.openmrs.module.actcore.model.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadRecord;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 

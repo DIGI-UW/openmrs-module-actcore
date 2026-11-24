@@ -19,7 +19,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.api.NextStepsService;
-import org.openmrs.module.actcore.nextsteps.NextStep;
+import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;

@@ -41,6 +41,7 @@ import org.openmrs.module.actcore.adherence.ProphylaxisSummary;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.consultation.NextConsultation;
+import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;

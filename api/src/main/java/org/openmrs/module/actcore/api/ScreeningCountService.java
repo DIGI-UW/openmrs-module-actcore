@@ -17,7 +17,7 @@ import org.openmrs.Location;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 
 /**
  * The service that reads, saves and sums the monthly screening counts that each clinic enters, as

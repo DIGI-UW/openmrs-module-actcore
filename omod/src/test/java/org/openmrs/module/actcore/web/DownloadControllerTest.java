@@ -54,7 +54,7 @@ import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.DownloadLogService;
-import org.openmrs.module.actcore.download.DownloadLog;
+import org.openmrs.module.actcore.model.DownloadLog;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;

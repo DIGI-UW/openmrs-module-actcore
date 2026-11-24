@@ -23,7 +23,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.api.db.FlagGapDAO;
-import org.openmrs.module.actcore.gap.FlagGap;
+import org.openmrs.module.actcore.model.FlagGap;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.api.FlagService;

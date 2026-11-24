@@ -29,6 +29,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.ScreeningCountService;
+import org.openmrs.module.actcore.model.ScreeningCounts;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {

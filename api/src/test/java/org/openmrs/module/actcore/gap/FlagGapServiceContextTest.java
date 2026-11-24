@@ -46,6 +46,7 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.FlagGapService;
 import org.openmrs.module.actcore.api.impl.FlagGapServiceImpl;
+import org.openmrs.module.actcore.model.FlagGap;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;

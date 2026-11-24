@@ -41,6 +41,7 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.logs.ActivityLog;
+import org.openmrs.module.actcore.model.RaisedFlags;
 import org.openmrs.module.cohort.CohortType;
 import org.openmrs.module.cohort.api.CohortTypeService;
 import org.openmrs.module.patientflags.Flag;

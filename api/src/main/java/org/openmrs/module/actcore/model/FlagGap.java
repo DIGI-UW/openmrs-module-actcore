@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.gap;
+package org.openmrs.module.actcore.model;
 
 import org.openmrs.Concept;
 import org.openmrs.Encounter;

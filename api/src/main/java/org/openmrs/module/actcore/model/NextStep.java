@@ -7,7 +7,7 @@
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
-package org.openmrs.module.actcore.nextsteps;
+package org.openmrs.module.actcore.model;
 
 /**
  * One step the chart suggests for a patient at this visit, such as a form to record. It says which

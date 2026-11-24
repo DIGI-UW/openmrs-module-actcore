@@ -16,7 +16,7 @@ import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.actcore.consultation.NextConsultation;
-import org.openmrs.module.actcore.nextsteps.NextStep;
+import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.module.actcore.nextsteps.NextSteps;
 import org.openmrs.util.PrivilegeConstants;
 
