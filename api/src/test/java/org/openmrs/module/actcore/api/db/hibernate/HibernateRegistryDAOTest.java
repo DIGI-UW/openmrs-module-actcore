@@ -10,11 +10,10 @@
 package org.openmrs.module.actcore.api.db.hibernate;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Collections;
+import java.util.UUID;
 
 import org.junit.Test;
 import org.openmrs.api.context.Context;
@@ -24,21 +23,25 @@ import org.openmrs.test.BaseModuleContextSensitiveTest;
 public class HibernateRegistryDAOTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
-	public void getDeadPatientsWithOpenEnrolments_shouldGiveThePatientsOfItsSql() {
-		Context.getAdministrationService().executeSQL(
-		    "update person set dead = true where person_id in (select patient_id from patient_program)", false);
+	public void getDeadPatientsWithOpenEnrolments_shouldGiveDeadUnvoidedPatientsWithAnOpenEnrolmentInThePrograms() {
+		enrol(6, 1);
+		enrol(7, 3);
+		enrol(432, 1);
+		sql("update person set dead = true where person_id in (2, 7, 8, 432)");
+		sql("update patient_program set date_completed = '2009-01-01' where patient_program_id = 4");
 		HibernateRegistryDAO dao = new HibernateRegistryDAO();
 		dao.setSessionFactory(Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class));
 		
-		List<Integer> expected = new ArrayList<Integer>();
-		for (List<Object> row : Context.getAdministrationService()
-		        .executeSQL("select distinct pp.patient_id from patient_program pp"
-		                + " join person p on p.person_id = pp.patient_id where p.dead = true and p.voided = false"
-		                + " and pp.voided = false and pp.date_completed is null and pp.program_id in (1,2)",
-		            true)) {
-			expected.add(((Number) row.get(0)).intValue());
-		}
-		assertFalse(expected.isEmpty());
-		assertEquals(expected, dao.getDeadPatientsWithOpenEnrolments(Arrays.asList(1, 2)));
+		assertEquals(Collections.singletonList(2), dao.getDeadPatientsWithOpenEnrolments(Arrays.asList(1, 2)));
+	}
+	
+	private static void enrol(int patientId, int programId) {
+		sql("insert into patient_program (patient_id, program_id, date_enrolled, creator, date_created, voided, uuid)"
+		        + " values (" + patientId + ", " + programId + ", '2009-01-01', 1, now(), false, '" + UUID.randomUUID()
+		        + "')");
+	}
+	
+	private static void sql(String statement) {
+		Context.getAdministrationService().executeSQL(statement, false);
 	}
 }

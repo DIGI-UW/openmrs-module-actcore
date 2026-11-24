@@ -70,6 +70,10 @@ public class HibernateAuditLogDAOTest extends BaseModuleContextSensitiveTest {
 		        + " values (%d, '1', %d, 1, now(), false, '%s')",
 		    PATIENT, clinic.getPersonAttributeTypeId(), UUID.randomUUID());
 		sql("insert into user_property (user_id, property, property_value) values (1, 'actcore.clinics', 'abc')");
+		sql("insert into person_name (person_id, preferred, given_name, family_name, creator, date_created, voided, uuid)"
+		        + " values (%d, true, 'Voided', 'Name', 1, now(), true, '%s')",
+		    PATIENT, UUID.randomUUID());
+		sql("update person set voided = true where person_id = 6");
 		
 		revision(10, "2026-10-21 10:52:14", 1);
 		revision(11, "2026-10-22 11:10:00", 501);
