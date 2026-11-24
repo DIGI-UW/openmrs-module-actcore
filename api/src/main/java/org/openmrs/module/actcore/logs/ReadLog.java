@@ -28,8 +28,8 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
-import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.download.FormDownload;
+import org.openmrs.module.actcore.utils.UserClinics;
 
 /**
  * The read log behind the Logs page's Patients opened tab, which lists who opened which patient's

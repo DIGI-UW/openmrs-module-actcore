@@ -37,7 +37,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.UserClinicsService;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 

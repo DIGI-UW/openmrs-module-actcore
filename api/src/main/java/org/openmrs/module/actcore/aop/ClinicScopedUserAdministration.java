@@ -26,7 +26,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.utils.UserClinics;
 
 /**
  * Advice on UserService that confines an administrator limited to their clinics, such as a site

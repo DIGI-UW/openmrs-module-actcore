@@ -19,6 +19,7 @@ import org.openmrs.module.actcore.aop.ClinicScopedUserAdministration;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.api.db.UserClinicsDAO;
 import org.openmrs.module.actcore.api.impl.UserClinicsServiceImpl;
+import org.openmrs.module.actcore.utils.UserClinics;
 
 /**
  * A Hibernate interceptor that checks a limited administrator's change to a user's clinics or roles

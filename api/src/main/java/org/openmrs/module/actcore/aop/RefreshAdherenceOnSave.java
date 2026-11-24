@@ -19,9 +19,9 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.AdherenceService;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

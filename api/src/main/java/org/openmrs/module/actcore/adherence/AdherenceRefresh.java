@@ -34,9 +34,9 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
-import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -18,7 +18,7 @@ import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.api.db.UserClinicsDAO;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.utils.UserClinics;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.UserClinicsService}. */

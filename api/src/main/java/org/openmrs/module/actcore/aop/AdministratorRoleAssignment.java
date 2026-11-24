@@ -28,7 +28,7 @@ import org.openmrs.api.context.Credentials;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
 
