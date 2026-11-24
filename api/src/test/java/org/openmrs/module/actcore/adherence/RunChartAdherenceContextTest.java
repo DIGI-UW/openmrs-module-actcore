@@ -42,14 +42,15 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 	public void pointAtAReportListingPatient7() {
 		StringBuilder select = new StringBuilder("select cast(dateadd('DAY', -x, date '" + TODAY
 		        + "') as date) as point_date, null as clinic_uuid, 0 as total_registrants, 0 as active_registrants,"
-		        + " 0 as active_registrants_seen_last_7_months, 0 as active_registrants_prescribed_prophylaxis,"
+		        + " 0 as active_registrants_rhd, 0 as active_registrants_seen_last_7_months, 0 as active_registrants_prescribed_prophylaxis,"
 		        + " 0 as consultation_visit_total, 0 as consultation_visits_with_echocardiogram_resulted,"
 		        + " 0 as consultation_visits_with_intervention, 0 as interventions_completed,"
 		        + " 0 as active_registrants_on_bpg, null as bpg_patient_ids from system_range(1, 34)");
 		for (LocalDate day : new LocalDate[] { EARLIER, TODAY }) {
 			select.append(" union all ");
 			select.append("select date '").append(day).append("' as point_date, null as clinic_uuid,")
-			        .append(" 1 as total_registrants, 1 as active_registrants, 1 as active_registrants_seen_last_7_months,")
+			        .append(" 1 as total_registrants, 1 as active_registrants, 1 as active_registrants_rhd,")
+			        .append(" 1 as active_registrants_seen_last_7_months,")
 			        .append(" 1 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,")
 			        .append(
 			            " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,")

@@ -69,7 +69,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	private static String row(String named, int day) {
 		return "select date '2026-10-" + String.format("%02d", day) + "' as point_date, " + named
 		        + " as clinic_uuid, 10 as total_registrants, " + day
-		        + " as active_registrants, 5 as active_registrants_seen_last_7_months,"
+		        + " as active_registrants, 6 as active_registrants_rhd, 5 as active_registrants_seen_last_7_months,"
 		        + " 4 as active_registrants_prescribed_prophylaxis, " + (named.equals("null") ? 0 : 4)
 		        + " as consultation_visit_total, 1 as consultation_visits_with_echocardiogram_resulted,"
 		        + " 0 as consultation_visits_with_intervention, 3 as interventions_completed,"
@@ -186,7 +186,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(Double.valueOf(0), adherent.value);
 		assertEquals(Long.valueOf(0), adherent.count);
-		assertEquals(Long.valueOf(21), adherent.total);
+		// Of the 6 active RHD patients, as the care cascade shares it, not the 21 active registrants
+		assertEquals(Long.valueOf(6), adherent.total);
 	}
 	
 	@Test
@@ -205,6 +206,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void calculate_shouldRefuseARowWithNoDate() {
 		useReportSelecting("select null as point_date, null as clinic_uuid, 1 as total_registrants, 1 as active_registrants,"
+		        + " 1 as active_registrants_rhd,"
 		        + " 0 as active_registrants_seen_last_7_months, 0 as active_registrants_prescribed_prophylaxis,"
 		        + " 0 as consultation_visit_total, 0 as consultation_visits_with_echocardiogram_resulted,"
 		        + " 0 as consultation_visits_with_intervention, 0 as interventions_completed,"
@@ -222,7 +224,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void calculate_shouldRefuseABpgListShorterThanItsCount() {
 		useReportSelecting("select date '2026-10-21' as point_date, null as clinic_uuid, 1 as total_registrants,"
-		        + " 1 as active_registrants, 0 as active_registrants_seen_last_7_months,"
+		        + " 1 as active_registrants, 1 as active_registrants_rhd, 0 as active_registrants_seen_last_7_months,"
 		        + " 0 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,"
 		        + " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
 		        + " 0 as interventions_completed, 3 as active_registrants_on_bpg, '7,8' as bpg_patient_ids");
@@ -356,7 +358,8 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 			assertTrue(e.getMessage(), e.getMessage().contains(String.valueOf(RunCharts.MOST_POINTS)));
 		}
 		useReportSelecting("select cast(dateadd('DAY', -x, date '2026-10-21') as date) as point_date, null as clinic_uuid,"
-		        + " 0 as total_registrants, 0 as active_registrants, 0 as active_registrants_seen_last_7_months,"
+		        + " 0 as total_registrants, 0 as active_registrants, 0 as active_registrants_rhd,"
+		        + " 0 as active_registrants_seen_last_7_months,"
 		        + " 0 as active_registrants_prescribed_prophylaxis, 0 as consultation_visit_total,"
 		        + " 0 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
 		        + " 0 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"

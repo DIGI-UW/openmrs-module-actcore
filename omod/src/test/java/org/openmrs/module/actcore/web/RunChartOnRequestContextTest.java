@@ -73,7 +73,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		DaemonTokens.pass("actcore", new ActCoreActivator());
 		String day = "cast(dateadd('DAY', -x, date '2026-10-21') as date)";
 		String select = "select " + day + " as point_date, null as clinic_uuid, 40 as total_registrants, day_of_month(" + day
-		        + ") as active_registrants, 2 as active_registrants_seen_last_7_months,"
+		        + ") as active_registrants, 3 as active_registrants_rhd, 2 as active_registrants_seen_last_7_months,"
 		        + " 3 as active_registrants_prescribed_prophylaxis, 2 as consultation_visit_total,"
 		        + " 1 as consultation_visits_with_echocardiogram_resulted, 0 as consultation_visits_with_intervention,"
 		        + " 1 as interventions_completed, 0 as active_registrants_on_bpg, null as bpg_patient_ids"

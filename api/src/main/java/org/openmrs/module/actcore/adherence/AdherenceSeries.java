@@ -27,13 +27,31 @@ public final class AdherenceSeries {
 	private AdherenceSeries() {
 	}
 	
+	/** What a patient held on a day: the adherence, and when the next dose was due. */
+	public static final class Day {
+		
+		public final double adherence;
+		
+		/** Null when the replay set none. */
+		public final LocalDate nextDue;
+		
+		Day(double adherence, LocalDate nextDue) {
+			this.adherence = adherence;
+			this.nextDue = nextDue;
+		}
+		
+		/** Covered on the day: the next dose not yet due, as the care cascade's Covered today reads it. */
+		public boolean coveredOn(LocalDate day) {
+			return nextDue != null && !nextDue.isBefore(day);
+		}
+	}
+	
 	/**
-	 * By patient, then by day, the adherence held on that day: absent for a day the patient held no row
-	 * or no adherence. Each history is read and replayed once.
+	 * By patient, then by day, the adherence held on that day and when the next dose was due: absent
+	 * for a day the patient held no row or no adherence. Each history is read and replayed once.
 	 */
-	public static Map<Integer, Map<LocalDate, Double>> adherenceOn(Collection<Integer> patientIds,
-	        SortedSet<LocalDate> days) {
-		Map<Integer, Map<LocalDate, Double>> adherence = new HashMap<Integer, Map<LocalDate, Double>>();
+	public static Map<Integer, Map<LocalDate, Day>> adherenceOn(Collection<Integer> patientIds, SortedSet<LocalDate> days) {
+		Map<Integer, Map<LocalDate, Day>> adherence = new HashMap<Integer, Map<LocalDate, Day>>();
 		if (patientIds.isEmpty() || days.isEmpty()) {
 			return adherence;
 		}
@@ -47,11 +65,11 @@ public final class AdherenceSeries {
 		}
 		Integer oralFirstDueDays = AdherenceRefresh.oralFirstDueDays();
 		for (Map.Entry<Integer, AdherenceReplay.History> entry : histories.entrySet()) {
-			Map<LocalDate, Double> byDay = new HashMap<LocalDate, Double>();
+			Map<LocalDate, Day> byDay = new HashMap<LocalDate, Day>();
 			for (Map.Entry<LocalDate, AdherenceReplay.Row> row : AdherenceReplay
 			        .replayOn(entry.getValue(), days, oralFirstDueDays).entrySet()) {
 				if (row.getValue() != null && row.getValue().adherence != null) {
-					byDay.put(row.getKey(), row.getValue().adherence);
+					byDay.put(row.getKey(), new Day(row.getValue().adherence, row.getValue().nextDue));
 				}
 			}
 			adherence.put(entry.getKey(), byDay);

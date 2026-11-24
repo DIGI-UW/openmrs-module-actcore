@@ -68,11 +68,16 @@ public class RunCharts {
 	/** The metric the report does not give: counted here from the BPG list and the replay. */
 	static final String ADHERENT = "active_registrants_adherent";
 	
-	/** ACT 2.0's runchart_record columns the report gives as numbers. */
-	public static final List<String> COLUMNS = Collections.unmodifiableList(Arrays.asList("total_registrants",
-	    "active_registrants", "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
-	    "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
-	    "consultation_visits_with_intervention", "interventions_completed"));
+	/**
+	 * ACT 2.0's runchart_record columns the report gives as numbers, and active_registrants_rhd, the
+	 * active patients with the RHD category, which prescribed and adherent are shares of as on the care
+	 * cascade (AR-219).
+	 */
+	public static final List<String> COLUMNS = Collections
+	        .unmodifiableList(Arrays.asList("total_registrants", "active_registrants", "active_registrants_rhd",
+	            "active_registrants_seen_last_7_months", "active_registrants_prescribed_prophylaxis",
+	            "consultation_visit_total", "consultation_visits_with_echocardiogram_resulted",
+	            "consultation_visits_with_intervention", "interventions_completed"));
 	
 	/** The report's columns that must hold a number in every row. */
 	private static final List<String> NUMBER_COLUMNS;
@@ -83,20 +88,27 @@ public class RunCharts {
 		NUMBER_COLUMNS = Collections.unmodifiableList(columns);
 	}
 	
-	/** The metrics ACT 2.0 charted as a percent, of the column given, as dashboard_query.py does. */
+	/**
+	 * The metrics charted as a percent, of the column given: as ACT 2.0's dashboard_query.py did,
+	 * except that prescribed and adherent are shares of the active RHD patients, as on the care
+	 * cascade, rather than of every active registrant, whom no diagnosis but RHD can be prescribed for.
+	 */
 	static final Map<String, String> PERCENT_OF;
 	
 	static {
 		Map<String, String> percentOf = new HashMap<String, String>();
 		percentOf.put("active_registrants_seen_last_7_months", "active_registrants");
-		percentOf.put("active_registrants_prescribed_prophylaxis", "active_registrants");
-		percentOf.put(ADHERENT, "active_registrants");
+		percentOf.put("active_registrants_prescribed_prophylaxis", "active_registrants_rhd");
+		percentOf.put(ADHERENT, "active_registrants_rhd");
 		percentOf.put("consultation_visits_with_echocardiogram_resulted", "consultation_visit_total");
 		percentOf.put("consultation_visits_with_intervention", "consultation_visit_total");
 		PERCENT_OF = Collections.unmodifiableMap(percentOf);
 	}
 	
-	/** ACT 2.0's eight run chart metrics; consultation_visit_total is only a denominator. */
+	/**
+	 * ACT 2.0's eight run chart metrics; consultation_visit_total and active_registrants_rhd are only
+	 * denominators.
+	 */
 	public static final List<String> METRICS = Collections.unmodifiableList(
 	    Arrays.asList("total_registrants", "active_registrants", "active_registrants_seen_last_7_months",
 	        "active_registrants_prescribed_prophylaxis", ADHERENT, "consultation_visits_with_echocardiogram_resulted",
@@ -259,7 +271,9 @@ public class RunCharts {
 	}
 	
 	/**
-	 * How many of each day's listed BPG patients were adherent on it, from one replay of each history.
+	 * How many of each day's listed BPG patients were adherent on it, from one replay of each history:
+	 * adherence of 80% or more, and covered that day, with the next dose not yet due, as the care
+	 * cascade's Adherent step counts within Covered today.
 	 */
 	private static Map<LocalDate, Long> adherentOf(Map<LocalDate, DataSetRow> rows, List<LocalDate> days) {
 		Map<LocalDate, Set<Integer>> listed = new HashMap<LocalDate, Set<Integer>>();
@@ -269,15 +283,15 @@ public class RunCharts {
 			listed.put(day, ids);
 			everyone.addAll(ids);
 		}
-		Map<Integer, Map<LocalDate, Double>> adherence = everyone.isEmpty()
-		        ? Collections.<Integer, Map<LocalDate, Double>> emptyMap()
+		Map<Integer, Map<LocalDate, AdherenceSeries.Day>> adherence = everyone.isEmpty()
+		        ? Collections.<Integer, Map<LocalDate, AdherenceSeries.Day>> emptyMap()
 		        : AdherenceSeries.adherenceOn(everyone, new TreeSet<LocalDate>(days));
 		Map<LocalDate, Long> adherent = new HashMap<LocalDate, Long>();
 		for (LocalDate day : days) {
 			long count = 0;
 			for (Integer id : listed.get(day)) {
-				Double value = adherence.containsKey(id) ? adherence.get(id).get(day) : null;
-				if (value != null && value >= 0.8) {
+				AdherenceSeries.Day value = adherence.containsKey(id) ? adherence.get(id).get(day) : null;
+				if (value != null && value.adherence >= 0.8 && value.coveredOn(day)) {
 					count++;
 				}
 			}
