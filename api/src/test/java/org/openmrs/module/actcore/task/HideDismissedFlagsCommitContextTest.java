@@ -22,6 +22,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.patientflags.Flag;
@@ -67,7 +68,7 @@ public class HideDismissedFlagsCommitContextTest extends BaseModuleContextSensit
 		Patient patient = Context.getPatientService().getPatient(PATIENT);
 		flagService.savePatientFlag(new PatientFlag(patient, flag, "dismissed"));
 		Context.getAdministrationService()
-		        .executeSQL("insert into " + RaisedFlags.TABLE
+		        .executeSQL("insert into " + ActCoreConstants.RAISED_FLAG_TABLE
 		                + " (patient_id, flag_id, raised_since, dismissed_by, date_dismissed) values (" + PATIENT + ", "
 		                + flag.getFlagId() + ", '2026-01-05 10:00:00', 1, '2026-01-06 10:00:00')",
 		            false);
@@ -101,8 +102,8 @@ public class HideDismissedFlagsCommitContextTest extends BaseModuleContextSensit
 		if (flag != null) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);
-			Context.getAdministrationService()
-			        .executeSQL("delete from " + RaisedFlags.TABLE + " where flag_id = " + flag.getFlagId(), false);
+			Context.getAdministrationService().executeSQL(
+			    "delete from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
 		}
 	}

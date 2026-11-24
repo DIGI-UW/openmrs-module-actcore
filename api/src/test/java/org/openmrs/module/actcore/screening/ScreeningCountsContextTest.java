@@ -26,6 +26,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.ScreeningCountService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -95,7 +96,7 @@ public class ScreeningCountsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static int count(String where) {
 		List<List<Object>> rows = Context.getAdministrationService()
-		        .executeSQL("select count(*) from " + ScreeningCounts.TABLE + " where " + where, true);
+		        .executeSQL("select count(*) from " + ActCoreConstants.SCREENING_COUNT_TABLE + " where " + where, true);
 		return ((Number) rows.get(0).get(0)).intValue();
 	}
 	

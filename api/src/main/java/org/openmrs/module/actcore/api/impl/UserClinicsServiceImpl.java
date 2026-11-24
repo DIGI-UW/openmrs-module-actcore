@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.api.db.UserClinicsDAO;
 import org.openmrs.module.actcore.clinics.UserClinics;
@@ -36,7 +37,7 @@ public class UserClinicsServiceImpl extends BaseOpenmrsService implements UserCl
 	@Transactional(readOnly = true)
 	public Set<String> getStoredClinics(Integer userId) {
 		return userId == null ? new LinkedHashSet<String>()
-		        : UserClinics.parse(dao.getUserProperty(userId, UserClinics.PROPERTY));
+		        : UserClinics.parse(dao.getUserProperty(userId, ActCoreConstants.USER_PROPERTY_CLINICS));
 	}
 	
 	/**

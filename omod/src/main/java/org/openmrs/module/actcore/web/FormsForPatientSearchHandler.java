@@ -21,6 +21,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Form;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.webservices.rest.web.RequestContext;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.resource.api.PageableResult;
@@ -38,12 +39,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class FormsForPatientSearchHandler implements SearchHandler {
-	
-	/**
-	 * The name of the global property that lists, by uuid and separated by commas or spaces, the forms
-	 * offered only for a female patient.
-	 */
-	public static final String FEMALE_ONLY_PROPERTY = "actcore.forms.femaleOnly";
 	
 	private static final Pattern COMPONENT = Pattern.compile("component", Pattern.CASE_INSENSITIVE);
 	
@@ -79,7 +74,7 @@ public class FormsForPatientSearchHandler implements SearchHandler {
 	}
 	
 	private static Set<String> femaleOnly() {
-		String value = Context.getAdministrationService().getGlobalProperty(FEMALE_ONLY_PROPERTY);
+		String value = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_FORMS_FEMALE_ONLY);
 		return new HashSet<>(Arrays.asList(StringUtils.split(StringUtils.defaultString(value), ", ")));
 	}
 }

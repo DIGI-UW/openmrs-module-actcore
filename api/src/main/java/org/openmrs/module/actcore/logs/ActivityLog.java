@@ -26,9 +26,9 @@ import java.util.TreeMap;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.download.FormDownload;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
 
 /**
  * The activity log behind the Logs page's Activity tab, which lists what ACT's users changed, one
@@ -37,18 +37,6 @@ import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
  * and the scheduled tasks, and the saves that touch only the server's setup.
  */
 public class ActivityLog {
-	
-	/**
-	 * The privilege needed to read the activity log, which is the audit log module's privilege for
-	 * reading its audit logs.
-	 */
-	public static final String VIEW_PRIVILEGE = "View Audit Logs";
-	
-	/**
-	 * The name of the global property that lists, by uuid and separated by commas, the person attribute
-	 * types holding a patient's clinics, the primary care clinic first and then the cardiac clinic.
-	 */
-	public static final String CLINIC_ATTRIBUTE_TYPES_PROPERTY = "actcore.logs.clinicAttributeTypes";
 	
 	/**
 	 * The kinds of entry the log tells apart, which a request may filter by. Each entry has one of
@@ -348,8 +336,8 @@ public class ActivityLog {
 	/**
 	 * Lists the changes the filter matches, newest first, including ACT Core's flag dismissals unless
 	 * the filter names a form or a kind other than flag. This method does not check a privilege:
-	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks {@link #VIEW_PRIVILEGE} before it
-	 * calls it.
+	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks
+	 * {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS} before it calls it.
 	 *
 	 * @param filter the filters that choose the changes and the page of them to return
 	 * @return the page of entries; empty when the filter names a user, patient or form that does not
@@ -574,8 +562,9 @@ public class ActivityLog {
 	}
 	
 	private List<Entry> dismissals(Integer userId, LocalDate from, LocalDate to, Integer patientId) {
-		StringBuilder sql = new StringBuilder("select f.patient_id, f.dismissed_by, f.date_dismissed, g.name"
-		        + " from actcore_flag_dismissal f left join patientflags_flag g on g.flag_id = f.flag_id where 1 = 1");
+		StringBuilder sql = new StringBuilder("select f.patient_id, f.dismissed_by, f.date_dismissed, g.name" + " from "
+		        + ActCoreConstants.FLAG_DISMISSAL_TABLE
+		        + " f left join patientflags_flag g on g.flag_id = f.flag_id where 1 = 1");
 		StringBuilder order = new StringBuilder(" order by f.date_dismissed desc, f.dismissal_id desc");
 		List<Object> params = new ArrayList<Object>();
 		if (userId != null) {
@@ -976,9 +965,10 @@ public class ActivityLog {
 	 * the person attributes saved with it. It is null when it recorded neither.
 	 */
 	private String registrationSummary(Entry entry) {
-		List<String> clinicTypes = FormDownload.uuids(CLINIC_ATTRIBUTE_TYPES_PROPERTY);
-		String consentType = Context.getAdministrationService().getGlobalProperty(StudyEnrolmentRules.CONSENT_PROPERTY);
-		String yes = Context.getAdministrationService().getGlobalProperty(StudyEnrolmentRules.YES_PROPERTY);
+		List<String> clinicTypes = FormDownload.uuids(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES);
+		String consentType = Context.getAdministrationService()
+		        .getGlobalProperty(ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE);
+		String yes = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT);
 		List<String> parts = new ArrayList<String>();
 		boolean consented = false;
 		for (Map<String, Object> attribute : entry.revision.of("person_attribute_AUD")) {
@@ -1470,7 +1460,7 @@ public class ActivityLog {
 	 */
 	private boolean isRegistry(Integer programId) {
 		Map<String, Object> program = names.row("program", "program_id", programId);
-		String registry = Context.getAdministrationService().getGlobalProperty("actcore.registryProgram");
+		String registry = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM);
 		return program != null && registry != null && registry.equals(Rows.string(program, "uuid"));
 	}
 	

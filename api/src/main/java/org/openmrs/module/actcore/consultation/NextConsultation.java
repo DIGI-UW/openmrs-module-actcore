@@ -25,7 +25,7 @@ import org.openmrs.PatientProgram;
 import org.openmrs.Person;
 import org.openmrs.Program;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.registry.EnrolOnRegistration;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -35,17 +35,6 @@ import org.openmrs.util.PrivilegeConstants;
  * recorded on the same encounter.
  */
 public final class NextConsultation {
-	
-	/**
-	 * The name of the global property that holds the uuid of the Next Consultation Time Amount concept.
-	 */
-	public static final String GP_AMOUNT = "actcore.consultation.nextAmountConcept";
-	
-	/**
-	 * The name of the global property that holds the uuid of the concept recording the Time Period that
-	 * the amount is counted in.
-	 */
-	public static final String GP_PERIOD = "actcore.consultation.nextPeriodConcept";
 	
 	private static final String DAYS = "1072AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 	
@@ -80,8 +69,8 @@ public final class NextConsultation {
 		boolean enrolled;
 		proxyReads(true);
 		try {
-			amount = concept(GP_AMOUNT);
-			period = concept(GP_PERIOD);
+			amount = concept(ActCoreConstants.GP_CONSULTATION_NEXT_AMOUNT_CONCEPT);
+			period = concept(ActCoreConstants.GP_CONSULTATION_NEXT_PERIOD_CONCEPT);
 			enrolled = onRegistry(patient);
 		}
 		finally {
@@ -143,7 +132,7 @@ public final class NextConsultation {
 	}
 	
 	private static boolean onRegistry(Patient patient) {
-		String uuid = Context.getAdministrationService().getGlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY);
+		String uuid = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM);
 		Program program = uuid == null ? null : Context.getProgramWorkflowService().getProgramByUuid(uuid.trim());
 		if (program == null) {
 			return false;

@@ -22,6 +22,7 @@ import org.openmrs.Program;
 import org.openmrs.ProgramAttributeType;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.Transactions;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
@@ -37,30 +38,6 @@ import org.springframework.validation.Errors;
  * enrolment.
  */
 public class StudyEnrolmentRules implements MethodInterceptor {
-	
-	/**
-	 * The name of the global property that holds the uuid of the person attribute type recording the
-	 * patient's consent. A blank value turns the consent rule off.
-	 */
-	public static final String CONSENT_PROPERTY = "actcore.studies.consentAttributeType";
-	
-	/**
-	 * The name of the global property that holds the uuid of the person attribute type recording
-	 * whether the patient opted in to research. A blank value turns the opt-in rule off.
-	 */
-	public static final String OPT_IN_PROPERTY = "actcore.studies.optInAttributeType";
-	
-	/**
-	 * The name of the global property that holds the uuid of the Yes concept, which the consent and
-	 * opt-in attributes hold when the patient answered yes.
-	 */
-	public static final String YES_PROPERTY = "actcore.studies.yesConcept";
-	
-	/**
-	 * The name of the global property that holds the uuid of the program attribute type recording a
-	 * study enrolment's Study ID. A blank value turns the Study ID rule off.
-	 */
-	public static final String STUDY_ID_PROPERTY = "actcore.studies.participantIdAttributeType";
 	
 	private static final String[] PRIVILEGES = { PrivilegeConstants.GET_GLOBAL_PROPERTIES,
 	        PrivilegeConstants.GET_PERSON_ATTRIBUTE_TYPES, PrivilegeConstants.GET_CONCEPTS };
@@ -104,21 +81,22 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 				if (Boolean.TRUE.equals(enrolment.getPatient().getDead()) && enrolment.getDateCompleted() == null) {
 					throw refusal(enrolment, "The patient has died, so they cannot be enrolled in a study");
 				}
-				Concept yes = conceptByProperty(YES_PROPERTY);
-				if (!answeredYes(enrolment, CONSENT_PROPERTY, yes)) {
+				Concept yes = conceptByProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT);
+				if (!answeredYes(enrolment, ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE, yes)) {
 					throw refusal(enrolment,
 					    "The patient has not given registry consent, so they cannot be enrolled in a study."
 					            + " Record Consent Obtained as Yes on their registration first");
 				}
-				if (!answeredYes(enrolment, OPT_IN_PROPERTY, yes)) {
+				if (!answeredYes(enrolment, ActCoreConstants.GP_STUDIES_OPT_IN_ATTRIBUTE_TYPE, yes)) {
 					throw refusal(enrolment,
 					    "The patient has not said they would like to be considered for research, so they cannot be"
 					            + " enrolled in a study. Record their answer on the Research participation page first");
 				}
 			}
 			// Attributes can be edited, so an open enrolment keeps the Study ID it was saved with.
-			if (!hasStudyId(enrolment) && (!existing || enrolment.getDateCompleted() == null
-			        && !studies.isSavedOpenWithoutAttribute(enrolment, property(STUDY_ID_PROPERTY)))) {
+			if (!hasStudyId(enrolment)
+			        && (!existing || enrolment.getDateCompleted() == null && !studies.isSavedOpenWithoutAttribute(enrolment,
+			            property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE)))) {
 				throw refusal(enrolment,
 				    "A study enrolment needs a Study ID. Enrol the patient from their Research participation page");
 			}
@@ -179,7 +157,7 @@ public class StudyEnrolmentRules implements MethodInterceptor {
 	}
 	
 	private static boolean hasStudyId(PatientProgram enrolment) {
-		String uuid = property(STUDY_ID_PROPERTY);
+		String uuid = property(ActCoreConstants.GP_STUDIES_PARTICIPANT_ID_ATTRIBUTE_TYPE);
 		if (uuid == null) {
 			return true;
 		}

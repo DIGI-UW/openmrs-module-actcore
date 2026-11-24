@@ -18,15 +18,6 @@ import java.util.Date;
  */
 public class DownloadLog {
 	
-	/** The table that holds one row per download recorded. */
-	public static final String TABLE = "actcore_download_log";
-	
-	/**
-	 * The privilege needed to list the downloads. It is the audit log module's privilege for reading
-	 * the read audit, since a download is a read of patients' data.
-	 */
-	public static final String VIEW_PRIVILEGE = "View Read Audit Logs";
-	
 	/** One recorded download, as the Logs page lists it. */
 	public static class Entry {
 		

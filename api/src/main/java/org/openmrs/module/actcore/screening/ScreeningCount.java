@@ -23,6 +23,7 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsData;
+import org.openmrs.module.actcore.ActCoreConstants;
 
 /**
  * One saved set of a clinic's screening counts for a month, with a count field for each column of
@@ -30,7 +31,7 @@ import org.openmrs.BaseOpenmrsData;
  * save of the month voids this one rather than changing it.
  */
 @Entity
-@Table(name = ScreeningCounts.TABLE)
+@Table(name = ActCoreConstants.SCREENING_COUNT_TABLE)
 public class ScreeningCount extends BaseOpenmrsData {
 	
 	@Id

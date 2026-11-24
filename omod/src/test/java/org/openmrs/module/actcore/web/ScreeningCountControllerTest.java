@@ -30,9 +30,10 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.ScreeningCountService;
-import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
@@ -78,7 +79,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void givesAMonthsCountsToADashboardReader() {
-		authenticateWith(null, ScreeningCountController.DASHBOARD_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.DASHBOARD);
 		
 		SimpleObject month = controller.get(CLINIC_A, "2026-09");
 		
@@ -91,7 +92,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void savesAMonthForAUserWhoMayEnterThemAndAnswersWithIt() {
-		authenticateWith(null, ScreeningCountController.ENTER_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.ENTER_SCREENING_COUNTS);
 		
 		SimpleObject saved = controller.save(CLINIC_A, "2026-08", body(40, "Two schools"));
 		
@@ -102,14 +103,14 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void refusesToSaveForAReaderOnly() {
-		authenticateWith(null, ScreeningCountController.READ_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.SCREENING_COUNTS);
 		
 		try {
 			controller.save(CLINIC_A, "2026-08", body(40, null));
 			fail("expected the save to be refused");
 		}
 		catch (ContextAuthenticationException e) {
-			assertTrue(e.getMessage().contains(ScreeningCountController.ENTER_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.ENTER_SCREENING_COUNTS));
 		}
 	}
 	
@@ -122,20 +123,20 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 			fail("expected the read to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(ScreeningCountController.READ_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.SCREENING_COUNTS));
 		}
 		try {
 			controller.summary(null, null, null);
 			fail("expected the summary to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(ScreeningCountController.READ_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.SCREENING_COUNTS));
 		}
 	}
 	
 	@Test
 	public void answersCountsThatDoNotHoldTogetherAsABadRequest() {
-		authenticateWith(null, ScreeningCountController.ENTER_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.ENTER_SCREENING_COUNTS);
 		Map<String, Object> body = body(40, null);
 		@SuppressWarnings("unchecked")
 		Map<String, Object> counts = (Map<String, Object>) body.get("counts");
@@ -156,7 +157,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void answersASummaryOfAClinicNoLocationHasAsABadRequest() {
-		authenticateWith(null, ScreeningCountController.DASHBOARD_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.DASHBOARD);
 		
 		badRequest(() -> controller.summary(new String[] { "no-such-clinic" }, "2026-01", "2026-12"), "no-such-clinic");
 		badRequest(() -> controller.summary(new String[] { CLINIC_A, "no-such-clinic" }, "2026-01", "2026-12"),
@@ -165,7 +166,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void sumsASiteAdministratorsClinicsPastOneOnTheirAccountNoLocationHasNow() {
-		authenticateWith(CLINIC_A + ",gone-clinic", ScreeningCountController.READ_PRIVILEGE, PrivilegeConstants.EDIT_USERS);
+		authenticateWith(CLINIC_A + ",gone-clinic", ActCorePrivileges.SCREENING_COUNTS, PrivilegeConstants.EDIT_USERS);
 		
 		assertEquals(100, ((Number) controller.summary(null, "2026-01", "2026-12").get("screened")).intValue());
 		assertEquals(100,
@@ -176,7 +177,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void holdsASiteAdministratorToTheClinicsOnTheirAccount() {
-		authenticateWith(CLINIC_A, ScreeningCountController.ENTER_PRIVILEGE, PrivilegeConstants.EDIT_USERS);
+		authenticateWith(CLINIC_A, ActCorePrivileges.ENTER_SCREENING_COUNTS, PrivilegeConstants.EDIT_USERS);
 		
 		assertEquals(100, ((Number) counts(controller.get(CLINIC_A, "2026-09")).get("school_screened")).intValue());
 		controller.save(CLINIC_A, "2026-08", body(40, null));
@@ -194,14 +195,14 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void givesASiteAdministratorWithNoClinicsNothingRatherThanEveryClinic() {
-		authenticateWith("", ScreeningCountController.READ_PRIVILEGE, PrivilegeConstants.EDIT_USERS);
+		authenticateWith("", ActCorePrivileges.SCREENING_COUNTS, PrivilegeConstants.EDIT_USERS);
 		
 		assertEquals(0, ((Number) controller.summary(null, "2026-01", "2026-12").get("screened")).intValue());
 	}
 	
 	@Test
 	public void sumsEveryClinicOrTheClinicsGivenOverTheMonthsGiven() {
-		authenticateWith(null, ScreeningCountController.DASHBOARD_PRIVILEGE);
+		authenticateWith(null, ActCorePrivileges.DASHBOARD);
 		
 		SimpleObject every = controller.summary(null, "2026-09", "2026-09");
 		assertEquals(150, ((Number) every.get("screened")).intValue());
@@ -263,7 +264,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 		user.setUsername("screeningcaller");
 		user.addRole(role);
 		if (clinics != null) {
-			user.setUserProperty(UserClinics.PROPERTY, clinics);
+			user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, clinics);
 		}
 		users.createUser(user, "Screening123");
 		Context.logout();

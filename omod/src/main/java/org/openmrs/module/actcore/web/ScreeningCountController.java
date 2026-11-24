@@ -51,15 +51,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
 public class ScreeningCountController extends ActCoreRestController {
 	
-	/** The privilege that opens the Screening counts page, where the counts are read. */
-	public static final String READ_PRIVILEGE = ActCorePrivileges.SCREENING_COUNTS;
-	
-	/** The Dashboard's privilege, which lets its screening section read the sums. */
-	public static final String DASHBOARD_PRIVILEGE = ActCorePrivileges.DASHBOARD;
-	
-	/** The privilege to save a clinic's counts for a month. */
-	public static final String ENTER_PRIVILEGE = ActCorePrivileges.ENTER_SCREENING_COUNTS;
-	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
 	
 	/**
@@ -69,9 +60,10 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @param month the month as YYYY-MM
 	 * @return the clinic, the month, whether it was saved, each column's count, all zero when it was
 	 *         not, and the notes
-	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE},
-	 *             {@link #DASHBOARD_PRIVILEGE} and {@link #ENTER_PRIVILEGE}, or is a site administrator
-	 *             without the clinic on their account
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#SCREENING_COUNTS}, {@link ActCorePrivileges#DASHBOARD} and
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
 	 * @throws IllegalRequestException when the clinic or month is blank or not recognised; a request
 	 *             without one of them is answered with 400 before this method runs
 	 */
@@ -92,7 +84,8 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @param body the request body, holding each column's count as {@code counts}, a column not given
 	 *            being zero, and optional {@code notes}
 	 * @return the month as saved, as {@link #get(String, String)} gives it
-	 * @throws ContextAuthenticationException when the user lacks {@link #ENTER_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
 	 * @throws APIAuthenticationException when the user is a site administrator without the clinic on
 	 *             their account
 	 * @throws IllegalRequestException when the clinic or month is blank or not recognised, the counts
@@ -104,7 +97,7 @@ public class ScreeningCountController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject save(@RequestParam("clinic") String clinic, @RequestParam("month") String month,
 	        @RequestBody Map<String, Object> body) {
-		Context.requirePrivilege(ENTER_PRIVILEGE);
+		Context.requirePrivilege(ActCorePrivileges.ENTER_SCREENING_COUNTS);
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
 		Object notes = body == null ? null : body.get("notes");
@@ -127,8 +120,9 @@ public class ScreeningCountController extends ActCoreRestController {
 	 * @param endMonth the last month as YYYY-MM; blank for this month
 	 * @return the months, how many clinic months were saved, the totals screened, female, positive,
 	 *         negative and by age group, and the screened by setting
-	 * @throws APIAuthenticationException when the user lacks {@link #READ_PRIVILEGE},
-	 *             {@link #DASHBOARD_PRIVILEGE} and {@link #ENTER_PRIVILEGE}
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#SCREENING_COUNTS}, {@link ActCorePrivileges#DASHBOARD} and
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
 	 * @throws IllegalRequestException when a month or clinic is not recognised or the start is after
 	 *             the end
 	 */
@@ -275,10 +269,10 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	private static void requireReader() {
-		if (!Context.hasPrivilege(READ_PRIVILEGE) && !Context.hasPrivilege(DASHBOARD_PRIVILEGE)
-		        && !Context.hasPrivilege(ENTER_PRIVILEGE)) {
-			throw new APIAuthenticationException(
-			        "Privilege required: " + READ_PRIVILEGE + ", " + DASHBOARD_PRIVILEGE + " or " + ENTER_PRIVILEGE);
+		if (!Context.hasPrivilege(ActCorePrivileges.SCREENING_COUNTS) && !Context.hasPrivilege(ActCorePrivileges.DASHBOARD)
+		        && !Context.hasPrivilege(ActCorePrivileges.ENTER_SCREENING_COUNTS)) {
+			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.SCREENING_COUNTS + ", "
+			        + ActCorePrivileges.DASHBOARD + " or " + ActCorePrivileges.ENTER_SCREENING_COUNTS);
 		}
 	}
 	

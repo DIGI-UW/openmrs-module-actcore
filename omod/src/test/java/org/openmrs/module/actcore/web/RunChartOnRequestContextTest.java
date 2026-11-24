@@ -33,6 +33,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.runchart.RunCharts;
 import org.openmrs.module.reporting.dataset.definition.SqlDataSetDefinition;
 import org.openmrs.module.reporting.evaluation.parameter.Mapped;
@@ -94,7 +96,8 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		report.addParameter(new Parameter("points", "Points", String.class));
 		report.addDataSetDefinition("metrics", Mapped.mapStraightThrough(sql));
 		Context.getService(ReportDefinitionService.class).saveDefinition(report);
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(RunCharts.GP_REPORT, REPORT_UUID));
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_RUN_CHARTS_REPORT, REPORT_UUID));
 	}
 	
 	@After
@@ -107,8 +110,8 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		if (report != null) {
 			reports.purgeDefinition(report);
 		}
-		Context.getAdministrationService()
-		        .executeSQL("delete from global_property where property = '" + RunCharts.GP_REPORT + "'", false);
+		Context.getAdministrationService().executeSQL(
+		    "delete from global_property where property = '" + ActCoreConstants.GP_RUN_CHARTS_REPORT + "'", false);
 		UserService users = Context.getUserService();
 		for (Integer id : createdUsers) {
 			users.purgeUser(users.getUser(id));
@@ -128,7 +131,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void givesAPointPerWeekOfTheRangeCalculatedFromTheReportToAUserWithTheDashboardPrivilege() {
-		authenticateWith(RunChartController.READ_PRIVILEGE);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
 		
 		SimpleObject response = controller.get("active_registrants", null, "2026-10-01", "2026-10-21", "week");
 		
@@ -147,7 +150,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void answersEveryMetricWithTheOneNamedOnTopAndAllOfThemWithoutAName() {
-		authenticateWith(RunChartController.READ_PRIVILEGE);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
 		
 		SimpleObject named = controller.get("active_registrants", null, "2026-10-19", "2026-10-21", "day");
 		SimpleObject unnamed = controller.get(null, null, "2026-10-19", "2026-10-21", "day");
@@ -170,14 +173,14 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 			fail("expected the request to be refused");
 		}
 		catch (ContextAuthenticationException e) {
-			assertTrue(e.getMessage().contains(RunChartController.READ_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.DASHBOARD));
 		}
 	}
 	
 	@Test
 	public void refusesToCalculateBeforeTheModuleHasStarted() {
 		new ActCoreActivator().setDaemonToken(null);
-		authenticateWith(RunChartController.READ_PRIVILEGE);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
 		
 		try {
 			controller.get("active_registrants", null, null, null, null);
@@ -190,7 +193,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void refusesDailyPointsOverMoreThan92DaysAndMoreThanAThousandPoints() {
-		authenticateWith(RunChartController.READ_PRIVILEGE);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
 		
 		try {
 			controller.get("active_registrants", null, "2026-01-01", "2026-10-21", "day");
@@ -211,7 +214,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 	
 	@Test
 	public void refusesAnUnknownMetricOrClinicAndBadDates() {
-		authenticateWith(RunChartController.READ_PRIVILEGE);
+		authenticateWith(ActCorePrivileges.DASHBOARD);
 		for (Runnable call : new Runnable[] { () -> controller.get("consultation_visit_total", null, null, null, null),
 		        () -> controller.get("active_registrants", UUID.randomUUID().toString(), null, null, null),
 		        () -> controller.get("active_registrants", null, "21/10/2026", null, null),

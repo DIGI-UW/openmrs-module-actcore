@@ -14,6 +14,7 @@ import java.util.Map;
 
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.Names;
 import org.openmrs.module.actcore.logs.ReadLog;
@@ -36,9 +37,9 @@ public interface AuditLogService extends OpenmrsService {
 	 * @throws Rows.TooMany when a kind filter has more than {@link ActivityLog#MAX_CLASSIFIED} changes
 	 *             to sort
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
-	 *             {@link ActivityLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 */
-	@Authorized(ActivityLog.VIEW_PRIVILEGE)
+	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS)
 	ActivityLog.Page getActivity(ActivityLog.Filter filter);
 	
 	/**
@@ -48,9 +49,9 @@ public interface AuditLogService extends OpenmrsService {
 	 * @return the entry's fields and void reason; null when no audited table has the revision or the
 	 *         log leaves it out
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
-	 *             {@link ActivityLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 */
-	@Authorized(ActivityLog.VIEW_PRIVILEGE)
+	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS)
 	ActivityLog.Details getActivityDetails(int revisionId);
 	
 	/**
@@ -63,9 +64,9 @@ public interface AuditLogService extends OpenmrsService {
 	 * @throws Rows.TooMany when more than {@value ReadLog#PATIENT_MATCHES} patients match the filter's
 	 *             patient
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
-	 *             {@link ReadLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
-	@Authorized(ReadLog.VIEW_PRIVILEGE)
+	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
 	ReadLog.Page getReads(ReadLog.Filter filter);
 	
 	/**
@@ -75,9 +76,10 @@ public interface AuditLogService extends OpenmrsService {
 	 * @param username the username or system ID
 	 * @return the user's id, or null when no user has it
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
-	 *             {@link ActivityLog#VIEW_PRIVILEGE} nor {@link ReadLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS} nor
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
-	@Authorized({ ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE })
+	@Authorized({ ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS })
 	Integer getUserId(String username);
 	
 	/**
@@ -88,8 +90,9 @@ public interface AuditLogService extends OpenmrsService {
 	 * @param uuids the users' uuids
 	 * @return each user found, by uuid; a uuid that no user has is absent
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
-	 *             {@link ActivityLog#VIEW_PRIVILEGE} nor {@link ReadLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS} nor
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
-	@Authorized({ ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE })
+	@Authorized({ ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS })
 	Map<String, Names.Who> getUsers(Collection<String> uuids);
 }

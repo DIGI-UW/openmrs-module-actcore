@@ -17,6 +17,7 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.Names;
@@ -62,7 +63,8 @@ public class ActivityController extends ActCoreRestController {
 	 * @param limit the most entries to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
 	 *            {@link Rows#DEFAULT_LIMIT}
 	 * @return the entries as {@code results}, with {@code totalCount} and the days read
-	 * @throws ContextAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 * @throws IllegalRequestException when the kind or a date is not recognised, the start is after the
 	 *             end, or a kind filter has too many changes to sort
 	 */
@@ -76,7 +78,7 @@ public class ActivityController extends ActCoreRestController {
 	        @RequestParam(value = "patient", required = false) String patient,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		Context.requirePrivilege(ActivityLog.VIEW_PRIVILEGE);
+		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		ActivityLog.Filter filter = new ActivityLog.Filter();
 		filter.username = StringUtils.trimToNull(username);
 		filter.kind = StringUtils.trimToNull(kind);
@@ -115,13 +117,14 @@ public class ActivityController extends ActCoreRestController {
 	 *
 	 * @param revisionId the entry's revision id
 	 * @return the revision id, the fields and the void reason, null when there is none
-	 * @throws ContextAuthenticationException when the user lacks {@link ActivityLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
 	 * @throws ObjectNotFoundException when the log has no entry for the revision
 	 */
 	@RequestMapping(value = "/{revisionId}", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {
-		Context.requirePrivilege(ActivityLog.VIEW_PRIVILEGE);
+		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		ActivityLog.Details details = Context.getService(AuditLogService.class).getActivityDetails(revisionId);
 		if (details == null) {
 			throw new ObjectNotFoundException();

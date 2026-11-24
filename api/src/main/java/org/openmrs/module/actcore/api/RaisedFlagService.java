@@ -16,6 +16,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
@@ -141,8 +142,8 @@ public interface RaisedFlagService extends OpenmrsService {
 	
 	/**
 	 * Tells whether the signed-in user may dismiss this flag. They may when they hold
-	 * {@link RaisedFlags#DISMISS_PRIVILEGE} and View Patient Flags, and the flag carries the tag that
-	 * {@value RaisedFlags#DISMISS_TAG_PROPERTY} names, or that property is blank.
+	 * {@link ActCorePrivileges#DISMISS_FLAGS} and View Patient Flags, and the flag carries the tag that
+	 * {@value ActCoreConstants#GP_DISMISS_FLAG_TAG} names, or that property is blank.
 	 *
 	 * @param flag the flag
 	 * @return true when the user may dismiss the flag, whether or not it is raised for anyone

@@ -27,7 +27,7 @@ import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.registry.EnrolOnRegistration;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class NextConsultationContextTest extends BaseModuleContextSensitiveTest {
@@ -56,10 +56,10 @@ public class NextConsultationContextTest extends BaseModuleContextSensitiveTest 
 		weeks = concept("Weeks", "N/A", "1073AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
 		months = concept("Months", "N/A", "1074AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
 		years = concept("Years", "N/A", "1734AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-		property(NextConsultation.GP_AMOUNT, amount.getUuid());
-		property(NextConsultation.GP_PERIOD, period.getUuid());
+		property(ActCoreConstants.GP_CONSULTATION_NEXT_AMOUNT_CONCEPT, amount.getUuid());
+		property(ActCoreConstants.GP_CONSULTATION_NEXT_PERIOD_CONCEPT, period.getUuid());
 		registry = Context.getProgramWorkflowService().getProgram(1);
-		property(EnrolOnRegistration.PROGRAM_PROPERTY, registry.getUuid());
+		property(ActCoreConstants.GP_REGISTRY_PROGRAM, registry.getUuid());
 		enrol(7, null);
 	}
 	

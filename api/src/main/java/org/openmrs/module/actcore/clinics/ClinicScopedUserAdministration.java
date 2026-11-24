@@ -24,6 +24,7 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
 
 /**
@@ -76,12 +77,12 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 				refuseUnlessMayChange(me, user, null, clinics);
 			}
 		}
-		if ("saveUserProperty".equals(method) && args.length == 2 && UserClinics.PROPERTY.equals(args[0])
+		if ("saveUserProperty".equals(method) && args.length == 2 && ActCoreConstants.USER_PROPERTY_CLINICS.equals(args[0])
 		        && !UserClinics.parse((String) args[1]).equals(clinics.getStoredClinics(me.getUserId()))) {
 			throw refusal("You cannot change your own clinics. Ask an instance administrator");
 		}
 		if ("saveUserProperties".equals(method) && args.length == 1 && args[0] instanceof Map) {
-			Object saved = ((Map<?, ?>) args[0]).get(UserClinics.PROPERTY);
+			Object saved = ((Map<?, ?>) args[0]).get(ActCoreConstants.USER_PROPERTY_CLINICS);
 			if (!UserClinics.parse(saved == null ? null : String.valueOf(saved))
 			        .equals(clinics.getStoredClinics(me.getUserId()))) {
 				throw refusal("You cannot change your own clinics. Ask an instance administrator");
@@ -103,7 +104,7 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 	 * the user's current clinics instead.
 	 */
 	private static Set<String> changedClinics(User user, Object[] args, boolean set) {
-		if (args.length < 2 || !UserClinics.PROPERTY.equals(args[1])) {
+		if (args.length < 2 || !ActCoreConstants.USER_PROPERTY_CLINICS.equals(args[1])) {
 			return null;
 		}
 		return set ? UserClinics.parse(args.length > 2 ? (String) args[2] : null) : new HashSet<String>();
@@ -125,7 +126,7 @@ public class ClinicScopedUserAdministration implements MethodInterceptor {
 			}
 			return;
 		}
-		Set<String> assignable = clinics.getRolesIn(UserClinics.ASSIGNABLE_ROLES_PROPERTY);
+		Set<String> assignable = clinics.getRolesIn(ActCoreConstants.GP_USERS_SITE_ADMINISTRATOR_ROLES);
 		if (user.getUserId() != null) {
 			if (!UserClinics.share(clinics.getStoredClinics(user.getUserId()), mine)) {
 				throw refusal("This user is not at one of your clinics, so you cannot change them");

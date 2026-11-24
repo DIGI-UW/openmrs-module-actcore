@@ -26,16 +26,13 @@ import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSession;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.actcore.adherence.AdherenceRefresh;
 import org.openmrs.module.actcore.adherence.InjectionTiming;
 import org.openmrs.module.actcore.adherence.ProphylaxisAdherence;
-import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.download.DownloadRecord;
 import org.openmrs.module.actcore.screening.ScreeningCount;
 import org.openmrs.module.actcore.screening.ScreeningCounts;
 import org.openmrs.module.actcore.task.FlagDismissal;
 import org.openmrs.module.actcore.task.RaisedFlag;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -53,7 +50,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void readsAPatientsAdherence() throws Exception {
-		sql("insert into " + AdherenceRefresh.TABLE + " (patient_id, regimen_concept_id, injection_interval_days, adherence,"
+		sql("insert into " + ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE
+		        + " (patient_id, regimen_concept_id, injection_interval_days, adherence,"
 		        + " last_given, next_due, date_computed) values (" + PATIENT
 		        + ", null, 28, 0.75, '2026-10-01', '2026-10-29', '2026-10-02 08:30:00')");
 		
@@ -69,8 +67,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void readsAnInjectionsTiming() throws Exception {
-		sql("insert into " + AdherenceRefresh.TIMING_TABLE + " (patient_id, injection_date, on_time) values (" + PATIENT
-		        + ", '2026-10-01', true)");
+		sql("insert into " + ActCoreConstants.INJECTION_TIMING_TABLE + " (patient_id, injection_date, on_time) values ("
+		        + PATIENT + ", '2026-10-01', true)");
 		
 		InjectionTiming timing = (InjectionTiming) session().get(InjectionTiming.class,
 		    new InjectionTiming.Key(PATIENT, java.sql.Date.valueOf("2026-10-01")));
@@ -80,7 +78,7 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void readsADownload() throws Exception {
-		sql("insert into " + DownloadLog.TABLE
+		sql("insert into " + ActCoreConstants.DOWNLOAD_LOG_TABLE
 		        + " (uuid, user_id, form_id, detail, date_created) values ('download-1', 1, 99,"
 		        + " 'forms: 1', '2026-10-02 08:30:00')");
 		
@@ -96,11 +94,12 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void readsARaisedFlagAndItsDismissal() throws Exception {
 		int flagId = flag();
-		sql("insert into " + RaisedFlags.TABLE
+		sql("insert into " + ActCoreConstants.RAISED_FLAG_TABLE
 		        + " (patient_id, flag_id, raised_since, dismissed_by, date_dismissed) values (" + PATIENT + ", " + flagId
 		        + ", '2026-10-01 08:00:00', 1, '2026-10-02 09:00:00')");
-		sql("insert into " + RaisedFlags.DISMISSAL_TABLE + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
-		        + " values ('dismissal-1', " + PATIENT + ", " + flagId + ", 1, '2026-10-02 09:00:00')");
+		sql("insert into " + ActCoreConstants.FLAG_DISMISSAL_TABLE
+		        + " (uuid, patient_id, flag_id, dismissed_by, date_dismissed)" + " values ('dismissal-1', " + PATIENT + ", "
+		        + flagId + ", 1, '2026-10-02 09:00:00')");
 		
 		RaisedFlag raised = (RaisedFlag) session().get(RaisedFlag.class, new RaisedFlag.Key(PATIENT, flagId));
 		FlagDismissal dismissal = (FlagDismissal) single("from FlagDismissal");
@@ -125,7 +124,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		for (Integer value : written.values()) {
 			values.append(", ").append(value);
 		}
-		sql("insert into " + ScreeningCounts.TABLE + " (location_id, month, " + String.join(", ", written.keySet())
+		sql("insert into " + ActCoreConstants.SCREENING_COUNT_TABLE + " (location_id, month, "
+		        + String.join(", ", written.keySet())
 		        + ", notes, uuid, creator, date_created, voided) values (1, '2026-09-01'" + values + ", 'school term',"
 		        + " 'count-1', 1, '2026-10-02 08:30:00', false)");
 		
@@ -150,8 +150,8 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		session().save(new ScreeningCount(1, java.sql.Date.valueOf("2026-09-01"), written, null));
 		Context.flushSession();
 		
-		List<List<Object>> rows = Context.getAdministrationService()
-		        .executeSQL("select " + String.join(", ", written.keySet()) + " from " + ScreeningCounts.TABLE, true);
+		List<List<Object>> rows = Context.getAdministrationService().executeSQL(
+		    "select " + String.join(", ", written.keySet()) + " from " + ActCoreConstants.SCREENING_COUNT_TABLE, true);
 		
 		assertEquals(1, rows.size());
 		Map<String, Integer> stored = new LinkedHashMap<String, Integer>();
@@ -172,11 +172,11 @@ public class ModuleEntitiesContextTest extends BaseModuleContextSensitiveTest {
 		session().save(count);
 		Context.flushSession();
 		
-		assertEquals(download.getUuid(), column(DownloadLog.TABLE, "uuid"));
-		assertEquals(dismissal.getUuid(), column(RaisedFlags.DISMISSAL_TABLE, "uuid"));
-		assertEquals(count.getUuid(), column(ScreeningCounts.TABLE, "uuid"));
+		assertEquals(download.getUuid(), column(ActCoreConstants.DOWNLOAD_LOG_TABLE, "uuid"));
+		assertEquals(dismissal.getUuid(), column(ActCoreConstants.FLAG_DISMISSAL_TABLE, "uuid"));
+		assertEquals(count.getUuid(), column(ActCoreConstants.SCREENING_COUNT_TABLE, "uuid"));
 		assertEquals(Context.getAuthenticatedUser().getUserId(),
-		    Integer.valueOf(((Number) column(ScreeningCounts.TABLE, "creator")).intValue()));
+		    Integer.valueOf(((Number) column(ActCoreConstants.SCREENING_COUNT_TABLE, "creator")).intValue()));
 	}
 	
 	private static Map<String, Integer> zeros() {

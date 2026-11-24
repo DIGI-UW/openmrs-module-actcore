@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.download.DownloadLog;
 
@@ -47,8 +48,8 @@ public interface DownloadLogService extends OpenmrsService {
 	 * @param to the last day to include, to its end, or null for no upper bound
 	 * @return the matching downloads; an empty list when there are none
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
-	 *             {@link DownloadLog#VIEW_PRIVILEGE}
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 */
-	@Authorized(DownloadLog.VIEW_PRIVILEGE)
+	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
 	List<DownloadLog.Entry> getDownloads(Integer userId, LocalDate from, LocalDate to);
 }

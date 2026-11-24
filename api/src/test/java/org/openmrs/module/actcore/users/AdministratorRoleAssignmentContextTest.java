@@ -33,7 +33,8 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.UserContext;
-import org.openmrs.module.actcore.clinics.UserClinics;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
@@ -89,9 +90,9 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 	@Before
 	public void setUp() {
 		users = Context.getUserService();
-		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY,
+		setProperty(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES,
 		    SITE_ADMINISTRATOR + "," + COMMUNITY_CLINICIAN + "," + CLINICIAN);
-		setProperty(AdministratorRoleAssignment.GLOBAL_ROLES_PROPERTY,
+		setProperty(ActCoreConstants.GP_USERS_GLOBAL_ADMINISTRATOR_ROLES,
 		    AdministratorRoleAssignment.GLOBAL_ADMINISTRATOR_ROLE + ","
 		            + AdministratorRoleAssignment.INSTANCE_ADMINISTRATOR_ROLE + "," + SITE_ADMINISTRATOR + ","
 		            + COMMUNITY_CLINICIAN + "," + CLINICIAN);
@@ -100,9 +101,9 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		role("Test Data Clerk", DATA_CLERK, null, CLERK_PRIVILEGE);
 		role("Test Site Administrator", SITE_ADMINISTRATOR, clinician, ADMINISTERS_USERS);
 		Role instance = role("Test Instance Administrator", AdministratorRoleAssignment.INSTANCE_ADMINISTRATOR_ROLE, null,
-		    ADMINISTERS_USERS + "," + UserClinics.ALL_CLINICS_PRIVILEGE + "," + INSTANCE_PRIVILEGE);
+		    ADMINISTERS_USERS + "," + ActCorePrivileges.ALL_CLINICS + "," + INSTANCE_PRIVILEGE);
 		Role global = role("Test Global Administrator", AdministratorRoleAssignment.GLOBAL_ADMINISTRATOR_ROLE, null,
-		    ADMINISTERS_USERS + "," + UserClinics.ALL_CLINICS_PRIVILEGE + "," + GLOBAL_PRIVILEGE);
+		    ADMINISTERS_USERS + "," + ActCorePrivileges.ALL_CLINICS + "," + GLOBAL_PRIVILEGE);
 		instanceAdmin = user("instanceadmin", instance);
 		globalAdmin = user("globaladmin", global);
 		siteAdmin = user("siteadmin", users.getRoleByUuid(SITE_ADMINISTRATOR));
@@ -130,10 +131,11 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		for (String name : createdPrivileges) {
 			Context.getAdministrationService().executeSQL("delete from privilege where privilege = '" + name + "'", false);
 		}
-		Context.getAdministrationService().executeSQL(
-		    "delete from global_property where property in ('" + AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY + "','"
-		            + AdministratorRoleAssignment.GLOBAL_ROLES_PROPERTY + "')",
-		    false);
+		Context.getAdministrationService()
+		        .executeSQL("delete from global_property where property in ('"
+		                + ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES + "','"
+		                + ActCoreConstants.GP_USERS_GLOBAL_ADMINISTRATOR_ROLES + "')",
+		            false);
 	}
 	
 	private void purge(User user) {
@@ -257,7 +259,7 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		createdPrivileges.add(assign.getPrivilege());
 		developer.addPrivilege(assign);
 		users.saveRole(developer);
-		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, developer.getUuid() + "," + CLINICIAN);
+		setProperty(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES, developer.getUuid() + "," + CLINICIAN);
 		Context.becomeUser(instanceAdmin.getSystemId());
 		String developerUuid = developer.getUuid();
 		
@@ -266,8 +268,8 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 	
 	@Test
 	public void leavesALimitedSiteAdministratorToClinicScopingAndElevatesAnInstanceAdministrator() {
-		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, SITE_ADMINISTRATOR + "," + DATA_CLERK);
-		users.setUserProperty(siteAdmin, UserClinics.PROPERTY, CLINIC);
+		setProperty(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES, SITE_ADMINISTRATOR + "," + DATA_CLERK);
+		users.setUserProperty(siteAdmin, ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC);
 		Context.removeAdvice(UserService.class, advice);
 		ClinicScopedUserAdministration clinics = new ClinicScopedUserAdministration();
 		Context.addAdvice(UserService.class, clinics);
@@ -275,7 +277,7 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 		try {
 			Context.becomeUser(siteAdmin.getSystemId());
 			User clerk = newUser("zz128-bylimited", DATA_CLERK);
-			clerk.setUserProperty(UserClinics.PROPERTY, CLINIC);
+			clerk.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC);
 			refused(() -> users.createUser(clerk, "Created123"), "in order to assign");
 			
 			Context.logout();
@@ -326,7 +328,7 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 	
 	@Test
 	public void leavesRolesToOpenMRSWhenTheAdministratorsPropertyIsEmpty() {
-		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, "");
+		setProperty(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES, "");
 		Context.becomeUser(instanceAdmin.getSystemId());
 		
 		refused(() -> users.createUser(newUser("zz128-empty", CLINICIAN), "Created123"), "in order to assign");
@@ -334,7 +336,7 @@ public class AdministratorRoleAssignmentContextTest extends BaseModuleContextSen
 	
 	@Test
 	public void leavesAnAdministratorWhoIsNeitherInstanceNorGlobalToOpenMRS() {
-		setProperty(AdministratorRoleAssignment.INSTANCE_ROLES_PROPERTY, SITE_ADMINISTRATOR + "," + DATA_CLERK);
+		setProperty(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES, SITE_ADMINISTRATOR + "," + DATA_CLERK);
 		Context.becomeUser(siteAdmin.getSystemId());
 		
 		users.createUser(newUser("zz128-bysite", CLINICIAN), "Created123");

@@ -24,9 +24,6 @@ import java.util.Map;
  */
 public class ScreeningCounts {
 	
-	/** The table that holds the screening counts, one row per saved clinic month. */
-	public static final String TABLE = "actcore_screening_count";
-	
 	/** The settings where people are screened, in the order their columns take. */
 	public static final List<String> SETTINGS = Collections
 	        .unmodifiableList(Arrays.asList("school", "community", "facility"));

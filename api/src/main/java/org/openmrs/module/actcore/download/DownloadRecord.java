@@ -21,6 +21,7 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 import org.openmrs.BaseOpenmrsObject;
+import org.openmrs.module.actcore.ActCoreConstants;
 
 /**
  * One recorded download, as {@link org.openmrs.module.actcore.api.DownloadLogService} saves it: the
@@ -28,7 +29,7 @@ import org.openmrs.BaseOpenmrsObject;
  * held as JSON, and when it was recorded.
  */
 @Entity
-@Table(name = DownloadLog.TABLE)
+@Table(name = ActCoreConstants.DOWNLOAD_LOG_TABLE)
 public class DownloadRecord extends BaseOpenmrsObject {
 	
 	@Id

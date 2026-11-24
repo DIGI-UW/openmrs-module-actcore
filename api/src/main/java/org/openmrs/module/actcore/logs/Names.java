@@ -23,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.download.FormDownload;
 import org.openmrs.util.PrivilegeConstants;
@@ -210,7 +211,7 @@ public class Names {
 	 */
 	private String actId(int personId) {
 		if (identifyingTypes == null) {
-			identifyingTypes = FormDownload.uuids(FormDownload.IDENTIFIER_TYPES_PROPERTY);
+			identifyingTypes = FormDownload.uuids(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_IDENTIFIER_TYPES);
 		}
 		for (Map<String, Object> row : dao.select("select i.identifier, t.uuid type_uuid from patient_identifier i"
 		        + " join patient_identifier_type t on t.patient_identifier_type_id = i.identifier_type"

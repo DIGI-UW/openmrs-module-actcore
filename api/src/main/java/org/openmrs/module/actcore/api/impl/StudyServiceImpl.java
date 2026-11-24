@@ -26,9 +26,9 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.actcore.api.db.StudyDAO;
-import org.openmrs.module.actcore.studies.Studies;
 import org.openmrs.util.LocaleUtility;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
@@ -203,14 +203,15 @@ public class StudyServiceImpl extends BaseOpenmrsService implements StudyService
 	private static Program template() {
 		Program template = templateOrNull();
 		if (template == null) {
-			throw new APIException(Studies.TEMPLATE_PROPERTY + " names no program with a workflow ("
-			        + Context.getAdministrationService().getGlobalProperty(Studies.TEMPLATE_PROPERTY) + ")");
+			throw new APIException(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM + " names no program with a workflow ("
+			        + Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM)
+			        + ")");
 		}
 		return template;
 	}
 	
 	private static Program templateOrNull() {
-		String uuid = Context.getAdministrationService().getGlobalProperty(Studies.TEMPLATE_PROPERTY);
+		String uuid = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM);
 		Program template = StringUtils.isBlank(uuid) ? null
 		        : Context.getProgramWorkflowService().getProgramByUuid(uuid.trim());
 		return template == null || template.getWorkflows().isEmpty() ? null : template;

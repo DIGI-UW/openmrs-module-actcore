@@ -29,6 +29,7 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.PatientService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.framework.ProxyFactory;
@@ -47,7 +48,7 @@ public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTe
 		registry.setConcept(Context.getConceptService().getConcept(5089));
 		registry = Context.getProgramWorkflowService().saveProgram(registry);
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY, registry.getUuid()));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM, registry.getUuid()));
 		// The patient service as the module's advice wraps it at runtime.
 		ProxyFactory proxy = new ProxyFactory(Context.getPatientService());
 		proxy.addInterface(PatientService.class);
@@ -81,7 +82,7 @@ public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTe
 	
 	@Test
 	public void savePatient_shouldEnrolNobodyWhenNoProgramIsConfigured() {
-		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY, ""));
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM, ""));
 		
 		Patient paul = patients.savePatient(newPatient());
 		
@@ -91,7 +92,7 @@ public class EnrolOnRegistrationContextTest extends BaseModuleContextSensitiveTe
 	@Test
 	public void savePatient_shouldStillRegisterThePatientWhenTheProgramDoesNotExist() {
 		Context.getAdministrationService().saveGlobalProperty(
-		    new GlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY, "00000000-0000-0000-0000-000000000000"));
+		    new GlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM, "00000000-0000-0000-0000-000000000000"));
 		
 		Patient paul = patients.savePatient(newPatient());
 		

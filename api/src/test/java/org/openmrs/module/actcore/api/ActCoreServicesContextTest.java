@@ -30,9 +30,9 @@ import org.openmrs.Program;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
-import org.openmrs.module.actcore.download.DownloadLog;
 import org.openmrs.module.actcore.logs.ActivityLog;
 import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.actcore.runchart.RunCharts;
@@ -84,7 +84,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		assertNotNull(service);
 		refused(() -> service.recordDownload(null, "{}"), ActCorePrivileges.DOWNLOAD_DATA);
-		refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getDownloads(null, null, null), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 	}
 	
 	@Test
@@ -101,7 +101,8 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void getDownloads_shouldRefuseAUserWhoMayOnlyDownload() {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		for (String download : new String[] { ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA }) {
-			holding(download, () -> refused(() -> service.getDownloads(null, null, null), DownloadLog.VIEW_PRIVILEGE));
+			holding(download, () -> refused(() -> service.getDownloads(null, null, null),
+			    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
 	
@@ -194,24 +195,26 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void auditLogService_shouldRefuseAUserWithoutTheLogPrivileges() {
 		AuditLogService service = Context.getService(AuditLogService.class);
 		assertNotNull(service);
-		refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
-		refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
-		refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE);
-		refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
-		refused(() -> service.getUsers(Collections.singleton("uuid")), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE);
+		refused(() -> service.getActivity(new ActivityLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
+		refused(() -> service.getActivityDetails(1), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
+		refused(() -> service.getReads(new ReadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getUserId("admin"), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
+		    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		refused(() -> service.getUsers(Collections.singleton("uuid")), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
+		    ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 	}
 	
 	@Test
 	public void auditLogService_shouldRefuseAUserWhoMayReadOnlyTheOtherLog() {
 		AuditLogService service = Context.getService(AuditLogService.class);
-		holding(ReadLog.VIEW_PRIVILEGE, () -> {
-			refused(() -> service.getActivity(new ActivityLog.Filter()), ActivityLog.VIEW_PRIVILEGE);
-			refused(() -> service.getActivityDetails(1), ActivityLog.VIEW_PRIVILEGE);
+		holding(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS, () -> {
+			refused(() -> service.getActivity(new ActivityLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
+			refused(() -> service.getActivityDetails(1), ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		});
-		holding(ActivityLog.VIEW_PRIVILEGE,
-		    () -> refused(() -> service.getReads(new ReadLog.Filter()), ReadLog.VIEW_PRIVILEGE));
-		holding("View Security Audit Logs",
-		    () -> refused(() -> service.getUserId("admin"), ActivityLog.VIEW_PRIVILEGE, ReadLog.VIEW_PRIVILEGE));
+		holding(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS,
+		    () -> refused(() -> service.getReads(new ReadLog.Filter()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
+		holding("View Security Audit Logs", () -> refused(() -> service.getUserId("admin"),
+		    ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS, ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 	}
 	
 	@Test

@@ -38,6 +38,7 @@ import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiveTest {
@@ -72,8 +73,8 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 		registry.setConcept(concept("RHD Registry program"));
 		registry.addWorkflow(workflow);
 		registry = Context.getProgramWorkflowService().saveProgram(registry);
-		property(EnrolOnRegistration.PROGRAM_PROPERTY, registry.getUuid());
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, deceasedConcept.getUuid());
+		property(ActCoreConstants.GP_REGISTRY_PROGRAM, registry.getUuid());
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, deceasedConcept.getUuid());
 		// As config.xml orders them: an earlier advice wraps a later one.
 		Context.addAdvice(PatientService.class, enrolOnRegistration);
 		Context.addAdvice(PatientService.class, closeOnDeath);
@@ -104,7 +105,7 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 	
 	@Test
 	public void savePerson_shouldLeaveTheRegistryEnrolmentOpenWhenNoDeathStateIsConfigured() {
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, "");
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, "");
 		Patient patient = Context.getPatientService().getPatient(2);
 		PatientProgram enrolment = enrol(patient, daysAgo(30));
 		
@@ -159,7 +160,7 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 	public void savePatientProgram_shouldAcceptAnOpenRegistryEnrolmentForTheDeadWhenNoDeathStateIsConfigured() {
 		Patient patient = Context.getPatientService().getPatient(2);
 		markDead(patient, daysAgo(10));
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, "");
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, "");
 		
 		PatientProgram open = Context.getProgramWorkflowService().savePatientProgram(enrolment(patient, daysAgo(5), null));
 		
@@ -170,7 +171,7 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 	public void savePatientProgram_shouldAcceptAnOpenRegistryEnrolmentForTheDeadWhenTheWorkflowHasNoDeathState() {
 		Patient patient = Context.getPatientService().getPatient(2);
 		markDead(patient, daysAgo(10));
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, concept("Not a registry state").getUuid());
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, concept("Not a registry state").getUuid());
 		
 		PatientProgram open = Context.getProgramWorkflowService().savePatientProgram(enrolment(patient, daysAgo(5), null));
 		
@@ -237,9 +238,9 @@ public class CloseEnrolmentsOnDeathContextTest extends BaseModuleContextSensitiv
 		PatientProgram livingsEnrolment = enrol(living, daysAgo(30));
 		Date died = daysAgo(10);
 		// Recorded dead before this module ended enrolments on death, as an import or ACT 2.0 did.
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, "");
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, "");
 		markDead(dead, died);
-		property(CloseEnrolmentsOnDeath.REGISTRY_DEATH_STATE_PROPERTY, deceased.getConcept().getUuid());
+		property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, deceased.getConcept().getUuid());
 		assertNull(deadsEnrolment.getDateCompleted());
 		
 		assertEquals(1, CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead());

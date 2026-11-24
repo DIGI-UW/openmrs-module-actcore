@@ -18,12 +18,14 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.openmrs.module.actcore.ActCoreConstants;
+
 /**
  * A patient's prophylaxis adherence and next due date, as the latest adherence refresh computed
  * them. The refresh writes these rows in bulk by SQL rather than through this entity.
  */
 @Entity
-@Table(name = AdherenceRefresh.TABLE)
+@Table(name = ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE)
 public class ProphylaxisAdherence {
 	
 	@Id

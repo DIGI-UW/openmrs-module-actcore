@@ -16,6 +16,7 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
 import org.openmrs.module.actcore.logs.ReadLog;
 import org.openmrs.module.actcore.logs.Rows;
@@ -56,7 +57,8 @@ public class ReadsController extends ActCoreRestController {
 	 * @param limit the most rows to give, capped at {@link Rows#MAX_LIMIT}; null or below 1 for
 	 *            {@link Rows#DEFAULT_LIMIT}
 	 * @return the rows as {@code results}, with {@code totalCount} and the days read
-	 * @throws ContextAuthenticationException when the user lacks {@link ReadLog#VIEW_PRIVILEGE}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date is not a date, the start is after the end, or too
 	 *             many patients match
 	 */
@@ -68,7 +70,7 @@ public class ReadsController extends ActCoreRestController {
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		Context.requirePrivilege(ReadLog.VIEW_PRIVILEGE);
+		Context.requirePrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		ReadLog.Filter filter = new ReadLog.Filter();
 		filter.username = StringUtils.trimToNull(username);
 		filter.patient = StringUtils.trimToNull(patient);

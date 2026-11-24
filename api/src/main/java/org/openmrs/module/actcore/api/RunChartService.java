@@ -16,14 +16,15 @@ import java.util.Map;
 import org.openmrs.Location;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.OpenmrsService;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.runchart.RunCharts;
 
 /**
  * The service that calculates ACT 2.0's run charts for the Dashboard when they are asked for,
- * without storing them. It evaluates the report that {@value RunCharts#GP_REPORT} names and has
- * {@link AdherenceService} replay the adherence of the patients on BPG. The run chart endpoint
- * calls it on a daemon thread, so that the report reads every clinic's records.
+ * without storing them. It evaluates the report that {@value ActCoreConstants#GP_RUN_CHARTS_REPORT}
+ * names and has {@link AdherenceService} replay the adherence of the patients on BPG. The run chart
+ * endpoint calls it on a daemon thread, so that the report reads every clinic's records.
  */
 public interface RunChartService extends OpenmrsService {
 	
@@ -38,8 +39,8 @@ public interface RunChartService extends OpenmrsService {
 	 * @return each metric's points, earliest first, by metric in the order of {@link RunCharts#METRICS}
 	 * @throws IllegalArgumentException when the range has more than {@link RunCharts#MOST_POINTS}
 	 *             points
-	 * @throws org.openmrs.api.APIException when {@value RunCharts#GP_REPORT} names no report, or the
-	 *             report cannot be evaluated or gives rows ACT Core cannot read
+	 * @throws org.openmrs.api.APIException when {@value ActCoreConstants#GP_RUN_CHARTS_REPORT} names no
+	 *             report, or the report cannot be evaluated or gives rows ACT Core cannot read
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#DASHBOARD}
 	 */

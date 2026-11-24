@@ -15,7 +15,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.actcore.adherence.AdherenceRefresh;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AdherenceDAO;
 import org.openmrs.util.DatabaseUtil;
 
@@ -107,12 +107,13 @@ public class HibernateAdherenceDAO implements AdherenceDAO {
 	@Override
 	public void replaceRows(Integer patientId, List<Object[]> rows, List<Object[]> timings, int rowsPerInsert) {
 		String where = patientId == null ? "" : " where patient_id = " + patientId;
-		sql("delete from " + AdherenceRefresh.TABLE + where, false);
-		insert(AdherenceRefresh.TABLE + " (patient_id, regimen_concept_id, injection_interval_days, adherence,"
+		sql("delete from " + ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE + where, false);
+		insert(ActCoreConstants.PROPHYLAXIS_ADHERENCE_TABLE
+		        + " (patient_id, regimen_concept_id, injection_interval_days, adherence,"
 		        + " last_given, next_due, date_computed)",
 		    rows, rowsPerInsert);
-		sql("delete from " + AdherenceRefresh.TIMING_TABLE + where, false);
-		insert(AdherenceRefresh.TIMING_TABLE + " (patient_id, injection_date, on_time)", timings, rowsPerInsert);
+		sql("delete from " + ActCoreConstants.INJECTION_TIMING_TABLE + where, false);
+		insert(ActCoreConstants.INJECTION_TIMING_TABLE + " (patient_id, injection_date, on_time)", timings, rowsPerInsert);
 	}
 	
 	private void insert(String into, List<Object[]> rows, int rowsPerInsert) {

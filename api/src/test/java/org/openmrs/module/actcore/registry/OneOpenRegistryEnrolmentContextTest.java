@@ -34,6 +34,7 @@ import org.openmrs.api.PatientService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.framework.ProxyFactory;
@@ -73,7 +74,7 @@ public class OneOpenRegistryEnrolmentContextTest extends BaseModuleContextSensit
 		registry = program("RHD Registry");
 		other = program("Research Participation");
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(EnrolOnRegistration.PROGRAM_PROPERTY, registry.getUuid()));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_REGISTRY_PROGRAM, registry.getUuid()));
 		patient = Context.getPatientService().getPatient(2);
 		// The program service as the module's advice wraps it at runtime.
 		ProxyFactory proxy = new ProxyFactory(Context.getProgramWorkflowService());

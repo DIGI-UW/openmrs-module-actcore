@@ -20,9 +20,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.api.context.ContextAuthenticationException;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -96,7 +96,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 	 *             dismissed, or it is not raised for the patient now
 	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
 	 * @throws APIAuthenticationException when the user lacks Get Patients, View Patient Flags or
-	 *             {@link RaisedFlags#DISMISS_PRIVILEGE}
+	 *             {@link ActCorePrivileges#DISMISS_FLAGS}
 	 * @throws ResponseException with 409 Conflict while the patient flag refresh runs
 	 */
 	@RequestMapping(value = "/dismiss", method = RequestMethod.POST)

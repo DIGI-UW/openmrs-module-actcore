@@ -21,6 +21,7 @@ import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
@@ -44,7 +45,8 @@ final class UnreviewedAnaphylaxis {
 		try {
 			EncounterType bpg = type("bpg");
 			EncounterType consult = type("consult");
-			Concept answer = Context.getConceptService().getConceptByUuid(property("actcore.nextSteps.anaphylaxisAnswer"));
+			Concept answer = Context.getConceptService()
+			        .getConceptByUuid(property(ActCoreConstants.GP_NEXT_STEPS_ANAPHYLAXIS_ANSWER));
 			if (bpg == null || answer == null) {
 				return false;
 			}
@@ -85,7 +87,8 @@ final class UnreviewedAnaphylaxis {
 	 * uuid.
 	 */
 	private static EncounterType type(String key) {
-		for (String pair : StringUtils.split(StringUtils.defaultString(property("actcore.nextSteps.encounterTypes")), ',')) {
+		for (String pair : StringUtils
+		        .split(StringUtils.defaultString(property(ActCoreConstants.GP_NEXT_STEPS_ENCOUNTER_TYPES)), ',')) {
 			String[] parts = StringUtils.split(pair, ':');
 			if (parts.length == 2 && key.equals(parts[0].trim())) {
 				return Context.getEncounterService().getEncounterTypeByUuid(parts[1].trim());

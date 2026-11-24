@@ -26,6 +26,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.api.context.Credentials;
 import org.openmrs.api.context.UserContext;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.util.PrivilegeConstants;
@@ -43,18 +44,6 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 	
 	/** The uuid of the global administrator role. */
 	public static final String GLOBAL_ADMINISTRATOR_ROLE = "c95f35f4-0422-46a3-a593-a6615fab90bc";
-	
-	/**
-	 * The name of the global property that lists, by uuid and separated by commas, the roles an
-	 * instance administrator may give out.
-	 */
-	public static final String INSTANCE_ROLES_PROPERTY = "actcore.users.instanceAdministratorRoles";
-	
-	/**
-	 * The name of the global property that lists, by uuid and separated by commas, the roles a global
-	 * administrator may give out.
-	 */
-	public static final String GLOBAL_ROLES_PROPERTY = "actcore.users.globalAdministratorRoles";
 	
 	/**
 	 * The names of the UserService methods that save a user. Core's retire and unretire save the user
@@ -124,10 +113,12 @@ public class AdministratorRoleAssignment implements MethodInterceptor {
 			held.add(role.getUuid());
 		}
 		if (held.contains(INSTANCE_ADMINISTRATOR_ROLE)) {
-			grantable.addAll(Context.getService(UserClinicsService.class).getRolesIn(INSTANCE_ROLES_PROPERTY));
+			grantable.addAll(Context.getService(UserClinicsService.class)
+			        .getRolesIn(ActCoreConstants.GP_USERS_INSTANCE_ADMINISTRATOR_ROLES));
 		}
 		if (held.contains(GLOBAL_ADMINISTRATOR_ROLE)) {
-			grantable.addAll(Context.getService(UserClinicsService.class).getRolesIn(GLOBAL_ROLES_PROPERTY));
+			grantable.addAll(Context.getService(UserClinicsService.class)
+			        .getRolesIn(ActCoreConstants.GP_USERS_GLOBAL_ADMINISTRATOR_ROLES));
 		}
 		return grantable;
 	}

@@ -31,8 +31,8 @@ import org.openmrs.PersonName;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AuditLogService;
-import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
@@ -143,13 +143,14 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		clinicType.setName("Primary Care Clinic");
 		clinicType.setFormat("org.openmrs.Location");
 		Context.getPersonService().savePersonAttributeType(clinicType);
-		Context.getAdministrationService().setGlobalProperty(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY,
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES,
 		    clinicType.getUuid());
 		collet.addAttribute(new PersonAttribute(clinicType, "1"));
 		Context.getPatientService().savePatient(collet);
 		anet.addAttribute(new PersonAttribute(clinicType, "2"));
 		Context.getPatientService().savePatient(anet);
-		clinician.setUserProperty(UserClinics.PROPERTY, Context.getLocationService().getLocation(1).getUuid());
+		clinician.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS,
+		    Context.getLocationService().getLocation(1).getUuid());
 		Context.getUserService().saveUser(clinician);
 		Context.flushSession();
 		
@@ -193,13 +194,13 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		int before = ((Number) AuditTables.select("select count(*) as n from read_audit_log").get(0).get("n")).intValue();
 		
 		// The privilege the log asks for, and not Get Patients, which the patient service would.
-		Context.addProxyPrivilege(ReadLog.VIEW_PRIVILEGE);
+		Context.addProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		try {
 			assertEquals(4, log.getReads(filter(null, "6TS-4", null, null)).totalCount);
 			assertEquals(4, log.getReads(filter(null, "chebask", null, null)).totalCount);
 		}
 		finally {
-			Context.removeProxyPrivilege(ReadLog.VIEW_PRIVILEGE);
+			Context.removeProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		}
 		
 		assertEquals(before,

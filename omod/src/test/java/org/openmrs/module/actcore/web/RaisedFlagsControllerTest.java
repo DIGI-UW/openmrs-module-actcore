@@ -37,10 +37,10 @@ import org.openmrs.GlobalProperty;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.task.HideDismissedFlags;
 import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
-import org.openmrs.module.actcore.task.RaisedFlags;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
@@ -71,7 +71,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	public void setUp() {
 		ModuleTables.create();
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, "Critical data"));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_DISMISS_FLAG_TAG, "Critical data"));
 		critical = new Tag("Critical data");
 		Context.getService(FlagService.class).saveTag(critical);
 		Context.addAdvice(FlagService.class, hide);
@@ -222,9 +222,10 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		        .savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(7), flag, flag.getMessage()));
 		Context.flushSession();
 		if (since != null) {
-			Context.getAdministrationService().executeSQL("insert into " + RaisedFlags.TABLE
-			        + " (patient_id, flag_id, raised_since) values (7, " + flag.getFlagId() + ", '" + since + "')",
-			    false);
+			Context.getAdministrationService()
+			        .executeSQL("insert into " + ActCoreConstants.RAISED_FLAG_TABLE
+			                + " (patient_id, flag_id, raised_since) values (7, " + flag.getFlagId() + ", '" + since + "')",
+			            false);
 		}
 		return flag;
 	}

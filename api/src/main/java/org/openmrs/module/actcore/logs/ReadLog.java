@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.db.AuditLogDAO;
 import org.openmrs.module.actcore.clinics.UserClinics;
 import org.openmrs.module.actcore.download.FormDownload;
@@ -36,12 +37,6 @@ import org.openmrs.module.actcore.download.FormDownload;
  * fall within an hour of the first of them into one row.
  */
 public class ReadLog {
-	
-	/**
-	 * The privilege needed to read the read log, which is the audit log module's privilege for reading
-	 * its read audit.
-	 */
-	public static final String VIEW_PRIVILEGE = "View Read Audit Logs";
 	
 	/**
 	 * How long after a row's first read, in milliseconds, a later read by the same user of the same
@@ -215,8 +210,8 @@ public class ReadLog {
 	/**
 	 * Lists the reads of patients' data that the filter matches, folded into rows, the row with the
 	 * latest first read first. This method does not check a privilege:
-	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks {@link #VIEW_PRIVILEGE} before it
-	 * calls it.
+	 * {@link org.openmrs.module.actcore.api.AuditLogService} checks
+	 * {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS} before it calls it.
 	 *
 	 * @param filter the filters that choose the reads and the page of rows to return
 	 * @return the page of rows; empty when no patient matches the filter's patient or no read falls in
@@ -458,7 +453,7 @@ public class ReadLog {
 		if (found == null) {
 			return;
 		}
-		List<String> clinicTypes = FormDownload.uuids(ActivityLog.CLINIC_ATTRIBUTE_TYPES_PROPERTY);
+		List<String> clinicTypes = FormDownload.uuids(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES);
 		Set<String> patientClinics = new LinkedHashSet<String>();
 		for (Map<String, Object> attribute : dao.select("select a.value, t.uuid as type_uuid from person_attribute a"
 		        + " join person_attribute_type t on t.person_attribute_type_id = a.person_attribute_type_id"
@@ -481,7 +476,7 @@ public class ReadLog {
 		List<Map<String, Object>> property = dao
 		        .select("select p.property_value from user_property p join users u on u.user_id = p.user_id"
 		                + " where u.uuid = ? and p.property = ?",
-		            row.userUuid, UserClinics.PROPERTY);
+		            row.userUuid, ActCoreConstants.USER_PROPERTY_CLINICS);
 		Set<String> userClinics = UserClinics
 		        .parse(property.isEmpty() ? null : Rows.string(property.get(0), "property_value"));
 		row.sameClinicAsUser = userClinics.isEmpty() || patientClinics.isEmpty() ? null

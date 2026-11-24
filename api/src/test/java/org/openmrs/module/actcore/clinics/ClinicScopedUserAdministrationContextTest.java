@@ -34,6 +34,8 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.UserClinicsService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
@@ -69,7 +71,8 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	@Before
 	public void setUp() {
 		users = Context.getUserService();
-		Context.getAdministrationService().setGlobalProperty(UserClinics.ASSIGNABLE_ROLES_PROPERTY, CLINICIAN_ROLE);
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_USERS_SITE_ADMINISTRATOR_ROLES,
+		    CLINICIAN_ROLE);
 		clinician = role("Organizational: ACT Clinician", CLINICIAN_ROLE);
 		siteAdmin = role("Organizational: ACT Site Administrator", null, PrivilegeConstants.EDIT_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_ROLES,
@@ -78,7 +81,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		instanceAdmin = role("Organizational: ACT Instance Administrator", null, PrivilegeConstants.EDIT_USERS,
 		    PrivilegeConstants.ADD_USERS, PrivilegeConstants.GET_USERS, PrivilegeConstants.GET_ROLES,
 		    PrivilegeConstants.GET_PERSONS, PrivilegeConstants.ADD_PERSONS, PrivilegeConstants.EDIT_PERSONS,
-		    UserClinics.ALL_CLINICS_PRIVILEGE);
+		    ActCorePrivileges.ALL_CLINICS);
 		siteAdminAtA = user("siteadmin", siteAdmin, CLINIC_A);
 		clinicianAtA = user("clinicianA", clinician, CLINIC_A);
 		clinicianAtB = user("clinicianB", clinician, CLINIC_B);
@@ -140,7 +143,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		
 		refused(() -> users.changePassword(user, "Changed123"), "not at one of your clinics");
 		refused(() -> users.retireUser(user, "No"), "not at one of your clinics");
-		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 		refused(() -> users.saveUser(user), "not at one of your clinics");
 	}
 	
@@ -152,7 +155,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		// As the REST layer sets the fields, then looks up each role and the person before it saves: the
 		// lookups flush the edit, and the refusal comes from whichever call writes it first.
 		refused(() -> {
-			user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+			user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 			users.getUsersByName("clinicianB", "Tester", false);
 			Context.getPersonService().getPersonByUuid(user.getPerson().getUuid());
 			users.saveUser(user);
@@ -164,7 +167,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 	public void refusesAnEditToAnotherClinicsUserEvenWhenNoServiceSavesIt() {
 		Context.becomeUser(siteAdminAtA.getSystemId());
 		User user = users.getUser(clinicianAtB.getUserId());
-		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 		
 		refused(Context::flushSession, "not at one of your clinics");
 	}
@@ -180,9 +183,10 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		users.retireUser(user, "Left the clinic");
 		
 		User shared = users.getUserByUuid(clinicianAtAAndB.getUuid());
-		shared.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		shared.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 		refused(() -> users.saveUser(shared), "only your own clinics");
-		refused(() -> users.setUserProperty(shared, UserClinics.PROPERTY, CLINIC_B), "at least one of your clinics");
+		refused(() -> users.setUserProperty(shared, ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_B),
+		    "at least one of your clinics");
 	}
 	
 	@Test
@@ -201,10 +205,12 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		Context.becomeUser(siteAdminAtA.getSystemId());
 		
 		User user = users.getUserByUuid(clinicianAtA.getUuid());
-		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A + "," + CLINIC_B);
+		user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A + "," + CLINIC_B);
 		refused(() -> users.saveUser(user), "only your own clinics");
-		refused(() -> users.setUserProperty(user, UserClinics.PROPERTY, CLINIC_B), "only your own clinics");
-		refused(() -> users.removeUserProperty(user, UserClinics.PROPERTY), "at least one of your clinics");
+		refused(() -> users.setUserProperty(user, ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_B),
+		    "only your own clinics");
+		refused(() -> users.removeUserProperty(user, ActCoreConstants.USER_PROPERTY_CLINICS),
+		    "at least one of your clinics");
 	}
 	
 	@Test
@@ -230,7 +236,8 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		
 		User created = users.createUser(newUser("newclinician", clinician, CLINIC_A), "Created123");
 		
-		assertEquals(CLINIC_A, users.getUserByUuid(created.getUuid()).getUserProperty(UserClinics.PROPERTY));
+		assertEquals(CLINIC_A,
+		    users.getUserByUuid(created.getUuid()).getUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS));
 		refused(() -> users.createUser(newUser("elsewhere", clinician, CLINIC_B), "Created123"), "only your own clinics");
 		refused(() -> users.createUser(newUser("noclinic", clinician, null), "Created123"), "at least one");
 	}
@@ -245,13 +252,14 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		users.saveUser(me);
 		users.saveUserProperty("defaultLocation", CLINIC_A);
 		
-		refused(() -> users.saveUserProperty(UserClinics.PROPERTY, CLINIC_A + "," + CLINIC_B), "your own clinics");
+		refused(() -> users.saveUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A + "," + CLINIC_B),
+		    "your own clinics");
 		Map<String, String> without = new HashMap<String, String>();
 		without.put("defaultLocation", CLINIC_A);
 		refused(() -> users.saveUserProperties(without), "your own clinics");
-		me.setUserProperty(UserClinics.PROPERTY, CLINIC_A + "," + CLINIC_B);
+		me.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A + "," + CLINIC_B);
 		refused(() -> users.saveUser(me), "your own clinics");
-		me.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		me.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 		me.addRole(users.getRoleByUuid(clinician.getUuid()));
 		refused(() -> users.saveUser(me), "your own roles");
 	}
@@ -265,7 +273,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		assertFalse(UserClinics.isLimited(Context.getAuthenticatedUser()));
 		assertTrue(usernames(users.getAllUsers()).contains("clinicianB"));
 		User user = users.getUser(clinicianAtB.getUserId());
-		user.setUserProperty(UserClinics.PROPERTY, CLINIC_A);
+		user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, CLINIC_A);
 		users.saveUser(user);
 	}
 	
@@ -323,7 +331,7 @@ public class ClinicScopedUserAdministrationContextTest extends BaseModuleContext
 		user.setUsername(username);
 		user.addRole(role);
 		if (clinics != null) {
-			user.setUserProperty(UserClinics.PROPERTY, clinics);
+			user.setUserProperty(ActCoreConstants.USER_PROPERTY_CLINICS, clinics);
 		}
 		return user;
 	}
