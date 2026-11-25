@@ -156,7 +156,8 @@ public class PatientFlagRefresh {
 	/**
 	 * Re-evaluates one patient's flags and updates the patient's place on the flag lists, after a save
 	 * that the patientflags module's own pass may have evaluated before it committed. While a full
-	 * refresh is writing the rows, the patient is left to that run, which refreshes them when it ends.
+	 * refresh of the flags, or of adherence running on its own, is writing the rows, the patient is
+	 * left to that run at once, which refreshes them when it ends.
 	 *
 	 * @param patientId the patient whose flags to refresh
 	 */
@@ -193,50 +194,54 @@ public class PatientFlagRefresh {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			final List<Integer> flagIds = new ArrayList<Integer>();
-			unit.accept(new Runnable() {
-				
-				@Override
-				public void run() {
-					for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
-						flagIds.add(flag.getFlagId());
-					}
-				}
-			});
-			for (final Integer flagId : flagIds) {
-				try {
-					unit.accept(new Runnable() {
-						
-						@Override
-						public void run() {
-							reconcile(flagId, patientId);
-						}
-					});
-				}
-				catch (RuntimeException e) {
-					log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
-				}
-			}
-			for (final Integer flagId : flagIds) {
-				try {
-					unit.accept(new Runnable() {
-						
-						@Override
-						public void run() {
-							new FlagListSync().syncPatient(flagId, patientId);
-						}
-					});
-				}
-				catch (RuntimeException e) {
-					log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
-				}
-			}
+			AdherenceRefresh.unlessRefreshingAll(patientId, () -> refreshEachFlag(patientId, unit));
 		}
 		finally {
 			for (String privilege : PATIENT_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
 			ROWS.readLock().unlock();
+		}
+	}
+	
+	private static void refreshEachFlag(final int patientId, Consumer<Runnable> unit) {
+		final List<Integer> flagIds = new ArrayList<Integer>();
+		unit.accept(new Runnable() {
+			
+			@Override
+			public void run() {
+				for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
+					flagIds.add(flag.getFlagId());
+				}
+			}
+		});
+		for (final Integer flagId : flagIds) {
+			try {
+				unit.accept(new Runnable() {
+					
+					@Override
+					public void run() {
+						reconcile(flagId, patientId);
+					}
+				});
+			}
+			catch (RuntimeException e) {
+				log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
+			}
+		}
+		for (final Integer flagId : flagIds) {
+			try {
+				unit.accept(new Runnable() {
+					
+					@Override
+					public void run() {
+						new FlagListSync().syncPatient(flagId, patientId);
+					}
+				});
+			}
+			catch (RuntimeException e) {
+				log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
+			}
 		}
 	}
 	

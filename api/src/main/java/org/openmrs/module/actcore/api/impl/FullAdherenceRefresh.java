@@ -15,6 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * The refresh of every patient's prophylaxis adherence and next due date that
  * {@link org.openmrs.module.actcore.tasks.AdherenceRefreshTask} runs, and that the patient flag
  * refresh runs before it evaluates the flags. One lock keeps two of these runs from going at once.
+ * It also refreshes one patient after a save, leaving the patient to a run in progress.
  */
 public final class FullAdherenceRefresh {
 	
@@ -54,6 +56,19 @@ public final class FullAdherenceRefresh {
 		finally {
 			RUNNING.unlock();
 		}
+	}
+	
+	/**
+	 * Recomputes one patient's adherence rows as of today after a save, as a unit of its own, as
+	 * {@link Transactions#inPatientTransaction(int, Runnable)} describes. While a run is rewriting the
+	 * rows, the patient is left to that run at once rather than waiting for it, and the run refreshes
+	 * the patient's adherence and flags once it has finished.
+	 *
+	 * @param patientId the patient to recompute
+	 */
+	public static void refreshPatient(final int patientId) {
+		AdherenceRefresh.unlessRefreshingAll(patientId, () -> Transactions.inPatientTransaction(patientId,
+		    () -> Context.getService(AdherenceService.class).refreshPatient(patientId, LocalDate.now())));
 	}
 	
 	/**

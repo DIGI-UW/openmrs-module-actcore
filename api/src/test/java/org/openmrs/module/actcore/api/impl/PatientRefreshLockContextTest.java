@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.openmrs.module.actcore.utils.TransactionsContextTest.await;
@@ -60,6 +61,9 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	private static final int OTHER_PATIENT = 2;
 	
 	private static final long WAIT_MILLIS = 500;
+	
+	// Well under H2's lock timeout, which a refresh waiting on the patient's row would reach first.
+	private static final long LEFT_MILLIS = 5000;
 	
 	private final List<Throwable> failed = Collections.synchronizedList(new ArrayList<Throwable>());
 	
@@ -113,6 +117,29 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	@Test
+	public void leavesASaveToTheFullAdherenceRefreshAtOnceWhileItRewritesTheRows() throws Exception {
+		Encounter encounter = new Encounter();
+		encounter.setPatient(Context.getPatientService().getPatient(PATIENT));
+		MethodInvocation save = mock(MethodInvocation.class);
+		when(save.getMethod()).thenReturn(EncounterService.class.getMethod("saveEncounter", Encounter.class));
+		when(save.getArguments()).thenReturn(new Object[] { encounter });
+		
+		assertLeftToTheFullAdherenceRefresh(() -> {
+			try {
+				new RefreshAdherenceOnSave().invoke(save);
+			}
+			catch (Throwable e) {
+				throw new IllegalStateException(e);
+			}
+		});
+	}
+	
+	@Test
+	public void leavesAPatientsFlagsToTheFullAdherenceRefreshAtOnceWhileItRewritesTheRows() {
+		assertLeftToTheFullAdherenceRefresh(() -> PatientFlagRefresh.refreshPatient(PATIENT));
+	}
+	
+	@Test
 	public void clearsEveryRowOfAFlagNightlyWhenPatientflagsDeletedOneFirst() {
 		flag = saveFlag("select p.patient_id from patient p where p.patient_id = -1");
 		FlagService flagService = Context.getService(FlagService.class);
@@ -146,6 +173,30 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		join(second[0]);
 		assertEquals(0, done.getCount());
 		assertEquals(Collections.emptyList(), failed);
+	}
+	
+	/**
+	 * Runs the refresh on another thread while a full adherence refresh, run on its own as the
+	 * scheduled adherence task runs it, rewrites the rows, and checks that the refresh returns at once
+	 * and leaves the patient to that run. On MySQL, the rewrite's inserts hold the patient's row
+	 * through their foreign key until it commits; H2 does not, so a unit holds the row here instead.
+	 */
+	private void assertLeftToTheFullAdherenceRefresh(Runnable refresh) {
+		CountDownLatch done = new CountDownLatch(1);
+		Thread[] second = new Thread[1];
+		
+		List<Integer> readAfter = AdherenceRefreshInTest.whileRewritingEveryPatient(
+		    () -> Transactions.inPatientTransaction(PATIENT, () -> {
+			    second[0] = inThread(failed, () -> {
+				    refresh.run();
+				    done.countDown();
+			    });
+			    assertTrue("the refresh waited for the full adherence refresh", await(done, LEFT_MILLIS));
+		    }));
+		
+		join(second[0]);
+		assertEquals(Collections.emptyList(), failed);
+		assertEquals(Collections.singletonList(PATIENT), readAfter);
 	}
 	
 	/**

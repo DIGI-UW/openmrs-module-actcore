@@ -56,9 +56,11 @@ class AdherenceRefresh {
 	
 	/**
 	 * The lock that keeps a refresh of one patient from writing while the full refresh runs. Each
-	 * patient's refresh holds it shared, and the full refresh holds it alone, because the full refresh
-	 * reads every patient before it rewrites them all, so a row written in between would be put back as
-	 * it was.
+	 * patient's refresh, of their adherence or of their flags, holds it shared, and the full refresh
+	 * holds it alone, because the full refresh reads every patient before it rewrites them all, so a row
+	 * written in between would be put back as it was. The rewrite also holds each patient's row in the
+	 * patient table until it commits, through the rows' foreign keys, so a patient's refresh that
+	 * locked that row would wait for it.
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
@@ -113,7 +115,8 @@ class AdherenceRefresh {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
 			if (DEFERRED.remove(patientId)) {
 				try {
-					Transactions.inPatientTransaction(patientId, () -> refreshPatient(patientId, today));
+					unlessRefreshingAll(patientId,
+					    () -> Transactions.inPatientTransaction(patientId, () -> rewritePatient(patientId, today)));
 					PatientFlagRefresh.refreshPatient(patientId);
 				}
 				catch (RuntimeException e) {
@@ -132,11 +135,24 @@ class AdherenceRefresh {
 	 * @param today the day to compute adherence and due dates as of
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
+		unlessRefreshingAll(patientId, () -> rewritePatient(patientId, today));
+	}
+	
+	/**
+	 * Runs one patient's work while holding the rows shared, unless a full refresh is running. The
+	 * patient is then left to that run at once, which refreshes the patient's adherence and flags once
+	 * it has finished. It does not wait for the rows, so a refresh that then locks the patient's row
+	 * does not wait for the rewrite to commit.
+	 *
+	 * @param patientId the patient the work refreshes
+	 * @param work the work to run
+	 */
+	static void unlessRefreshingAll(int patientId, Runnable work) {
 		if (!ROWS.readLock().tryLock()) {
 			DEFERRED.add(patientId);
 			// The full refresh may have let go, and refreshed the ones it was left, since the first try.
 			if (!ROWS.readLock().tryLock()) {
-				log.info("Adherence of patient {} left to the adherence refresh running now", patientId);
+				log.info("Patient {} left to the adherence refresh running now", patientId);
 				return;
 			}
 			if (!DEFERRED.remove(patientId)) {
@@ -146,14 +162,18 @@ class AdherenceRefresh {
 			}
 		}
 		try {
-			List<Object[]> rows = new ArrayList<Object[]>();
-			List<Object[]> timings = new ArrayList<Object[]>();
-			compute(read(patientId), today, rows, timings);
-			rewrite(patientId, rows, timings);
+			work.run();
 		}
 		finally {
 			ROWS.readLock().unlock();
 		}
+	}
+	
+	private void rewritePatient(int patientId, LocalDate today) {
+		List<Object[]> rows = new ArrayList<Object[]>();
+		List<Object[]> timings = new ArrayList<Object[]>();
+		compute(read(patientId), today, rows, timings);
+		rewrite(patientId, rows, timings);
 	}
 	
 	/**
