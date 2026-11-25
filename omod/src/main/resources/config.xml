@@ -48,10 +48,6 @@
     <class>org.openmrs.module.actcore.aop.HideDismissedFlags</class>
   </advice>
   <advice>
-    <point>org.openmrs.module.patientflags.api.FlagService</point>
-    <class>org.openmrs.module.actcore.aop.GuardFlagCache</class>
-  </advice>
-  <advice>
     <point>org.openmrs.api.PatientService</point>
     <class>org.openmrs.module.actcore.aop.EnrolOnRegistration</class>
   </advice>

@@ -51,6 +51,8 @@ import org.openmrs.module.patientflags.api.impl.FlagServiceImpl;
 import org.openmrs.module.patientflags.db.FlagDAO;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.springframework.aop.AfterReturningAdvice;
+import org.springframework.aop.Advisor;
+import org.springframework.aop.framework.Advised;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -173,6 +175,18 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		service.getPrivileges().retainAll(Collections.emptySet());
 		
 		assertFalse(service.getPrivileges().isEmpty());
+	}
+	
+	@Test
+	public void flagService_shouldCarryTheAdviceOnceFromTheSpringContext() {
+		int guards = 0;
+		for (Advisor advisor : ((Advised) Context.getService(FlagService.class)).getAdvisors()) {
+			if (advisor.getAdvice() instanceof GuardFlagCache) {
+				guards++;
+			}
+		}
+		
+		assertEquals(1, guards);
 	}
 	
 	@Test

@@ -50,6 +50,11 @@ import org.openmrs.module.patientflags.api.FlagService;
  * context refresh has just put in place of the one being read, and the fill would wait for the
  * evaluation's read lock. getPrivileges returns a copy of the privilege cache, because a Groovy
  * flag's evaluator narrows the collection it gets to the privileges of the user it runs for.
+ * <p>
+ * ACT Core's Spring context adds this advice to patientflags' flagService bean, which
+ * ServiceContext keeps as the FlagService itself. So the FlagService that a context refresh creates
+ * carries it before ServiceContext hands that service to any caller and before any module's advice
+ * is loaded.
  */
 public class GuardFlagCache implements MethodInterceptor {
 	
