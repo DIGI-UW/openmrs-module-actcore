@@ -473,7 +473,12 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void listsADownloadWhoseDetailCannotBeReadWithoutItAndOnlyWithoutAnIdentifiersFilter() throws Exception {
+	public void listsADownloadWhoseDetailCannotBeReadWithoutItAndAsPossiblyHoldingIdentifiers() throws Exception {
+		Form other = new Form();
+		other.setName("RHD Follow-up");
+		other.setVersion("1");
+		other.setEncounterType(Context.getEncounterService().getEncounterType(1));
+		Context.getFormService().saveForm(other);
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		controller.download(body());
 		controller.download(body());
@@ -498,9 +503,13 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertNull(spoiltForm.get("detail"));
 		assertEquals("RHD Echocardiogram", ((SimpleObject) spoiltForm.get("form")).get("name"));
 		assertEquals(Boolean.TRUE, ((Map<?, ?>) ((SimpleObject) results.get(2)).get("detail")).get("identifiers"));
-		assertEquals(Integer.valueOf(2),
+		assertEquals(Integer.valueOf(3),
 		    controller.getDownloads(null, null, null, form.getUuid(), null, null, null).get("totalCount"));
-		assertEquals(Integer.valueOf(1),
+		List<?> ofOther = (List<?>) controller.getDownloads(null, null, null, other.getUuid(), null, null, null)
+		        .get("results");
+		assertEquals(1, ofOther.size());
+		assertNull(((SimpleObject) ofOther.get(0)).get("form"));
+		assertEquals(Integer.valueOf(3),
 		    controller.getDownloads(null, null, null, null, "with", null, null).get("totalCount"));
 		assertEquals(Integer.valueOf(0),
 		    controller.getDownloads(null, null, null, null, "without", null, null).get("totalCount"));

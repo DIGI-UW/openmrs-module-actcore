@@ -106,10 +106,12 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		for (DownloadLogEntry entry : entries) {
 			Map<?, ?> detail = read(entry);
 			boolean unreadable = detail == null && entry.detail != null;
-			if (filter.identifiers != null && (unreadable || !filter.identifiers.equals(identifiersOf(detail)))) {
+			// An unreadable detail may have given identifiers, and an auditor must not miss such a download.
+			if (filter.identifiers != null && !filter.identifiers.equals(unreadable ? "with" : identifiersOf(detail))) {
 				continue;
 			}
-			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
+			if (chosenForm != null && !(unreadable && entry.formUuid == null) && !chosenForm.equals(entry.formUuid)
+			        && !formsOf(detail).contains(chosenForm)) {
 				continue;
 			}
 			DownloadLogItem download = new DownloadLogItem();

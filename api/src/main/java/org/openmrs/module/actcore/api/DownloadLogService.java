@@ -46,7 +46,8 @@ public interface DownloadLogService extends OpenmrsService {
 	/**
 	 * Gets a page of the downloads that match the filter, newest first, each with its user named and
 	 * its detail read. A detail that cannot be read as JSON is logged and left out, so the download is
-	 * listed without it.
+	 * listed without it, matched as having given identifiers and, when it was recorded without one
+	 * form, as holding every form.
 	 *
 	 * @param filter the user, days, form, identifiers and page to list
 	 * @return the page and how many downloads match in all; empty when none matches, as when no user

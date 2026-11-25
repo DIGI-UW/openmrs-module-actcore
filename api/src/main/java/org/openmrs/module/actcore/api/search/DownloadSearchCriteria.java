@@ -31,14 +31,15 @@ public class DownloadSearchCriteria {
 	
 	/**
 	 * The uuid of a form the downloads must hold, either as the one form downloaded or as one of
-	 * several.
+	 * several. A download recorded without one form whose recorded detail cannot be read as JSON
+	 * matches every form, since its forms cannot be told.
 	 */
 	public String formUuid;
 	
 	/**
 	 * What the downloads must have held: "research" for research data only, "with" for any other
 	 * download that gave identifiers, and "without" for the rest. A download whose recorded detail
-	 * cannot be read as JSON matches none of them.
+	 * cannot be read as JSON matches "with", since it may have given identifiers.
 	 */
 	public String identifiers;
 	
