@@ -26,8 +26,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Advice on PersonService and PatientService that re-evaluates a patient's flags and their place on
- * the flag lists once the transaction that saves, voids or unvoids them commits. It leaves the
- * adherence rows alone, since those are computed from encounters only.
+ * the flag lists after the patient is saved, voided or unvoided. The advice sits outside the
+ * service's own transaction, so when no transaction synchronization is active, as on a REST
+ * request, the service has already committed and the refresh runs at once, before the call returns.
+ * Otherwise, as inside a wider transaction, the refresh waits as
+ * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each flag and list is
+ * refreshed in a new transaction, as {@link Transactions#inNewTransaction(Runnable)} describes. It
+ * leaves the adherence rows alone, since those are computed from encounters only.
  */
 public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 	

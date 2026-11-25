@@ -18,6 +18,7 @@ import org.openmrs.api.context.Context;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.ResourceTransactionManager;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
@@ -34,23 +35,39 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in a new transaction of its own, suspending any transaction already in progress.
-	 * Code that runs after a commit needs this to write, because the committed transaction's resources
-	 * are still bound to the thread at that point.
+	 * Runs the work in a new transaction, suspending any transaction already in progress. Code that
+	 * runs after a commit needs this to write, because the committed transaction's resources are still
+	 * bound to the thread at that point. When no transaction synchronization is active, the session
+	 * bound to the thread, such as a REST request's, is set aside while the work runs and bound again
+	 * afterwards, so a rollback of the work cannot clear it and detach what the caller loaded. Inside a
+	 * scope that activates synchronization without starting a transaction, such as one with SUPPORTS
+	 * propagation, the session is not set aside.
 	 *
 	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
 	 *            propagates
 	 */
 	public static void inNewTransaction(final Runnable work) {
-		TransactionTemplate template = new TransactionTemplate(transactionManager());
+		PlatformTransactionManager manager = transactionManager();
+		TransactionTemplate template = new TransactionTemplate(manager);
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		template.execute(new TransactionCallbackWithoutResult() {
-			
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus status) {
-				work.run();
+		// With no synchronization to suspend, Spring would join the bound session and clear it on a rollback.
+		Object sessionFactory = ((ResourceTransactionManager) manager).getResourceFactory();
+		Object callersSession = TransactionSynchronizationManager.isSynchronizationActive() ? null
+		        : TransactionSynchronizationManager.unbindResourceIfPossible(sessionFactory);
+		try {
+			template.execute(new TransactionCallbackWithoutResult() {
+				
+				@Override
+				protected void doInTransactionWithoutResult(TransactionStatus status) {
+					work.run();
+				}
+			});
+		}
+		finally {
+			if (callersSession != null) {
+				TransactionSynchronizationManager.bindResource(sessionFactory, callersSession);
 			}
-		});
+		}
 	}
 	
 	/**
@@ -124,9 +141,9 @@ public final class Transactions {
 	
 	/**
 	 * Runs the work for the patient once the current transaction commits, or at once when no
-	 * transaction is in progress, so that a failure in the work cannot roll back the save that
-	 * triggered it. Calls made with the same owner, such as an advice class, within one transaction run
-	 * the work once for each patient, however many times a patient is passed.
+	 * transaction synchronization is active, so that a failure in the work cannot roll back the save
+	 * that triggered it. Calls made with the same owner, such as an advice class, within one
+	 * transaction run the work once for each patient, however many times a patient is passed.
 	 *
 	 * @param owner what the work is registered under in the current transaction; a later call with the
 	 *            same owner adds its patient to that registration and its own work is not used

@@ -27,6 +27,8 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
 import org.junit.After;
 import org.junit.Test;
 import org.openmrs.Encounter;
@@ -40,10 +42,12 @@ import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
 import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
+import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.orm.hibernate5.SessionHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -304,6 +308,33 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		});
 		
 		assertNotNull(row(7));
+	}
+	
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void saveEncounter_shouldLeaveThePatientReadableWhenTheRefreshRollsBack() {
+		SessionFactory sessionFactory = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
+		Object leftover = TransactionSynchronizationManager.unbindResourceIfPossible(sessionFactory);
+		Session request = sessionFactory.openSession();
+		// Stands in for the session OpenSessionInViewFilter binds to a REST request.
+		TransactionSynchronizationManager.bindResource(sessionFactory, new SessionHolder(request));
+		try {
+			Encounter report = unsaved(7, 0);
+			
+			committed(encounters(patientId -> Transactions.inNewTransaction(() -> {
+				throw new IllegalStateException("Deadlock found when trying to get lock");
+			}), patientId -> {}).saveEncounter(report));
+			
+			// What REST reads to display the saved encounter's patient.
+			assertNotNull(report.getPatient().getPatientIdentifier());
+		}
+		finally {
+			TransactionSynchronizationManager.unbindResource(sessionFactory);
+			request.close();
+			if (leftover != null) {
+				TransactionSynchronizationManager.bindResource(sessionFactory, leftover);
+			}
+		}
 	}
 	
 	@Test
