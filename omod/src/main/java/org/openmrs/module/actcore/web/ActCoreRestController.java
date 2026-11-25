@@ -22,17 +22,20 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.api.impl.Names;
 import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.response.ConversionException;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -45,9 +48,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * or of the wrong type with 400, a request body of a content type the endpoint does not read with
  * 415, a request that accepts no type the endpoint gives with 406, and a privilege that
  * {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401 or 403, as for
- * an {@link APIAuthenticationException}. BaseRestController would answer each of these with 500. It
- * also holds the request helpers the controllers share, which find a request's patient and
- * location, read its dates and months, and describe a user.
+ * an {@link APIAuthenticationException}. BaseRestController would answer each of these with 500.
+ * Each handler that writes a body writes it in JSON whatever the request accepts: under an
+ * {@code Accept} such as {@code text/plain}, Spring cannot write the body in a type the request
+ * accepts, and the request ends in the web application's 500 page instead. It also holds the
+ * request helpers the controllers share, which find a request's patient and location, read its
+ * dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
@@ -69,6 +75,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject badParameterHandler(Exception e, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		String message;
 		if (e instanceof MethodArgumentTypeMismatchException) {
 			MethodArgumentTypeMismatchException mismatch = (MethodArgumentTypeMismatchException) e;
@@ -99,8 +106,8 @@ public abstract class ActCoreRestController extends BaseRestController {
 	}
 	
 	/**
-	 * Answers a request that accepts no type the endpoint gives with 406 and no body, since the
-	 * request accepts no type to write one in.
+	 * Answers a request that accepts no type the endpoint gives with 406 and no body, since the request
+	 * accepts no type to write one in.
 	 *
 	 * @param response the response, whose status is set to 406
 	 */
@@ -125,6 +132,81 @@ public abstract class ActCoreRestController extends BaseRestController {
 	public SimpleObject privilegeRequiredHandler(ContextAuthenticationException e, HttpServletRequest request,
 	        HttpServletResponse response) throws Exception {
 		return apiAuthenticationExceptionHandler(e, request, response);
+	}
+	
+	/**
+	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 *
+	 * @see BaseRestController#apiAuthenticationExceptionHandler(Exception, HttpServletRequest,
+	 *      HttpServletResponse)
+	 */
+	@Override
+	@ExceptionHandler(APIAuthenticationException.class)
+	@ResponseBody
+	public SimpleObject apiAuthenticationExceptionHandler(Exception ex, HttpServletRequest request,
+	        HttpServletResponse response) throws Exception {
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		return super.apiAuthenticationExceptionHandler(ex, request, response);
+	}
+	
+	/**
+	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 *
+	 * @see BaseRestController#validationExceptionHandler(ValidationException, HttpServletRequest,
+	 *      HttpServletResponse)
+	 */
+	@Override
+	@ExceptionHandler(ValidationException.class)
+	@ResponseBody
+	public SimpleObject validationExceptionHandler(ValidationException validationException, HttpServletRequest request,
+	        HttpServletResponse response) {
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		return super.validationExceptionHandler(validationException, request, response);
+	}
+	
+	/**
+	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 *
+	 * @see BaseRestController#conversionExceptionHandler(ConversionException, HttpServletRequest,
+	 *      HttpServletResponse)
+	 */
+	@Override
+	@ExceptionHandler(ConversionException.class)
+	@ResponseBody
+	public SimpleObject conversionExceptionHandler(ConversionException conversionException, HttpServletRequest request,
+	        HttpServletResponse response) {
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		return super.conversionExceptionHandler(conversionException, request, response);
+	}
+	
+	/**
+	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 *
+	 * @see BaseRestController#httpMessageNotReadableExceptionHandler(HttpMessageNotReadableException,
+	 *      HttpServletRequest, HttpServletResponse)
+	 */
+	@Override
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	@ResponseBody
+	public SimpleObject httpMessageNotReadableExceptionHandler(
+	        HttpMessageNotReadableException httpMessageNotReadableException, HttpServletRequest request,
+	        HttpServletResponse response) {
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		return super.httpMessageNotReadableExceptionHandler(httpMessageNotReadableException, request, response);
+	}
+	
+	/**
+	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 *
+	 * @see BaseRestController#handleException(Exception, HttpServletRequest, HttpServletResponse)
+	 */
+	@Override
+	@ExceptionHandler(Exception.class)
+	@ResponseBody
+	public SimpleObject handleException(Exception ex, HttpServletRequest request, HttpServletResponse response)
+	        throws Exception {
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		return super.handleException(ex, request, response);
 	}
 	
 	/**

@@ -38,6 +38,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.response.ConversionException;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -201,6 +202,59 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void answersARefusedRequestInJsonWhateverItAccepts() throws Exception {
+		for (String accept : ACCEPTS) {
+			for (Object[] refused : refusedAsAdmin()) {
+				MockHttpServletRequest request = (MockHttpServletRequest) refused[1];
+				accept(request, accept);
+				
+				assertJsonError(refused[2] + " " + accept, (Integer) refused[0], dispatch(request));
+			}
+		}
+	}
+	
+	@Test
+	public void answersAMissingPrivilegeInJsonWhateverTheRequestAccepts() throws Exception {
+		authenticateWith(PrivilegeConstants.GET_PROGRAMS);
+		for (String accept : ACCEPTS) {
+			for (MockHttpServletRequest request : new MockHttpServletRequest[] {
+			        post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"), cardiology(UUID.randomUUID().toString()),
+			        get("/rest/v1/actcore/refresh") }) {
+				accept(request, accept);
+				
+				assertJsonError(request.getRequestURI() + " " + accept, 403, dispatch(request));
+			}
+		}
+	}
+	
+	@Test
+	public void answersARequestWithoutAUserInJsonWhateverItAccepts() throws Exception {
+		Context.logout();
+		for (String accept : ACCEPTS) {
+			MockHttpServletRequest request = post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}");
+			accept(request, accept);
+			
+			MockHttpServletResponse response = dispatch(request);
+			
+			assertJsonError(accept, 401, response);
+			assertNotNull(response.getHeader("WWW-Authenticate"));
+		}
+	}
+	
+	@Test
+	public void answersAFailedConversionInJsonWhateverTheRequestAccepts() throws Exception {
+		for (String accept : ACCEPTS) {
+			MockHttpServletRequest request = cardiology(null);
+			accept(request, accept);
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			
+			assertNotNull(accept,
+			    resolver.resolveException(request, response, handler(request), new ConversionException("unconvertible")));
+			assertJsonError(accept, 400, response);
+		}
+	}
+	
+	@Test
 	public void answersAGetWhoseAcceptItCannotMeetWithNotAcceptable() throws Exception {
 		for (String accept : new String[] { "text/plain", "text/csv" }) {
 			MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rest/v1/actcore/refresh");
@@ -236,6 +290,36 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertJsonError("json", 415, response);
 		assertEquals("application/json", response.getHeader("Accept"));
+	}
+	
+	/**
+	 * Requests an administrator sends wrong, each with the status it gets and what it is, one for each
+	 * of the controllers' error handlers that writes a body.
+	 */
+	static Object[][] refusedAsAdmin() {
+		MockHttpServletRequest mistyped = get("/rest/v1/actcore/activity");
+		mistyped.setParameter("startIndex", "abc");
+		MockHttpServletRequest missing = get("/rest/v1/actcore/screeningcounts");
+		missing.setParameter("clinic", "x");
+		return new Object[][] { { 400, mistyped, "a mistyped parameter" }, { 400, missing, "a missing parameter" },
+		        { 400, post("/rest/v1/actcore/studies", "{\"name\":\" \"}"), "a refused study" },
+		        { 400, post("/rest/v1/actcore/studies", ""), "a missing body" },
+		        { 400, cardiology(null), "a missing patient" },
+		        { 404, cardiology(UUID.randomUUID().toString()), "an unknown patient" } };
+	}
+	
+	private static MockHttpServletRequest cardiology(String patient) {
+		MockHttpServletRequest request = get("/rest/v1/actcore/cardiology");
+		if (patient != null) {
+			request.setParameter("patient", patient);
+		}
+		return request;
+	}
+	
+	private static MockHttpServletRequest get(String uri) {
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
+		request.addHeader("Accept", "application/json");
+		return request;
 	}
 	
 	/**
@@ -280,14 +364,18 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		return request;
 	}
 	
-	private MockHttpServletResponse dispatch(MockHttpServletRequest request) throws Exception {
-		MockHttpServletResponse response = new MockHttpServletResponse();
+	private HandlerMethod handler(MockHttpServletRequest request) throws Exception {
 		HandlerExecutionChain chain = null;
 		for (RequestMappingHandlerMapping mapping : mappings) {
 			chain = chain == null ? mapping.getHandler(request) : chain;
 		}
 		assertNotNull(chain);
-		HandlerMethod handler = (HandlerMethod) chain.getHandler();
+		return (HandlerMethod) chain.getHandler();
+	}
+	
+	private MockHttpServletResponse dispatch(MockHttpServletRequest request) throws Exception {
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		HandlerMethod handler = handler(request);
 		try {
 			adapter.handle(request, response, handler);
 		}
