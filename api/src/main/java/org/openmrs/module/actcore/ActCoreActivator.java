@@ -10,11 +10,16 @@
 package org.openmrs.module.actcore;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 
+import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.APIException;
+import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
 import org.openmrs.module.BaseModuleActivator;
@@ -26,6 +31,7 @@ import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.ReportDescriptorLoader;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
+import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +39,8 @@ import org.slf4j.LoggerFactory;
  * The module's activator. Each time the module starts, it loads the report descriptors, ends the
  * open enrolments of patients already recorded dead, and makes sure the scheduler holds the patient
  * flag refresh task and the adherence refresh task, registering each one the first time it is
- * missing.
+ * missing. When an administrator stops the module, or it fails to start, it takes those tasks off
+ * the scheduler's startup until it starts again.
  * <p>
  * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
  * patientflags module registers nothing of its own, so without this each task would have to be
@@ -52,6 +59,11 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	 * activator finds it again on later starts.
 	 */
 	public static final String ADHERENCE_TASK_NAME = "RHD Prophylaxis Adherence Refresh";
+	
+	private static final List<String> TASK_NAMES = Arrays.asList(REFRESH_TASK_NAME, ADHERENCE_TASK_NAME);
+	
+	private static final String[] STOP_PRIVILEGES = { PrivilegeConstants.MANAGE_SCHEDULER,
+	        PrivilegeConstants.GET_GLOBAL_PROPERTIES, PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES };
 	
 	/**
 	 * The interval, in seconds, that each task is first registered with. The scheduler owns the
@@ -131,14 +143,19 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	public void started() {
 		ReportDescriptorLoader.load();
 		closeEnrolmentsOfTheDead();
-		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
+		Set<String> takenOff = tasksTakenOff();
+		boolean scheduled = schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 		            + " of the same name.",
-		    soon());
-		schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
+		    soon(), takenOff.contains(REFRESH_TASK_NAME));
+		scheduled &= schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
 		    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
 		            + " injections and oral adherence estimates.",
-		    soon());
+		    soon(), takenOff.contains(ADHERENCE_TASK_NAME));
+		// Kept on a failure, so that a later start still puts the tasks back.
+		if (scheduled && !takenOff.isEmpty()) {
+			forgetTasksTakenOff();
+		}
 		log.info("ACT Core module started");
 	}
 	
@@ -166,14 +183,23 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		}
 	}
 	
-	private void schedule(String name, String taskClass, String description, Date firstRun) {
+	/**
+	 * Registers the task the first time it is missing, and otherwise brings its description and class
+	 * up to date and puts it back on startup when a stop took it off.
+	 *
+	 * @return false when it could not, which it logs
+	 */
+	private boolean schedule(String name, String taskClass, String description, Date firstRun, boolean takenOff) {
 		try {
 			SchedulerService schedulerService = Context.getSchedulerService();
 			TaskDefinition existing = schedulerService.getTaskByName(name);
 			if (existing != null) {
 				// The description and the class: the interval and start time are the administrator's to change.
 				boolean moved = !taskClass.equals(existing.getTaskClass());
-				if (moved || !description.equals(existing.getDescription())) {
+				if (takenOff) {
+					existing.setStartOnStartup(Boolean.TRUE);
+				}
+				if (moved || takenOff || !description.equals(existing.getDescription())) {
 					existing.setDescription(description);
 					existing.setTaskClass(taskClass);
 					schedulerService.saveTaskDefinition(existing);
@@ -181,12 +207,13 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 				// A task saved under a class that has since moved (rhdflags' before the rename) could not load.
 				if (moved) {
 					log.warn("Moved '{}' to {}", name, taskClass);
-					// Core's scheduler started before this, on the old class, so this call is what schedules the task.
-					if (Boolean.TRUE.equals(existing.getStarted()) || Boolean.TRUE.equals(existing.getStartOnStartup())) {
-						schedulerService.rescheduleTask(existing);
-					}
 				}
-				return;
+				// Core's scheduler started on the old class or without the task, so this call schedules it.
+				if ((moved || takenOff) && (Boolean.TRUE.equals(existing.getStarted())
+				        || Boolean.TRUE.equals(existing.getStartOnStartup()))) {
+					schedulerService.rescheduleTask(existing);
+				}
+				return true;
 			}
 			
 			TaskDefinition task = new TaskDefinition();
@@ -201,17 +228,97 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 			schedulerService.saveTaskDefinition(task);
 			schedulerService.scheduleTask(task);
 			log.info("Registered '{}' every {}s", name, task.getRepeatInterval());
+			return true;
 		}
 		catch (Exception e) {
 			// A module that cannot schedule itself must still start, or it takes the whole
 			// distribution down with it on a machine where the scheduler is unavailable.
 			log.error("Could not schedule '{}'", name, e);
+			return false;
 		}
 	}
 	
-	/** @see org.openmrs.module.BaseModuleActivator#stopped() */
+	/**
+	 * Takes the module's tasks off the scheduler's startup when an administrator stops the module, or
+	 * it fails to start. Core refreshes its context after such a stop, and its scheduler then schedules
+	 * every task set to start on startup, which for these tasks logs a ClassNotFoundException since
+	 * their classes went with the module. {@link #started()} puts back the tasks this took off. A
+	 * shutdown of OpenMRS leaves the tasks as they are.
+	 *
+	 * @see org.openmrs.module.BaseModuleActivator#stopped()
+	 */
 	@Override
 	public void stopped() {
+		for (String privilege : STOP_PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
+			takeTasksOffStartup();
+		}
+		catch (Exception e) {
+			log.error("Could not take ACT Core's tasks off the scheduler's startup", e);
+		}
+		finally {
+			for (String privilege : STOP_PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
+		}
 		log.info("ACT Core module stopped");
+	}
+	
+	private static void takeTasksOffStartup() {
+		AdministrationService administrationService = Context.getAdministrationService();
+		// Core sets this to false before calling stopped() on a stop or a failed start, and not on a shutdown.
+		if (!"false".equals(administrationService.getGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY))) {
+			return;
+		}
+		SchedulerService schedulerService = Context.getSchedulerService();
+		Set<String> takenOff = tasksTakenOff();
+		List<TaskDefinition> taking = new ArrayList<TaskDefinition>();
+		for (String name : TASK_NAMES) {
+			TaskDefinition task = schedulerService.getTaskByName(name);
+			if (task != null && Boolean.TRUE.equals(task.getStartOnStartup())) {
+				taking.add(task);
+				takenOff.add(name);
+			}
+		}
+		if (taking.isEmpty()) {
+			return;
+		}
+		// Recorded before the tasks change, so that no failure leaves a task off that no start puts back.
+		administrationService.setGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED,
+		    StringUtils.join(takenOff, ","));
+		for (TaskDefinition task : taking) {
+			task.setStartOnStartup(Boolean.FALSE);
+			schedulerService.saveTaskDefinition(task);
+		}
+		log.info("Took {} off the scheduler's startup until ACT Core starts again", takenOff);
+	}
+	
+	private static Set<String> tasksTakenOff() {
+		Set<String> names = new LinkedHashSet<String>();
+		try {
+			String value = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED);
+			for (String name : StringUtils.split(StringUtils.defaultString(value), ',')) {
+				names.add(name.trim());
+			}
+		}
+		catch (Exception e) {
+			log.error("Could not read which tasks a stop took off the scheduler's startup", e);
+		}
+		return names;
+	}
+	
+	private static void forgetTasksTakenOff() {
+		Context.addProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
+		try {
+			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, "");
+		}
+		catch (Exception e) {
+			log.error("Could not clear the record of the tasks a stop took off the scheduler's startup", e);
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
+		}
 	}
 }
