@@ -509,9 +509,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			assertEquals(Level.WARN, warning.getLevel());
 		}
 		String first = warned.get(0).getMessage().getFormattedMessage();
-		assertTrue(first, first.contains(spoiltListUuid));
+		assertEquals(warningFor(spoiltListUuid), first);
 		String second = warned.get(1).getMessage().getFormattedMessage();
-		assertTrue(second, second.contains(spoiltFormUuid));
+		assertEquals(warningFor(spoiltFormUuid), second);
 		assertEquals(Integer.valueOf(3), every.get("totalCount"));
 		List<?> results = (List<?>) every.get("results");
 		SimpleObject spoiltList = (SimpleObject) results.get(0);
@@ -590,9 +590,15 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		}
 		assertEquals(2, warned.size());
 		String first = warned.get(0).getMessage().getFormattedMessage();
-		assertTrue(first, first.contains(nulledUuid));
+		assertEquals(warningFor(nulledUuid), first);
 		String second = warned.get(1).getMessage().getFormattedMessage();
-		assertTrue(second, second.contains(spoiltUuid));
+		assertEquals(warningFor(spoiltUuid), second);
+	}
+	
+	/** The WARN logged for the download with this uuid when its detail cannot be read. */
+	private static String warningFor(String uuid) {
+		return "Download " + uuid
+		        + " has a recorded detail that cannot be read as a JSON object, so the detail is left out when the download is listed";
 	}
 	
 	/** Committed, as the download's record was. It gives the uuid of the record spoilt. */

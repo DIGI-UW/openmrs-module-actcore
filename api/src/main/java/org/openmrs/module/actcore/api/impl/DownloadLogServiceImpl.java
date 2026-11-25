@@ -154,7 +154,9 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 			download.unreadable = download.detail == null;
 		}
 		if (download.unreadable) {
-			log.warn("Download {} is listed without its detail, which cannot be read as a JSON object", entry.uuid);
+			log.warn(
+			    "Download {} has a recorded detail that cannot be read as a JSON object, so the detail is left out when the download is listed",
+			    entry.uuid);
 		}
 		download.identifiers = download.unreadable ? "with" : identifiersOf(download.detail);
 		return download;
