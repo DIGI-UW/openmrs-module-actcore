@@ -237,6 +237,27 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 	
+	@Test
+	public void started_shouldKeepTheRecordOfTheTasksTakenOffWhenTheFirstCouldNotBeScheduled() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
+		stoppedAtRuntime();
+		new ActCoreActivator().stopped();
+		// Two tasks of one name make the scheduler's lookup by name throw.
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
+		
+		new ActCoreActivator().started();
+		
+		try {
+			assertEquals(ActCoreActivator.ADHERENCE_TASK_NAME,
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED));
+		}
+		finally {
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		}
+	}
+	
 	/** Sets what core sets on a stop made while OpenMRS runs, before it calls the activator. */
 	private static void stoppedAtRuntime() {
 		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "false");
