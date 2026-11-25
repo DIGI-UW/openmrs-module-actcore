@@ -77,7 +77,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	        "/rest/v1/actcore/raisedflags/dismiss", "/rest/v1/actcore/screeningcounts", "/rest/v1/actcore/studies",
 	        "/rest/v1/actcore/studies/" + UUID.randomUUID() };
 	
-	/** What a client may accept, which an error answers in JSON whatever it is. */
+	/** What a client may accept, which an error answers in JSON unless it is XML. */
 	private static final String[] ACCEPTS = { "application/json", "text/plain", "text/csv" };
 	
 	/** What a client may accept that admits neither JSON nor XML, or that is not a media type. */
@@ -170,9 +170,10 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	public void namesTheUnsupportedContentTypeWithoutAStackTrace() {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		
-		SimpleObject body = screeningCounts.unsupportedMediaTypeHandler(new HttpMediaTypeNotSupportedException(
-		        MediaType.TEXT_PLAIN, Collections.singletonList(MediaType.APPLICATION_JSON)),
-		    response);
+		SimpleObject body = screeningCounts
+		        .unsupportedMediaTypeHandler(new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN,
+		                Collections.singletonList(MediaType.APPLICATION_JSON)),
+		            new MockHttpServletRequest(), response);
 		
 		assertEquals(415, response.getStatus());
 		assertEquals("application/json", response.getHeader("Accept"));
@@ -212,9 +213,15 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void answersARefusedRequestInJson() throws Exception {
-		for (Object[] refused : refusedAsAdmin()) {
-			assertJsonError(refused[2] + "", (Integer) refused[0], dispatch((MockHttpServletRequest) refused[1]));
+	public void answersARefusedRequestInJsonOrInTheXmlItAccepts() throws Exception {
+		Object[][] asJson = refusedAsAdmin();
+		Object[][] asXml = refusedAsAdmin();
+		for (int i = 0; i < asJson.length; i++) {
+			MockHttpServletRequest xml = (MockHttpServletRequest) asXml[i][1];
+			accept(xml, "application/xml");
+			
+			assertJsonError(asJson[i][2] + "", (Integer) asJson[i][0], dispatch((MockHttpServletRequest) asJson[i][1]));
+			assertXmlError(asXml[i][2] + "", (Integer) asXml[i][0], dispatch(xml));
 		}
 	}
 	
@@ -231,35 +238,64 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void answersAMissingPrivilegeInJson() throws Exception {
+	public void answersAMissingPrivilegeInJsonOrInTheXmlItAccepts() throws Exception {
 		authenticateWith(PrivilegeConstants.GET_PROGRAMS);
-		for (MockHttpServletRequest request : new MockHttpServletRequest[] {
-		        post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"), cardiology(UUID.randomUUID().toString()),
-		        get("/rest/v1/actcore/refresh") }) {
-			assertJsonError(request.getRequestURI(), 403, dispatch(request));
+		for (String accept : new String[] { "application/json", "application/xml" }) {
+			for (MockHttpServletRequest request : new MockHttpServletRequest[] {
+			        post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"), cardiology(UUID.randomUUID().toString()),
+			        get("/rest/v1/actcore/refresh") }) {
+				accept(request, accept);
+				MockHttpServletResponse response = dispatch(request);
+				
+				if (accept.endsWith("xml")) {
+					assertXmlError(request.getRequestURI(), 403, response);
+				} else {
+					assertJsonError(request.getRequestURI(), 403, response);
+				}
+			}
 		}
 	}
 	
 	@Test
-	public void answersARequestWithoutAUserInJson() throws Exception {
+	public void answersARequestWithoutAUserInJsonOrInTheXmlItAccepts() throws Exception {
 		Context.logout();
 		MockHttpServletResponse response = dispatch(post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"));
-		
 		assertJsonError("json", 401, response);
+		assertNotNull(response.getHeader("WWW-Authenticate"));
+		
+		MockHttpServletRequest request = post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}");
+		accept(request, "application/xml");
+		response = dispatch(request);
+		
+		assertXmlError("xml", 401, response);
 		assertNotNull(response.getHeader("WWW-Authenticate"));
 	}
 	
 	@Test
-	public void answersAFailedConversionInJsonWhateverTheRequestAccepts() throws Exception {
-		for (String accept : new String[] { "application/json", "text/plain", "text/csv", "not a type" }) {
+	public void answersAFailedConversionInJsonUnlessTheRequestAcceptsXml() throws Exception {
+		for (String accept : new String[] { "application/json", "text/plain", "text/csv", "not a type",
+		        "application/xml" }) {
 			MockHttpServletRequest request = cardiology(null);
 			accept(request, accept);
 			MockHttpServletResponse response = new MockHttpServletResponse();
 			
 			assertNotNull(accept,
 			    resolver.resolveException(request, response, handler(request), new ConversionException("unconvertible")));
-			assertJsonError(accept, 400, response);
+			if (accept.endsWith("xml")) {
+				assertXmlError(accept, 400, response);
+			} else {
+				assertJsonError(accept, 400, response);
+			}
 		}
+	}
+	
+	@Test
+	public void answersABodyOfTheWrongContentTypeInTheXmlTheRequestAccepts() throws Exception {
+		MockHttpServletRequest request = bodyPost("/rest/v1/actcore/studies", "name=ARC");
+		request.setContentType("text/plain");
+		accept(request, "application/xml");
+		
+		assertXmlError("text/plain", 415, dispatch(request));
 	}
 	
 	@Test
@@ -409,6 +445,14 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	private static void assertNotAcceptable(String what, MockHttpServletResponse response) throws Exception {
 		assertEquals(what, 406, response.getStatus());
 		assertEquals(what, "", response.getContentAsString());
+	}
+	
+	/** Asserts the status, and a body in XML. */
+	private static void assertXmlError(String what, int status, MockHttpServletResponse response) throws Exception {
+		assertEquals(what, status, response.getStatus());
+		assertTrue(what + " " + response.getContentType(),
+		    MediaType.APPLICATION_XML.equalsTypeAndSubtype(MediaType.parseMediaType(response.getContentType())));
+		assertTrue(what + " " + response.getContentAsString(), response.getContentAsString().startsWith("<"));
 	}
 	
 	/** Asserts the status, and an {@code error} body in JSON. */

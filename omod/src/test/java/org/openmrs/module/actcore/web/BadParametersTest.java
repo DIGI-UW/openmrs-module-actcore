@@ -77,7 +77,7 @@ public class BadParametersTest extends BaseModuleWebContextSensitiveTest {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		
 		SimpleObject body = activity.badParameterHandler(new MissingServletRequestParameterException("month", "String"),
-		    response);
+		    new MockHttpServletRequest(), response);
 		
 		assertEquals(400, response.getStatus());
 		assertEquals("{error={message=month is required}}", body.toString());

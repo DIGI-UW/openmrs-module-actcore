@@ -54,10 +54,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * 415, a request that accepts neither JSON nor XML with 406 before the endpoint runs, and a
  * privilege that {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401
  * or 403, as for an {@link APIAuthenticationException}. BaseRestController would answer each of
- * these with 500. Each handler that writes a body writes it in JSON whatever the request accepts:
- * under an {@code Accept} such as {@code text/plain}, Spring cannot write the body in a type the
- * request accepts, and the request ends in the web application's 500 page instead. It also holds
- * the request helpers the controllers share, which find a request's patient and location, read its
+ * these with 500. Each handler that writes a body writes it in the JSON or XML the request accepts,
+ * and in JSON when it accepts neither: Spring could not write the body in a type such a request
+ * accepts, and the request would end in the web application's 500 page instead. It also holds the
+ * request helpers the controllers share, which find a request's patient and location, read its
  * dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
@@ -99,14 +99,15 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 * it.
 	 *
 	 * @param e the MethodArgumentTypeMismatchException or MissingServletRequestParameterException
+	 * @param request the request
 	 * @param response the response, whose status is set to 400
 	 * @return an {@code error} holding the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler({ MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class })
 	@ResponseBody
-	public SimpleObject badParameterHandler(Exception e, HttpServletResponse response) {
+	public SimpleObject badParameterHandler(Exception e, HttpServletRequest request, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		String message;
 		if (e instanceof MethodArgumentTypeMismatchException) {
 			MethodArgumentTypeMismatchException mismatch = (MethodArgumentTypeMismatchException) e;
@@ -119,19 +120,21 @@ public abstract class ActCoreRestController extends BaseRestController {
 	}
 	
 	/**
-	 * Answers a request body of a content type the endpoint does not read with 415, in JSON whatever
-	 * the request accepts, and names JSON in the {@code Accept} header as the type the module's
-	 * endpoints read.
+	 * Answers a request body of a content type the endpoint does not read with 415, in the JSON or XML
+	 * the request accepts and in JSON when it accepts neither, and names JSON in the {@code Accept}
+	 * header as the type the module's endpoints read.
 	 *
 	 * @param e the HttpMediaTypeNotSupportedException
+	 * @param request the request
 	 * @param response the response, whose status is set to 415
 	 * @return an {@code error} holding the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
 	@ResponseBody
-	public SimpleObject unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletResponse response) {
+	public SimpleObject unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletRequest request,
+	        HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		response.setHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
 		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
 	}
@@ -166,7 +169,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
 	 *
 	 * @see BaseRestController#apiAuthenticationExceptionHandler(Exception, HttpServletRequest,
 	 *      HttpServletResponse)
@@ -176,12 +179,12 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject apiAuthenticationExceptionHandler(Exception ex, HttpServletRequest request,
 	        HttpServletResponse response) throws Exception {
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		return super.apiAuthenticationExceptionHandler(ex, request, response);
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
 	 *
 	 * @see BaseRestController#validationExceptionHandler(ValidationException, HttpServletRequest,
 	 *      HttpServletResponse)
@@ -191,12 +194,12 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject validationExceptionHandler(ValidationException validationException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		return super.validationExceptionHandler(validationException, request, response);
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
 	 *
 	 * @see BaseRestController#conversionExceptionHandler(ConversionException, HttpServletRequest,
 	 *      HttpServletResponse)
@@ -206,12 +209,12 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject conversionExceptionHandler(ConversionException conversionException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		return super.conversionExceptionHandler(conversionException, request, response);
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
 	 *
 	 * @see BaseRestController#httpMessageNotReadableExceptionHandler(HttpMessageNotReadableException,
 	 *      HttpServletRequest, HttpServletResponse)
@@ -222,12 +225,12 @@ public abstract class ActCoreRestController extends BaseRestController {
 	public SimpleObject httpMessageNotReadableExceptionHandler(
 	        HttpMessageNotReadableException httpMessageNotReadableException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		return super.httpMessageNotReadableExceptionHandler(httpMessageNotReadableException, request, response);
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON whatever the request accepts.
+	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
 	 *
 	 * @see BaseRestController#handleException(Exception, HttpServletRequest, HttpServletResponse)
 	 */
@@ -236,8 +239,22 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject handleException(Exception ex, HttpServletRequest request, HttpServletResponse response)
 	        throws Exception {
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		return super.handleException(ex, request, response);
+	}
+	
+	/**
+	 * Sets the response's type to JSON when the request accepts neither JSON nor XML, so that an error
+	 * body can be written. Otherwise the type is left for Spring to choose from what the request
+	 * accepts.
+	 *
+	 * @param request the request
+	 * @param response the response
+	 */
+	private static void jsonUnlessJsonOrXmlIsAccepted(HttpServletRequest request, HttpServletResponse response) {
+		if (!acceptsJsonOrXml(request)) {
+			response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		}
 	}
 	
 	/**
