@@ -11,6 +11,7 @@ package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.nio.charset.StandardCharsets;
@@ -32,8 +33,10 @@ import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
@@ -56,6 +59,11 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private ScreeningCountController screeningCounts;
+	
+	/** The endpoints that read a JSON body. */
+	private static final String[] BODY_URIS = { "/rest/v1/actcore/download", "/rest/v1/actcore/download/record",
+	        "/rest/v1/actcore/raisedflags/dismiss", "/rest/v1/actcore/screeningcounts", "/rest/v1/actcore/studies",
+	        "/rest/v1/actcore/studies/" + UUID.randomUUID() };
 	
 	@Test
 	public void answersARefusedStudyNameWithABadRequest() throws Exception {
@@ -111,6 +119,79 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.setParameter("endDate", "2026-10-21");
 		
 		assertEquals(400, dispatch(request).getStatus());
+	}
+	
+	@Test
+	public void answersABodyOfTheWrongContentTypeWithUnsupportedMediaType() throws Exception {
+		for (String uri : BODY_URIS) {
+			for (String contentType : new String[] { "text/plain", "application/x-www-form-urlencoded" }) {
+				MockHttpServletRequest request = bodyPost(uri, "name=ARC");
+				request.setContentType(contentType);
+				
+				MockHttpServletResponse response = dispatch(request);
+				
+				assertEquals(uri + " " + contentType, 415, response.getStatus());
+				assertTrue(uri, response.getHeader("Accept").contains("application/json"));
+			}
+		}
+	}
+	
+	@Test
+	public void namesTheUnsupportedContentTypeWithoutAStackTrace() {
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		
+		SimpleObject body = screeningCounts.unsupportedMediaTypeHandler(new HttpMediaTypeNotSupportedException(
+		        MediaType.TEXT_PLAIN, Collections.singletonList(MediaType.APPLICATION_JSON)),
+		    response);
+		
+		assertEquals(415, response.getStatus());
+		assertEquals("application/json", response.getHeader("Accept"));
+		assertEquals("{error={message=Content type 'text/plain' not supported}}", body.toString());
+	}
+	
+	@Test
+	public void answersAMissingOrMalformedBodyWithABadRequest() throws Exception {
+		for (String uri : BODY_URIS) {
+			for (String json : new String[] { "", "{\"name\":", "[]" }) {
+				assertEquals(uri + " " + json, 400, dispatch(bodyPost(uri, json)).getStatus());
+			}
+		}
+	}
+	
+	@Test
+	public void answersARefreshThatIsNotJsonWithUnsupportedMediaTypeWithoutRunningIt() throws Exception {
+		for (String contentType : new String[] { "text/plain", "application/x-www-form-urlencoded", "multipart/form-data",
+		        null }) {
+			MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/v1/actcore/refresh");
+			request.addHeader("Accept", "application/json");
+			if (contentType != null) {
+				request.setContentType(contentType);
+			}
+			
+			MockHttpServletResponse response = dispatch(request);
+			
+			assertEquals(String.valueOf(contentType), 415, response.getStatus());
+			assertEquals("application/json", response.getHeader("Accept"));
+		}
+	}
+	
+	@Test
+	public void answersARefreshWithAnUnreadableContentTypeWithUnsupportedMediaType() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/v1/actcore/refresh");
+		request.addHeader("Accept", "application/json");
+		request.setContentType("json");
+		
+		assertEquals(415, dispatch(request).getStatus());
+	}
+	
+	/**
+	 * A POST with the parameters the screening counts read before the body, which the others ignore.
+	 */
+	private static MockHttpServletRequest bodyPost(String uri, String body) {
+		MockHttpServletRequest request = post(uri, body);
+		request.setParameter("clinic", "x");
+		request.setParameter("month", "2026-09");
+		return request;
 	}
 	
 	private static MockHttpServletRequest post(String uri, String json) {

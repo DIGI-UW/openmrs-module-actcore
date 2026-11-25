@@ -31,6 +31,9 @@ import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -38,11 +41,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 /**
  * The base class of the module's REST controllers. It answers a request parameter that is missing
- * or of the wrong type with 400, and a privilege that
- * {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401 or 403, as for
- * an {@link APIAuthenticationException}. BaseRestController would answer both with 500. It also
- * holds the request helpers the controllers share, which find a request's patient and location,
- * read its dates and months, and describe a user.
+ * or of the wrong type with 400, a request body of a content type the endpoint does not read with
+ * 415, and a privilege that {@link org.openmrs.api.context.Context#requirePrivilege(String)}
+ * refuses with 401 or 403, as for an {@link APIAuthenticationException}. BaseRestController would
+ * answer all three with 500. It also holds the request helpers the controllers share, which find a
+ * request's patient and location, read its dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
@@ -73,6 +76,24 @@ public abstract class ActCoreRestController extends BaseRestController {
 		}
 		// No stack trace or code: the caller sent the request wrong, and the server has nothing to show.
 		return new SimpleObject().add("error", new SimpleObject().add("message", message));
+	}
+	
+	/**
+	 * Answers a request body of a content type the endpoint does not read with 415, naming the types it
+	 * reads in the {@code Accept} header, as Spring MVC's own DefaultHandlerExceptionResolver does.
+	 *
+	 * @param e the HttpMediaTypeNotSupportedException
+	 * @param response the response, whose status is set to 415
+	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 */
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	@ResponseBody
+	public SimpleObject unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletResponse response) {
+		response.setStatus(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
+		if (!e.getSupportedMediaTypes().isEmpty()) {
+			response.setHeader(HttpHeaders.ACCEPT, MediaType.toString(e.getSupportedMediaTypes()));
+		}
+		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
 	}
 	
 	/**
