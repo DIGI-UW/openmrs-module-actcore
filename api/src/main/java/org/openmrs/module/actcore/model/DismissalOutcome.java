@@ -11,7 +11,7 @@ package org.openmrs.module.actcore.model;
 
 /**
  * The outcome of a dismissal: the flag was dismissed, it is not raised for the patient now, it may
- * not be dismissed, or the full refresh is running.
+ * not be dismissed, or the full flag or adherence refresh is running.
  *
  * @see org.openmrs.module.actcore.api.RaisedFlagService#dismiss(org.openmrs.Patient,
  *      org.openmrs.module.patientflags.Flag)

@@ -174,6 +174,20 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	@Test
+	public void refusesADismissalAtOnceWhileTheFullAdherenceRefreshRewritesTheRows() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		List<DismissalOutcome> outcome = new ArrayList<DismissalOutcome>();
+		
+		assertLeftToTheFullAdherenceRefresh(
+		    () -> outcome.add(raisedFlags().dismiss(Context.getPatientService().getPatient(PATIENT),
+		        Context.getService(FlagService.class).getFlag(flag.getFlagId()))));
+		
+		assertEquals(Collections.singletonList(DismissalOutcome.REFRESH_RUNNING), outcome);
+		assertEquals(0L, count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where patient_id = "
+		        + PATIENT + " and flag_id = " + flag.getFlagId() + " and date_dismissed is not null"));
+	}
+	
+	@Test
 	public void leavesASaveToTheFullAdherenceRefreshAtOnceWhileItRewritesTheRows() throws Exception {
 		Encounter encounter = new Encounter();
 		encounter.setPatient(Context.getPatientService().getPatient(PATIENT));

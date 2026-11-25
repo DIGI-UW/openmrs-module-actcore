@@ -184,7 +184,10 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			return dismissIfRaised(patient, flag);
+			DismissalOutcome[] outcome = { DismissalOutcome.REFRESH_RUNNING };
+			// Not waited on either: the adherence rewrite holds the patient's row until it commits.
+			AdherenceRefresh.unlessRefreshingAll(patient.getPatientId(), () -> outcome[0] = dismissIfRaised(patient, flag));
+			return outcome[0];
 		}
 		finally {
 			for (String privilege : DISMISS_PRIVILEGES) {
