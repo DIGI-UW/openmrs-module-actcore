@@ -19,8 +19,6 @@ import org.hibernate.StaleStateException;
 import org.hibernate.exception.LockAcquisitionException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.api.db.RegistryDAO;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -37,8 +35,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  * one, such as advice classes and scheduled tasks.
  */
 public final class Transactions {
-	
-	private static final Logger log = LoggerFactory.getLogger(Transactions.class);
 	
 	private static final int MAX_CAUSE_CHAIN_DEPTH = 10;
 	
@@ -88,7 +84,6 @@ public final class Transactions {
 			if (!isConcurrencyFailure(e)) {
 				throw e;
 			}
-			log.warn("A refresh of patient {} met a concurrent write and runs once more: {}", patientId, e.toString());
 			unit.run();
 		}
 	}

@@ -30,6 +30,12 @@ import java.util.function.Supplier;
 import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.hibernate.SessionFactory;
 import org.hibernate.StaleStateException;
 import org.hibernate.exception.ConstraintViolationException;
@@ -109,6 +115,35 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(2, sessions.size());
 		assertNotSame(sessions.get(0), sessions.get(1));
+	}
+	
+	@Test
+	public void logsNothingWhenTheRetryRecovers() {
+		List<LogEvent> logged = new ArrayList<LogEvent>();
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				logged.add(event.toImmutable());
+			}
+		};
+		appender.start();
+		Logger logger = (Logger) LogManager.getLogger(Transactions.class);
+		Level level = logger.getLevel();
+		logger.addAppender(appender);
+		// The test log4j2.xml turns every logger off.
+		logger.setLevel(Level.ALL);
+		try {
+			runFailingFirst(() -> new DAOException("Error while running sql: insert into actcore_prophylaxis_adherence",
+			        new SQLTransactionRollbackException("Deadlock found when trying to get lock", "40001", 1213)),
+			    () -> {});
+		}
+		finally {
+			logger.removeAppender(appender);
+			logger.setLevel(level);
+		}
+		
+		assertEquals(Collections.emptyList(), logged);
 	}
 	
 	@Test
