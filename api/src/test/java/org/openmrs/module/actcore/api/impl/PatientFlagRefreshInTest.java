@@ -32,6 +32,18 @@ public final class PatientFlagRefreshInTest {
 		}.runIfIdle();
 	}
 	
+	public static PatientFlagRefresh inTestTransaction() {
+		return new PatientFlagRefresh() {
+			
+			@Override
+			void inPatientTransaction(int patientId, Runnable work) {
+				work.run();
+				// Where a transaction of its own would commit.
+				Context.flushSession();
+			}
+		};
+	}
+	
 	public static void refreshPatient(int patientId) {
 		PatientFlagRefresh.refreshPatient(patientId, new Consumer<Runnable>() {
 			

@@ -9,12 +9,19 @@
  */
 package org.openmrs.module.actcore.utils;
 
+import java.sql.SQLTransactionRollbackException;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
+import org.hibernate.StaleStateException;
+import org.hibernate.exception.LockAcquisitionException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.db.RegistryDAO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -30,6 +37,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * one, such as advice classes and scheduled tasks.
  */
 public final class Transactions {
+	
+	private static final Logger log = LoggerFactory.getLogger(Transactions.class);
+	
+	private static final int MAX_CAUSE_CHAIN_DEPTH = 10;
 	
 	private Transactions() {
 	}
@@ -47,9 +58,64 @@ public final class Transactions {
 	 *            propagates
 	 */
 	public static void inNewTransaction(final Runnable work) {
+		inNewTransaction(TransactionDefinition.ISOLATION_DEFAULT, work);
+	}
+	
+	/**
+	 * Runs one patient's refresh work as a unit of its own, as openmrs-core 2.8 counts a user's failed
+	 * logins: in a new transaction, as {@link #inNewTransaction(Runnable)} describes, at READ
+	 * COMMITTED, and with the patient's row locked first. The lock makes two units for the same patient
+	 * take turns, so the second reads what the first wrote rather than writing the same rows again.
+	 * READ COMMITTED leaves out the gap locks that MySQL takes at its default REPEATABLE READ, by which
+	 * the units of two new patients could deadlock. A patient with no row is not locked and the work
+	 * still runs. When the unit fails on a concurrent write, such as a lost deadlock or a row that
+	 * another transaction deleted first, it is run once more in a new transaction, as
+	 * openmrs-module-billing retries its receipt number blocks; any other failure, or a second one,
+	 * propagates.
+	 *
+	 * @param patientId the patient the work refreshes
+	 * @param work the work to run; it may run twice, so it must read what it writes afresh each time
+	 */
+	public static void inPatientTransaction(final int patientId, final Runnable work) {
+		Runnable unit = () -> inNewTransaction(TransactionDefinition.ISOLATION_READ_COMMITTED, () -> {
+			Context.getRegisteredComponents(RegistryDAO.class).get(0).lockPatient(patientId);
+			work.run();
+		});
+		try {
+			unit.run();
+		}
+		catch (RuntimeException e) {
+			if (!isConcurrencyFailure(e)) {
+				throw e;
+			}
+			log.warn("A refresh of patient {} met a concurrent write and runs once more: {}", patientId, e.toString());
+			unit.run();
+		}
+	}
+	
+	/**
+	 * Tells whether the failure, or anything in its cause chain, is a concurrent write: what Spring
+	 * translates to a ConcurrencyFailureException, or what reaches ACT Core untranslated in its place,
+	 * a Hibernate stale state or lock acquisition failure, or a JDBC transaction rollback such as
+	 * MySQL's deadlock. A duplicate key is not one.
+	 */
+	private static boolean isConcurrencyFailure(Throwable failure) {
+		Throwable t = failure;
+		for (int depth = 0; t != null && depth < MAX_CAUSE_CHAIN_DEPTH; depth++) {
+			if (t instanceof ConcurrencyFailureException || t instanceof StaleStateException
+			        || t instanceof LockAcquisitionException || t instanceof SQLTransactionRollbackException) {
+				return true;
+			}
+			t = t.getCause();
+		}
+		return false;
+	}
+	
+	private static void inNewTransaction(int isolation, final Runnable work) {
 		PlatformTransactionManager manager = transactionManager();
 		TransactionTemplate template = new TransactionTemplate(manager);
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		template.setIsolationLevel(isolation);
 		// With no synchronization to suspend, Spring would join the bound session and clear it on a rollback.
 		Object sessionFactory = ((ResourceTransactionManager) manager).getResourceFactory();
 		Object callersSession = TransactionSynchronizationManager.isSynchronizationActive() ? null

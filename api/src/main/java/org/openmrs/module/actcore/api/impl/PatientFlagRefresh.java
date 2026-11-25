@@ -160,12 +160,12 @@ public class PatientFlagRefresh {
 	 *
 	 * @param patientId the patient whose flags to refresh
 	 */
-	public static void refreshPatient(int patientId) {
+	public static void refreshPatient(final int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {
 			
 			@Override
 			public void accept(Runnable work) {
-				Transactions.inNewTransaction(work);
+				Transactions.inPatientTransaction(patientId, work);
 			}
 		});
 	}
@@ -384,7 +384,7 @@ public class PatientFlagRefresh {
 		// Clearing first, since evaluating a message can throw and end the flag's pass.
 		for (Integer patientId : alreadyFlagged.keySet()) {
 			if (!matching.contains(patientId)) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+				inPatientTransaction(patientId, () -> flagService.deletePatientFlagForPatient(new Patient(patientId), flag));
 				cleared++;
 			}
 		}
@@ -395,14 +395,25 @@ public class PatientFlagRefresh {
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
 				raised++;
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
-				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
+				inPatientTransaction(patientId, () -> {
+					flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+					flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
+				});
 			}
 		}
 		
 		if (raised > raisedBefore || cleared > clearedBefore) {
 			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), raised - raisedBefore, cleared - clearedBefore);
 		}
+	}
+	
+	/**
+	 * Runs the full refresh's delete of one patient's flag row, with the save that rewrites it when its
+	 * message changed, as a unit of its own, so that a row the patientflags module's own thread deleted
+	 * first is retried rather than ending the flag's pass.
+	 */
+	void inPatientTransaction(int patientId, Runnable work) {
+		Transactions.inPatientTransaction(patientId, work);
 	}
 	
 	void trackRaised(Flag flag, Set<Integer> matching) {

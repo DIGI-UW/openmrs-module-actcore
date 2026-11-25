@@ -113,7 +113,7 @@ class AdherenceRefresh {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
 			if (DEFERRED.remove(patientId)) {
 				try {
-					refreshPatient(patientId, today);
+					Transactions.inPatientTransaction(patientId, () -> refreshPatient(patientId, today));
 					PatientFlagRefresh.refreshPatient(patientId);
 				}
 				catch (RuntimeException e) {

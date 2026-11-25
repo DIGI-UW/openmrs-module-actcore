@@ -32,8 +32,8 @@ import org.slf4j.LoggerFactory;
  * request, the service has already committed and the refresh runs at once, before the call returns.
  * Otherwise, as inside a wider transaction, the refresh waits as
  * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each step of the refresh
- * runs in a new transaction, as {@link Transactions#inNewTransaction(Runnable)} describes, and a
- * step that fails is logged and leaves the save as it is. The flags are refreshed again here
+ * runs as a unit of its own, as {@link Transactions#inPatientTransaction(int, Runnable)} describes,
+ * and a step that fails is logged and leaves the save as it is. The flags are refreshed again here
  * because the patientflags module's own pass may run before the commit, and so miss the change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
@@ -58,7 +58,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			
 			@Override
 			public void accept(final int patientId) {
-				Transactions.inNewTransaction(new Runnable() {
+				Transactions.inPatientTransaction(patientId, new Runnable() {
 					
 					@Override
 					public void run() {

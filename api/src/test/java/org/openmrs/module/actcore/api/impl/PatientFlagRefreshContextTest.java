@@ -837,8 +837,7 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		flagService.saveFlag(flag);
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(OTHER_PATIENT), flag, "overdue"));
 		
-		String summary = theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
-		        .getFormattedMessage();
+		String summary = summaryOfARun();
 		
 		assertTrue(summary, summary.contains("1 cleared"));
 		assertEquals(0, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
@@ -846,8 +845,8 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	private String summaryOfARun() {
-		return theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
-		        .getFormattedMessage();
+		return theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, PatientFlagRefreshInTest.inTestTransaction()))
+		        .getMessage().getFormattedMessage();
 	}
 	
 	private void refreshPatient(int patientId) {
@@ -872,7 +871,7 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	private void runScheduledWork() {
-		runScheduledWork(new PatientFlagRefresh());
+		runScheduledWork(PatientFlagRefreshInTest.inTestTransaction());
 	}
 	
 	private void runScheduledWork(PatientFlagRefresh task) {

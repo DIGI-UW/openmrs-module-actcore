@@ -75,6 +75,11 @@ public class PatientFlagRefreshTest {
 			@Override
 			void trackRaised(Flag flag, Set<Integer> matching) {
 			}
+			
+			@Override
+			void inPatientTransaction(int patientId, Runnable work) {
+				work.run();
+			}
 		};
 	}
 	
