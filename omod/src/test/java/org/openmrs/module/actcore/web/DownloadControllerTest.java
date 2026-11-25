@@ -537,6 +537,23 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		    controller.getDownloads(null, null, null, null, "research", null, null).get("totalCount"));
 	}
 	
+	@Test
+	public void listsADownloadRecordedWithoutADetailAsWithoutIdentifiersAndWithoutAWarning() {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		Context.getService(DownloadLogService.class).recordDownload(null, null);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		List<LogEvent> warned = new ArrayList<LogEvent>();
+		
+		SimpleObject without = warningsOf(warned,
+		    () -> controller.getDownloads(null, null, null, null, "without", null, null));
+		
+		assertEquals(Integer.valueOf(1), without.get("totalCount"));
+		assertNull(((SimpleObject) ((List<?>) without.get("results")).get(0)).get("detail"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, null, "with", null, null).get("totalCount"));
+		assertTrue(warned.isEmpty());
+	}
+	
 	/** Committed, as the download's record was. It gives the uuid of the record spoilt. */
 	private static String spoilLastDetail() {
 		String table = ActCoreConstants.DOWNLOAD_LOG_TABLE;
