@@ -17,9 +17,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLTransactionRollbackException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -36,6 +38,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.StaleStateException;
 import org.hibernate.exception.ConstraintViolationException;
@@ -115,6 +118,53 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 		
 		assertEquals(2, sessions.size());
 		assertNotSame(sessions.get(0), sessions.get(1));
+	}
+	
+	/**
+	 * The retry runs as the first attempt does. Spring reports each attempt's isolation, and a unit for
+	 * the same patient on another thread must still wait during the retry. The connection is checked
+	 * too: at READ COMMITTED inside each attempt, and back at the pool's default once the unit
+	 * returns. H2 opens every connection at READ COMMITTED, so here those connection checks hold
+	 * whatever isolation the unit asks for; the reported isolation and the waiting unit are what fail
+	 * when the retry runs otherwise.
+	 */
+	@Test
+	public void retriesAUnitAtReadCommittedWithThePatientStillLocked() {
+		List<Throwable> failed = Collections.synchronizedList(new ArrayList<Throwable>());
+		CountDownLatch entered = new CountDownLatch(1);
+		Thread[] second = new Thread[1];
+		List<Integer> isolation = new ArrayList<Integer>();
+		List<Integer> connectionIsolation = new ArrayList<Integer>();
+		List<Connection> connections = new ArrayList<Connection>();
+		int[] poolDefault = new int[1];
+		Transactions.inNewTransaction(() -> poolDefault[0] = currentSession().doReturningWork(Connection::getTransactionIsolation));
+		
+		runFailingFirst(() -> new CannotAcquireLockException("Deadlock found when trying to get lock"), () -> {
+			isolation.add(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel());
+			currentSession().doWork(connection -> {
+				connectionIsolation.add(connection.getTransactionIsolation());
+				connections.add(connection.unwrap(Connection.class));
+			});
+			if (isolation.size() == 2) {
+				second[0] = inThread(failed, () -> Transactions.inPatientTransaction(PATIENT, entered::countDown));
+				assertFalse("a unit for the patient started during the retry", await(entered, WAIT_MILLIS));
+			}
+		});
+		
+		join(second[0]);
+		assertEquals(0, entered.getCount());
+		assertEquals(Collections.emptyList(), failed);
+		assertEquals(Arrays.asList(Connection.TRANSACTION_READ_COMMITTED, Connection.TRANSACTION_READ_COMMITTED), isolation);
+		assertEquals(Arrays.asList(Connection.TRANSACTION_READ_COMMITTED, Connection.TRANSACTION_READ_COMMITTED),
+		    connectionIsolation);
+		for (Connection connection : connections) {
+			try {
+				assertEquals(poolDefault[0], connection.getTransactionIsolation());
+			}
+			catch (SQLException e) {
+				throw new IllegalStateException(e);
+			}
+		}
 	}
 	
 	@Test
@@ -235,6 +285,10 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 			assertSame(thrown.get(1), e);
 		}
 		assertEquals(2, attempts.get());
+	}
+	
+	private static Session currentSession() {
+		return Context.getRegisteredComponent("sessionFactory", SessionFactory.class).getCurrentSession();
 	}
 	
 	/** Runs a unit that throws the failure on its first attempt only, and gives how often it ran. */
