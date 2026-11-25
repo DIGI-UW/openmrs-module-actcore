@@ -21,8 +21,8 @@ import org.openmrs.module.actcore.model.RaisedFlag;
  * The database access behind {@link org.openmrs.module.actcore.api.RaisedFlagService}, which reads,
  * saves, dismisses and deletes the raised flags and saves the dismissals. Its reads leave the
  * session unflushed, since a raised flag changes only by a bulk statement or a save that is flushed
- * at once. The flag refresh and the flag lists also read the patientflags module's flag rows and
- * the cohort module's cohorts through it.
+ * at once. The flag refresh also reads and deletes the patientflags module's flag rows through it,
+ * and the flag lists read the cohort module's cohorts.
  */
 public interface RaisedFlagDAO {
 	
@@ -111,6 +111,17 @@ public interface RaisedFlagDAO {
 	 * @return each row as its patient_id and message, in that order; empty when there are none
 	 */
 	List<List<Object>> getPatientFlagRows(Integer flagId, Integer patientId);
+	
+	/**
+	 * Deletes the patientflags module's unvoided rows of the flag for the patient by one statement. A
+	 * row that another transaction has already deleted is then simply not deleted again, whereas
+	 * FlagService loads the rows first and deletes each by its id, which fails when the row has gone
+	 * in between.
+	 *
+	 * @param flagId the id of the flag
+	 * @param patientId the id of the patient
+	 */
+	void deletePatientFlagRows(Integer flagId, Integer patientId);
 	
 	/**
 	 * Tells whether a cohort with the uuid exists, voided or not. It reads by SQL, because the cohort

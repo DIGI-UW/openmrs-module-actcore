@@ -265,7 +265,7 @@ public class PatientFlagRefresh {
 		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		if (!matches) {
 			if (alreadyFlagged.containsKey(patientId)) {
-				flagService.deletePatientFlagForPatient(patient, flag);
+				deleteFlagRows(flagId, patientId);
 			}
 			raisedFlags.lower(flagId, patientId);
 			return;
@@ -275,7 +275,7 @@ public class PatientFlagRefresh {
 		if (!alreadyFlagged.containsKey(patientId)) {
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
 		} else if (!message.equals(alreadyFlagged.get(patientId))) {
-			flagService.deletePatientFlagForPatient(patient, flag);
+			deleteFlagRows(flagId, patientId);
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
 		}
 	}
@@ -389,7 +389,7 @@ public class PatientFlagRefresh {
 		// Clearing first, since evaluating a message can throw and end the flag's pass.
 		for (Integer patientId : alreadyFlagged.keySet()) {
 			if (!matching.contains(patientId)) {
-				inPatientTransaction(patientId, () -> flagService.deletePatientFlagForPatient(new Patient(patientId), flag));
+				inPatientTransaction(patientId, () -> deleteFlagRows(flag, patientId));
 				cleared++;
 			}
 		}
@@ -401,7 +401,7 @@ public class PatientFlagRefresh {
 				raised++;
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
 				inPatientTransaction(patientId, () -> {
-					flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+					deleteFlagRows(flag, patientId);
 					flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
 				});
 			}
@@ -414,11 +414,23 @@ public class PatientFlagRefresh {
 	
 	/**
 	 * Runs the full refresh's delete of one patient's flag row, with the save that rewrites it when its
-	 * message changed, as a unit of its own, so that a row the patientflags module's own thread deleted
-	 * first is retried rather than ending the flag's pass.
+	 * message changed, as a unit of its own, so that a deadlock with the patientflags module's own
+	 * thread is retried rather than ending the flag's pass.
 	 */
 	void inPatientTransaction(int patientId, Runnable work) {
 		Transactions.inPatientTransaction(patientId, work);
+	}
+	
+	void deleteFlagRows(Flag flag, int patientId) {
+		deleteFlagRows(flag.getFlagId(), patientId);
+	}
+	
+	/**
+	 * Deletes the patient's rows of the flag, as {@link RaisedFlagDAO#deletePatientFlagRows} describes,
+	 * so that a row the patientflags module's own thread has already deleted is no error.
+	 */
+	private static void deleteFlagRows(int flagId, int patientId) {
+		Context.getRegisteredComponents(RaisedFlagDAO.class).get(0).deletePatientFlagRows(flagId, patientId);
 	}
 	
 	void trackRaised(Flag flag, Set<Integer> matching) {

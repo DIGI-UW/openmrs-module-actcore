@@ -18,17 +18,24 @@ import static org.openmrs.module.actcore.utils.TransactionsContextTest.await;
 import static org.openmrs.module.actcore.utils.TransactionsContextTest.inThread;
 import static org.openmrs.module.actcore.utils.TransactionsContextTest.join;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.aopalliance.intercept.MethodInvocation;
-import org.hibernate.StaleStateException;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,7 +53,7 @@ import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
-import org.springframework.orm.hibernate5.HibernateOptimisticLockingFailureException;
+import org.springframework.aop.MethodBeforeAdvice;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,6 +76,8 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	private final List<Throwable> failed = Collections.synchronizedList(new ArrayList<Throwable>());
 	
 	private Flag flag;
+	
+	private final List<Thread> elsewhere = new ArrayList<Thread>();
 	
 	@Before
 	public void createModuleTables() {
@@ -165,18 +174,62 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	@Test
-	public void clearsEveryRowOfAFlagNightlyWhenPatientflagsDeletedOneFirst() {
+	public void clearsAFlagsRowsNightlyWithoutAnErrorWhenPatientflagsDeletesThemFirst() {
 		flag = saveFlag("select p.patient_id from patient p where p.patient_id = -1");
 		FlagService flagService = Context.getService(FlagService.class);
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(OTHER_PATIENT), flag, "old"));
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(PATIENT), flag, "old"));
-		PatientFlagRefresh refresh = new PatientFlagRefresh();
+		List<Integer> attempts = Collections.synchronizedList(new ArrayList<Integer>());
+		PatientFlagRefresh refresh = new PatientFlagRefresh() {
+			
+			@Override
+			void inPatientTransaction(int patientId, Runnable work) {
+				Transactions.inPatientTransaction(patientId, () -> {
+					attempts.add(patientId);
+					work.run();
+					deleteAsPatientflagsDoes(patientId);
+				});
+			}
+		};
 		
-		refresh.reconcile(deletingTheRowFirstOnce(flagService), flag);
+		List<LogEvent> errors = errors(() -> refresh.reconcile(flagService, flag));
 		
+		assertEquals(Collections.emptyList(), errors);
+		assertEquals(2, attempts.size());
+		assertEquals(new HashSet<Integer>(Arrays.asList(PATIENT, OTHER_PATIENT)), new HashSet<Integer>(attempts));
 		assertEquals(2, refresh.cleared);
-		assertEquals(0L,
-		    count("select count(*) from patientflags_patient_flag where voided = false and flag_id = " + flag.getFlagId()));
+		assertEquals(0L, flagRows());
+	}
+	
+	@Test
+	public void clearsAPatientsRowWithoutAnErrorWhenPatientflagsDeletesItFirst() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = -1");
+		Context.getService(FlagService.class)
+		        .savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(PATIENT), flag, "old"));
+		Map<Runnable, Integer> attempts = Collections.synchronizedMap(new IdentityHashMap<Runnable, Integer>());
+		// Lowering the raised flag follows the row's delete in the same unit.
+		MethodBeforeAdvice deleteBeforeLowering = (method, args, target) -> {
+			if ("lower".equals(method.getName()) && flag.getFlagId().equals(args[0])) {
+				deleteAsPatientflagsDoes(PATIENT);
+			}
+		};
+		
+		Context.addAdvice(RaisedFlagService.class, deleteBeforeLowering);
+		List<LogEvent> errors;
+		try {
+			errors = errors(() -> PatientFlagRefresh.refreshPatient(PATIENT,
+			    work -> Transactions.inPatientTransaction(PATIENT, () -> {
+				    attempts.merge(work, 1, Integer::sum);
+				    work.run();
+			    })));
+		}
+		finally {
+			Context.removeAdvice(RaisedFlagService.class, deleteBeforeLowering);
+		}
+		
+		assertEquals(Collections.emptyList(), errors);
+		assertEquals(Collections.singleton(1), new HashSet<Integer>(attempts.values()));
+		assertEquals(0L, flagRows());
 	}
 	
 	/**
@@ -198,6 +251,61 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		join(second[0]);
 		assertEquals(0, done.getCount());
 		assertEquals(Collections.emptyList(), failed);
+	}
+	
+	@Test
+	public void rewritesARowNightlyWithoutAnErrorWhenPatientflagsDeletesItFirst() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		FlagService flagService = Context.getService(FlagService.class);
+		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(PATIENT), flag, "old"));
+		List<Integer> attempts = Collections.synchronizedList(new ArrayList<Integer>());
+		PatientFlagRefresh refresh = new PatientFlagRefresh() {
+			
+			@Override
+			void inPatientTransaction(int patientId, Runnable work) {
+				Transactions.inPatientTransaction(patientId, () -> {
+					attempts.add(patientId);
+					work.run();
+					deleteAsPatientflagsDoes(patientId);
+				});
+			}
+		};
+		
+		List<LogEvent> errors = errors(() -> refresh.reconcile(flagService, flag));
+		
+		assertEquals(Collections.emptyList(), errors);
+		assertEquals(Collections.singletonList(PATIENT), attempts);
+	}
+	
+	@Test
+	public void rewritesAPatientsRowWithoutAnErrorWhenPatientflagsDeletesItFirst() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		Context.getService(FlagService.class)
+		        .savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(PATIENT), flag, "old"));
+		Map<Runnable, Integer> attempts = Collections.synchronizedMap(new IdentityHashMap<Runnable, Integer>());
+		// The rewritten row is saved after the old one is deleted, in the same unit.
+		MethodBeforeAdvice deleteBeforeSaving = (method, args, target) -> {
+			if ("savePatientFlag".equals(method.getName())
+			        && flag.getFlagId().equals(((PatientFlag) args[0]).getFlag().getFlagId())) {
+				deleteAsPatientflagsDoes(PATIENT);
+			}
+		};
+		
+		Context.addAdvice(FlagService.class, deleteBeforeSaving);
+		List<LogEvent> errors;
+		try {
+			errors = errors(() -> PatientFlagRefresh.refreshPatient(PATIENT,
+			    work -> Transactions.inPatientTransaction(PATIENT, () -> {
+				    attempts.merge(work, 1, Integer::sum);
+				    work.run();
+			    })));
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, deleteBeforeSaving);
+		}
+		
+		assertEquals(Collections.emptyList(), errors);
+		assertEquals(Collections.singleton(1), new HashSet<Integer>(attempts.values()));
 	}
 	
 	/**
@@ -225,34 +333,56 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	/**
-	 * The flag service, except that the first row it is asked to delete is deleted by another
-	 * transaction first, as the patientflags module's own thread does, so the delete fails as it then
-	 * does.
+	 * Deletes the flag's rows for the patient in a transaction on another thread, as the patientflags
+	 * module's own thread deletes them, while the caller's unit has deleted them and not yet committed.
+	 * A delete that holds the rows makes it wait for the unit to end; one that does not lets it finish
+	 * first.
 	 */
-	private static FlagService deletingTheRowFirstOnce(FlagService flagService) {
-		AtomicBoolean deletedFirst = new AtomicBoolean();
-		return (FlagService) Proxy.newProxyInstance(FlagService.class.getClassLoader(), new Class<?>[] { FlagService.class },
-		    (proxy, method, args) -> {
-			    if ("deletePatientFlagForPatient".equals(method.getName()) && deletedFirst.compareAndSet(false, true)) {
-				    List<Throwable> failed = new ArrayList<Throwable>();
-				    join(inThread(failed,
-				        () -> Transactions.inNewTransaction(() -> Context.getAdministrationService()
-				                .executeSQL("delete from patientflags_patient_flag where patient_id = "
-				                        + ((org.openmrs.Patient) args[0]).getPatientId() + " and flag_id = "
-				                        + ((Flag) args[1]).getFlagId(),
-				                    false))));
-				    assertEquals(Collections.emptyList(), failed);
-				    throw new HibernateOptimisticLockingFailureException(
-				            new StaleStateException("Batch update returned unexpected row count from update [0];"
-				                    + " actual row count: 0; expected: 1"));
-			    }
-			    try {
-				    return method.invoke(flagService, args);
-			    }
-			    catch (InvocationTargetException e) {
-				    throw e.getCause();
-			    }
-		    });
+	private void deleteAsPatientflagsDoes(int patientId) {
+		CountDownLatch deleted = new CountDownLatch(1);
+		elsewhere.add(inThread(failed, () -> {
+			Transactions.inNewTransaction(() -> Context.getAdministrationService().executeSQL(
+			    "delete from patientflags_patient_flag where patient_id = " + patientId + " and flag_id = " + flag.getFlagId(),
+			    false));
+			deleted.countDown();
+		}));
+		await(deleted, WAIT_MILLIS);
+	}
+	
+	/** What Hibernate and ACT Core log at ERROR while the work runs. */
+	private static List<LogEvent> errors(Runnable work) {
+		List<LogEvent> logged = Collections.synchronizedList(new ArrayList<LogEvent>());
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				logged.add(event.toImmutable());
+			}
+		};
+		appender.start();
+		List<Logger> loggers = Arrays.asList((Logger) LogManager.getLogger("org.hibernate"),
+		    (Logger) LogManager.getLogger("org.openmrs.module.actcore"));
+		List<Level> levels = new ArrayList<Level>();
+		for (Logger logger : loggers) {
+			levels.add(logger.getLevel());
+			logger.addAppender(appender);
+			// The test log4j2.xml turns every logger off; this sets the level of the loggers below it too.
+			Configurator.setLevel(logger.getName(), Level.ERROR);
+		}
+		try {
+			work.run();
+		}
+		finally {
+			for (int i = 0; i < loggers.size(); i++) {
+				loggers.get(i).removeAppender(appender);
+				Configurator.setLevel(loggers.get(i).getName(), levels.get(i));
+			}
+		}
+		return logged;
+	}
+	
+	private long flagRows() {
+		return count("select count(*) from patientflags_patient_flag where voided = false and flag_id = " + flag.getFlagId());
 	}
 	
 	private static RaisedFlagService raisedFlags() {
@@ -278,6 +408,10 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	// Nothing rolls this test back.
 	@After
 	public void removeCommittedFlag() {
+		for (Thread thread : elsewhere) {
+			join(thread);
+		}
+		assertEquals(Collections.emptyList(), failed);
 		if (flag != null) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);

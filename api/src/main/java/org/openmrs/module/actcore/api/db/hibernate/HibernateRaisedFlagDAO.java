@@ -24,6 +24,7 @@ import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
 import org.openmrs.module.actcore.model.FlagDismissal;
 import org.openmrs.module.actcore.model.RaisedFlag;
+import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.util.DatabaseUtil;
 
 /** Hibernate implementation of {@link org.openmrs.module.actcore.api.db.RaisedFlagDAO}. */
@@ -135,6 +136,18 @@ public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
 	public List<List<Object>> getPatientFlagRows(Integer flagId, Integer patientId) {
 		return sql("select patient_id, message from patientflags_patient_flag where flag_id = " + flagId
 		        + " and voided = false" + (patientId == null ? "" : " and patient_id = " + patientId));
+	}
+	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.RaisedFlagDAO#deletePatientFlagRows(Integer, Integer)
+	 */
+	@Override
+	public void deletePatientFlagRows(Integer flagId, Integer patientId) {
+		session()
+		        .createSQLQuery("delete from patientflags_patient_flag"
+		                + " where flag_id = :flag and patient_id = :patient and voided = false")
+		        .addSynchronizedEntityClass(PatientFlag.class).setParameter("flag", flagId).setParameter("patient", patientId)
+		        .executeUpdate();
 	}
 	
 	/**
