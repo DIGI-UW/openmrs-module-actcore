@@ -62,7 +62,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	private static final List<String> TASK_NAMES = Arrays.asList(REFRESH_TASK_NAME, ADHERENCE_TASK_NAME);
 	
-	private static final String[] STOP_PRIVILEGES = { PrivilegeConstants.MANAGE_SCHEDULER,
+	private static final String[] TASK_PRIVILEGES = { PrivilegeConstants.MANAGE_SCHEDULER,
 	        PrivilegeConstants.GET_GLOBAL_PROPERTIES, PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES };
 	
 	/**
@@ -143,18 +143,29 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	public void started() {
 		ReportDescriptorLoader.load();
 		closeEnrolmentsOfTheDead();
-		Set<String> takenOff = tasksTakenOff();
-		boolean scheduled = schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
-		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
-		            + " of the same name.",
-		    soon(), takenOff.contains(REFRESH_TASK_NAME));
-		scheduled &= schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
-		    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
-		            + " injections and oral adherence estimates.",
-		    soon(), takenOff.contains(ADHERENCE_TASK_NAME));
-		// Kept on a failure, so that a later start still puts the tasks back.
-		if (scheduled && !takenOff.isEmpty()) {
-			forgetTasksTakenOff();
+		// Core starts a module as the user who asked, who may hold no more than Manage Modules.
+		for (String privilege : TASK_PRIVILEGES) {
+			Context.addProxyPrivilege(privilege);
+		}
+		try {
+			Set<String> takenOff = tasksTakenOff();
+			boolean scheduled = schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
+			    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
+			            + " of the same name.",
+			    soon(), takenOff.contains(REFRESH_TASK_NAME));
+			scheduled &= schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
+			    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
+			            + " injections and oral adherence estimates.",
+			    soon(), takenOff.contains(ADHERENCE_TASK_NAME));
+			// Kept on a failure, so that a later start still puts the tasks back.
+			if (scheduled && !takenOff.isEmpty()) {
+				forgetTasksTakenOff();
+			}
+		}
+		finally {
+			for (String privilege : TASK_PRIVILEGES) {
+				Context.removeProxyPrivilege(privilege);
+			}
 		}
 		log.info("ACT Core module started");
 	}
@@ -252,7 +263,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	 */
 	@Override
 	public void stopped() {
-		for (String privilege : STOP_PRIVILEGES) {
+		for (String privilege : TASK_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
@@ -262,7 +273,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 			log.error("Could not take ACT Core's tasks off the scheduler's startup", e);
 		}
 		finally {
-			for (String privilege : STOP_PRIVILEGES) {
+			for (String privilege : TASK_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
 		}
@@ -313,15 +324,11 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	private static void forgetTasksTakenOff() {
-		Context.addProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
 		try {
 			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, "");
 		}
 		catch (Exception e) {
 			log.error("Could not clear the record of the tasks a stop took off the scheduler's startup", e);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
 		}
 	}
 }

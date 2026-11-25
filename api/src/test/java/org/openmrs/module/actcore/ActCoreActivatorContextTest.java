@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -25,6 +26,14 @@ import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
 import org.junit.Test;
+import org.openmrs.Person;
+import org.openmrs.PersonName;
+import org.openmrs.Privilege;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.AdministrationService;
+import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
@@ -32,6 +41,8 @@ import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.openmrs.scheduler.timer.TimerSchedulerServiceImpl;
+import org.openmrs.util.PrivilegeConstants;
+import org.springframework.aop.MethodBeforeAdvice;
 
 public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -258,9 +269,83 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 	
+	@Test
+	public void started_shouldPutBackTheTasksWhenAUserWhoCanOnlyManageModulesStopsAndStartsTheModule() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
+		stoppedAtRuntime();
+		User moduleManager = userWithOnly(PrivilegeConstants.MANAGE_MODULES);
+		MethodBeforeAdvice globalPropertyChecks = new GlobalPropertyChecksOfLaterCore();
+		Context.addAdvice(AdministrationService.class, globalPropertyChecks);
+		try {
+			Context.becomeUser(moduleManager.getSystemId());
+			new ActCoreActivator().stopped();
+			new ActCoreActivator().started();
+			assertFalse(Context.hasPrivilege(PrivilegeConstants.MANAGE_SCHEDULER));
+			assertFalse(Context.hasPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES));
+			assertFalse(Context.hasPrivilege(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES));
+		}
+		finally {
+			Context.removeAdvice(AdministrationService.class, globalPropertyChecks);
+			Context.logout();
+			authenticate();
+		}
+		
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		try {
+			assertTrue(flags.getStartOnStartup());
+			assertTrue(flags.getStarted() && flags.getTaskInstance() != null);
+			assertEquals("",
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, ""));
+		}
+		finally {
+			schedulerService.shutdownTask(flags);
+		}
+	}
+	
 	/** Sets what core sets on a stop made while OpenMRS runs, before it calls the activator. */
 	private static void stoppedAtRuntime() {
 		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "false");
+	}
+	
+	private static User userWithOnly(String privilegeName) {
+		UserService userService = Context.getUserService();
+		Privilege privilege = userService.getPrivilege(privilegeName);
+		if (privilege == null) {
+			privilege = userService.savePrivilege(new Privilege(privilegeName, privilegeName));
+		}
+		Role role = new Role("Test Module Manager", "Can only manage modules");
+		role.addPrivilege(privilege);
+		userService.saveRole(role);
+		Person person = new Person();
+		person.addName(new PersonName("Module", null, "Manager"));
+		person.setGender("F");
+		User user = new User(person);
+		user.setUsername("modulemanager");
+		user.addRole(role);
+		return userService.createUser(user, "Password123");
+	}
+	
+	/**
+	 * Refuses the global property reads and writes that core 2.8.10 authorizes and 2.4.0, which the
+	 * tests run on, does not.
+	 */
+	private static class GlobalPropertyChecksOfLaterCore implements MethodBeforeAdvice {
+		
+		@Override
+		public void before(Method method, Object[] args, Object target) {
+			if ("getGlobalProperty".equals(method.getName())) {
+				require(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+			} else if ("setGlobalProperty".equals(method.getName())) {
+				require(PrivilegeConstants.MANAGE_GLOBAL_PROPERTIES);
+			}
+		}
+		
+		private static void require(String privilege) {
+			if (!Context.hasPrivilege(privilege)) {
+				throw new APIAuthenticationException("Privileges required: " + privilege);
+			}
+		}
 	}
 	
 	private static TaskDefinition registered(String name, Class<?> taskClass, boolean startOnStartup) {
