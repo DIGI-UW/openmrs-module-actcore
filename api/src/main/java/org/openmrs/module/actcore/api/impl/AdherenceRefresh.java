@@ -64,7 +64,12 @@ class AdherenceRefresh {
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
-	// The handshake PatientFlagRefresh uses for flags: a fix to one belongs in both.
+	/**
+	 * The patients left to the running full refresh, which refreshes their adherence and flags once it
+	 * has finished. A patient is added by their own refresh, or by a dismissal refused while the full
+	 * refresh runs, which then gets that refresh but no dismissal. PatientFlagRefresh keeps the same
+	 * handshake for flags, so a fix to one belongs in both.
+	 */
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
@@ -141,11 +146,12 @@ class AdherenceRefresh {
 	/**
 	 * Runs one patient's work while holding the rows shared, unless a full refresh is running. The
 	 * patient is then left to that run at once, which refreshes the patient's adherence and flags once
-	 * it has finished. It does not wait for the rows, so a refresh that then locks the patient's row
-	 * does not wait for the rewrite to commit.
+	 * it has finished, and the work does not run. When the work is a dismissal, the patient therefore
+	 * gets that refresh with no dismissal. It does not wait for the rows, so a refresh that then locks
+	 * the patient's row does not wait for the rewrite to commit.
 	 *
-	 * @param patientId the patient the work refreshes
-	 * @param work the work to run
+	 * @param patientId the patient the work is for
+	 * @param work the work to run, a refresh of the patient or a dismissal
 	 */
 	static void unlessRefreshingAll(int patientId, Runnable work) {
 		if (!ROWS.readLock().tryLock()) {
