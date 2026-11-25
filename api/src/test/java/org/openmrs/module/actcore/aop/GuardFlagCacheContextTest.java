@@ -17,8 +17,11 @@ import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -26,16 +29,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.hibernate.SessionFactory;
 import org.junit.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
+import org.openmrs.PatientProgram;
+import org.openmrs.Privilege;
+import org.openmrs.Role;
+import org.openmrs.api.AdministrationService;
+import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
+import org.openmrs.module.DaemonTokens;
+import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.patientflags.DisplayPoint;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.api.impl.FlagServiceImpl;
 import org.openmrs.module.patientflags.db.FlagDAO;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.springframework.aop.AfterReturningAdvice;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Runs patientflags' own FlagServiceImpl over a stub DAO whose tag query, which the cache rebuild
@@ -46,6 +63,11 @@ import org.springframework.aop.framework.ProxyFactory;
 public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static final long WAIT_SECONDS = 10;
+	
+	private static final String HIV_PROGRAM = "da4a0391-ba62-4fad-ad66-1e3722d16380";
+	
+	/** The concept of the terminal state in the standard test data's HIV program. */
+	private static final String TERMINAL_STATE_CONCEPT = "7d104a6f-8337-4afa-b936-41083a5d9d88";
 	
 	// How long the rebuild holds the unsorted list open for an evaluation that never comes.
 	private static final long HOLD_SECONDS = 2;
@@ -65,6 +87,11 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	private final AtomicInteger tagQueries = new AtomicInteger();
 	
 	private final AtomicInteger evaluations = new AtomicInteger();
+	
+	private volatile Work onEvaluation;
+	
+	@Autowired
+	private SessionFactory sessionFactory;
 	
 	@Test
 	public void generateFlagsForPatient_shouldThrowWhenItReadsTheCacheThatSaveFlagIsSortingWithoutTheAdvice()
@@ -95,6 +122,123 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void getFlagsForPatient_shouldFillAnEmptyCacheOnceBeforeItFiltersByTag() throws Exception {
+		FlagService service = service(true, false);
+		AtomicReference<Throwable> failure = coldReaders(service,
+		    () -> service.getFlagsForPatient(new Patient(2), new HashSet<Role>(), (DisplayPoint) null));
+		
+		assertNull(failure.get());
+		assertEquals(1, tagQueries.get());
+	}
+	
+	@Test
+	public void getPrivileges_shouldFillAnEmptyCacheBeforeAReaderReadsIt() throws Exception {
+		FlagService service = service(true, false);
+		
+		assertNull(race(service, service::getPrivileges));
+	}
+	
+	@Test
+	public void getPrivileges_shouldNotWaitForTheFillOnAThreadThatAnEvaluationStarted() throws Exception {
+		FlagService evaluated = service(true);
+		// The service a context refresh puts in its place, whose cache is still empty.
+		FlagService replacement = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		AtomicReference<Thread> groovy = new AtomicReference<Thread>();
+		AtomicBoolean groovyWaited = new AtomicBoolean();
+		released.countDown();
+		// A Groovy evaluator thread asks the current service for privileges while the evaluation waits.
+		onEvaluation = () -> {
+			groovy.set(start(failure, replacement::getPrivileges));
+			groovy.get().join(TimeUnit.SECONDS.toMillis(HOLD_SECONDS));
+			groovyWaited.set(groovy.get().isAlive());
+		};
+		Thread reader = start(failure,
+		    () -> evaluated.generateFlagsForPatient(new Patient(1), new HashMap<Object, Object>()));
+		join(reader);
+		join(groovy.get());
+		
+		assertFalse(groovyWaited.get());
+		assertNull(failure.get());
+	}
+	
+	@Test
+	public void getPrivileges_shouldReturnACopyThatTheCallerCanNarrow() throws Exception {
+		// The test data holds no privileges, so the superuser's privileges are this one.
+		Context.getUserService().savePrivilege(new Privilege("Flag Privilege", "Read by a flag"));
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty("patientflags.username", "admin"));
+		FlagService service = service(true, false);
+		
+		// As a Groovy flag's evaluator narrows them to the privileges of a user who is not a superuser.
+		service.getPrivileges().retainAll(Collections.emptySet());
+		
+		assertFalse(service.getPrivileges().isEmpty());
+	}
+	
+	@Test
+	public void started_shouldFillAnEmptyCacheOnceForTheFlagThreadsItsEnrolmentSavesStart() throws Exception {
+		FlagService service = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		List<Thread> flagThreads = Collections.synchronizedList(new ArrayList<Thread>());
+		cold.set(true);
+		// As patientflags' advice does after each save, generates the patient's flags on a thread of its own.
+		AfterReturningAdvice flagThread = (returned, method, args, target) -> {
+			if ("savePatientProgram".equals(method.getName())) {
+				Patient patient = ((PatientProgram) args[0]).getPatient();
+				flagThreads.add(start(failure, () -> {
+					service.generateFlagsForPatient(patient, new HashMap<Object, Object>());
+					released.countDown();
+				}));
+			}
+		};
+		DaemonTokens.pass("actcore", new ActCoreActivator());
+		try {
+			// The daemon thread sees only what is committed, so it commits two dead patients' enrolments.
+			asDaemon(() -> {
+				property(ActCoreConstants.GP_REGISTRY_PROGRAM, HIV_PROGRAM);
+				property(ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT, TERMINAL_STATE_CONCEPT);
+				AdministrationService admin = Context.getAdministrationService();
+				admin.executeSQL("update person set dead = true, death_date = '2025-06-01' where person_id in (7, 8)",
+				    false);
+				for (int patientId : new int[] { 7, 8 }) {
+					admin.executeSQL("insert into patient_program (patient_id, program_id, date_enrolled, creator,"
+					        + " date_created, voided, uuid) values (" + patientId
+					        + ", 1, '2025-01-01', 1, '2025-01-01', false, '" + enrolment(patientId) + "')",
+					    false);
+				}
+			});
+			Context.addAdvice(ProgramWorkflowService.class, flagThread);
+			try {
+				new ActCoreActivator().started();
+			}
+			finally {
+				Context.removeAdvice(ProgramWorkflowService.class, flagThread);
+			}
+			join(flagThreads.toArray(new Thread[0]));
+		}
+		finally {
+			asDaemon(() -> {
+				AdministrationService admin = Context.getAdministrationService();
+				String enrolments = "(select patient_program_id from patient_program where uuid in ('" + enrolment(7)
+				        + "', '" + enrolment(8) + "'))";
+				admin.executeSQL("delete from patient_state where patient_program_id in " + enrolments, false);
+				admin.executeSQL(
+				    "delete from patient_program where uuid in ('" + enrolment(7) + "', '" + enrolment(8) + "')", false);
+				admin.executeSQL("update person set dead = false, death_date = null where person_id in (7, 8)", false);
+				admin.executeSQL("delete from global_property where property in ('" + ActCoreConstants.GP_REGISTRY_PROGRAM
+				        + "', '" + ActCoreConstants.GP_REGISTRY_DEATH_STATE_CONCEPT + "')",
+				    false);
+			});
+			sessionFactory.getCache().evictAllRegions();
+			new ActCoreActivator().setDaemonToken(null);
+		}
+		
+		assertEquals(2, flagThreads.size());
+		assertNull(failure.get());
+		assertEquals(1, tagQueries.get());
+	}
+	
+	@Test
 	public void getPrivileges_shouldNotWaitBehindARebuildThatWaitsForAnEvaluation() throws Exception {
 		FlagService service = service(true);
 		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
@@ -105,7 +249,7 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		
 		// A Groovy flag's evaluator thread asks for the privileges while its evaluation waits for it.
 		Thread groovy = start(failure, () -> service.getPrivileges());
-		groovy.join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS));
+		groovy.join(TimeUnit.SECONDS.toMillis(HOLD_SECONDS));
 		boolean groovyWaited = groovy.isAlive();
 		released.countDown();
 		join(reader, writer, groovy);
@@ -119,11 +263,19 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	 * generation threw.
 	 */
 	private Throwable race(FlagService service) throws Exception {
+		return race(service, () -> service.saveFlag(new Flag()));
+	}
+	
+	/**
+	 * Runs a call that rebuilds the cache on one thread while a patient's flags are generated on
+	 * another, and returns what the generation threw.
+	 */
+	private Throwable race(FlagService service, Work rebuild) throws Exception {
 		AtomicReference<Throwable> writerFailure = new AtomicReference<Throwable>();
 		AtomicReference<Throwable> readerFailure = new AtomicReference<Throwable>();
 		rebuilding.set(true);
 		Thread writer = start(writerFailure, () -> {
-			service.saveFlag(new Flag());
+			rebuild.run();
 			released.countDown();
 		});
 		Thread reader = start(readerFailure, () -> {
@@ -141,6 +293,14 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	 * and returns what either generation threw.
 	 */
 	private AtomicReference<Throwable> coldReaders(FlagService service) throws Exception {
+		return coldReaders(service, () -> service.generateFlagsForPatient(new Patient(2), new HashMap<Object, Object>()));
+	}
+	
+	/**
+	 * Generates a patient's flags on an empty cache while a second read starts as the generation fills
+	 * it, and returns what either threw.
+	 */
+	private AtomicReference<Throwable> coldReaders(FlagService service, Work secondRead) throws Exception {
 		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
 		cold.set(true);
 		Thread first = start(failure, () -> {
@@ -149,7 +309,7 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		});
 		Thread second = start(failure, () -> {
 			assertTrue(published.await(WAIT_SECONDS, TimeUnit.SECONDS));
-			service.generateFlagsForPatient(new Patient(2), new HashMap<Object, Object>());
+			secondRead.run();
 			released.countDown();
 		});
 		join(first, second);
@@ -182,7 +342,7 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 				    case "getAllEnabledFlags":
 					    return new ArrayList<Flag>(Arrays.asList(new StalledFlag("b"), new StalledFlag("a")));
 				    case "getAllTags":
-					    if (rebuilding.get()) {
+					    if (rebuilding.get() && tagQueries.incrementAndGet() == 1) {
 						    published.countDown();
 						    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
 					    } else if (cold.get() && tagQueries.incrementAndGet() == 1) {
@@ -193,6 +353,8 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 						    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
 					    }
 					    return new ArrayList<Tag>();
+				    case "getFlagsForPatient":
+					    return new ArrayList<Flag>();
 				    case "saveFlag":
 					    return null;
 				    default:
@@ -215,10 +377,13 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 			}
 			evaluating.countDown();
 			try {
+				if (onEvaluation != null) {
+					onEvaluation.run();
+				}
 				released.await(WAIT_SECONDS, TimeUnit.SECONDS);
 			}
-			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
+			catch (Exception e) {
+				throw new IllegalStateException(e);
 			}
 			return false;
 		}
@@ -244,6 +409,30 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		});
 		thread.start();
 		return thread;
+	}
+	
+	private static String enrolment(int patientId) {
+		return "5b0c1f9e-4d0a-4c8e-9a3f-0e7d2b6c4a" + patientId + patientId;
+	}
+	
+	/** Runs the work on the daemon thread, whose service calls commit, and rethrows what it throws. */
+	private static void asDaemon(Runnable work) {
+		RuntimeException[] thrown = new RuntimeException[1];
+		Daemon.runInDaemonThreadAndWait(() -> {
+			try {
+				work.run();
+			}
+			catch (RuntimeException e) {
+				thrown[0] = e;
+			}
+		}, ActCoreActivator.getDaemonToken());
+		if (thrown[0] != null) {
+			throw thrown[0];
+		}
+	}
+	
+	private static void property(String name, String value) {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(name, value));
 	}
 	
 	private static void waitUntilWaiting(Thread thread) throws InterruptedException {
