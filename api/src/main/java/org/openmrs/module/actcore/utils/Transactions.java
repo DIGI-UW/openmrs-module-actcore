@@ -42,32 +42,16 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in a new transaction, suspending any transaction already in progress. Code that
-	 * runs after a commit needs this to write, because the committed transaction's resources are still
-	 * bound to the thread at that point. When no transaction synchronization is active, the session
-	 * bound to the thread, such as a REST request's, is set aside while the work runs and bound again
-	 * afterwards, so a rollback of the work cannot clear it and detach what the caller loaded. Inside a
-	 * scope that activates synchronization without starting a transaction, such as one with SUPPORTS
-	 * propagation, the session is not set aside.
-	 *
-	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
-	 *            propagates
-	 */
-	public static void inNewTransaction(final Runnable work) {
-		inNewTransaction(TransactionDefinition.ISOLATION_DEFAULT, work);
-	}
-	
-	/**
 	 * Runs one patient's refresh work as a unit of its own, as openmrs-core 2.8 counts a user's failed
-	 * logins: in a new transaction, as {@link #inNewTransaction(Runnable)} describes, at READ
-	 * COMMITTED, and with the patient's row locked first. The lock makes two units for the same patient
-	 * take turns, so the second reads what the first wrote rather than writing the same rows again.
-	 * READ COMMITTED leaves out the gap locks that MySQL takes at its default REPEATABLE READ, by which
-	 * the units of two new patients could deadlock. A patient with no row is not locked and the work
-	 * still runs. When the unit fails on a concurrent write, such as a lost deadlock or a row that
-	 * another transaction deleted first, it is run once more in a new transaction, as
-	 * openmrs-module-billing retries its receipt number blocks; any other failure, or a second one,
-	 * propagates.
+	 * logins: in a new transaction that suspends any transaction in progress and sets aside a session
+	 * bound to the thread outside one, at READ COMMITTED, and with the patient's row locked first. The
+	 * lock makes two units for the same patient take turns, so the second reads what the first wrote
+	 * rather than writing the same rows again. READ COMMITTED leaves out the gap locks that MySQL takes
+	 * at its default REPEATABLE READ, by which the units of two new patients could deadlock. A patient
+	 * with no row is not locked and the work still runs. When the unit fails on a concurrent write,
+	 * such as a lost deadlock or a row that another transaction deleted first, it is run once more in a
+	 * new transaction, as openmrs-module-billing retries its receipt number blocks; any other failure,
+	 * or a second one, propagates.
 	 *
 	 * @param patientId the patient the work refreshes
 	 * @param work the work to run; it may run twice, so it must read what it writes afresh each time
@@ -106,7 +90,20 @@ public final class Transactions {
 		return false;
 	}
 	
-	private static void inNewTransaction(int isolation, final Runnable work) {
+	/**
+	 * Runs the work in a new transaction at the isolation given, suspending any transaction already in
+	 * progress. Code that runs after a commit needs this to write, because the committed transaction's
+	 * resources are still bound to the thread at that point. When no transaction synchronization is
+	 * active, the session bound to the thread, such as a REST request's, is set aside while the work
+	 * runs and bound again afterwards, so a rollback of the work cannot clear it and detach what the
+	 * caller loaded. Inside a scope that activates synchronization without starting a transaction, such
+	 * as one with SUPPORTS propagation, the session is not set aside.
+	 *
+	 * @param isolation the isolation level, one of TransactionDefinition's ISOLATION_ constants
+	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
+	 *            propagates
+	 */
+	static void inNewTransaction(int isolation, final Runnable work) {
 		PlatformTransactionManager manager = transactionManager();
 		TransactionTemplate template = new TransactionTemplate(manager);
 		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

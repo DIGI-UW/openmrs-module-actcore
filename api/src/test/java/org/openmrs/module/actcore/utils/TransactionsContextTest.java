@@ -137,7 +137,7 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 		List<Integer> connectionIsolation = new ArrayList<Integer>();
 		List<Connection> connections = new ArrayList<Connection>();
 		int[] poolDefault = new int[1];
-		Transactions.inNewTransaction(
+		TransactionsInTest.inNewTransaction(
 		    () -> poolDefault[0] = currentSession().doReturningWork(Connection::getTransactionIsolation));
 		
 		runFailingFirst(() -> new CannotAcquireLockException("Deadlock found when trying to get lock"), () -> {

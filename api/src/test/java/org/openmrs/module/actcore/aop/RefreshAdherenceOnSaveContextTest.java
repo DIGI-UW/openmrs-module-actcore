@@ -42,7 +42,7 @@ import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
 import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -321,7 +321,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		try {
 			Encounter report = unsaved(7, 0);
 			
-			committed(encounters(patientId -> Transactions.inNewTransaction(() -> {
+			committed(encounters(patientId -> TransactionsInTest.inNewTransaction(() -> {
 				throw new IllegalStateException("Deadlock found when trying to get lock");
 			}), patientId -> {}).saveEncounter(report));
 			

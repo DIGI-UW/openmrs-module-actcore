@@ -48,6 +48,7 @@ import org.openmrs.module.actcore.aop.RefreshAdherenceOnSave;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -342,7 +343,7 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	private void deleteAsPatientflagsDoes(int patientId) {
 		CountDownLatch deleted = new CountDownLatch(1);
 		elsewhere.add(inThread(failed, () -> {
-			Transactions.inNewTransaction(() -> Context.getAdministrationService()
+			TransactionsInTest.inNewTransaction(() -> Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where patient_id = " + patientId + " and flag_id = "
 			                + flag.getFlagId(),
 			            false));
