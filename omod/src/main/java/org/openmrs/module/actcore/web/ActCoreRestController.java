@@ -33,6 +33,7 @@ import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestControlle
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,10 +43,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 /**
  * The base class of the module's REST controllers. It answers a request parameter that is missing
  * or of the wrong type with 400, a request body of a content type the endpoint does not read with
- * 415, and a privilege that {@link org.openmrs.api.context.Context#requirePrivilege(String)}
- * refuses with 401 or 403, as for an {@link APIAuthenticationException}. BaseRestController would
- * answer all three with 500. It also holds the request helpers the controllers share, which find a
- * request's patient and location, read its dates and months, and describe a user.
+ * 415, a request that accepts no type the endpoint gives with 406, and a privilege that
+ * {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401 or 403, as for
+ * an {@link APIAuthenticationException}. BaseRestController would answer each of these with 500. It
+ * also holds the request helpers the controllers share, which find a request's patient and
+ * location, read its dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
@@ -94,6 +96,17 @@ public abstract class ActCoreRestController extends BaseRestController {
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.setHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
 		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
+	}
+	
+	/**
+	 * Answers a request that accepts no type the endpoint gives with 406 and no body, since the
+	 * request accepts no type to write one in.
+	 *
+	 * @param response the response, whose status is set to 406
+	 */
+	@ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+	public void notAcceptableHandler(HttpServletResponse response) {
+		response.setStatus(HttpServletResponse.SC_NOT_ACCEPTABLE);
 	}
 	
 	/**

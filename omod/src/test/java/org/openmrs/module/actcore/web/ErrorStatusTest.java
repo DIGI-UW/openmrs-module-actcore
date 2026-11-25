@@ -201,6 +201,19 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void answersAGetWhoseAcceptItCannotMeetWithNotAcceptable() throws Exception {
+		for (String accept : new String[] { "text/plain", "text/csv" }) {
+			MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rest/v1/actcore/refresh");
+			accept(request, accept);
+			
+			MockHttpServletResponse response = dispatch(request);
+			
+			assertEquals(accept, 406, response.getStatus());
+			assertEquals(accept, "", response.getContentAsString());
+		}
+	}
+	
+	@Test
 	public void runsARefreshThatIsJson() throws Exception {
 		DaemonTokens.pass("actcore", new ActCoreActivator());
 		String lastFinished = lastRefreshFinished();
