@@ -70,7 +70,7 @@ public class CardiologyControllerTest extends BaseModuleWebContextSensitiveTest 
 	
 	private void authenticateWith(String... privileges) {
 		UserService users = Context.getUserService();
-		Role role = new Role("cardiology reader " + UUID.randomUUID());
+		Role role = new Role("cardiology " + UUID.randomUUID());
 		for (String name : privileges) {
 			Privilege privilege = users.getPrivilege(name);
 			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));

@@ -140,7 +140,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	private void authenticateWith(String... privileges) {
 		UserService users = Context.getUserService();
-		Role role = new Role("error status caller " + UUID.randomUUID());
+		Role role = new Role("error status " + UUID.randomUUID());
 		for (String name : privileges) {
 			Privilege privilege = users.getPrivilege(name);
 			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));

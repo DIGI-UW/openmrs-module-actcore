@@ -251,7 +251,7 @@ public class ScreeningCountControllerTest extends BaseModuleWebContextSensitiveT
 	 */
 	private void authenticateWith(String clinics, String... privileges) {
 		UserService users = Context.getUserService();
-		Role role = new Role("screening caller " + UUID.randomUUID());
+		Role role = new Role("screening " + UUID.randomUUID());
 		for (String name : privileges) {
 			Privilege privilege = users.getPrivilege(name);
 			role.addPrivilege(privilege != null ? privilege : users.savePrivilege(new Privilege(name)));
