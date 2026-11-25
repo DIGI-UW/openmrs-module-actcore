@@ -114,9 +114,8 @@ public final class ActCoreConstants {
 	public static final String GP_TASKS_OFF_WHILE_STOPPED = "actcore.tasksOffWhileStopped";
 	
 	/**
-	 * The global property core keeps of whether ACT Core is started. Core sets it to false when an
-	 * administrator stops the module or the module fails to start, and leaves it as it is when OpenMRS
-	 * shuts down.
+	 * The global property core keeps of whether ACT Core is started. Core sets it to false on a stop,
+	 * or a failed start that core records as stopped, and leaves it as it is when OpenMRS shuts down.
 	 */
 	public static final String MODULE_STARTED_PROPERTY = "actcore.started";
 	

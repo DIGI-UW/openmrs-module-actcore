@@ -39,8 +39,8 @@ import org.slf4j.LoggerFactory;
  * The module's activator. Each time the module starts, it loads the report descriptors, ends the
  * open enrolments of patients already recorded dead, and makes sure the scheduler holds the patient
  * flag refresh task and the adherence refresh task, registering each one the first time it is
- * missing. When an administrator stops the module, or it fails to start, it takes those tasks off
- * the scheduler's startup until it starts again.
+ * missing. On a stop, or a failed start that core records as stopped, it takes those tasks off the
+ * scheduler's startup until it starts again.
  * <p>
  * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
  * patientflags module registers nothing of its own, so without this each task would have to be
@@ -239,10 +239,10 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * Takes the module's tasks off the scheduler's startup when an administrator stops the module, or
-	 * it fails to start. Core refreshes its context after such a stop, and its scheduler then schedules
-	 * every task set to start on startup, which for these tasks logs a ClassNotFoundException since
-	 * their classes went with the module. {@link #started()} puts back the tasks this took off. A
+	 * Takes the module's tasks off the scheduler's startup on a stop, or a failed start that core
+	 * records as stopped. Core refreshes its context after such a stop, and its scheduler then
+	 * schedules every task set to start on startup, which for these tasks logs a ClassNotFoundException
+	 * since their classes went with the module. {@link #started()} puts back the tasks this took off. A
 	 * shutdown of OpenMRS leaves the tasks as they are.
 	 *
 	 * @see org.openmrs.module.BaseModuleActivator#stopped()
@@ -268,7 +268,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	private static void takeTasksOffStartup() {
 		AdministrationService administrationService = Context.getAdministrationService();
-		// Core sets this to false before calling stopped() on a stop or a failed start, and not on a shutdown.
+		// Core sets this to false before stopped() on a stop, or a failed start that core records as stopped.
 		if (!"false".equals(administrationService.getGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY))) {
 			return;
 		}
