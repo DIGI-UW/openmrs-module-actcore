@@ -206,10 +206,10 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	}
 	
 	/**
-	 * Records the dismissal with the patient's row locked, so that a refresh of the patient cannot raise
-	 * the flag beside it. Outside a transaction, as on a request, it is a unit of its own, committed
-	 * before the list sync, so a failing sync leaves the dismissal recorded. Inside a caller's
-	 * transaction it joins that transaction, which then commits it.
+	 * Records the dismissal with the patient's row locked, so that a refresh of the patient cannot
+	 * raise the flag beside it. Outside a transaction, as on a request, it is a unit of its own,
+	 * committed before the list sync, so a failing sync leaves the dismissal recorded. Inside a
+	 * caller's transaction it joins that transaction, which then commits it.
 	 */
 	private void recordDismissal(Integer flagId, Integer patientId, Integer userId) {
 		Runnable record = () -> {

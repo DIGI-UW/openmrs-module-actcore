@@ -84,10 +84,10 @@ public class HibernateRaisedFlagDAOTest extends BaseModuleContextSensitiveTest {
 	
 	private String rows() {
 		StringBuilder rows = new StringBuilder();
-		for (List<Object> row : Context.getAdministrationService().executeSQL(
-		    "select patient_id, message, voided from patientflags_patient_flag where flag_id = " + flag.getFlagId()
-		            + " order by patient_id, message",
-		    true)) {
+		for (List<Object> row : Context.getAdministrationService()
+		        .executeSQL("select patient_id, message, voided from patientflags_patient_flag where flag_id = "
+		                + flag.getFlagId() + " order by patient_id, message",
+		            true)) {
 			rows.append(rows.length() == 0 ? "" : ", ").append(row.get(0)).append(' ').append(row.get(1)).append(' ')
 			        .append(row.get(2));
 		}

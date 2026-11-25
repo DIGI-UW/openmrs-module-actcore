@@ -123,10 +123,10 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 	/**
 	 * The retry runs as the first attempt does. Spring reports each attempt's isolation, and a unit for
 	 * the same patient on another thread must still wait during the retry. The connection is checked
-	 * too: at READ COMMITTED inside each attempt, and back at the pool's default once the unit
-	 * returns. H2 opens every connection at READ COMMITTED, so here those connection checks hold
-	 * whatever isolation the unit asks for; the reported isolation and the waiting unit are what fail
-	 * when the retry runs otherwise.
+	 * too: at READ COMMITTED inside each attempt, and back at the pool's default once the unit returns.
+	 * H2 opens every connection at READ COMMITTED, so here those connection checks hold whatever
+	 * isolation the unit asks for; the reported isolation and the waiting unit are what fail when the
+	 * retry runs otherwise.
 	 */
 	@Test
 	public void retriesAUnitAtReadCommittedWithThePatientStillLocked() {
@@ -137,7 +137,8 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 		List<Integer> connectionIsolation = new ArrayList<Integer>();
 		List<Connection> connections = new ArrayList<Connection>();
 		int[] poolDefault = new int[1];
-		Transactions.inNewTransaction(() -> poolDefault[0] = currentSession().doReturningWork(Connection::getTransactionIsolation));
+		Transactions.inNewTransaction(
+		    () -> poolDefault[0] = currentSession().doReturningWork(Connection::getTransactionIsolation));
 		
 		runFailingFirst(() -> new CannotAcquireLockException("Deadlock found when trying to get lock"), () -> {
 			isolation.add(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel());
@@ -184,8 +185,9 @@ public class TransactionsContextTest extends BaseModuleContextSensitiveTest {
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.ALL);
 		try {
-			runFailingFirst(() -> new DAOException("Error while running sql: insert into actcore_prophylaxis_adherence",
-			        new SQLTransactionRollbackException("Deadlock found when trying to get lock", "40001", 1213)),
+			runFailingFirst(
+			    () -> new DAOException("Error while running sql: insert into actcore_prophylaxis_adherence",
+			            new SQLTransactionRollbackException("Deadlock found when trying to get lock", "40001", 1213)),
 			    () -> {});
 		}
 		finally {

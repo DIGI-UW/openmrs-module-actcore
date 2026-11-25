@@ -31,9 +31,10 @@ import org.slf4j.LoggerFactory;
  * Otherwise, as inside a wider transaction, the refresh waits as
  * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each step of the refresh
  * runs as a unit of its own, as {@link Transactions#inPatientTransaction(int, Runnable)} describes,
- * and a step that fails is logged and leaves the save as it is. While a full refresh is rewriting the
- * rows, each step leaves the patient to it at once, as {@link FullAdherenceRefresh#refreshPatient(int)}
- * and {@link PatientFlagRefresh#refreshPatient(int)} describe. The flags are refreshed again here
+ * and a step that fails is logged and leaves the save as it is. While a full refresh is rewriting
+ * the rows, each step leaves the patient to it at once, as
+ * {@link FullAdherenceRefresh#refreshPatient(int)} and
+ * {@link PatientFlagRefresh#refreshPatient(int)} describe. The flags are refreshed again here
  * because the patientflags module's own pass may run before the commit, and so miss the change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
@@ -42,10 +43,10 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	/**
 	 * The time, in milliseconds, beyond which a patient's refresh is logged as a warning rather than at
-	 * debug level, since the save waits for the refresh to finish. It is well above what a save waits
-	 * for under many concurrent saves, waiting for another refresh of the same patient included, and
-	 * below MySQL's default lock wait timeout of 50 seconds, so a refresh that waited on a lock for
-	 * most of that is still reported.
+	 * debug level, since the save waits for the refresh to finish. It is several times longer than a
+	 * save waits under many concurrent saves, waiting for another refresh of the same patient included,
+	 * and shorter than MySQL's default lock wait timeout of 50 seconds, so a refresh that waited on a
+	 * lock for most of that is still reported.
 	 */
 	static final long SLOW_MILLIS = 10000L;
 	

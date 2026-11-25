@@ -146,8 +146,8 @@ public class HibernateRaisedFlagDAO implements RaisedFlagDAO {
 		session()
 		        .createSQLQuery("delete from patientflags_patient_flag"
 		                + " where flag_id = :flag and patient_id = :patient and voided = false")
-		        .addSynchronizedEntityClass(PatientFlag.class).setParameter("flag", flagId).setParameter("patient", patientId)
-		        .executeUpdate();
+		        .addSynchronizedEntityClass(PatientFlag.class).setParameter("flag", flagId)
+		        .setParameter("patient", patientId).executeUpdate();
 	}
 	
 	/**

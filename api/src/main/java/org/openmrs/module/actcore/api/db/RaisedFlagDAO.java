@@ -115,8 +115,8 @@ public interface RaisedFlagDAO {
 	/**
 	 * Deletes the patientflags module's unvoided rows of the flag for the patient by one statement. A
 	 * row that another transaction has already deleted is then simply not deleted again, whereas
-	 * FlagService loads the rows first and deletes each by its id, which fails when the row has gone
-	 * in between.
+	 * FlagService loads the rows first and deletes each by its id, which fails when the row has gone in
+	 * between.
 	 *
 	 * @param flagId the id of the flag
 	 * @param patientId the id of the patient

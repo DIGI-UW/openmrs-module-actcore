@@ -57,9 +57,9 @@ class AdherenceRefresh {
 	/**
 	 * The lock that keeps a refresh of one patient from writing while the full refresh runs. Each
 	 * patient's refresh, of their adherence or of their flags, holds it shared, and the full refresh
-	 * holds it alone, because the full refresh reads every patient before it rewrites them all, so a row
-	 * written in between would be put back as it was. The rewrite also holds each patient's row in the
-	 * patient table until it commits, through the rows' foreign keys, so a patient's refresh that
+	 * holds it alone, because the full refresh reads every patient before it rewrites them all, so a
+	 * row written in between would be put back as it was. The rewrite also holds each patient's row in
+	 * the patient table until it commits, through the rows' foreign keys, so a patient's refresh that
 	 * locked that row would wait for it.
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();

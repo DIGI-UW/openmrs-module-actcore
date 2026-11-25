@@ -144,8 +144,9 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
 		List<DismissalOutcome> outcome = new ArrayList<DismissalOutcome>();
 		
-		assertWaitsForThePatient(() -> outcome.add(Transactions.supplyInTransaction(() -> raisedFlags().dismiss(
-		    Context.getPatientService().getPatient(PATIENT), Context.getService(FlagService.class).getFlag(flag.getFlagId())))));
+		assertWaitsForThePatient(() -> outcome.add(
+		    Transactions.supplyInTransaction(() -> raisedFlags().dismiss(Context.getPatientService().getPatient(PATIENT),
+		        Context.getService(FlagService.class).getFlag(flag.getFlagId())))));
 		
 		assertEquals(Collections.singletonList(DismissalOutcome.DISMISSED), outcome);
 	}
@@ -217,8 +218,8 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		Context.addAdvice(RaisedFlagService.class, deleteBeforeLowering);
 		List<LogEvent> errors;
 		try {
-			errors = errors(() -> PatientFlagRefresh.refreshPatient(PATIENT,
-			    work -> Transactions.inPatientTransaction(PATIENT, () -> {
+			errors = errors(
+			    () -> PatientFlagRefresh.refreshPatient(PATIENT, work -> Transactions.inPatientTransaction(PATIENT, () -> {
 				    attempts.merge(work, 1, Integer::sum);
 				    work.run();
 			    })));
@@ -294,8 +295,8 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		Context.addAdvice(FlagService.class, deleteBeforeSaving);
 		List<LogEvent> errors;
 		try {
-			errors = errors(() -> PatientFlagRefresh.refreshPatient(PATIENT,
-			    work -> Transactions.inPatientTransaction(PATIENT, () -> {
+			errors = errors(
+			    () -> PatientFlagRefresh.refreshPatient(PATIENT, work -> Transactions.inPatientTransaction(PATIENT, () -> {
 				    attempts.merge(work, 1, Integer::sum);
 				    work.run();
 			    })));
@@ -318,14 +319,14 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		CountDownLatch done = new CountDownLatch(1);
 		Thread[] second = new Thread[1];
 		
-		List<Integer> readAfter = AdherenceRefreshInTest.whileRewritingEveryPatient(
-		    () -> Transactions.inPatientTransaction(PATIENT, () -> {
-			    second[0] = inThread(failed, () -> {
-				    refresh.run();
-				    done.countDown();
-			    });
-			    assertTrue("the refresh waited for the full adherence refresh", await(done, LEFT_MILLIS));
-		    }));
+		List<Integer> readAfter = AdherenceRefreshInTest
+		        .whileRewritingEveryPatient(() -> Transactions.inPatientTransaction(PATIENT, () -> {
+			        second[0] = inThread(failed, () -> {
+				        refresh.run();
+				        done.countDown();
+			        });
+			        assertTrue("the refresh waited for the full adherence refresh", await(done, LEFT_MILLIS));
+		        }));
 		
 		join(second[0]);
 		assertEquals(Collections.emptyList(), failed);
@@ -341,9 +342,10 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	private void deleteAsPatientflagsDoes(int patientId) {
 		CountDownLatch deleted = new CountDownLatch(1);
 		elsewhere.add(inThread(failed, () -> {
-			Transactions.inNewTransaction(() -> Context.getAdministrationService().executeSQL(
-			    "delete from patientflags_patient_flag where patient_id = " + patientId + " and flag_id = " + flag.getFlagId(),
-			    false));
+			Transactions.inNewTransaction(() -> Context.getAdministrationService()
+			        .executeSQL("delete from patientflags_patient_flag where patient_id = " + patientId + " and flag_id = "
+			                + flag.getFlagId(),
+			            false));
 			deleted.countDown();
 		}));
 		await(deleted, WAIT_MILLIS);
@@ -366,7 +368,7 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		for (Logger logger : loggers) {
 			levels.add(logger.getLevel());
 			logger.addAppender(appender);
-			// The test log4j2.xml turns every logger off; this sets the level of the loggers below it too.
+			// The test log4j2.xml turns every logger off; this sets its child loggers' level too.
 			Configurator.setLevel(logger.getName(), Level.ERROR);
 		}
 		try {
@@ -382,7 +384,8 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	private long flagRows() {
-		return count("select count(*) from patientflags_patient_flag where voided = false and flag_id = " + flag.getFlagId());
+		return count(
+		    "select count(*) from patientflags_patient_flag where voided = false and flag_id = " + flag.getFlagId());
 	}
 	
 	private static RaisedFlagService raisedFlags() {
