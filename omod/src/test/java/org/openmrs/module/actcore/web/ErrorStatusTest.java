@@ -214,7 +214,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 			adapter.handle(request, response, handler);
 		}
 		catch (Exception e) {
-			resolver.resolveException(request, response, handler, e);
+			assertNotNull(e.toString(), resolver.resolveException(request, response, handler, e));
 		}
 		return response;
 	}
