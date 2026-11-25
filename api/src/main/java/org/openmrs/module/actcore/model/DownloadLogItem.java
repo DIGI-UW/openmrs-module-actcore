@@ -29,11 +29,14 @@ public class DownloadLogItem {
 	
 	/**
 	 * What the download held, read from its JSON, or null when nothing was recorded or what was
-	 * recorded cannot be read as a JSON object.
+	 * recorded cannot be read as a JSON object of the shape every download records.
 	 */
 	public Map<?, ?> detail;
 	
-	/** Whether a detail was recorded that cannot be read as a JSON object. */
+	/**
+	 * Whether a detail was recorded that cannot be read as a JSON object of the shape every download
+	 * records.
+	 */
 	public boolean unreadable;
 	
 	/**

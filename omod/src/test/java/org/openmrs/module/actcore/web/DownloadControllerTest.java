@@ -85,6 +85,11 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private static final String ASIDE = "actcore_download_log_aside";
 	
+	/** Details without the shape every download records, though each is a JSON object. */
+	private static final List<String> SHAPELESS = Arrays.asList("{}", "{\"rows\":3}",
+	    recorded("ACT ID", false, false).replace("[\"ACT ID\"]", "\"ACT ID\""),
+	    recorded("ACT ID", false, false).replace("\"withheld\":[],", ""));
+	
 	@Autowired
 	private DownloadController controller;
 	
@@ -364,9 +369,9 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	public void refusesToRecordADetailTheListingCannotReadOrTheLogCannotHold() {
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		DownloadLogService service = Context.getService(DownloadLogService.class);
-		int room = ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES - "{\"name\":\"\"}".length();
-		String fits = "{\"name\":\"" + StringUtils.repeat("x", room) + "\"}";
-		String overInBytesOnly = "{\"name\":\"" + StringUtils.repeat("\u00e9", room / 2 + 1) + "\"}";
+		int room = ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES - recorded("", false, false).length();
+		String fits = recorded(StringUtils.repeat("x", room), false, false);
+		String overInBytesOnly = recorded(StringUtils.repeat("\u00e9", room / 2 + 1), false, false);
 		assertTrue(overInBytesOnly.length() <= ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES);
 		
 		for (String refused : Arrays.asList("{not json", "[1]", "null", "", overInBytesOnly)) {
@@ -558,13 +563,13 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	public void givesEachListedDownloadTheIdentifiersFilterThatListsItAndWhetherItsDetailIsUnreadable() {
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		DownloadLogService service = Context.getService(DownloadLogService.class);
-		service.recordDownload(null, "{\"identifiers\":true}");
-		service.recordDownload(null, "{\"identifiers\":false}");
-		service.recordDownload(null, "{\"researchOnly\":true}");
+		service.recordDownload(null, recorded("ACT ID", true, false));
+		service.recordDownload(null, recorded("ACT ID", false, false));
+		service.recordDownload(null, recorded("ACT ID", false, true));
 		service.recordDownload(null, null);
-		service.recordDownload(null, "{}");
+		service.recordDownload(null, recorded("ACT ID", false, false));
 		String spoiltUuid = spoilLastDetail("{not json");
-		service.recordDownload(null, "{}");
+		service.recordDownload(null, recorded("ACT ID", false, false));
 		String nulledUuid = spoilLastDetail("null");
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		List<LogEvent> warned = new ArrayList<LogEvent>();
@@ -595,10 +600,147 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(warningFor(spoiltUuid), second);
 	}
 	
+	@Test
+	public void listsADetailWithoutTheShapeEveryDownloadRecordsAsUnreadable() throws Exception {
+		Form other = secondForm();
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		controller.download(body());
+		spoilLastDetail("{}");
+		List<String> spoilt = new ArrayList<String>();
+		for (String detail : SHAPELESS) {
+			Map<String, Object> list = new HashMap<String, Object>();
+			list.put("list", "registry");
+			list.put("columns", Collections.singletonList("ACT ID"));
+			controller.record(list);
+			spoilt.add(0, spoilLastDetail(detail));
+		}
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		List<LogEvent> warned = new ArrayList<LogEvent>();
+		
+		List<?> every = (List<?>) warningsOf(warned, () -> controller.getDownloads(null, null, null, null, null, null, null))
+		        .get("results");
+		
+		assertEquals(SHAPELESS.size() + 1, every.size());
+		for (Object each : every) {
+			SimpleObject download = (SimpleObject) each;
+			assertEquals(Boolean.TRUE, download.get("unreadable"));
+			assertEquals("with", download.get("identifiers"));
+			assertNull(download.get("detail"));
+			assertNull(download.get("list"));
+		}
+		assertEquals(SHAPELESS.size() + 1, warned.size());
+		for (int i = 0; i < spoilt.size(); i++) {
+			assertEquals(warningFor(spoilt.get(i)), warned.get(i).getMessage().getFormattedMessage());
+		}
+		assertEquals(Integer.valueOf(SHAPELESS.size() + 1),
+		    controller.getDownloads(null, null, null, form.getUuid(), null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(SHAPELESS.size()),
+		    controller.getDownloads(null, null, null, other.getUuid(), null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, null, "without", null, null).get("totalCount"));
+	}
+	
+	@Test
+	public void refusesToRecordADetailWithoutTheShapeEveryDownloadRecords() {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		List<String> refused = new ArrayList<String>(SHAPELESS);
+		String shaped = recorded("ACT ID", false, false);
+		refused.add(shaped.replace("\"withheld\":[]", "\"withheld\":[1]"));
+		refused.add(shaped.replace("\"rows\":1", "\"rows\":\"1\""));
+		refused.add(shaped.replace("\"identifiers\":false", "\"identifiers\":\"no\""));
+		refused.add(shaped.replace("\"researchOnly\":false", "\"researchOnly\":null"));
+		refused.add(shaped.replace("\"startDate\":null,", ""));
+		refused.add(shaped.replace("\"endDate\":null", "\"endDate\":20260630"));
+		refused.add(shaped.replace("}", ",\"list\":[\"registry\"]}"));
+		refused.add(shaped.replace("}", ",\"forms\":{}}"));
+		refused.add(shaped.replace("}", ",\"forms\":[\"RHD Echocardiogram\"]}"));
+		refused.add(shaped.replace("}", ",\"rowPerPatient\":\"yes\"}"));
+		refused.add(shaped.replace("}", ",\"filters\":[]}"));
+		refused.add(shaped.replace("}", ",\"patient\":\"sex\"}"));
+		refused.add(shaped.replace("}", ",\"patient\":[null]}"));
+		
+		for (String detail : refused) {
+			try {
+				service.recordDownload(null, detail);
+				fail("expected the detail to be refused: " + detail);
+			}
+			catch (ValidationException e) {
+				assertEquals(detail, "A download's detail must be a JSON object of the shape a download records",
+				    e.getMessage());
+			}
+		}
+		assertTrue(logged().isEmpty());
+	}
+	
+	@Test
+	public void recordsAndListsEveryDetailTheDownloadsRecordAndHaveRecorded() throws Exception {
+		Form second = secondForm();
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		// As 1.0.0 recorded a download, and then a list the app made itself.
+		service.recordDownload(form.getFormId(),
+		    "{\"fields\":[\"Mitral regurgitation\"],\"withheld\":[\"Given name\"],\"startDate\":\"2026-01-01\","
+		            + "\"endDate\":null,\"rows\":2,\"identifiers\":false,\"researchOnly\":true}");
+		service.recordDownload(null,
+		    "{\"list\":\"registry\",\"fields\":[\"ACT ID\"],\"withheld\":[],\"startDate\":null,\"endDate\":null,"
+		            + "\"rows\":0,\"identifiers\":true,\"researchOnly\":false,\"filters\":{}}");
+		controller.download(body());
+		Map<String, Object> both = new HashMap<String, Object>();
+		both.put("forms", Arrays.asList(choice(form), choice(second)));
+		both.put("patient", Arrays.asList("sex", "givenName"));
+		controller.download(both);
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA));
+		controller.download(body());
+		// As the app's Download CSV and dashboard export record their files.
+		Map<String, Object> worklist = new HashMap<String, Object>();
+		worklist.put("list", "worklist:Due for prophylaxis");
+		worklist.put("columns", Arrays.asList("ACT ID", "Name"));
+		worklist.put("rows", 12);
+		worklist.put("identifiers", true);
+		worklist.put("filters", Collections.singletonMap("filter", "overdue"));
+		controller.record(worklist);
+		Map<String, Object> figure = new HashMap<String, Object>();
+		figure.put("list", "dashboard:screenings");
+		figure.put("columns", Arrays.asList("Section", "Group", "Label", "Count", "Period", "Clinics"));
+		figure.put("rows", 4);
+		figure.put("identifiers", false);
+		Map<String, Object> filters = new HashMap<String, Object>();
+		filters.put("clinics", "Lira RRH");
+		filters.put("startDate", "2026-01-01");
+		figure.put("filters", filters);
+		controller.record(figure);
+		Map<String, Object> bare = new HashMap<String, Object>();
+		bare.put("list", "logs:downloads");
+		bare.put("columns", Collections.emptyList());
+		controller.record(bare);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		List<LogEvent> warned = new ArrayList<LogEvent>();
+		
+		List<?> every = (List<?>) warningsOf(warned, () -> controller.getDownloads(null, null, null, null, null, null, null))
+		        .get("results");
+		
+		assertEquals(8, every.size());
+		for (Object each : every) {
+			assertEquals(Boolean.FALSE, ((SimpleObject) each).get("unreadable"));
+			assertTrue(((SimpleObject) each).get("detail") instanceof Map);
+		}
+		assertTrue(warned.isEmpty());
+	}
+	
+	/**
+	 * A detail of the shape every download has recorded since 1.0.0, of one field with this label and
+	 * with the identifiers and research flags given.
+	 */
+	private static String recorded(String label, boolean identifiers, boolean researchOnly) {
+		return "{\"fields\":[\"" + label + "\"],\"withheld\":[],\"startDate\":null,\"endDate\":null,\"rows\":1,"
+		        + "\"identifiers\":" + identifiers + ",\"researchOnly\":" + researchOnly + "}";
+	}
+	
 	/** The WARN logged for the download with this uuid when its detail cannot be read. */
 	private static String warningFor(String uuid) {
 		return "Download " + uuid
-		        + " has a recorded detail that cannot be read as a JSON object, so the detail is left out when the download is listed";
+		        + " has a recorded detail that cannot be read as a JSON object of the shape a download records, so the detail is left out when the download is listed";
 	}
 	
 	/** Committed, as the download's record was. It gives the uuid of the record spoilt. */

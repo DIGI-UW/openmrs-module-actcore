@@ -183,8 +183,8 @@ public class DownloadController extends ActCoreRestController {
 	 *         no user has the username or no form has the uuid. Each download gives its {@code date},
 	 *         {@code user}, {@code form}, {@code list} and {@code detail}; {@code identifiers}, the
 	 *         value of the identifiers filter that matches it; and {@code unreadable}, true when its
-	 *         recorded detail cannot be read as a JSON object, which leaves {@code detail} and
-	 *         {@code list} null and {@code identifiers} {@code "with"}
+	 *         recorded detail cannot be read as a JSON object of the shape every download records,
+	 *         which leaves {@code detail} and {@code list} null and {@code identifiers} {@code "with"}
 	 * @throws APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is

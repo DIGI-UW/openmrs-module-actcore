@@ -32,22 +32,23 @@ public interface DownloadLogService extends OpenmrsService {
 	 *
 	 * @param formId the id of the form downloaded when the download held exactly one form, or null
 	 *            otherwise, as for a download of several forms or a list the app made itself
-	 * @param detail what the download held, such as its forms, columns and filters, as a JSON object,
-	 *            or null when nothing is recorded of it
+	 * @param detail what the download held, such as its forms, columns and filters, as a JSON object of
+	 *            the shape every download records, or null when nothing is recorded of it
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} nor
 	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}
-	 * @throws org.openmrs.api.ValidationException when the detail is not a JSON object, or is longer
-	 *             than {@link ActCoreConstants#MAX_DOWNLOAD_DETAIL_BYTES} bytes of UTF-8
+	 * @throws org.openmrs.api.ValidationException when the detail is not a JSON object of that shape,
+	 *             or is longer than {@link ActCoreConstants#MAX_DOWNLOAD_DETAIL_BYTES} bytes of UTF-8
 	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
 	void recordDownload(Integer formId, String detail);
 	
 	/**
 	 * Gets a page of the downloads that match the filter, newest first, each with its user named and
-	 * its detail read. A detail that cannot be read as a JSON object is logged and left out, so the
-	 * download is listed without it and marked unreadable, matched as having given identifiers and,
-	 * when it was recorded without one form, as holding every form.
+	 * its detail read. A detail that cannot be read as a JSON object of the shape every download
+	 * records is logged and left out, so the download is listed without it and marked unreadable,
+	 * matched as having given identifiers and, when it was recorded without one form, as holding every
+	 * form.
 	 *
 	 * @param filter the user, days, form, identifiers and page to list
 	 * @return the page and how many downloads match in all; empty when none matches, as when no user
