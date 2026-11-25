@@ -312,7 +312,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void saveEncounter_shouldLeaveThePatientReadableWhenTheRefreshRollsBack() {
 		// The test framework's session stands in for the one OpenSessionInViewFilter binds to a REST request.
-		assertTrue(TransactionSynchronizationManager
+		assertTrue("the test framework should have bound a session", TransactionSynchronizationManager
 		        .hasResource(Context.getRegisteredComponent("sessionFactory", SessionFactory.class)));
 		Context.clearSession();
 		Encounter report = unsaved(7, 0);
