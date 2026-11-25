@@ -27,6 +27,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.junit.After;
 import org.junit.Test;
@@ -46,6 +47,7 @@ import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.orm.hibernate5.SessionHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -311,18 +313,28 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void saveEncounter_shouldLeaveThePatientReadableWhenTheRefreshRollsBack() {
-		// The test framework's session stands in for the one OpenSessionInViewFilter binds to a REST request.
-		assertTrue("the test framework should have bound a session", TransactionSynchronizationManager
-		        .hasResource(Context.getRegisteredComponent("sessionFactory", SessionFactory.class)));
-		Context.clearSession();
-		Encounter report = unsaved(7, 0);
-		
-		committed(encounters(patientId -> Transactions.inNewTransaction(() -> {
-			throw new IllegalStateException("Deadlock found when trying to get lock");
-		}), patientId -> {}).saveEncounter(report));
-		
-		// What REST reads to display the saved encounter's patient.
-		assertNotNull(report.getPatient().getPatientIdentifier());
+		SessionFactory sessionFactory = Context.getRegisteredComponent("sessionFactory", SessionFactory.class);
+		Object leftover = TransactionSynchronizationManager.unbindResourceIfPossible(sessionFactory);
+		Session request = sessionFactory.openSession();
+		// Stands in for the session OpenSessionInViewFilter binds to a REST request.
+		TransactionSynchronizationManager.bindResource(sessionFactory, new SessionHolder(request));
+		try {
+			Encounter report = unsaved(7, 0);
+			
+			committed(encounters(patientId -> Transactions.inNewTransaction(() -> {
+				throw new IllegalStateException("Deadlock found when trying to get lock");
+			}), patientId -> {}).saveEncounter(report));
+			
+			// What REST reads to display the saved encounter's patient.
+			assertNotNull(report.getPatient().getPatientIdentifier());
+		}
+		finally {
+			TransactionSynchronizationManager.unbindResource(sessionFactory);
+			request.close();
+			if (leftover != null) {
+				TransactionSynchronizationManager.bindResource(sessionFactory, leftover);
+			}
+		}
 	}
 	
 	@Test
