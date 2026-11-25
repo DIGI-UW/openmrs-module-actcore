@@ -34,7 +34,8 @@ import org.slf4j.LoggerFactory;
  * The module's activator. Each time the module starts, it loads the report descriptors, fills the
  * patientflags module's flag cache, ends the open enrolments of patients already recorded dead, and
  * makes sure the scheduler holds the patient flag refresh task and the adherence refresh task,
- * registering each one the first time it is missing.
+ * registering each one the first time it is missing. Each time core refreshes the Spring context,
+ * which replaces patientflags' service with one whose cache is empty, it fills the cache again.
  * <p>
  * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
  * patientflags module registers nothing of its own, so without this each task would have to be
@@ -131,7 +132,6 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
-		fillFlagCache();
 		closeEnrolmentsOfTheDead();
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
@@ -144,12 +144,25 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		log.info("ACT Core module started");
 	}
 	
+	/** @see org.openmrs.module.BaseModuleActivator#contextRefreshed() */
+	@Override
+	public void contextRefreshed() {
+		try {
+			Daemon.runInDaemonThreadAndWait(ActCoreActivator::fillFlagCache, daemonToken);
+		}
+		catch (Exception e) {
+			log.error("Could not fill the patient flag cache", e);
+		}
+	}
+	
 	/**
-	 * Fills the patientflags module's flag cache on this thread. patientflags fills it on first use
-	 * without a lock, and each enrolment that {@link #closeEnrolmentsOfTheDead()} saves starts a
-	 * patientflags thread for that patient; on a cold cache those threads fill it at the same time, and
-	 * one can throw a ConcurrentModificationException while another sorts it. A failure is logged
-	 * rather than thrown, so that the module still starts.
+	 * Fills the patientflags module's flag cache. patientflags fills it on first use without a lock,
+	 * and each enrolment that {@link #closeEnrolmentsOfTheDead()} saves starts a patientflags thread
+	 * for that patient; on a cold cache those threads fill it at the same time, and one can throw a
+	 * ConcurrentModificationException while another sorts it. Callers run it as the daemon user: when
+	 * the patientflags.username user is a superuser, filling it reads every privilege, which core
+	 * 2.8.10 allows only to a user with Manage Privileges. A failure is logged rather than thrown, so
+	 * that the module still starts.
 	 */
 	private static void fillFlagCache() {
 		try {
@@ -162,13 +175,15 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	}
 	
 	/**
-	 * Ends the open enrolments of patients already recorded dead, running as the daemon user. A failure
-	 * is logged rather than thrown, so that the module still starts.
+	 * Ends the open enrolments of patients already recorded dead, running as the daemon user, after
+	 * filling the flag cache on the same thread. A failure is logged rather than thrown, so that the
+	 * module still starts.
 	 */
 	private static void closeEnrolmentsOfTheDead() {
 		try {
 			// The work runs on the daemon thread, so its failures are caught there.
 			Daemon.runInDaemonThreadAndWait(() -> {
+				fillFlagCache();
 				try {
 					int ended = CloseEnrolmentsOnDeath.closeEnrolmentsOfTheDead();
 					if (ended > 0) {
