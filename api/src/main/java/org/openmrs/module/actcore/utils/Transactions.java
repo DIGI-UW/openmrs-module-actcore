@@ -35,12 +35,13 @@ public final class Transactions {
 	}
 	
 	/**
-	 * Runs the work in a new transaction on a Hibernate session of its own, suspending any transaction
-	 * already in progress. Code that runs after a commit needs this to write, because the committed
-	 * transaction's resources are still bound to the thread at that point. When no transaction is in
-	 * progress, the session bound to the thread, such as a REST request's, is set aside while the work
-	 * runs and bound again afterwards, so a rollback of the work cannot clear it and detach what the
-	 * caller loaded.
+	 * Runs the work in a new transaction, suspending any transaction already in progress. Code that
+	 * runs after a commit needs this to write, because the committed transaction's resources are still
+	 * bound to the thread at that point. When no transaction synchronization is active, the session
+	 * bound to the thread, such as a REST request's, is set aside while the work runs and bound again
+	 * afterwards, so a rollback of the work cannot clear it and detach what the caller loaded. Inside a
+	 * scope that activates synchronization without starting a transaction, such as one with SUPPORTS
+	 * propagation, the session is not set aside.
 	 *
 	 * @param work the work to run; a runtime exception it throws rolls the new transaction back and
 	 *            propagates
@@ -140,9 +141,9 @@ public final class Transactions {
 	
 	/**
 	 * Runs the work for the patient once the current transaction commits, or at once when no
-	 * transaction is in progress, so that a failure in the work cannot roll back the save that
-	 * triggered it. Calls made with the same owner, such as an advice class, within one transaction run
-	 * the work once for each patient, however many times a patient is passed.
+	 * transaction synchronization is active, so that a failure in the work cannot roll back the save
+	 * that triggered it. Calls made with the same owner, such as an advice class, within one
+	 * transaction run the work once for each patient, however many times a patient is passed.
 	 *
 	 * @param owner what the work is registered under in the current transaction; a later call with the
 	 *            same owner adds its patient to that registration and its own work is not used

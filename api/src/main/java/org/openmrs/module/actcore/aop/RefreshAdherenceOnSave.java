@@ -28,12 +28,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Advice on EncounterService that recomputes a patient's adherence rows, and then their flags,
  * after one of their encounters is saved, voided, unvoided or purged. The advice sits outside the
- * service's own transaction, so when the call was not made inside a wider transaction, as on a REST
+ * service's own transaction, so when no transaction synchronization is active, as on a REST
  * request, the service has already committed and the refresh runs at once, before the call returns.
- * Inside a wider transaction, the refresh waits for that transaction to commit. Each step of the
- * refresh runs in a transaction and session of its own, and a step that fails is logged and leaves
- * the save as it is. The flags are refreshed again here because the patientflags module's own pass
- * may run before the commit, and so miss the change.
+ * Otherwise, as inside a wider transaction, the refresh waits as
+ * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each step of the refresh
+ * runs in a new transaction, as {@link Transactions#inNewTransaction(Runnable)} describes, and a
+ * step that fails is logged and leaves the save as it is. The flags are refreshed again here
+ * because the patientflags module's own pass may run before the commit, and so miss the change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
