@@ -42,9 +42,12 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	/**
 	 * The time, in milliseconds, beyond which a patient's refresh is logged as a warning rather than at
-	 * debug level, since the save waits for the refresh to finish.
+	 * debug level, since the save waits for the refresh to finish. It is well above what a save waits
+	 * for under many concurrent saves, waiting for another refresh of the same patient included, and
+	 * below MySQL's default lock wait timeout of 50 seconds, so a refresh that waited on a lock for
+	 * most of that is still reported.
 	 */
-	static final long SLOW_MILLIS = 1000L;
+	static final long SLOW_MILLIS = 10000L;
 	
 	private static final Set<String> METHODS = new HashSet<String>(
 	        Arrays.asList("saveEncounter", "voidEncounter", "unvoidEncounter", "purgeEncounter"));
