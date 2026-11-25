@@ -17,6 +17,7 @@ import static org.junit.Assert.fail;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,9 +26,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Concept;
@@ -46,6 +55,7 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.db.hibernate.DbSession;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.messagesource.MutableMessageSource;
@@ -56,6 +66,7 @@ import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.DownloadLogService;
 import org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO;
+import org.openmrs.module.actcore.api.impl.DownloadLogServiceImpl;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadPage;
@@ -482,16 +493,25 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		controller.download(body());
 		controller.download(body());
-		spoilLastDetail();
+		String spoiltFormUuid = spoilLastDetail();
 		Map<String, Object> list = new HashMap<String, Object>();
 		list.put("list", "registry");
 		list.put("columns", Collections.singletonList("ACT ID"));
 		controller.record(list);
-		spoilLastDetail();
+		String spoiltListUuid = spoilLastDetail();
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		List<LogEvent> warned = new ArrayList<LogEvent>();
 		
-		SimpleObject every = controller.getDownloads(null, null, null, null, null, null, null);
+		SimpleObject every = warningsOf(warned, () -> controller.getDownloads(null, null, null, null, null, null, null));
 		
+		assertEquals(2, warned.size());
+		for (LogEvent warning : warned) {
+			assertEquals(Level.WARN, warning.getLevel());
+		}
+		String first = warned.get(0).getMessage().getFormattedMessage();
+		assertTrue(first, first.contains(spoiltListUuid));
+		String second = warned.get(1).getMessage().getFormattedMessage();
+		assertTrue(second, second.contains(spoiltFormUuid));
 		assertEquals(Integer.valueOf(3), every.get("totalCount"));
 		List<?> results = (List<?>) every.get("results");
 		SimpleObject spoiltList = (SimpleObject) results.get(0);
@@ -517,14 +537,47 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		    controller.getDownloads(null, null, null, null, "research", null, null).get("totalCount"));
 	}
 	
-	/** Committed, as the download's record was. */
-	private static void spoilLastDetail() {
+	/** Committed, as the download's record was. It gives the uuid of the record spoilt. */
+	private static String spoilLastDetail() {
 		String table = ActCoreConstants.DOWNLOAD_LOG_TABLE;
-		Transactions.inNewTransaction(
-		    () -> Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession()
-		            .createSQLQuery("update " + table + " set detail = :detail"
-		                    + " where download_id = (select max(download_id) from " + table + ")")
-		            .setParameter("detail", "{not json").executeUpdate());
+		String last = "(select max(download_id) from " + table + ")";
+		AtomicReference<String> uuid = new AtomicReference<String>();
+		Transactions.inNewTransaction(() -> {
+			DbSession session = Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class)
+			        .getCurrentSession();
+			session.createSQLQuery("update " + table + " set detail = :detail where download_id = " + last)
+			        .setParameter("detail", "{not json").executeUpdate();
+			uuid.set((String) session.createSQLQuery("select uuid from " + table + " where download_id = " + last)
+			        .uniqueResult());
+		});
+		return uuid.get();
+	}
+	
+	/**
+	 * Runs the listing with what the download log service logs at WARN, as the distribution's
+	 * log4j2.xml leaves org.openmrs, added to the warnings.
+	 */
+	private static <T> T warningsOf(List<LogEvent> warned, Supplier<T> listing) {
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				warned.add(event.toImmutable());
+			}
+		};
+		appender.start();
+		Logger logger = (Logger) LogManager.getLogger(DownloadLogServiceImpl.class);
+		Level level = logger.getLevel();
+		logger.addAppender(appender);
+		// The test log4j2.xml turns every logger off.
+		logger.setLevel(Level.WARN);
+		try {
+			return listing.get();
+		}
+		finally {
+			logger.removeAppender(appender);
+			logger.setLevel(level);
+		}
 	}
 	
 	private static DownloadSearchCriteria filter(Consumer<DownloadSearchCriteria> settings) {
