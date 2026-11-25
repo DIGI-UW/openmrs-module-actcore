@@ -257,6 +257,23 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	@Test
+	public void refreshingAPatientRunsEachFlagsUnitsOnceWhenAUnitIsRunAgain() {
+		saveFlag("overdue", MATCHES_BOTH);
+		Context.flushSession();
+		List<Runnable> units = new ArrayList<Runnable>();
+		
+		// Run twice, as a unit that fails on a concurrent write is run again.
+		PatientFlagRefresh.refreshPatient(MATCHING_PATIENT, work -> {
+			units.add(work);
+			work.run();
+			work.run();
+			Context.flushSession();
+		});
+		
+		assertEquals(1 + 2 * flagService.getAllFlags().size(), units.size());
+	}
+	
+	@Test
 	public void refreshingAPatientSavedDuringTheFullRefreshIsLeftToItsEnd() throws Exception {
 		saveFlag("overdue", MATCHES_BOTH);
 		final List<Integer> deferred = new ArrayList<Integer>();

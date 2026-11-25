@@ -18,9 +18,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
@@ -205,15 +207,12 @@ public class PatientFlagRefresh {
 	}
 	
 	private static void refreshEachFlag(final int patientId, Consumer<Runnable> unit) {
-		final List<Integer> flagIds = new ArrayList<Integer>();
-		unit.accept(new Runnable() {
-			
-			@Override
-			public void run() {
-				for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
-					flagIds.add(flag.getFlagId());
-				}
+		List<Integer> flagIds = supply(unit, () -> {
+			List<Integer> ids = new ArrayList<Integer>();
+			for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
+				ids.add(flag.getFlagId());
 			}
+			return ids;
 		});
 		for (final Integer flagId : flagIds) {
 			try {
@@ -243,6 +242,13 @@ public class PatientFlagRefresh {
 				log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
 			}
 		}
+	}
+	
+	/** Runs the work as a unit and returns what its last run gave, so a run again replaces it. */
+	private static <T> T supply(Consumer<Runnable> unit, Supplier<T> work) {
+		AtomicReference<T> result = new AtomicReference<T>();
+		unit.accept(() -> result.set(work.get()));
+		return result.get();
 	}
 	
 	/**
