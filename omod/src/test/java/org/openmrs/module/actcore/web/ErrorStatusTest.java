@@ -10,6 +10,8 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -19,7 +21,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.junit.After;
 import org.junit.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -28,7 +32,11 @@ import org.openmrs.User;
 import org.openmrs.api.UserService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.DaemonTokens;
+import org.openmrs.module.actcore.ActCoreActivator;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
@@ -67,6 +75,11 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	/** What a client may accept, which an error answers in JSON whatever it is. */
 	private static final String[] ACCEPTS = { "application/json", "text/plain", "text/csv" };
+	
+	@After
+	public void forgetTheDaemonToken() {
+		new ActCoreActivator().setDaemonToken(null);
+	}
 	
 	@Test
 	public void answersARefusedStudyNameWithABadRequest() throws Exception {
@@ -166,6 +179,8 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void answersARefreshThatIsNotJsonWithUnsupportedMediaTypeWithoutRunningIt() throws Exception {
+		DaemonTokens.pass("actcore", new ActCoreActivator());
+		String lastFinished = lastRefreshFinished();
 		for (String contentType : new String[] { "text/plain", "application/x-www-form-urlencoded", "multipart/form-data",
 		        null }) {
 			for (String accept : ACCEPTS) {
@@ -179,8 +194,23 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 				
 				assertJsonError(contentType + " " + accept, 415, response);
 				assertEquals("application/json", response.getHeader("Accept"));
+				assertEquals(contentType + " " + accept, lastFinished, lastRefreshFinished());
+				assertFalse(PatientFlagRefresh.isRunning());
 			}
 		}
+	}
+	
+	@Test
+	public void runsARefreshThatIsJson() throws Exception {
+		DaemonTokens.pass("actcore", new ActCoreActivator());
+		String lastFinished = lastRefreshFinished();
+		MockHttpServletRequest request = post("/rest/v1/actcore/refresh", "{}");
+		
+		MockHttpServletResponse response = dispatch(request);
+		
+		assertEquals(response.getContentAsString(), 200, response.getStatus());
+		assertTrue(response.getContentAsString().contains("\"refreshed\":true"));
+		assertNotEquals(lastFinished, lastRefreshFinished());
 	}
 	
 	@Test
@@ -203,6 +233,17 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.setParameter("clinic", "x");
 		request.setParameter("month", "2026-09");
 		return request;
+	}
+	
+	/** When the refresh last finished, read from the database, where the daemon's run commits it. */
+	private static String lastRefreshFinished() {
+		GlobalProperty finished = Context.getAdministrationService()
+		        .getGlobalPropertyObject(ActCoreConstants.GP_REFRESH_LAST_FINISHED);
+		if (finished == null) {
+			return null;
+		}
+		Context.refreshEntity(finished);
+		return finished.getPropertyValue();
 	}
 	
 	private static void accept(MockHttpServletRequest request, String accept) {
