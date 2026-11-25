@@ -12,6 +12,7 @@ package org.openmrs.module.actcore;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Field;
 import java.util.Date;
 import java.util.List;
 
@@ -19,9 +20,12 @@ import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.api.impl.FlagServiceImpl;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
+import org.springframework.aop.framework.Advised;
 
 public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -109,6 +113,21 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		assertEquals(AdherenceRefreshTask.class.getName(), task.getTaskClass());
 		assertEquals(Long.valueOf(86400L), task.getRepeatInterval());
 		assertTrue(task.getStartOnStartup());
+	}
+	
+	@Test
+	public void fillsTheFlagCacheOfPatientflags() throws Exception {
+		Object flags = Context.getService(FlagService.class);
+		while (flags instanceof Advised) {
+			flags = ((Advised) flags).getTargetSource().getTarget();
+		}
+		Field filled = FlagServiceImpl.class.getDeclaredField("isInitialized");
+		filled.setAccessible(true);
+		filled.set(flags, false);
+		
+		new ActCoreActivator().started();
+		
+		assertTrue((Boolean) filled.get(flags));
 	}
 	
 	/**

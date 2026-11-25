@@ -24,16 +24,17 @@ import org.openmrs.module.actcore.aop.CloseEnrolmentsOnDeath;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
 import org.openmrs.module.actcore.utils.ReportDescriptorLoader;
+import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The module's activator. Each time the module starts, it loads the report descriptors, ends the
- * open enrolments of patients already recorded dead, and makes sure the scheduler holds the patient
- * flag refresh task and the adherence refresh task, registering each one the first time it is
- * missing.
+ * The module's activator. Each time the module starts, it loads the report descriptors, fills the
+ * patientflags module's flag cache, ends the open enrolments of patients already recorded dead, and
+ * makes sure the scheduler holds the patient flag refresh task and the adherence refresh task,
+ * registering each one the first time it is missing.
  * <p>
  * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
  * patientflags module registers nothing of its own, so without this each task would have to be
@@ -130,6 +131,7 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	@Override
 	public void started() {
 		ReportDescriptorLoader.load();
+		fillFlagCache();
 		closeEnrolmentsOfTheDead();
 		schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 		    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
@@ -140,6 +142,23 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		            + " injections and oral adherence estimates.",
 		    soon());
 		log.info("ACT Core module started");
+	}
+	
+	/**
+	 * Fills the patientflags module's flag cache on this thread. patientflags fills it on first use
+	 * without a lock, and each enrolment that {@link #closeEnrolmentsOfTheDead()} saves starts a
+	 * patientflags thread for that patient; on a cold cache those threads fill it at the same time, and
+	 * one can throw a ConcurrentModificationException while another sorts it. A failure is logged
+	 * rather than thrown, so that the module still starts.
+	 */
+	private static void fillFlagCache() {
+		try {
+			// getPrivileges fills the cache as a side effect and needs no patient.
+			Context.getService(FlagService.class).getPrivileges();
+		}
+		catch (Exception e) {
+			log.error("Could not fill the patient flag cache", e);
+		}
 	}
 	
 	/**
