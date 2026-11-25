@@ -448,6 +448,64 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(21, endpoints.size());
 	}
 	
+	/**
+	 * Every handler with a pattern under ACT Core's path is an ACT Core endpoint, so that
+	 * {@link FallbackController}, which lists the methods of ACT Core endpoints only, names its
+	 * methods.
+	 */
+	@Test
+	public void makesEveryHandlerUnderActCoresPathAnActCoreEndpoint() {
+		for (RequestMappingHandlerMapping mapping : mappings) {
+			for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
+				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
+					if (pattern.equals("/rest/v1/actcore") || pattern.startsWith("/rest/v1/actcore/")) {
+						assertTrue(pattern + " " + entry.getValue(),
+						    ActCoreRestController.class.isAssignableFrom(entry.getValue().getBeanType()));
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Every ACT Core endpoint that takes a request only with a parameter, header, content type or
+	 * {@code Accept} it names has a sibling with its pattern and method that names none. A request that
+	 * meets an endpoint's path and method but not such a condition otherwise reaches
+	 * {@link FallbackController}, which answers 405 while naming the method in {@code Allow}, rather
+	 * than the 400, 415 or 406 Spring would give. A sibling counts only when it names the same pattern,
+	 * not another pattern that matches the same paths.
+	 */
+	@Test
+	public void givesEveryConditionedActCoreEndpointASiblingWithoutConditions() {
+		List<RequestMappingInfo> endpoints = new ArrayList<>();
+		for (RequestMappingHandlerMapping mapping : mappings) {
+			for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
+				if (isActCoreEndpoint(entry.getValue())) {
+					endpoints.add(entry.getKey());
+				}
+			}
+		}
+		Set<String> conditioned = new HashSet<>();
+		for (RequestMappingInfo endpoint : endpoints) {
+			assertFalse(endpoint.toString(), endpoint.getMethodsCondition().getMethods().isEmpty());
+			if (isUnconditioned(endpoint)) {
+				continue;
+			}
+			for (String pattern : endpoint.getPatternsCondition().getPatterns()) {
+				for (RequestMethod method : endpoint.getMethodsCondition().getMethods()) {
+					boolean sibling = false;
+					for (RequestMappingInfo other : endpoints) {
+						sibling |= isUnconditioned(other) && other.getPatternsCondition().getPatterns().contains(pattern)
+						        && other.getMethodsCondition().getMethods().contains(method);
+					}
+					assertTrue(method + " " + pattern + " " + endpoint, sibling);
+					conditioned.add(method + " " + pattern);
+				}
+			}
+		}
+		assertTrue(conditioned.toString(), conditioned.contains("POST /rest/v1/actcore/refresh"));
+	}
+	
 	@Test
 	public void sendsEveryMethodAPathTakesToItsEndpoint() throws Exception {
 		for (String[] path : PATHS) {
@@ -643,6 +701,16 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	private static boolean isActCoreEndpoint(HandlerMethod handler) {
 		return ActCoreRestController.class.isAssignableFrom(handler.getBeanType())
 		        && handler.getBeanType() != FallbackController.class;
+	}
+	
+	/**
+	 * Tells whether a mapping takes a request whatever its parameters, headers and media types, and has
+	 * no custom condition.
+	 */
+	private static boolean isUnconditioned(RequestMappingInfo info) {
+		return info.getParamsCondition().isEmpty() && info.getHeadersCondition().isEmpty()
+		        && info.getConsumesCondition().isEmpty() && info.getProducesCondition().isEmpty()
+		        && info.getCustomCondition() == null;
 	}
 	
 	/** A request to an ACT Core path, with a JSON body when it has a content type. */

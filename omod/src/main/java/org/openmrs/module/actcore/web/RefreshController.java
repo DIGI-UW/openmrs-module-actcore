@@ -84,8 +84,7 @@ public class RefreshController extends ActCoreRestController {
 	
 	/**
 	 * Refuses a POST that is not JSON, which {@link #refresh()} does not take, with 415. Without it the
-	 * POST would fall through to webservices.rest's {@code POST /{resource}/{uuid}}, which answers 500
-	 * or 400.
+	 * POST would reach {@link FallbackController}, which answers 405.
 	 *
 	 * @param request the request
 	 * @throws HttpMediaTypeNotSupportedException always, naming the request's content type

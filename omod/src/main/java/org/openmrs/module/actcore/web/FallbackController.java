@@ -82,7 +82,6 @@ public class FallbackController extends ActCoreRestController {
 	 */
 	@RequestMapping(value = { "", "/*", "/*/*", "/*/*/*", "/**" }, method = { RequestMethod.GET, RequestMethod.POST,
 	        RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS })
-	@ResponseBody
 	public void refuse(HttpServletRequest request, HttpServletResponse response)
 	        throws HttpRequestMethodNotSupportedException, NoHandlerFoundException {
 		List<String> allowed = allowedMethods(request);
