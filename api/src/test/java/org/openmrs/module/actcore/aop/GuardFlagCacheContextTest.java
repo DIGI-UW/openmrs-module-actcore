@@ -40,6 +40,7 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.Daemon;
+import org.openmrs.api.context.ServiceContext;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -90,7 +91,13 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	
 	private final AtomicInteger evaluations = new AtomicInteger();
 	
+	private final AtomicInteger filling = new AtomicInteger();
+	
+	private final AtomicInteger mostFilling = new AtomicInteger();
+	
 	private volatile Work onEvaluation;
+	
+	private volatile Work onEveryEvaluation;
 	
 	@Autowired
 	private SessionFactory sessionFactory;
@@ -272,6 +279,67 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		assertNull(failure.get());
 	}
 	
+	@Test
+	public void getPrivileges_shouldFillAnEmptyCacheOnceForThreadsThatTwoEvaluationsStarted() throws Exception {
+		FlagService evaluated = service(true);
+		// The service a context refresh puts in its place, whose cache is still empty.
+		FlagService replacement = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		cold.set(true);
+		released.countDown();
+		// Each evaluation's Groovy thread asks the current service for privileges while the evaluation waits.
+		onEveryEvaluation = () -> join(start(failure, replacement::getPrivileges));
+		Thread first = start(failure,
+		    () -> evaluated.generateFlagsForPatient(new Patient(1), new HashMap<Object, Object>()));
+		Thread second = start(failure,
+		    () -> evaluated.generateFlagsForPatient(new Patient(2), new HashMap<Object, Object>()));
+		join(first, second);
+		
+		assertNull(failure.get());
+		assertEquals(1, mostFilling.get());
+	}
+	
+	@Test
+	public void generateFlagsForPatient_shouldReadAFilledCacheWhileAFillWaitsForAContextRefresh() throws Exception {
+		FlagService evaluated = service(true);
+		FlagService replacement = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		released.countDown();
+		Thread filler;
+		Thread reader;
+		boolean readerWaited;
+		ServiceContext.getInstance().startRefreshingContext();
+		try {
+			// The fill asks ServiceContext for AdministrationService, so it waits for the refresh to end.
+			filler = start(failure, replacement::getPrivileges);
+			waitUntilWaiting(filler);
+			reader = start(failure, () -> evaluated.generateFlagsForPatient(new Patient(1), new HashMap<Object, Object>()));
+			reader.join(TimeUnit.SECONDS.toMillis(HOLD_SECONDS));
+			readerWaited = reader.isAlive();
+		}
+		finally {
+			ServiceContext.getInstance().doneRefreshingContext();
+		}
+		join(filler, reader);
+		
+		assertFalse(readerWaited);
+		assertNull(failure.get());
+	}
+	
+	@Test
+	public void getPrivileges_shouldNotFillAnEmptyCacheWhileSaveFlagRebuildsIt() throws Exception {
+		FlagService service = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		rebuilding.set(true);
+		Thread writer = start(failure, () -> service.saveFlag(new Flag()));
+		assertTrue(published.await(WAIT_SECONDS, TimeUnit.SECONDS));
+		Thread filler = start(failure, service::getPrivileges);
+		join(writer, filler);
+		
+		assertNull(failure.get());
+		assertEquals(1, mostFilling.get());
+	}
+	
 	/**
 	 * Saves a flag on one thread while a patient's flags are generated on another, and returns what the
 	 * generation threw.
@@ -337,16 +405,17 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	private FlagService service(boolean guarded, boolean filled) {
 		FlagServiceImpl impl = new FlagServiceImpl();
 		impl.setFlagDAO(dao());
-		if (filled) {
-			// Fills the cache now, so the evaluation reads it rather than rebuilding it itself.
-			impl.getPrivileges();
-		}
 		ProxyFactory proxy = new ProxyFactory(impl);
 		proxy.addInterface(FlagService.class);
 		if (guarded) {
 			proxy.addAdvice(new GuardFlagCache());
 		}
-		return (FlagService) proxy.getProxy();
+		FlagService service = (FlagService) proxy.getProxy();
+		if (filled) {
+			// Fills the cache now, so the evaluation reads it rather than rebuilding it itself.
+			service.getPrivileges();
+		}
+		return service;
 	}
 	
 	private FlagDAO dao() {
@@ -356,17 +425,23 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 				    case "getAllEnabledFlags":
 					    return new ArrayList<Flag>(Arrays.asList(new StalledFlag("b"), new StalledFlag("a")));
 				    case "getAllTags":
-					    if (rebuilding.get() && tagQueries.incrementAndGet() == 1) {
-						    published.countDown();
-						    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
-					    } else if (cold.get() && tagQueries.incrementAndGet() == 1) {
-						    published.countDown();
-						    secondFill.await(HOLD_SECONDS, TimeUnit.SECONDS);
-					    } else if (cold.get()) {
-						    secondFill.countDown();
-						    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
+					    mostFilling.accumulateAndGet(filling.incrementAndGet(), Math::max);
+					    try {
+						    if (rebuilding.get() && tagQueries.incrementAndGet() == 1) {
+							    published.countDown();
+							    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
+						    } else if (cold.get() && tagQueries.incrementAndGet() == 1) {
+							    published.countDown();
+							    secondFill.await(HOLD_SECONDS, TimeUnit.SECONDS);
+						    } else if (cold.get()) {
+							    secondFill.countDown();
+							    evaluating.await(HOLD_SECONDS, TimeUnit.SECONDS);
+						    }
+						    return new ArrayList<Tag>();
 					    }
-					    return new ArrayList<Tag>();
+					    finally {
+						    filling.decrementAndGet();
+					    }
 				    case "getFlagsForPatient":
 					    return new ArrayList<Flag>();
 				    case "saveFlag":
@@ -377,7 +452,10 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		    });
 	}
 	
-	/** A flag whose first evaluation of all stays open until the test releases it. */
+	/**
+	 * A flag whose first evaluation of all stays open until the test releases it, and whose every
+	 * evaluation first runs the test's work for it.
+	 */
 	private class StalledFlag extends Flag {
 		
 		StalledFlag(String name) {
@@ -386,11 +464,14 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		
 		@Override
 		public Boolean eval(Patient patient, Map<Object, Object> context) {
-			if (evaluations.getAndIncrement() > 0) {
-				return false;
-			}
-			evaluating.countDown();
 			try {
+				if (onEveryEvaluation != null) {
+					onEveryEvaluation.run();
+				}
+				if (evaluations.getAndIncrement() > 0) {
+					return false;
+				}
+				evaluating.countDown();
 				if (onEvaluation != null) {
 					onEvaluation.run();
 				}

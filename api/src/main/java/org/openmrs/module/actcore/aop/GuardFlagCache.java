@@ -17,13 +17,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
-import org.openmrs.api.context.ServiceContext;
 import org.openmrs.module.patientflags.api.FlagService;
 
 /**
@@ -37,18 +35,19 @@ import org.openmrs.module.patientflags.api.FlagService;
  * <p>
  * A reader can also find the cache empty, on a FlagService that a context refresh has just created,
  * and fill it itself through the same rebuild, while other readers do the same under the shared
- * read lock. So the first reader of each FlagService fills its cache under the write lock before it
- * reads. The fill is skipped while the context is refreshing, since the rebuild asks ServiceContext
- * for a service and would wait for the refresh, and on a thread that holds the read lock, which
- * cannot be upgraded to the write lock.
+ * read lock. So the first reader of each FlagService fills its cache before it reads, under a fill
+ * lock that the rebuilding methods also take inside the write lock. The fill runs the target's own
+ * rebuild, which calls no FlagService method through the proxy, so a filling thread holds neither
+ * the read lock nor the write lock and does not wait for either. A thread that an evaluation
+ * started and waits for can therefore fill a FlagService that a context refresh has put in place of
+ * the one being read. A fill that starts during a context refresh waits for the refresh to end,
+ * since the rebuild asks ServiceContext for AdministrationService and UserService, and readers of a
+ * filled cache go on reading meanwhile.
  * <p>
  * getPrivileges rebuilds the cache too when it finds it empty, so it goes through the same fill and
  * then reads without a lock. A Groovy flag's evaluation calls it from a thread of its own and waits
  * for that thread, so under the read lock that thread would queue behind a waiting rebuild, which
- * waits for the evaluation. For the same reason the fill is also skipped on a thread started while
- * the thread that started it held the read lock: the evaluator thread may ask a FlagService that a
- * context refresh has just put in place of the one being read, and the fill would wait for the
- * evaluation's read lock. getPrivileges returns a copy of the privilege cache, because a Groovy
+ * waits for the evaluation. getPrivileges returns a copy of the privilege cache, because a Groovy
  * flag's evaluator narrows the collection it gets to the privileges of the user it runs for.
  * <p>
  * ACT Core's Spring context adds this advice to patientflags' flagService bean, which
@@ -60,8 +59,7 @@ public class GuardFlagCache implements MethodInterceptor {
 	
 	private static final ReentrantReadWriteLock CACHE = new ReentrantReadWriteLock();
 	
-	// True while the thread that set it, or the thread that started this one, holds the read lock.
-	private static final InheritableThreadLocal<AtomicBoolean> READING = new InheritableThreadLocal<AtomicBoolean>();
+	private static final Object FILL = new Object();
 	
 	private static final List<String> REBUILDING = Arrays.asList("saveFlag", "purgeFlag", "saveTag", "purgeTag",
 	    "savePriority", "savePatientFlagsProperties");
@@ -87,43 +85,32 @@ public class GuardFlagCache implements MethodInterceptor {
 		if (lock == CACHE.writeLock()) {
 			lock.lock();
 			try {
-				return invocation.proceed();
+				synchronized (FILL) {
+					return invocation.proceed();
+				}
 			}
 			finally {
 				lock.unlock();
 			}
 		}
 		fillOnce(invocation.getThis());
-		AtomicBoolean outer = READING.get();
-		AtomicBoolean reading = new AtomicBoolean(true);
 		lock.lock();
-		READING.set(reading);
 		try {
 			return invocation.proceed();
 		}
 		finally {
-			reading.set(false);
-			READING.set(outer);
 			lock.unlock();
 		}
 	}
 	
 	private static void fillOnce(Object service) {
-		AtomicBoolean reading = READING.get();
-		if (FILLED.contains(service) || reading != null && reading.get()
-		        || ServiceContext.getInstance().isRefreshingContext()) {
+		if (FILLED.contains(service)) {
 			return;
 		}
-		CACHE.writeLock().lock();
-		try {
-			if (!FILLED.contains(service)) {
-				// getPrivileges fills the cache as a side effect and needs no patient.
-				((FlagService) service).getPrivileges();
-				FILLED.add(service);
-			}
-		}
-		finally {
-			CACHE.writeLock().unlock();
+		synchronized (FILL) {
+			// getPrivileges fills an empty cache as a side effect and needs no patient.
+			((FlagService) service).getPrivileges();
+			FILLED.add(service);
 		}
 	}
 	
