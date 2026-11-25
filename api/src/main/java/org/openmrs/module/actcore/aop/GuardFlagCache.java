@@ -11,12 +11,17 @@ package org.openmrs.module.actcore.aop;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
+import org.openmrs.api.context.ServiceContext;
+import org.openmrs.module.patientflags.api.FlagService;
 
 /**
  * Advice on FlagService that keeps the patientflags module from rebuilding its flag cache while
@@ -26,6 +31,13 @@ import org.aopalliance.intercept.MethodInvocation;
  * evaluation that picks up the list before the sort ends throws a ConcurrentModificationException.
  * The rebuilding methods hold the write lock, and the methods that read the flag cache or the tag
  * cache hold the read lock.
+ * <p>
+ * A reader can also find the cache empty, on a FlagService that a context refresh has just created,
+ * and fill it itself through the same rebuild, while other readers do the same under the shared
+ * read lock. So the first reader of each FlagService fills its cache under the write lock before it
+ * reads. The fill is skipped while the context is refreshing, since the rebuild asks ServiceContext
+ * for a service and would wait for the refresh, and on a thread that already holds the read lock,
+ * which cannot be upgraded to the write lock.
  * <p>
  * getPrivileges reads the privilege cache, which a rebuild replaces whole, and is left unlocked. A
  * Groovy flag's evaluation calls it from a thread of its own and waits for that thread, so under
@@ -41,6 +53,9 @@ public class GuardFlagCache implements MethodInterceptor {
 	// Their overloads taking roles and a display point filter by the tag cache.
 	private static final List<String> FILTERING_BY_TAG = Arrays.asList("getFlagsForPatient", "getPatientFlags");
 	
+	private static final Set<Object> FILLED = Collections
+	        .synchronizedSet(Collections.newSetFromMap(new WeakHashMap<Object, Boolean>()));
+	
 	/** @see org.aopalliance.intercept.MethodInterceptor#invoke(MethodInvocation) */
 	@Override
 	public Object invoke(MethodInvocation invocation) throws Throwable {
@@ -48,12 +63,32 @@ public class GuardFlagCache implements MethodInterceptor {
 		if (lock == null) {
 			return invocation.proceed();
 		}
+		if (lock == CACHE.readLock()) {
+			fillOnce(invocation.getThis());
+		}
 		lock.lock();
 		try {
 			return invocation.proceed();
 		}
 		finally {
 			lock.unlock();
+		}
+	}
+	
+	private static void fillOnce(Object service) {
+		if (FILLED.contains(service) || CACHE.getReadHoldCount() > 0 || ServiceContext.getInstance().isRefreshingContext()) {
+			return;
+		}
+		CACHE.writeLock().lock();
+		try {
+			if (!FILLED.contains(service)) {
+				// getPrivileges fills the cache as a side effect and needs no patient.
+				((FlagService) service).getPrivileges();
+				FILLED.add(service);
+			}
+		}
+		finally {
+			CACHE.writeLock().unlock();
 		}
 	}
 	
