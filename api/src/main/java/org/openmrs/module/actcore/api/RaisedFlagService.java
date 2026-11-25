@@ -174,8 +174,9 @@ public interface RaisedFlagService extends OpenmrsService {
 	 * Dismisses the flag for the patient, which hides it wherever ACT reads flags until ACT Core finds
 	 * that the flag has stopped matching the patient. A flag can be dismissed only while it matches the
 	 * patient, and not while the full refresh runs, which would undo the dismissal. The dismissal is
-	 * saved before the patient's place on the flag's list is updated, so a failure to update the list
-	 * leaves the dismissal saved.
+	 * saved as a unit of its own, committed even when the caller's transaction then rolls back, and
+	 * before the patient's place on the flag's list is updated, so a failure to update the list leaves
+	 * the dismissal saved.
 	 *
 	 * @param patient the patient the flag is raised for
 	 * @param flag the flag to dismiss

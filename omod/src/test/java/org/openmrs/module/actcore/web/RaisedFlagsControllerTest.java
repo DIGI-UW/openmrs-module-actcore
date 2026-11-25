@@ -41,6 +41,7 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.api.impl.RaisedFlagServiceInTest;
 import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -68,6 +69,8 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	
 	private Tag critical;
 	
+	private Runnable restoreService;
+	
 	@Before
 	public void setUp() {
 		ModuleTables.create();
@@ -76,10 +79,12 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		critical = new Tag("Critical data");
 		Context.getService(FlagService.class).saveTag(critical);
 		Context.addAdvice(FlagService.class, hide);
+		restoreService = RaisedFlagServiceInTest.recordInTestTransaction();
 	}
 	
 	@After
 	public void removeAdvice() {
+		restoreService.run();
 		Context.removeAdvice(FlagService.class, hide);
 	}
 	

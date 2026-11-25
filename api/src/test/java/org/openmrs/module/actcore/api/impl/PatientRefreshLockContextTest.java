@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.api.impl;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.openmrs.module.actcore.utils.TransactionsContextTest.await;
@@ -150,6 +151,26 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		        Context.getService(FlagService.class).getFlag(flag.getFlagId())))));
 		
 		assertEquals(Collections.singletonList(DismissalOutcome.DISMISSED), outcome);
+	}
+	
+	@Test
+	public void recordsADismissalInACallersTransactionThatThenRollsBack() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		
+		try {
+			Transactions.supplyInTransaction(() -> {
+				raisedFlags().dismiss(Context.getPatientService().getPatient(PATIENT),
+				    Context.getService(FlagService.class).getFlag(flag.getFlagId()));
+				throw new IllegalStateException("the caller fails");
+			});
+			fail("expected the caller's transaction to roll back");
+		}
+		catch (IllegalStateException e) {
+			assertEquals("the caller fails", e.getMessage());
+		}
+		
+		assertEquals(1L, count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where patient_id = "
+		        + PATIENT + " and flag_id = " + flag.getFlagId() + " and date_dismissed is not null"));
 	}
 	
 	@Test

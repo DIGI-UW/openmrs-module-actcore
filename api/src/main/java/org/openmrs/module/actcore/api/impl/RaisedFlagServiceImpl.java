@@ -24,7 +24,6 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
-import org.openmrs.module.actcore.api.db.RegistryDAO;
 import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.model.FlagDismissal;
@@ -39,7 +38,6 @@ import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.RaisedFlagService}. */
 public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedFlagService {
@@ -186,16 +184,7 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
-			        || Boolean.TRUE.equals(flag.getRetired())
-			        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
-				return DismissalOutcome.NOT_RAISED;
-			}
-			Integer userId = Context.getAuthenticatedUser().getUserId();
-			recordDismissal(flag.getFlagId(), patient.getPatientId(), userId);
-			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
-			log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(), userId);
-			return DismissalOutcome.DISMISSED;
+			return dismissIfRaised(patient, flag);
 		}
 		finally {
 			for (String privilege : DISMISS_PRIVILEGES) {
@@ -205,26 +194,35 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 		}
 	}
 	
-	/**
-	 * Records the dismissal with the patient's row locked, so that a refresh of the patient cannot
-	 * raise the flag beside it. Outside a transaction, as on a request, it is a unit of its own,
-	 * committed before the list sync, so a failing sync leaves the dismissal recorded. Inside a
-	 * caller's transaction it joins that transaction, which then commits it.
-	 */
-	private void recordDismissal(Integer flagId, Integer patientId, Integer userId) {
-		Runnable record = () -> {
+	private DismissalOutcome dismissIfRaised(Patient patient, Flag flag) {
+		if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
+		        || Boolean.TRUE.equals(flag.getRetired())
+		        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
+			return DismissalOutcome.NOT_RAISED;
+		}
+		Integer flagId = flag.getFlagId();
+		Integer patientId = patient.getPatientId();
+		Integer userId = Context.getAuthenticatedUser().getUserId();
+		inPatientTransaction(patientId, () -> {
 			raise(flagId, patientId);
 			Date now = new Date();
 			if (dao.dismissRaisedFlag(flagId, patientId, userId, now)) {
 				dao.saveFlagDismissal(new FlagDismissal(patientId, flagId, userId, now));
 			}
-		};
-		if (TransactionSynchronizationManager.isActualTransactionActive()) {
-			Context.getRegisteredComponents(RegistryDAO.class).get(0).lockPatient(patientId);
-			record.run();
-		} else {
-			Transactions.inPatientTransaction(patientId, record);
-		}
+		});
+		new FlagListSync().syncPatient(flagId, patientId);
+		log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patientId, userId);
+		return DismissalOutcome.DISMISSED;
+	}
+	
+	/**
+	 * Records the dismissal as a unit of its own, with the patient's row locked, so that a refresh of
+	 * the patient cannot raise the flag beside it. The unit commits before the list sync, so a failing
+	 * sync leaves the dismissal recorded, and a caller's transaction that rolls back afterwards leaves
+	 * it recorded too.
+	 */
+	void inPatientTransaction(int patientId, Runnable work) {
+		Transactions.inPatientTransaction(patientId, work);
 	}
 	
 	private static boolean carriesDismissTag(Flag flag) {
