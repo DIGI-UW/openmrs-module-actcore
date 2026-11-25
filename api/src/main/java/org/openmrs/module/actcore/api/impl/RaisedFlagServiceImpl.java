@@ -18,13 +18,13 @@ import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Patient;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
+import org.openmrs.module.actcore.api.db.RegistryDAO;
 import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.model.FlagDismissal;
@@ -39,6 +39,7 @@ import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.RaisedFlagService}. */
 public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedFlagService {
@@ -204,23 +205,25 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 		}
 	}
 	
-	// Committed before the list sync, so a failing sync leaves the dismissal recorded.
+	/**
+	 * Records the dismissal with the patient's row locked, so that a refresh of the patient cannot raise
+	 * the flag beside it. Outside a transaction, as on a request, it is a unit of its own, committed
+	 * before the list sync, so a failing sync leaves the dismissal recorded. Inside a caller's
+	 * transaction it joins that transaction, which then commits it.
+	 */
 	private void recordDismissal(Integer flagId, Integer patientId, Integer userId) {
-		try {
-			Transactions.inTransaction(() -> {
-				raise(flagId, patientId);
-				Date now = new Date();
-				if (dao.dismissRaisedFlag(flagId, patientId, userId, now)) {
-					dao.saveFlagDismissal(new FlagDismissal(patientId, flagId, userId, now));
-				}
-				return null;
-			});
-		}
-		catch (RuntimeException e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException("Could not record the dismissal", e);
+		Runnable record = () -> {
+			raise(flagId, patientId);
+			Date now = new Date();
+			if (dao.dismissRaisedFlag(flagId, patientId, userId, now)) {
+				dao.saveFlagDismissal(new FlagDismissal(patientId, flagId, userId, now));
+			}
+		};
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			Context.getRegisteredComponents(RegistryDAO.class).get(0).lockPatient(patientId);
+			record.run();
+		} else {
+			Transactions.inPatientTransaction(patientId, record);
 		}
 	}
 	

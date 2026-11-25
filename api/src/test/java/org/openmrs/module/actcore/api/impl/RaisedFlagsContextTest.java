@@ -416,12 +416,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void runFullRefresh() {
 		Context.flushSession();
-		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
-			
-			@Override
-			public void run() {
-			}
-		});
+		PatientFlagRefreshInTest.runInTestTransaction();
 	}
 	
 	private void refreshPatient() {

@@ -39,6 +39,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.RefreshAdherenceOnSave;
 import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.model.DismissalOutcome;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -114,6 +115,30 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 				throw new IllegalStateException(e);
 			}
 		});
+	}
+	
+	@Test
+	public void dismissesAFlagOnlyOnceNoOtherUnitHoldsThePatient() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		List<DismissalOutcome> outcome = new ArrayList<DismissalOutcome>();
+		
+		assertWaitsForThePatient(() -> outcome.add(raisedFlags().dismiss(Context.getPatientService().getPatient(PATIENT),
+		    Context.getService(FlagService.class).getFlag(flag.getFlagId()))));
+		
+		assertEquals(Collections.singletonList(DismissalOutcome.DISMISSED), outcome);
+		assertEquals(1L, count("select count(*) from " + ActCoreConstants.RAISED_FLAG_TABLE + " where patient_id = "
+		        + PATIENT + " and flag_id = " + flag.getFlagId() + " and date_dismissed is not null"));
+	}
+	
+	@Test
+	public void dismissesAFlagInACallersTransactionOnlyOnceNoOtherUnitHoldsThePatient() {
+		flag = saveFlag("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		List<DismissalOutcome> outcome = new ArrayList<DismissalOutcome>();
+		
+		assertWaitsForThePatient(() -> outcome.add(Transactions.supplyInTransaction(() -> raisedFlags().dismiss(
+		    Context.getPatientService().getPatient(PATIENT), Context.getService(FlagService.class).getFlag(flag.getFlagId())))));
+		
+		assertEquals(Collections.singletonList(DismissalOutcome.DISMISSED), outcome);
 	}
 	
 	@Test
@@ -256,6 +281,8 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		if (flag != null) {
 			Context.getAdministrationService()
 			        .executeSQL("delete from patientflags_patient_flag where flag_id = " + flag.getFlagId(), false);
+			Context.getAdministrationService().executeSQL(
+			    "delete from " + ActCoreConstants.FLAG_DISMISSAL_TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getAdministrationService().executeSQL(
 			    "delete from " + ActCoreConstants.RAISED_FLAG_TABLE + " where flag_id = " + flag.getFlagId(), false);
 			Context.getService(FlagService.class).purgeFlag(flag.getFlagId());
