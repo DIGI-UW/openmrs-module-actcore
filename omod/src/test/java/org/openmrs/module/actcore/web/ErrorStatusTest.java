@@ -69,6 +69,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	@Autowired
 	private ScreeningCountController screeningCounts;
 	
+	/** Unknown Location in the standard test dataset. */
+	private static final String CLINIC = "8d6c993e-c2cc-11de-8d13-0010c6dffd0f";
+	
 	/** The endpoints that read a JSON body. */
 	private static final String[] BODY_URIS = { "/rest/v1/actcore/download", "/rest/v1/actcore/download/record",
 	        "/rest/v1/actcore/raisedflags/dismiss", "/rest/v1/actcore/screeningcounts", "/rest/v1/actcore/studies",
@@ -76,6 +79,13 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	/** What a client may accept, which an error answers in JSON whatever it is. */
 	private static final String[] ACCEPTS = { "application/json", "text/plain", "text/csv" };
+	
+	/** What a client may accept that admits neither JSON nor XML, or that is not a media type. */
+	private static final String[] UNMET_ACCEPTS = { "text/plain", "text/csv", "text/html", "not a type" };
+	
+	/** What a client may accept that admits JSON or XML, which ACT Core answers in. */
+	private static final String[] MET_ACCEPTS = { "application/json", "application/xml", "text/xml", "*/*", "application/*",
+	        "text/plain, application/json", null };
 	
 	@After
 	public void forgetTheDaemonToken() {
@@ -202,48 +212,46 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void answersARefusedRequestInJsonWhateverItAccepts() throws Exception {
-		for (String accept : ACCEPTS) {
+	public void answersARefusedRequestInJson() throws Exception {
+		for (Object[] refused : refusedAsAdmin()) {
+			assertJsonError(refused[2] + "", (Integer) refused[0], dispatch((MockHttpServletRequest) refused[1]));
+		}
+	}
+	
+	@Test
+	public void answersARefusedRequestWhoseAcceptItCannotMeetWithNotAcceptable() throws Exception {
+		for (String accept : UNMET_ACCEPTS) {
 			for (Object[] refused : refusedAsAdmin()) {
 				MockHttpServletRequest request = (MockHttpServletRequest) refused[1];
 				accept(request, accept);
 				
-				assertJsonError(refused[2] + " " + accept, (Integer) refused[0], dispatch(request));
+				assertNotAcceptable(refused[2] + " " + accept, dispatch(request));
 			}
 		}
 	}
 	
 	@Test
-	public void answersAMissingPrivilegeInJsonWhateverTheRequestAccepts() throws Exception {
+	public void answersAMissingPrivilegeInJson() throws Exception {
 		authenticateWith(PrivilegeConstants.GET_PROGRAMS);
-		for (String accept : ACCEPTS) {
-			for (MockHttpServletRequest request : new MockHttpServletRequest[] {
-			        post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"), cardiology(UUID.randomUUID().toString()),
-			        get("/rest/v1/actcore/refresh") }) {
-				accept(request, accept);
-				
-				assertJsonError(request.getRequestURI() + " " + accept, 403, dispatch(request));
-			}
+		for (MockHttpServletRequest request : new MockHttpServletRequest[] {
+		        post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"), cardiology(UUID.randomUUID().toString()),
+		        get("/rest/v1/actcore/refresh") }) {
+			assertJsonError(request.getRequestURI(), 403, dispatch(request));
 		}
 	}
 	
 	@Test
-	public void answersARequestWithoutAUserInJsonWhateverItAccepts() throws Exception {
+	public void answersARequestWithoutAUserInJson() throws Exception {
 		Context.logout();
-		for (String accept : ACCEPTS) {
-			MockHttpServletRequest request = post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}");
-			accept(request, accept);
-			
-			MockHttpServletResponse response = dispatch(request);
-			
-			assertJsonError(accept, 401, response);
-			assertNotNull(response.getHeader("WWW-Authenticate"));
-		}
+		MockHttpServletResponse response = dispatch(post("/rest/v1/actcore/studies", "{\"name\":\"ARC\"}"));
+		
+		assertJsonError("json", 401, response);
+		assertNotNull(response.getHeader("WWW-Authenticate"));
 	}
 	
 	@Test
 	public void answersAFailedConversionInJsonWhateverTheRequestAccepts() throws Exception {
-		for (String accept : ACCEPTS) {
+		for (String accept : new String[] { "application/json", "text/plain", "text/csv", "not a type" }) {
 			MockHttpServletRequest request = cardiology(null);
 			accept(request, accept);
 			MockHttpServletResponse response = new MockHttpServletResponse();
@@ -256,15 +264,55 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void answersAGetWhoseAcceptItCannotMeetWithNotAcceptable() throws Exception {
-		for (String accept : new String[] { "text/plain", "text/csv" }) {
+		for (String accept : UNMET_ACCEPTS) {
 			MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rest/v1/actcore/refresh");
 			accept(request, accept);
 			
+			assertNotAcceptable(accept, dispatch(request));
+		}
+	}
+	
+	@Test
+	public void answersAGetWhoseAcceptAdmitsJsonOrXml() throws Exception {
+		for (String accept : MET_ACCEPTS) {
+			MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rest/v1/actcore/refresh");
+			if (accept != null) {
+				accept(request, accept);
+			}
+			
 			MockHttpServletResponse response = dispatch(request);
 			
-			assertEquals(accept, 406, response.getStatus());
-			assertEquals(accept, "", response.getContentAsString());
+			assertEquals(accept + " " + response.getContentAsString(), 200, response.getStatus());
 		}
+	}
+	
+	@Test
+	public void answersAJsonRefreshWhoseAcceptItCannotMeetWithNotAcceptableWithoutRunningIt() throws Exception {
+		DaemonTokens.pass("actcore", new ActCoreActivator());
+		String lastFinished = lastRefreshFinished();
+		for (String accept : UNMET_ACCEPTS) {
+			MockHttpServletRequest request = post("/rest/v1/actcore/refresh", "{}");
+			accept(request, accept);
+			
+			assertNotAcceptable(accept, dispatch(request));
+			assertEquals(accept, lastFinished, lastRefreshFinished());
+			assertFalse(PatientFlagRefresh.isRunning());
+		}
+	}
+	
+	@Test
+	public void answersJsonScreeningCountsWhoseAcceptItCannotMeetWithNotAcceptableWithoutSavingThem() throws Exception {
+		ModuleTables.create();
+		for (String accept : UNMET_ACCEPTS) {
+			MockHttpServletRequest request = screeningCountsForAugust();
+			accept(request, accept);
+			
+			assertNotAcceptable(accept, dispatch(request));
+			assertEquals(accept, Boolean.FALSE, screeningCounts.get(CLINIC, "2026-08").get("saved"));
+		}
+		
+		assertEquals(200, dispatch(screeningCountsForAugust()).getStatus());
+		assertEquals(Boolean.TRUE, screeningCounts.get(CLINIC, "2026-08").get("saved"));
 	}
 	
 	@Test
@@ -308,6 +356,15 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		        { 404, cardiology(UUID.randomUUID().toString()), "an unknown patient" } };
 	}
 	
+	/** A JSON POST of counts for August at {@link #CLINIC} that add up. */
+	private static MockHttpServletRequest screeningCountsForAugust() {
+		MockHttpServletRequest request = post("/rest/v1/actcore/screeningcounts",
+		    "{\"counts\":{\"school_screened\":40,\"school_children\":40,\"school_females\":20,\"school_positive\":1}}");
+		request.setParameter("clinic", CLINIC);
+		request.setParameter("month", "2026-08");
+		return request;
+	}
+	
 	private static MockHttpServletRequest cardiology(String patient) {
 		MockHttpServletRequest request = get("/rest/v1/actcore/cardiology");
 		if (patient != null) {
@@ -348,7 +405,13 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.addHeader("Accept", accept);
 	}
 	
-	/** Asserts the status, and an {@code error} body in JSON, whatever the request accepts. */
+	/** Asserts 406 with an empty body. */
+	private static void assertNotAcceptable(String what, MockHttpServletResponse response) throws Exception {
+		assertEquals(what, 406, response.getStatus());
+		assertEquals(what, "", response.getContentAsString());
+	}
+	
+	/** Asserts the status, and an {@code error} body in JSON. */
 	private static void assertJsonError(String what, int status, MockHttpServletResponse response) throws Exception {
 		assertEquals(what, status, response.getStatus());
 		assertTrue(what + " " + response.getContentType(),

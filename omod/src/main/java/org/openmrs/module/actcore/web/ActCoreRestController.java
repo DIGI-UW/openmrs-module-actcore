@@ -14,6 +14,9 @@ import java.time.Period;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -34,25 +37,27 @@ import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * The base class of the module's REST controllers. It answers a request parameter that is missing
  * or of the wrong type with 400, a request body of a content type the endpoint does not read with
- * 415, a request that accepts no type the endpoint gives with 406, and a privilege that
- * {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401 or 403, as for
- * an {@link APIAuthenticationException}. BaseRestController would answer each of these with 500.
- * Each handler that writes a body writes it in JSON whatever the request accepts: under an
- * {@code Accept} such as {@code text/plain}, Spring cannot write the body in a type the request
- * accepts, and the request ends in the web application's 500 page instead. It also holds the
- * request helpers the controllers share, which find a request's patient and location, read its
+ * 415, a request that accepts neither JSON nor XML with 406 before the endpoint runs, and a
+ * privilege that {@link org.openmrs.api.context.Context#requirePrivilege(String)} refuses with 401
+ * or 403, as for an {@link APIAuthenticationException}. BaseRestController would answer each of
+ * these with 500. Each handler that writes a body writes it in JSON whatever the request accepts:
+ * under an {@code Accept} such as {@code text/plain}, Spring cannot write the body in a type the
+ * request accepts, and the request ends in the web application's 500 page instead. It also holds
+ * the request helpers the controllers share, which find a request's patient and location, read its
  * dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
@@ -62,6 +67,32 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 * default of its own.
 	 */
 	static final int DEFAULT_MONTHS = 12;
+	
+	/** The JSON and XML types webservices.rest's message converters write a response in. */
+	private static final List<MediaType> WRITTEN = Arrays.asList(MediaType.APPLICATION_JSON,
+	    new MediaType("application", "*+json"), MediaType.APPLICATION_XML, MediaType.TEXT_XML,
+	    new MediaType("application", "*+xml"));
+	
+	/**
+	 * Refuses a request whose {@code Accept} admits neither JSON nor XML, or is not a list of media
+	 * types, before the endpoint runs. Spring finds that it cannot write the response only after the
+	 * endpoint has run, so a POST would otherwise do its work and then be answered with 406. A POST
+	 * whose content type is neither JSON nor XML, or is missing, is left to the 415 or 400 with which
+	 * the module's POST endpoints refuse such a body before they run, so that it is answered with that
+	 * status in JSON rather than with 406.
+	 *
+	 * @param request the request
+	 * @throws HttpMediaTypeNotAcceptableException when the request accepts neither JSON nor XML
+	 */
+	@ModelAttribute
+	public void refuseAnAcceptWithoutJsonOrXml(HttpServletRequest request) throws HttpMediaTypeNotAcceptableException {
+		if ("POST".equals(request.getMethod()) && !isJsonOrXml(request.getContentType())) {
+			return;
+		}
+		if (!acceptsJsonOrXml(request)) {
+			throw new HttpMediaTypeNotAcceptableException(WRITTEN);
+		}
+	}
 	
 	/**
 	 * Answers a request parameter that is missing or of the wrong type with 400 and a message naming
@@ -207,6 +238,59 @@ public abstract class ActCoreRestController extends BaseRestController {
 	        throws Exception {
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		return super.handleException(ex, request, response);
+	}
+	
+	/**
+	 * Tells whether a request's {@code Accept} admits JSON or XML.
+	 *
+	 * @param request the request
+	 * @return true when the request has no {@code Accept} or it admits JSON or XML; false when it
+	 *         admits neither or is not a list of media types
+	 */
+	private static boolean acceptsJsonOrXml(HttpServletRequest request) {
+		List<MediaType> accepted;
+		try {
+			accepted = MediaType.parseMediaTypes(Collections.list(request.getHeaders(HttpHeaders.ACCEPT)));
+		}
+		catch (InvalidMediaTypeException e) {
+			return false;
+		}
+		if (accepted.isEmpty()) {
+			return true;
+		}
+		for (MediaType type : accepted) {
+			for (MediaType written : WRITTEN) {
+				if (type.isCompatibleWith(written)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * Tells whether a content type is JSON or XML.
+	 *
+	 * @param contentType the content type, or null
+	 * @return false when it is blank, not a media type, or neither JSON nor XML
+	 */
+	private static boolean isJsonOrXml(String contentType) {
+		if (StringUtils.isBlank(contentType)) {
+			return false;
+		}
+		MediaType type;
+		try {
+			type = MediaType.parseMediaType(contentType);
+		}
+		catch (InvalidMediaTypeException e) {
+			return false;
+		}
+		for (MediaType written : WRITTEN) {
+			if (written.includes(type)) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	/**
