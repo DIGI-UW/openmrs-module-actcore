@@ -448,6 +448,52 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("registry", page.results.get(0).detail.get("list"));
 	}
 	
+	@Test
+	public void listsADownloadWhoseDetailCannotBeReadWithoutItAndOnlyWithoutAnIdentifiersFilter() throws Exception {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		controller.download(body());
+		controller.download(body());
+		spoilLastDetail();
+		Map<String, Object> list = new HashMap<String, Object>();
+		list.put("list", "registry");
+		list.put("columns", Collections.singletonList("ACT ID"));
+		controller.record(list);
+		spoilLastDetail();
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		
+		SimpleObject every = controller.getDownloads(null, null, null, null, null, null, null);
+		
+		assertEquals(Integer.valueOf(3), every.get("totalCount"));
+		List<?> results = (List<?>) every.get("results");
+		SimpleObject spoiltList = (SimpleObject) results.get(0);
+		assertNull(spoiltList.get("detail"));
+		assertNull(spoiltList.get("list"));
+		assertNull(spoiltList.get("form"));
+		assertEquals("downloadcaller", ((SimpleObject) spoiltList.get("user")).get("username"));
+		SimpleObject spoiltForm = (SimpleObject) results.get(1);
+		assertNull(spoiltForm.get("detail"));
+		assertEquals("RHD Echocardiogram", ((SimpleObject) spoiltForm.get("form")).get("name"));
+		assertEquals(Boolean.TRUE, ((Map<?, ?>) ((SimpleObject) results.get(2)).get("detail")).get("identifiers"));
+		assertEquals(Integer.valueOf(2),
+		    controller.getDownloads(null, null, null, form.getUuid(), null, null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(1),
+		    controller.getDownloads(null, null, null, null, "with", null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, null, "without", null, null).get("totalCount"));
+		assertEquals(Integer.valueOf(0),
+		    controller.getDownloads(null, null, null, null, "research", null, null).get("totalCount"));
+	}
+	
+	/** Committed, as the download's record was. */
+	private static void spoilLastDetail() {
+		String table = ActCoreConstants.DOWNLOAD_LOG_TABLE;
+		Transactions.inNewTransaction(
+		    () -> Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class).getCurrentSession()
+		            .createSQLQuery("update " + table + " set detail = :detail"
+		                    + " where download_id = (select max(download_id) from " + table + ")")
+		            .setParameter("detail", "{not json").executeUpdate());
+	}
+	
 	private static DownloadSearchCriteria filter(Consumer<DownloadSearchCriteria> settings) {
 		DownloadSearchCriteria filter = new DownloadSearchCriteria();
 		settings.accept(filter);

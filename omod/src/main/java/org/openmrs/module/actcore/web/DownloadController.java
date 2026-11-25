@@ -191,7 +191,6 @@ public class DownloadController extends ActCoreRestController {
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
 	 *             after the end
-	 * @throws org.openmrs.api.APIException when a recorded download's detail cannot be read as JSON
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody

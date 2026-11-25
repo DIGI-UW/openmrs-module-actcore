@@ -42,14 +42,14 @@ public interface DownloadLogService extends OpenmrsService {
 	
 	/**
 	 * Gets a page of the downloads that match the filter, newest first, each with its user named and
-	 * its detail read.
+	 * its detail read. A detail that cannot be read as JSON is logged and left out, so the download is
+	 * listed without it.
 	 *
 	 * @param filter the user, days, form, identifiers and page to list
 	 * @return the page and how many downloads match in all; empty when none matches, as when no user
 	 *         has the username or no form has the uuid
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
-	 * @throws org.openmrs.api.APIException when a recorded download's detail cannot be read as JSON
 	 */
 	@Authorized(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS)
 	DownloadPage getDownloads(DownloadSearchCriteria filter);

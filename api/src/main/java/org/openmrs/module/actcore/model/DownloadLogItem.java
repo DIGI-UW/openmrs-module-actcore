@@ -27,6 +27,9 @@ public class DownloadLogItem {
 	/** The name users see for the form. It is null whenever {@link #formUuid} is null. */
 	public String formName;
 	
-	/** What the download held, read from its JSON, or null when nothing was recorded. */
+	/**
+	 * What the download held, read from its JSON, or null when nothing was recorded or what was
+	 * recorded cannot be read as JSON.
+	 */
 	public Map<?, ?> detail;
 }

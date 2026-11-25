@@ -20,7 +20,6 @@ import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Form;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -34,6 +33,8 @@ import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.model.DownloadRecord;
 import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.util.PrivilegeConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /** Default implementation of {@link org.openmrs.module.actcore.api.DownloadLogService}. */
 @Transactional
 public class DownloadLogServiceImpl extends BaseOpenmrsService implements DownloadLogService {
+	
+	private static final Logger log = LoggerFactory.getLogger(DownloadLogServiceImpl.class);
 	
 	private DownloadLogDAO dao;
 	
@@ -94,8 +97,9 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		List<DownloadLogItem> matching = new ArrayList<DownloadLogItem>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLogEntry entry : entries) {
-			Map<?, ?> detail = read(entry.detail);
-			if (filter.identifiers != null && !filter.identifiers.equals(identifiersOf(detail))) {
+			Map<?, ?> detail = read(entry);
+			boolean unreadable = detail == null && entry.detail != null;
+			if (filter.identifiers != null && (unreadable || !filter.identifiers.equals(identifiersOf(detail)))) {
 				continue;
 			}
 			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
@@ -117,15 +121,16 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		return page;
 	}
 	
-	private static Map<?, ?> read(String detail) {
-		if (detail == null) {
+	private static Map<?, ?> read(DownloadLogEntry entry) {
+		if (entry.detail == null) {
 			return null;
 		}
 		try {
-			return new ObjectMapper().readValue(detail, Map.class);
+			return new ObjectMapper().readValue(entry.detail, Map.class);
 		}
 		catch (IOException e) {
-			throw new APIException("A recorded download's detail cannot be read as JSON", e);
+			log.warn("Download {} is listed without its detail, which cannot be read as JSON", entry.uuid);
+			return null;
 		}
 	}
 	

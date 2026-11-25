@@ -37,7 +37,8 @@ public class DownloadSearchCriteria {
 	
 	/**
 	 * What the downloads must have held: "research" for research data only, "with" for any other
-	 * download that gave identifiers, and "without" for the rest.
+	 * download that gave identifiers, and "without" for the rest. A download whose recorded detail
+	 * cannot be read as JSON matches none of them.
 	 */
 	public String identifiers;
 	
