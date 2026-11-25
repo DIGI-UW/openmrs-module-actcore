@@ -208,6 +208,9 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 				if (moved) {
 					log.warn("Moved '{}' to {}", name, taskClass);
 				}
+				if (takenOff) {
+					log.info("Put '{}' back on the scheduler's startup", name);
+				}
 				// Core's scheduler started on the old class or without the task, so this call schedules it.
 				if ((moved || takenOff) && (Boolean.TRUE.equals(existing.getStarted())
 				        || Boolean.TRUE.equals(existing.getStartOnStartup()))) {

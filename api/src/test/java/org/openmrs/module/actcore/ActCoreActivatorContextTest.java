@@ -14,6 +14,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -135,7 +136,8 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		    false);
 		Context.clearSession();
 		
-		List<String> errors = errorsWhile(() -> Context.getSchedulerService().onStartup());
+		List<String> errors = loggedWhile(TimerSchedulerServiceImpl.class, Level.ERROR,
+		    () -> Context.getSchedulerService().onStartup());
 		
 		assertEquals(new ArrayList<String>(), errors);
 	}
@@ -161,7 +163,7 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		
 		new ActCoreActivator().stopped();
 		assertFalse(schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME).getStartOnStartup());
-		new ActCoreActivator().started();
+		List<String> logged = loggedWhile(ActCoreActivator.class, Level.INFO, () -> new ActCoreActivator().started());
 		
 		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
 		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
@@ -172,6 +174,14 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 			assertFalse(adherence.getStarted());
 			assertEquals("",
 			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, ""));
+			List<String> putBack = new ArrayList<String>();
+			for (String message : logged) {
+				if (message.startsWith("Put ")) {
+					putBack.add(message);
+				}
+			}
+			assertEquals(Arrays.asList("Put '" + ActCoreActivator.REFRESH_TASK_NAME + "' back on the scheduler's startup"),
+			    putBack);
 		}
 		finally {
 			schedulerService.shutdownTask(flags);
@@ -244,24 +254,27 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		return task;
 	}
 	
-	/** Runs the work and returns the messages core's scheduler logged at ERROR meanwhile. */
-	private static List<String> errorsWhile(Runnable work) {
+	/**
+	 * Runs the work and returns the messages the class's logger logged meanwhile at that level or a
+	 * more severe one.
+	 */
+	private static List<String> loggedWhile(Class<?> source, Level threshold, Runnable work) {
 		List<String> logged = new ArrayList<String>();
 		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
 			
 			@Override
 			public void append(LogEvent event) {
-				if (event.getLevel().isMoreSpecificThan(Level.ERROR)) {
+				if (event.getLevel().isMoreSpecificThan(threshold)) {
 					logged.add(event.getMessage().getFormattedMessage());
 				}
 			}
 		};
 		appender.start();
-		Logger logger = (Logger) LogManager.getLogger(TimerSchedulerServiceImpl.class);
+		Logger logger = (Logger) LogManager.getLogger(source);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
 		// The test log4j2.xml turns every logger off.
-		logger.setLevel(Level.ERROR);
+		logger.setLevel(threshold);
 		try {
 			work.run();
 		}
