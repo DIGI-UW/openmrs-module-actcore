@@ -18,7 +18,7 @@ public class DownloadLogItem {
 	/** When the download was recorded. */
 	public Date date;
 	
-	/** The user who downloaded, or null when no user has the uuid recorded. */
+	/** The user who downloaded. */
 	public LogUser user;
 	
 	/** The uuid of the form downloaded when the download held exactly one form, else null. */

@@ -29,8 +29,8 @@ public interface DownloadLogDAO {
 	void saveDownloadRecord(DownloadRecord record);
 	
 	/**
-	 * Gets the downloads that match the filters, newest first, each with its user's uuid and its form's
-	 * uuid and name. A filter left null is not applied.
+	 * Gets the downloads that match the filters, newest first, each with its record's uuid, its user's
+	 * uuid and its form's uuid and name. A filter left null is not applied.
 	 *
 	 * @param userId the id of the user who downloaded, or null for every user
 	 * @param from the earliest time to include, or null for no lower bound
