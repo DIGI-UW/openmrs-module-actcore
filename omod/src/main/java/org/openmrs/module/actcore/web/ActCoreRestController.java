@@ -251,7 +251,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 * @param request the request
 	 * @param response the response
 	 */
-	private static void jsonUnlessJsonOrXmlIsAccepted(HttpServletRequest request, HttpServletResponse response) {
+	static void jsonUnlessJsonOrXmlIsAccepted(HttpServletRequest request, HttpServletResponse response) {
 		if (!acceptsJsonOrXml(request)) {
 			response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		}

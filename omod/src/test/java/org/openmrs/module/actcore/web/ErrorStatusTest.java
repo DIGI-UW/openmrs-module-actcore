@@ -13,14 +13,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.After;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
@@ -45,9 +58,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -86,6 +102,31 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	/** What a client may accept that admits JSON or XML, which ACT Core answers in. */
 	private static final String[] MET_ACCEPTS = { "application/json", "application/xml", "text/xml", "*/*", "application/*",
 	        "text/plain, application/json", null };
+	
+	/**
+	 * Each ACT Core path, with an example value for a path variable, and the methods it takes, as the
+	 * {@code Allow} header names them.
+	 */
+	private static final String[][] PATHS = { { "/activity", "GET,HEAD,OPTIONS" }, { "/activity/42", "GET,HEAD,OPTIONS" },
+	        { "/cardiology", "GET,HEAD,OPTIONS" }, { "/download", "GET,HEAD,POST,OPTIONS" },
+	        { "/download/record", "POST,OPTIONS" }, { "/gap", "GET,HEAD,OPTIONS" }, { "/nextsteps", "GET,HEAD,OPTIONS" },
+	        { "/prophylaxis", "GET,HEAD,OPTIONS" }, { "/raisedflags", "GET,HEAD,OPTIONS" },
+	        { "/raisedflags/dismiss", "POST,OPTIONS" }, { "/reads", "GET,HEAD,OPTIONS" },
+	        { "/refresh", "GET,HEAD,POST,OPTIONS" }, { "/runchart", "GET,HEAD,OPTIONS" },
+	        { "/screeningcounts", "GET,HEAD,POST,OPTIONS" }, { "/screeningcounts/summary", "GET,HEAD,OPTIONS" },
+	        { "/studies", "GET,HEAD,POST,OPTIONS" }, { "/studies/" + UUID.randomUUID(), "POST,OPTIONS" } };
+	
+	/**
+	 * The methods a client may send, other than OPTIONS; the servlet refuses TRACE before Spring sees
+	 * it.
+	 */
+	private static final String[] METHODS = { "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE" };
+	
+	/**
+	 * Paths under ACT Core's that no endpoint takes, including those webservices.rest's patterns match.
+	 */
+	private static final String[] UNKNOWN_PATHS = { "", "/", "/nosuch", "/nosuch/x", "/search/x", "/studies/x/y",
+	        "/nosuch/x/y", "/nosuch/x/y/z", "/nosuch/x/y/z/w" };
 	
 	@After
 	public void forgetTheDaemonToken() {
@@ -376,6 +417,138 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals("application/json", response.getHeader("Accept"));
 	}
 	
+	@Test
+	public void checksEveryMethodOfEveryActCoreEndpoint() {
+		AntPathMatcher matcher = new AntPathMatcher();
+		Set<String> endpoints = new HashSet<>();
+		for (RequestMappingHandlerMapping mapping : mappings) {
+			for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
+				if (!isActCoreEndpoint(entry.getValue())) {
+					continue;
+				}
+				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
+					for (RequestMethod method : entry.getKey().getMethodsCondition().getMethods()) {
+						endpoints.add(method + " " + pattern);
+						boolean checked = false;
+						for (String[] path : PATHS) {
+							checked |= matcher.match(pattern, "/rest/v1/actcore" + path[0])
+							        && Arrays.asList(path[1].split(",")).contains(method.name());
+						}
+						assertTrue(method + " " + pattern, checked);
+					}
+				}
+			}
+		}
+		assertEquals(21, endpoints.size());
+	}
+	
+	@Test
+	public void sendsEveryMethodAPathTakesToItsEndpoint() throws Exception {
+		for (String[] path : PATHS) {
+			for (String suffix : new String[] { "", "/" }) {
+				for (String method : path[1].split(",")) {
+					if ("OPTIONS".equals(method)) {
+						continue;
+					}
+					String what = method + " " + path[0] + suffix;
+					MockHttpServletRequest request = new MockHttpServletRequest(method,
+					        "/rest/v1/actcore" + path[0] + suffix);
+					
+					assertTrue(what, isActCoreEndpoint(handler(request)));
+				}
+			}
+		}
+	}
+	
+	@Test
+	public void answersEveryMethodAPathDoesNotTakeWithMethodNotAllowed() throws Exception {
+		List<LogEvent> logged = new ArrayList<>();
+		int refused = 0;
+		for (String[] path : PATHS) {
+			for (String method : METHODS) {
+				if (Arrays.asList(path[1].split(",")).contains(method)) {
+					continue;
+				}
+				for (String contentType : new String[] { null, "application/json", "text/plain" }) {
+					for (String accept : new String[] { "application/json", "application/xml" }) {
+						String what = method + " " + path[0] + " " + contentType + " " + accept;
+						MockHttpServletRequest request = request(method, path[0], contentType, accept);
+						
+						MockHttpServletResponse response = logging(logged, () -> dispatch(request));
+						
+						if (accept.endsWith("xml")) {
+							assertXmlError(what, 405, response);
+						} else {
+							assertJsonError(what, 405, response);
+						}
+						assertEquals(what, path[1], response.getHeader("Allow"));
+						assertWithoutAStackTrace(what, response);
+						refused++;
+					}
+				}
+			}
+		}
+		assertEquals(Collections.emptyList(), messages(logged));
+		assertEquals(402, refused);
+	}
+	
+	@Test
+	public void answersAWrongMethodWhoseAcceptItCannotMeetWithMethodNotAllowedInJson() throws Exception {
+		for (String accept : UNMET_ACCEPTS) {
+			MockHttpServletResponse response = dispatch(request("PUT", "/refresh", "application/json", accept));
+			
+			assertJsonError(accept, 405, response);
+			assertEquals("GET,HEAD,POST,OPTIONS", response.getHeader("Allow"));
+		}
+	}
+	
+	@Test
+	public void answersOptionsWithTheMethodsAPathTakes() throws Exception {
+		for (String[] path : PATHS) {
+			MockHttpServletResponse response = dispatch(request("OPTIONS", path[0], null, "application/json"));
+			
+			assertEquals(path[0], 200, response.getStatus());
+			assertEquals(path[0], path[1], response.getHeader("Allow"));
+			assertEquals(path[0], "", response.getContentAsString());
+		}
+	}
+	
+	@Test
+	public void answersAPathNoActCoreEndpointTakesWithNotFound() throws Exception {
+		List<LogEvent> logged = new ArrayList<>();
+		for (String path : UNKNOWN_PATHS) {
+			for (String method : new String[] { "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" }) {
+				for (String accept : new String[] { "application/json", "application/xml" }) {
+					String what = method + " " + path + " " + accept;
+					MockHttpServletRequest request = request(method, path, "application/json", accept);
+					
+					MockHttpServletResponse response = logging(logged, () -> dispatch(request));
+					
+					if (accept.endsWith("xml")) {
+						assertXmlError(what, 404, response);
+					} else {
+						assertJsonError(what, 404, response);
+					}
+					assertNull(what, response.getHeader("Allow"));
+					assertWithoutAStackTrace(what, response);
+				}
+			}
+		}
+		assertEquals(Collections.emptyList(), messages(logged));
+	}
+	
+	@Test
+	public void leavesPathsOutsideActCoreToTheirEndpoints() throws Exception {
+		for (String uri : new String[] { "/rest/v1/patient/" + UUID.randomUUID(), "/rest/v1/actcorex/runchart",
+		        "/rest/v1/location" }) {
+			for (String method : new String[] { "GET", "POST" }) {
+				HandlerMethod handler = handler(new MockHttpServletRequest(method, uri));
+				
+				assertFalse(method + " " + uri, ActCoreRestController.class.isAssignableFrom(handler.getBeanType()));
+			}
+		}
+	}
+	
 	/**
 	 * Requests an administrator sends wrong, each with the status it gets and what it is, one for each
 	 * of the controllers' error handlers that writes a body.
@@ -439,6 +612,74 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	private static void accept(MockHttpServletRequest request, String accept) {
 		request.removeHeader("Accept");
 		request.addHeader("Accept", accept);
+	}
+	
+	/**
+	 * Tells whether a handler is an ACT Core endpoint rather than the fallback for the paths none
+	 * takes.
+	 */
+	private static boolean isActCoreEndpoint(HandlerMethod handler) {
+		return ActCoreRestController.class.isAssignableFrom(handler.getBeanType())
+		        && handler.getBeanType() != FallbackController.class;
+	}
+	
+	/** A request to an ACT Core path, with a JSON body when it has a content type. */
+	private static MockHttpServletRequest request(String method, String path, String contentType, String accept) {
+		MockHttpServletRequest request = new MockHttpServletRequest(method, "/rest/v1/actcore" + path);
+		request.addHeader("Accept", accept);
+		if (contentType != null) {
+			request.setContentType(contentType);
+			request.setContent("{\"name\":\"ARC\"}".getBytes(StandardCharsets.UTF_8));
+		}
+		return request;
+	}
+	
+	private interface Dispatch {
+		
+		MockHttpServletResponse run() throws Exception;
+	}
+	
+	/** Runs a dispatch, adding what any logger logs at INFO or above while it runs. */
+	private static MockHttpServletResponse logging(List<LogEvent> logged, Dispatch dispatch) throws Exception {
+		AbstractAppender appender = new AbstractAppender("capture", null, null, true, Property.EMPTY_ARRAY) {
+			
+			@Override
+			public void append(LogEvent event) {
+				logged.add(event.toImmutable());
+			}
+		};
+		appender.start();
+		LoggerContext context = (LoggerContext) LogManager.getContext(false);
+		LoggerConfig root = context.getConfiguration().getRootLogger();
+		Level level = root.getLevel();
+		root.addAppender(appender, Level.INFO, null);
+		// The test log4j2.xml turns every logger off.
+		root.setLevel(Level.INFO);
+		context.updateLoggers();
+		try {
+			return dispatch.run();
+		}
+		finally {
+			root.removeAppender("capture");
+			root.setLevel(level);
+			context.updateLoggers();
+		}
+	}
+	
+	private static List<String> messages(List<LogEvent> logged) {
+		List<String> messages = new ArrayList<>();
+		for (LogEvent event : logged) {
+			messages.add(event.getLevel() + " " + event.getLoggerName() + " " + event.getMessage().getFormattedMessage());
+		}
+		return messages;
+	}
+	
+	/** Asserts that a body gives the error's message alone, without a stack trace or a code. */
+	private static void assertWithoutAStackTrace(String what, MockHttpServletResponse response) throws Exception {
+		String body = response.getContentAsString();
+		for (String trace : new String[] { "stackTrace", "detail", "code", "at org." }) {
+			assertFalse(what + " " + body, body.contains(trace));
+		}
 	}
 	
 	/** Asserts 406 with an empty body. */
