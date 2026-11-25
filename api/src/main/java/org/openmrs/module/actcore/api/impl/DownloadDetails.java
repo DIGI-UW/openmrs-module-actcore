@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.api.impl;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -21,8 +22,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code fields} and {@code withheld}, each a list of labels; {@code startDate} and
  * {@code endDate}, each a string or null; {@code rows}, a number; and {@code identifiers} and
  * {@code researchOnly}, each true or false. A detail may also have {@code list}, a string;
- * {@code forms}, a list of objects; {@code rowPerPatient}, true or false; {@code filters}, an
- * object; and {@code patient}, a list of strings. It may have other keys as well.
+ * {@code forms}, a list of objects, each with a {@code name} that is a string;
+ * {@code rowPerPatient}, true or false; {@code filters}, an object; and {@code patient}, a list of
+ * strings. In a detail without {@code list}, the {@code status}, {@code cardiacClinic} and
+ * {@code primaryCareClinic} of its filters are each a string or null where present, as a form
+ * download records them; a list the app made itself records its filters as the app sent them. A
+ * detail may have other keys as well.
  */
 final class DownloadDetails {
 	
@@ -51,9 +56,9 @@ final class DownloadDetails {
 		        && stringOrNull(detail, "endDate") && detail.get("rows") instanceof Number
 		        && detail.get("identifiers") instanceof Boolean && detail.get("researchOnly") instanceof Boolean
 		        && (!detail.containsKey("list") || detail.get("list") instanceof String)
-		        && (!detail.containsKey("forms") || objects(detail.get("forms")))
+		        && (!detail.containsKey("forms") || named(detail.get("forms")))
 		        && (!detail.containsKey("rowPerPatient") || detail.get("rowPerPatient") instanceof Boolean)
-		        && (!detail.containsKey("filters") || detail.get("filters") instanceof Map)
+		        && (!detail.containsKey("filters") || filters(detail.get("filters"), detail.containsKey("list")))
 		        && (!detail.containsKey("patient") || strings(detail.get("patient")));
 	}
 	
@@ -65,7 +70,13 @@ final class DownloadDetails {
 		return value instanceof List && ((List<?>) value).stream().allMatch(item -> item instanceof String);
 	}
 	
-	private static boolean objects(Object value) {
-		return value instanceof List && ((List<?>) value).stream().allMatch(item -> item instanceof Map);
+	private static boolean named(Object value) {
+		return value instanceof List && ((List<?>) value).stream()
+		        .allMatch(item -> item instanceof Map && ((Map<?, ?>) item).get("name") instanceof String);
+	}
+	
+	private static boolean filters(Object value, boolean list) {
+		return value instanceof Map && (list || Stream.of("status", "cardiacClinic", "primaryCareClinic")
+		        .allMatch(key -> ((Map<?, ?>) value).get(key) == null || ((Map<?, ?>) value).get(key) instanceof String));
 	}
 }

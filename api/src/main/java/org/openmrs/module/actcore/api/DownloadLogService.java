@@ -33,7 +33,15 @@ public interface DownloadLogService extends OpenmrsService {
 	 * @param formId the id of the form downloaded when the download held exactly one form, or null
 	 *            otherwise, as for a download of several forms or a list the app made itself
 	 * @param detail what the download held, such as its forms, columns and filters, as a JSON object of
-	 *            the shape every download records, or null when nothing is recorded of it
+	 *            the shape every download records, or null when nothing is recorded of it. That object
+	 *            has {@code fields} and {@code withheld}, each a list of labels; {@code startDate} and
+	 *            {@code endDate}, each a string or null; {@code rows}, a number; and
+	 *            {@code identifiers} and {@code researchOnly}, each true or false. It may also have
+	 *            {@code list}, a string; {@code forms}, a list of objects, each with a {@code name}
+	 *            that is a string; {@code rowPerPatient}, true or false; {@code filters}, an object,
+	 *            whose {@code status}, {@code cardiacClinic} and {@code primaryCareClinic} are each a
+	 *            string or null where present unless the detail has a {@code list}; and
+	 *            {@code patient}, a list of strings
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} nor
 	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}

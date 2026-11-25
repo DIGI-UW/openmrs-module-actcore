@@ -88,7 +88,12 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	/** Details without the shape every download records, though each is a JSON object. */
 	private static final List<String> SHAPELESS = Arrays.asList("{}", "{\"rows\":3}",
 	    recorded("ACT ID", false, false).replace("[\"ACT ID\"]", "\"ACT ID\""),
-	    recorded("ACT ID", false, false).replace("\"withheld\":[],", ""));
+	    recorded("ACT ID", false, false).replace("\"withheld\":[],", ""),
+	    recorded("ACT ID", false, false).replace("}", ",\"filters\":{\"status\":{\"value\":\"active\"}}}"),
+	    recorded("ACT ID", false, false).replace("}", ",\"filters\":{\"cardiacClinic\":[\"Lira RRH\"]}}"),
+	    recorded("ACT ID", false, false).replace("}", ",\"filters\":{\"primaryCareClinic\":1}}"),
+	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{}]}"),
+	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{\"name\":{}}]}"));
 	
 	@Autowired
 	private DownloadController controller;
@@ -678,13 +683,19 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		Form second = secondForm();
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		DownloadLogService service = Context.getService(DownloadLogService.class);
-		// As 1.0.0 recorded a download, and then a list the app made itself.
+		// As downloads were recorded before AR-76, and then a list the app made itself.
 		service.recordDownload(form.getFormId(),
 		    "{\"fields\":[\"Mitral regurgitation\"],\"withheld\":[\"Given name\"],\"startDate\":\"2026-01-01\","
 		            + "\"endDate\":null,\"rows\":2,\"identifiers\":false,\"researchOnly\":true}");
 		service.recordDownload(null,
 		    "{\"list\":\"registry\",\"fields\":[\"ACT ID\"],\"withheld\":[],\"startDate\":null,\"endDate\":null,"
 		            + "\"rows\":0,\"identifiers\":true,\"researchOnly\":false,\"filters\":{}}");
+		service.recordDownload(form.getFormId(),
+		    "{\"fields\":[\"ACT ID\"],\"withheld\":[],\"startDate\":null,\"endDate\":null,\"rows\":1,"
+		            + "\"identifiers\":true,\"researchOnly\":false,\"forms\":[{\"uuid\":\"" + form.getUuid()
+		            + "\",\"name\":\"RHD Echocardiogram\",\"fields\":[\"ACT ID\"]}],\"rowPerPatient\":false,"
+		            + "\"filters\":{\"status\":\"active\",\"cardiacClinic\":\"Lira RRH\",\"primaryCareClinic\":null},"
+		            + "\"patient\":[]}");
 		controller.download(body());
 		Map<String, Object> both = new HashMap<String, Object>();
 		both.put("forms", Arrays.asList(choice(form), choice(second)));
@@ -714,13 +725,18 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		bare.put("list", "logs:downloads");
 		bare.put("columns", Collections.emptyList());
 		controller.record(bare);
+		Map<String, Object> odd = new HashMap<String, Object>();
+		odd.put("list", "registry");
+		odd.put("columns", Collections.singletonList("ACT ID"));
+		odd.put("filters", Collections.singletonMap("status", Collections.singletonMap("value", "active")));
+		controller.record(odd);
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		List<LogEvent> warned = new ArrayList<LogEvent>();
 		
 		List<?> every = (List<?>) warningsOf(warned, () -> controller.getDownloads(null, null, null, null, null, null, null))
 		        .get("results");
 		
-		assertEquals(8, every.size());
+		assertEquals(10, every.size());
 		for (Object each : every) {
 			assertEquals(Boolean.FALSE, ((SimpleObject) each).get("unreadable"));
 			assertTrue(((SimpleObject) each).get("detail") instanceof Map);
