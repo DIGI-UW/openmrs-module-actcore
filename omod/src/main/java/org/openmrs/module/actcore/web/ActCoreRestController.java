@@ -79,8 +79,9 @@ public abstract class ActCoreRestController extends BaseRestController {
 	}
 	
 	/**
-	 * Answers a request body of a content type the endpoint does not read with 415, naming the types it
-	 * reads in the {@code Accept} header, as Spring MVC's own DefaultHandlerExceptionResolver does.
+	 * Answers a request body of a content type the endpoint does not read with 415, in JSON whatever
+	 * the request accepts, and names JSON in the {@code Accept} header as the type the module's
+	 * endpoints read.
 	 *
 	 * @param e the HttpMediaTypeNotSupportedException
 	 * @param response the response, whose status is set to 415
@@ -90,9 +91,8 @@ public abstract class ActCoreRestController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
-		if (!e.getSupportedMediaTypes().isEmpty()) {
-			response.setHeader(HttpHeaders.ACCEPT, MediaType.toString(e.getSupportedMediaTypes()));
-		}
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		response.setHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
 		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
 	}
 	

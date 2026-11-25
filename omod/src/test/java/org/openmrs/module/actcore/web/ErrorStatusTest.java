@@ -65,6 +65,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	        "/rest/v1/actcore/raisedflags/dismiss", "/rest/v1/actcore/screeningcounts", "/rest/v1/actcore/studies",
 	        "/rest/v1/actcore/studies/" + UUID.randomUUID() };
 	
+	/** What a client may accept, which an error answers in JSON whatever it is. */
+	private static final String[] ACCEPTS = { "application/json", "text/plain", "text/csv" };
+	
 	@Test
 	public void answersARefusedStudyNameWithABadRequest() throws Exception {
 		MockHttpServletResponse response = dispatch(post("/rest/v1/actcore/studies", "{\"name\":\" \"}"));
@@ -125,13 +128,16 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	public void answersABodyOfTheWrongContentTypeWithUnsupportedMediaType() throws Exception {
 		for (String uri : BODY_URIS) {
 			for (String contentType : new String[] { "text/plain", "application/x-www-form-urlencoded" }) {
-				MockHttpServletRequest request = bodyPost(uri, "name=ARC");
-				request.setContentType(contentType);
-				
-				MockHttpServletResponse response = dispatch(request);
-				
-				assertEquals(uri + " " + contentType, 415, response.getStatus());
-				assertTrue(uri, response.getHeader("Accept").contains("application/json"));
+				for (String accept : ACCEPTS) {
+					MockHttpServletRequest request = bodyPost(uri, "name=ARC");
+					request.setContentType(contentType);
+					accept(request, accept);
+					
+					MockHttpServletResponse response = dispatch(request);
+					
+					assertJsonError(uri + " " + contentType + " " + accept, 415, response);
+					assertEquals(uri, "application/json", response.getHeader("Accept"));
+				}
 			}
 		}
 	}
@@ -162,16 +168,18 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	public void answersARefreshThatIsNotJsonWithUnsupportedMediaTypeWithoutRunningIt() throws Exception {
 		for (String contentType : new String[] { "text/plain", "application/x-www-form-urlencoded", "multipart/form-data",
 		        null }) {
-			MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/v1/actcore/refresh");
-			request.addHeader("Accept", "application/json");
-			if (contentType != null) {
-				request.setContentType(contentType);
+			for (String accept : ACCEPTS) {
+				MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/v1/actcore/refresh");
+				accept(request, accept);
+				if (contentType != null) {
+					request.setContentType(contentType);
+				}
+				
+				MockHttpServletResponse response = dispatch(request);
+				
+				assertJsonError(contentType + " " + accept, 415, response);
+				assertEquals("application/json", response.getHeader("Accept"));
 			}
-			
-			MockHttpServletResponse response = dispatch(request);
-			
-			assertEquals(String.valueOf(contentType), 415, response.getStatus());
-			assertEquals("application/json", response.getHeader("Accept"));
 		}
 	}
 	
@@ -181,7 +189,10 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.addHeader("Accept", "application/json");
 		request.setContentType("json");
 		
-		assertEquals(415, dispatch(request).getStatus());
+		MockHttpServletResponse response = dispatch(request);
+		
+		assertJsonError("json", 415, response);
+		assertEquals("application/json", response.getHeader("Accept"));
 	}
 	
 	/**
@@ -192,6 +203,19 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.setParameter("clinic", "x");
 		request.setParameter("month", "2026-09");
 		return request;
+	}
+	
+	private static void accept(MockHttpServletRequest request, String accept) {
+		request.removeHeader("Accept");
+		request.addHeader("Accept", accept);
+	}
+	
+	/** Asserts the status, and an {@code error} body in JSON, whatever the request accepts. */
+	private static void assertJsonError(String what, int status, MockHttpServletResponse response) throws Exception {
+		assertEquals(what, status, response.getStatus());
+		assertTrue(what + " " + response.getContentType(),
+		    MediaType.APPLICATION_JSON.equalsTypeAndSubtype(MediaType.parseMediaType(response.getContentType())));
+		assertTrue(what + " " + response.getContentAsString(), response.getContentAsString().startsWith("{\"error\":{"));
 	}
 	
 	private static MockHttpServletRequest post(String uri, String json) {
