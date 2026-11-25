@@ -93,8 +93,14 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	@After
 	public void removeAdvice() {
-		restoreService.run();
-		Context.removeAdvice(FlagService.class, hide);
+		try {
+			if (restoreService != null) {
+				restoreService.run();
+			}
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, hide);
+		}
 	}
 	
 	@Test
