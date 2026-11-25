@@ -104,22 +104,18 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		List<DownloadLogItem> matching = new ArrayList<DownloadLogItem>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLogEntry entry : entries) {
-			Map<?, ?> detail = read(entry);
-			boolean unreadable = detail == null && entry.detail != null;
-			// An unreadable detail may have given identifiers, and an auditor must not miss such a download.
-			if (filter.identifiers != null && !filter.identifiers.equals(unreadable ? "with" : identifiersOf(detail))) {
+			DownloadLogItem download = read(entry);
+			if (filter.identifiers != null && !filter.identifiers.equals(download.identifiers)) {
 				continue;
 			}
-			if (chosenForm != null && !(unreadable && entry.formUuid == null) && !chosenForm.equals(entry.formUuid)
-			        && !formsOf(detail).contains(chosenForm)) {
+			if (chosenForm != null && !(download.unreadable && entry.formUuid == null) && !chosenForm.equals(entry.formUuid)
+			        && !formsOf(download.detail).contains(chosenForm)) {
 				continue;
 			}
-			DownloadLogItem download = new DownloadLogItem();
 			download.date = entry.date;
 			download.user = users.get(entry.userUuid);
 			download.formUuid = entry.formUuid;
 			download.formName = Names.shown("Form", entry.formUuid, entry.formName);
-			download.detail = detail;
 			matching.add(download);
 		}
 		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
@@ -140,17 +136,28 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		}
 	}
 	
-	private static Map<?, ?> read(DownloadLogEntry entry) {
-		if (entry.detail == null) {
-			return null;
+	/**
+	 * Reads a download's detail into a new item, with what the identifiers filter calls it. A detail
+	 * recorded that does not read as a JSON object, the JSON null among them, is logged and left out,
+	 * and the item is marked unreadable and called "with", since it may have given identifiers and an
+	 * auditor must not miss it.
+	 */
+	private static DownloadLogItem read(DownloadLogEntry entry) {
+		DownloadLogItem download = new DownloadLogItem();
+		if (entry.detail != null) {
+			try {
+				download.detail = new ObjectMapper().readValue(entry.detail, Map.class);
+			}
+			catch (IOException e) {
+				download.detail = null;
+			}
+			download.unreadable = download.detail == null;
 		}
-		try {
-			return new ObjectMapper().readValue(entry.detail, Map.class);
+		if (download.unreadable) {
+			log.warn("Download {} is listed without its detail, which cannot be read as a JSON object", entry.uuid);
 		}
-		catch (IOException e) {
-			log.warn("Download {} is listed without its detail, which cannot be read as JSON", entry.uuid);
-			return null;
-		}
+		download.identifiers = download.unreadable ? "with" : identifiersOf(download.detail);
+		return download;
 	}
 	
 	/**

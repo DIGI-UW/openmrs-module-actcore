@@ -180,7 +180,11 @@ public class DownloadController extends ActCoreRestController {
 	 * @param limit the most downloads to give, capped at {@value ActCoreConstants#DOWNLOAD_MAX_LIMIT};
 	 *            null or below 1 for {@value ActCoreConstants#DOWNLOAD_DEFAULT_LIMIT}
 	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
-	 *         no user has the username or no form has the uuid
+	 *         no user has the username or no form has the uuid. Each download gives its {@code date},
+	 *         {@code user}, {@code form}, {@code list} and {@code detail}; {@code identifiers}, the
+	 *         value of the identifiers filter that matches it; and {@code unreadable}, true when its
+	 *         recorded detail cannot be read as a JSON object, which leaves {@code detail} and
+	 *         {@code list} null and {@code identifiers} with
 	 * @throws APIAuthenticationException when the user lacks
 	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
 	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
@@ -215,7 +219,8 @@ public class DownloadController extends ActCoreRestController {
 			        .add("form",
 			            download.formName == null ? null
 			                    : new SimpleObject().add("uuid", download.formUuid).add("name", download.formName))
-			        .add("list", list == null ? null : list(list.toString())).add("detail", download.detail));
+			        .add("list", list == null ? null : list(list.toString())).add("detail", download.detail)
+			        .add("identifiers", download.identifiers).add("unreadable", download.unreadable));
 		}
 		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
 		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());

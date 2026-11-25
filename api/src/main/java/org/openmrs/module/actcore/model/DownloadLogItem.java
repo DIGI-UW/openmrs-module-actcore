@@ -29,7 +29,16 @@ public class DownloadLogItem {
 	
 	/**
 	 * What the download held, read from its JSON, or null when nothing was recorded or what was
-	 * recorded cannot be read as JSON.
+	 * recorded cannot be read as a JSON object.
 	 */
 	public Map<?, ?> detail;
+	
+	/** Whether a detail was recorded that cannot be read as a JSON object. */
+	public boolean unreadable;
+	
+	/**
+	 * The value of the identifiers filter that matches the download: "with", "without" or "research".
+	 * It is "with" for an {@link #unreadable} download.
+	 */
+	public String identifiers;
 }

@@ -493,12 +493,12 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
 		controller.download(body());
 		controller.download(body());
-		String spoiltFormUuid = spoilLastDetail();
+		String spoiltFormUuid = spoilLastDetail("{not json");
 		Map<String, Object> list = new HashMap<String, Object>();
 		list.put("list", "registry");
 		list.put("columns", Collections.singletonList("ACT ID"));
 		controller.record(list);
-		String spoiltListUuid = spoilLastDetail();
+		String spoiltListUuid = spoilLastDetail("{not json");
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		List<LogEvent> warned = new ArrayList<LogEvent>();
 		
@@ -554,8 +554,49 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(warned.isEmpty());
 	}
 	
+	@Test
+	public void givesEachListedDownloadTheIdentifiersFilterThatListsItAndWhetherItsDetailIsUnreadable() {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		service.recordDownload(null, "{\"identifiers\":true}");
+		service.recordDownload(null, "{\"identifiers\":false}");
+		service.recordDownload(null, "{\"researchOnly\":true}");
+		service.recordDownload(null, null);
+		service.recordDownload(null, "{}");
+		String spoiltUuid = spoilLastDetail("{not json");
+		service.recordDownload(null, "{}");
+		String nulledUuid = spoilLastDetail("null");
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+		List<LogEvent> warned = new ArrayList<LogEvent>();
+		
+		List<?> every = (List<?>) warningsOf(warned, () -> controller.getDownloads(null, null, null, null, null, null, null))
+		        .get("results");
+		
+		List<String> named = new ArrayList<String>();
+		for (Object each : every) {
+			named.add(((SimpleObject) each).get("identifiers")
+			        + (Boolean.TRUE.equals(((SimpleObject) each).get("unreadable")) ? " unreadable" : ""));
+		}
+		assertEquals(Arrays.asList("with unreadable", "with unreadable", "without", "research", "without", "with"), named);
+		assertNull(((SimpleObject) every.get(2)).get("detail"));
+		assertEquals(Boolean.FALSE, ((SimpleObject) every.get(2)).get("unreadable"));
+		for (String kind : Arrays.asList("with", "without", "research")) {
+			List<?> listed = (List<?>) controller.getDownloads(null, null, null, null, kind, null, null).get("results");
+			assertEquals(kind, Collections.frequency(named, kind) + Collections.frequency(named, kind + " unreadable"),
+			    listed.size());
+			for (Object each : listed) {
+				assertEquals(kind, ((SimpleObject) each).get("identifiers"));
+			}
+		}
+		assertEquals(2, warned.size());
+		String first = warned.get(0).getMessage().getFormattedMessage();
+		assertTrue(first, first.contains(nulledUuid));
+		String second = warned.get(1).getMessage().getFormattedMessage();
+		assertTrue(second, second.contains(spoiltUuid));
+	}
+	
 	/** Committed, as the download's record was. It gives the uuid of the record spoilt. */
-	private static String spoilLastDetail() {
+	private static String spoilLastDetail(String detail) {
 		String table = ActCoreConstants.DOWNLOAD_LOG_TABLE;
 		String last = "(select max(download_id) from " + table + ")";
 		AtomicReference<String> uuid = new AtomicReference<String>();
@@ -563,7 +604,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 			DbSession session = Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class)
 			        .getCurrentSession();
 			session.createSQLQuery("update " + table + " set detail = :detail where download_id = " + last)
-			        .setParameter("detail", "{not json").executeUpdate();
+			        .setParameter("detail", detail).executeUpdate();
 			uuid.set((String) session.createSQLQuery("select uuid from " + table + " where download_id = " + last)
 			        .uniqueResult());
 		});
