@@ -17,6 +17,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -67,6 +70,9 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.xml.sax.InputSource;
 
 /**
  * The statuses refused requests get when Spring MVC dispatches them and resolves their exceptions.
@@ -549,6 +555,22 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		}
 	}
 	
+	@Test
+	public void refusesAJsonSuffixedBodyWhoseAcceptItCannotMeetWithoutSavingIt() throws Exception {
+		ModuleTables.create();
+		MockHttpServletRequest request = screeningCountsForAugust();
+		request.setContentType("application/vnd.api+json");
+		accept(request, "text/plain");
+		
+		assertNotAcceptable("text/plain", dispatch(request));
+		assertEquals(Boolean.FALSE, screeningCounts.get(CLINIC, "2026-08").get("saved"));
+		
+		request = screeningCountsForAugust();
+		request.setContentType("application/vnd.api+json");
+		assertEquals(200, dispatch(request).getStatus());
+		assertEquals(Boolean.TRUE, screeningCounts.get(CLINIC, "2026-08").get("saved"));
+	}
+	
 	/**
 	 * Requests an administrator sends wrong, each with the status it gets and what it is, one for each
 	 * of the controllers' error handlers that writes a body.
@@ -688,12 +710,27 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		assertEquals(what, "", response.getContentAsString());
 	}
 	
-	/** Asserts the status, and a body in XML. */
+	/** Asserts the status, and an {@code error} body in XML that holds a {@code message}. */
 	private static void assertXmlError(String what, int status, MockHttpServletResponse response) throws Exception {
 		assertEquals(what, status, response.getStatus());
 		assertTrue(what + " " + response.getContentType(),
 		    MediaType.APPLICATION_XML.equalsTypeAndSubtype(MediaType.parseMediaType(response.getContentType())));
-		assertTrue(what + " " + response.getContentAsString(), response.getContentAsString().startsWith("<"));
+		Element object = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+		        .parse(new InputSource(new StringReader(response.getContentAsString()))).getDocumentElement();
+		assertEquals(what, "object", object.getTagName());
+		Element error = child(object, "error");
+		assertNotNull(what + " " + response.getContentAsString(), error);
+		assertNotNull(what + " " + response.getContentAsString(), child(error, "message"));
+	}
+	
+	/** The first child element of an element with a name, or null. */
+	private static Element child(Element parent, String name) {
+		for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
+			if (node instanceof Element && name.equals(node.getNodeName())) {
+				return (Element) node;
+			}
+		}
+		return null;
 	}
 	
 	/** Asserts the status, and an {@code error} body in JSON. */
