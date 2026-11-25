@@ -44,6 +44,7 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.messagesource.MessageSourceService;
@@ -337,7 +338,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		Map<String, Object> body = new HashMap<String, Object>();
 		body.put("list", "registry");
 		body.put("columns", Collections.singletonList("ACT ID"));
-		body.put("filters", Collections.singletonMap("name", StringUtils.repeat("x", DownloadController.MAX_DETAIL_BYTES)));
+		body.put("filters",
+		    Collections.singletonMap("name", StringUtils.repeat("x", ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES)));
 		
 		try {
 			controller.record(body);
@@ -345,6 +347,28 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		}
 		catch (IllegalRequestException expected) {}
 		assertTrue(logged().isEmpty());
+	}
+	
+	@Test
+	public void refusesToRecordADetailTheListingCannotReadOrTheLogCannotHold() {
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		DownloadLogService service = Context.getService(DownloadLogService.class);
+		int room = ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES - "{\"name\":\"\"}".length();
+		String fits = "{\"name\":\"" + StringUtils.repeat("x", room) + "\"}";
+		String overInBytesOnly = "{\"name\":\"" + StringUtils.repeat("\u00e9", room / 2 + 1) + "\"}";
+		assertTrue(overInBytesOnly.length() <= ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES);
+		
+		for (String refused : Arrays.asList("{not json", "[1]", "null", "", overInBytesOnly)) {
+			try {
+				service.recordDownload(null, refused);
+				fail("expected the detail to be refused: " + StringUtils.left(refused, 20));
+			}
+			catch (ValidationException expected) {}
+		}
+		assertTrue(logged().isEmpty());
+		service.recordDownload(null, fits);
+		service.recordDownload(null, null);
+		assertEquals(2, logged().size());
 	}
 	
 	@Test

@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.web;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
@@ -24,6 +23,7 @@ import org.openmrs.Concept;
 import org.openmrs.Form;
 import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
@@ -61,12 +61,6 @@ public class DownloadController extends ActCoreRestController {
 	static final int MAX_LABEL = 255;
 	
 	static final int MAX_COLUMNS = 200;
-	
-	/**
-	 * The most bytes the download log's detail column holds, which is the size of MariaDB's TEXT. A
-	 * longer record is refused.
-	 */
-	static final int MAX_DETAIL_BYTES = 65535;
 	
 	/**
 	 * The names the Logs page gives its tabs, keyed by the name the app records a tab's CSV under.
@@ -362,10 +356,12 @@ public class DownloadController extends ActCoreRestController {
 	
 	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
 		String json = new ObjectMapper().writeValueAsString(detail);
-		if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DETAIL_BYTES) {
-			throw new IllegalRequestException("Too many or too long columns and filters to record");
+		try {
+			Context.getService(DownloadLogService.class).recordDownload(formId, json);
 		}
-		Context.getService(DownloadLogService.class).recordDownload(formId, json);
+		catch (ValidationException e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
 	}
 	
 	/**

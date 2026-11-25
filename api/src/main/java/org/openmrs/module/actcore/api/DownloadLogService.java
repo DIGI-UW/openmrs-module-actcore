@@ -32,10 +32,13 @@ public interface DownloadLogService extends OpenmrsService {
 	 *
 	 * @param formId the id of the form downloaded when the download held exactly one form, or null
 	 *            otherwise, as for a download of several forms or a list the app made itself
-	 * @param detail what the download held, such as its forms, columns and filters, as JSON
+	 * @param detail what the download held, such as its forms, columns and filters, as a JSON object,
+	 *            or null when nothing is recorded of it
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} nor
 	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}
+	 * @throws org.openmrs.api.ValidationException when the detail is not a JSON object, or is longer
+	 *             than {@link ActCoreConstants#MAX_DOWNLOAD_DETAIL_BYTES} bytes of UTF-8
 	 */
 	@Authorized({ ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_RESEARCH_DATA })
 	void recordDownload(Integer formId, String detail);

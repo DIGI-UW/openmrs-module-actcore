@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.api.impl;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Date;
@@ -58,6 +59,12 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	@Override
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void recordDownload(Integer formId, String detail) {
+		if (detail != null && detail.getBytes(StandardCharsets.UTF_8).length > ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES) {
+			throw Rows.refusal("download", "Too many or too long columns and filters to record");
+		}
+		if (detail != null && !isJsonObject(detail)) {
+			throw Rows.refusal("download", "A download's detail must be a JSON object");
+		}
 		int userId = Context.getAuthenticatedUser().getUserId();
 		dao.saveDownloadRecord(new DownloadRecord(userId, formId, detail, new Date()));
 	}
@@ -119,6 +126,16 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		page.results.addAll(matching.subList(start, Math.min(start + size, matching.size())));
 		page.totalCount = matching.size();
 		return page;
+	}
+	
+	/** Tells whether a detail reads as a JSON object the way getDownloads reads it. */
+	private static boolean isJsonObject(String detail) {
+		try {
+			return new ObjectMapper().readValue(detail, Map.class) != null;
+		}
+		catch (IOException e) {
+			return false;
+		}
 	}
 	
 	private static Map<?, ?> read(DownloadLogEntry entry) {

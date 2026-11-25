@@ -15,9 +15,12 @@ import static org.junit.Assert.fail;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
@@ -27,8 +30,11 @@ import org.openmrs.User;
 import org.openmrs.api.UserService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +62,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private ScreeningCountController screeningCounts;
+	
+	@Autowired
+	private DownloadController downloads;
 	
 	@Test
 	public void answersARefusedStudyNameWithABadRequest() throws Exception {
@@ -111,6 +120,32 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		request.setParameter("endDate", "2026-10-21");
 		
 		assertEquals(400, dispatch(request).getStatus());
+	}
+	
+	@Test
+	public void answersADownloadRecordTooLongToKeepWithABadRequestNamingIt() throws Exception {
+		ModuleTables.create();
+		authenticateWith(ActCorePrivileges.DOWNLOAD_DATA);
+		String name = StringUtils.repeat("x", ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES);
+		
+		assertEquals(400, dispatch(post("/rest/v1/actcore/download/record",
+		    "{\"list\":\"registry\",\"columns\":[\"ACT ID\"],\"filters\":{\"name\":\"" + name + "\"}}")).getStatus());
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Collections.singletonList("ACT ID"));
+		body.put("filters", Collections.singletonMap("name", name));
+		try {
+			downloads.record(body);
+			fail("expected the record to be refused");
+		}
+		catch (IllegalRequestException e) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			SimpleObject answer = downloads.handleException(e, new MockHttpServletRequest(), response);
+			
+			assertEquals(400, response.getStatus());
+			assertEquals("[Too many or too long columns and filters to record]",
+			    ((Map<?, ?>) answer.get("error")).get("message"));
+		}
 	}
 	
 	private static MockHttpServletRequest post(String uri, String json) {
