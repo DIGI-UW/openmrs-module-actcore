@@ -63,11 +63,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockServletConfig;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.PathMatcher;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.mvc.condition.NameValueExpression;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
@@ -770,12 +773,41 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 					} else {
 						assertJsonError(what, 404, response);
 					}
-					assertNull(what, response.getHeader("Allow"));
+					if ("OPTIONS".equals(method)) {
+						assertEquals(what, "", response.getHeader("Allow"));
+					} else {
+						assertNull(what, response.getHeader("Allow"));
+					}
 					assertWithoutAStackTrace(what, response);
 				}
 			}
 		}
 		assertEquals(Collections.emptyList(), messages(logged));
+	}
+	
+	@Test
+	public void answersOptionsThroughSpringsServletWithTheMethodsAPathTakesAndNoneForAnUnknownPath() throws Exception {
+		StaticWebApplicationContext web = new StaticWebApplicationContext();
+		web.setParent(applicationContext);
+		web.refresh();
+		DispatcherServlet servlet = new DispatcherServlet(web);
+		servlet.init(new MockServletConfig());
+		for (String[] path : PATHS) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			
+			servlet.service(request("OPTIONS", path[0], null, "application/json"), response);
+			
+			assertEquals(path[0], 200, response.getStatus());
+			assertEquals(path[0], path[1], response.getHeader("Allow"));
+		}
+		for (String path : UNKNOWN_PATHS) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			
+			servlet.service(request("OPTIONS", path, null, "application/json"), response);
+			
+			assertJsonError(path, 404, response);
+			assertEquals(path, Collections.singletonList(""), response.getHeaders("Allow"));
+		}
 	}
 	
 	@Test

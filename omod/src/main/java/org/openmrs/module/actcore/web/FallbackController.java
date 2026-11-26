@@ -116,7 +116,9 @@ public class FallbackController extends ActCoreRestController {
 	
 	/**
 	 * Answers a path no ACT Core endpoint has with 404 and the exception's message in the JSON or XML
-	 * the request accepts, and in JSON when it accepts neither.
+	 * the request accepts, and in JSON when it accepts neither. An OPTIONS request also gets an empty
+	 * {@code Allow} header, which names no method: Spring's servlet adds every method it serves to an
+	 * answer to OPTIONS that has no {@code Allow}.
 	 *
 	 * @param e the NoHandlerFoundException
 	 * @param request the request
@@ -126,6 +128,9 @@ public class FallbackController extends ActCoreRestController {
 	@ExceptionHandler(NoHandlerFoundException.class)
 	public void notFoundHandler(NoHandlerFoundException e, HttpServletRequest request, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+		if (RequestMethod.OPTIONS.name().equals(request.getMethod())) {
+			response.setHeader(HttpHeaders.ALLOW, "");
+		}
 		writeError(error(e.getMessage()), request, response);
 	}
 	
