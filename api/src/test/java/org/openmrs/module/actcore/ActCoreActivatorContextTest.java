@@ -11,6 +11,7 @@ package org.openmrs.module.actcore;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Method;
@@ -197,6 +198,82 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		finally {
 			schedulerService.shutdownTask(flags);
 		}
+	}
+	
+	@Test
+	public void contextRefreshed_shouldPutBackTheTasksAStopTookOffWhenTheStartSkipsStarted() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
+		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
+		stoppedAtRuntime();
+		new ActCoreActivator().stopped();
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "true");
+		
+		// A start through REST refreshes the context without naming the module, so core skips started().
+		ActCoreActivator activator = new ActCoreActivator();
+		activator.willRefreshContext();
+		activator.contextRefreshed();
+		
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		try {
+			assertTrue(flags.getStartOnStartup());
+			assertTrue(flags.getStarted() && flags.getTaskInstance() != null);
+			assertTrue(adherence.getStartOnStartup());
+			assertTrue(adherence.getStarted() && adherence.getTaskInstance() != null);
+			assertEquals("",
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, ""));
+		}
+		finally {
+			schedulerService.shutdownTask(flags);
+			schedulerService.shutdownTask(adherence);
+		}
+	}
+	
+	@Test
+	public void contextRefreshed_shouldPutTheTasksBackOnceWhenStartedFollowsIt() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
+		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
+		stoppedAtRuntime();
+		new ActCoreActivator().stopped();
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "true");
+		
+		// Boot and a start from Manage Modules run started() right after contextRefreshed().
+		ActCoreActivator activator = new ActCoreActivator();
+		List<String> logged = loggedWhile(ActCoreActivator.class, Level.INFO, () -> {
+			activator.contextRefreshed();
+			activator.started();
+		});
+		
+		try {
+			List<String> putBack = new ArrayList<String>();
+			for (String message : logged) {
+				if (message.startsWith("Put ")) {
+					putBack.add(message);
+				}
+			}
+			assertEquals(Arrays.asList("Put '" + ActCoreActivator.REFRESH_TASK_NAME + "' back on the scheduler's startup",
+			    "Put '" + ActCoreActivator.ADHERENCE_TASK_NAME + "' back on the scheduler's startup"), putBack);
+		}
+		finally {
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME));
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		}
+	}
+	
+	@Test
+	public void contextRefreshed_shouldLeaveTheTasksAsTheyAreWhenNoStopTookThemOff() {
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "true");
+		
+		// Another module's start or stop refreshes the context while ACT Core keeps running.
+		new ActCoreActivator().contextRefreshed();
+		
+		TaskDefinition flags = Context.getSchedulerService().getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		assertFalse(flags.getStartOnStartup());
+		assertFalse(flags.getStarted());
+		assertNull(Context.getSchedulerService().getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
 	}
 	
 	@Test

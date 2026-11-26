@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  * open enrolments of patients already recorded dead, and makes sure the scheduler holds the patient
  * flag refresh task and the adherence refresh task, registering each one the first time it is
  * missing. On a stop, or a failed start that core records as stopped, it takes those tasks off the
- * scheduler's startup until it starts again.
+ * scheduler's startup until the first context refresh after it starts again.
  * <p>
  * The tasks are registered here because Initializer has no domain for scheduler_task_config and the
  * patientflags module registers nothing of its own, so without this each task would have to be
@@ -143,12 +143,41 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	public void started() {
 		ReportDescriptorLoader.load();
 		closeEnrolmentsOfTheDead();
+		scheduleTasks(false);
+		log.info("ACT Core module started");
+	}
+	
+	/**
+	 * Puts back the tasks a stop took off the scheduler's startup. Core calls this on every context
+	 * refresh while the module is started, and on a start through REST it calls this but not
+	 * {@link #started()}, since that refresh names no module. On boot and on a start from Manage
+	 * Modules, started() runs right after this and finds the tasks already back. A refresh with no
+	 * record of tasks taken off leaves the tasks as they are; one with a record a failed put-back kept
+	 * tries again.
+	 *
+	 * @see org.openmrs.module.BaseModuleActivator#contextRefreshed()
+	 */
+	@Override
+	public void contextRefreshed() {
+		scheduleTasks(true);
+	}
+	
+	/**
+	 * Registers or updates both tasks, putting back on startup those a stop took off, and clears the
+	 * record of them once both are scheduled.
+	 *
+	 * @param onlyToPutBack whether to do nothing when no stop took tasks off
+	 */
+	private void scheduleTasks(boolean onlyToPutBack) {
 		// Core starts a module as the user who asked, who may hold no more than Manage Modules.
 		for (String privilege : TASK_PRIVILEGES) {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
 			Set<String> takenOff = tasksTakenOff();
+			if (onlyToPutBack && takenOff.isEmpty()) {
+				return;
+			}
 			boolean scheduled = schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 			    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 			            + " of the same name.",
@@ -167,7 +196,6 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 				Context.removeProxyPrivilege(privilege);
 			}
 		}
-		log.info("ACT Core module started");
 	}
 	
 	/**
@@ -256,8 +284,8 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	 * Takes the module's tasks off the scheduler's startup on a stop, or a failed start that core
 	 * records as stopped. Core refreshes its context after such a stop, and its scheduler then
 	 * schedules every task set to start on startup, which for these tasks logs a ClassNotFoundException
-	 * since their classes went with the module. {@link #started()} puts back the tasks this took off. A
-	 * shutdown of OpenMRS leaves the tasks as they are.
+	 * since their classes went with the module. {@link #contextRefreshed()} puts back the tasks this
+	 * took off. A shutdown of OpenMRS leaves the tasks as they are.
 	 *
 	 * @see org.openmrs.module.BaseModuleActivator#stopped()
 	 */
