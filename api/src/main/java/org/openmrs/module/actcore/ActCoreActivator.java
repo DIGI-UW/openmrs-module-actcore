@@ -175,10 +175,24 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 			return;
 		}
 		startedWorkDone = true;
-		ReportDescriptorLoader.load();
+		loadReportDescriptors();
 		closeEnrolmentsOfTheDead();
 		scheduleTasks(false);
 		log.info("ACT Core module started");
+	}
+	
+	/**
+	 * Loads the report descriptors with the privilege to read the property that says whether to.
+	 */
+	private static void loadReportDescriptors() {
+		// Core starts a module as the user who asked, who may hold no more than Manage Modules.
+		Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		try {
+			ReportDescriptorLoader.load();
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		}
 	}
 	
 	/**

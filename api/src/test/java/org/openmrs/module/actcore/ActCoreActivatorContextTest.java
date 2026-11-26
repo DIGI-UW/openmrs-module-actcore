@@ -15,9 +15,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,19 +43,17 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.utils.ReportDescriptors;
 import org.openmrs.module.reporting.ReportingConstants;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.openmrs.scheduler.timer.TimerSchedulerServiceImpl;
-import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.MethodBeforeAdvice;
 
 public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest {
-	
-	private static final String REPORT_UUID = "0d3c2b1a-9f8e-4d7c-8b6a-5e4f3a2b1c0d";
 	
 	@Rule
 	public TemporaryFolder dataDirectory = new TemporaryFolder();
@@ -295,7 +291,7 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		
 		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
 		try {
-			assertNotNull(Context.getService(ReportDefinitionService.class).getDefinitionByUuid(REPORT_UUID));
+			assertNotNull(Context.getService(ReportDefinitionService.class).getDefinitionByUuid(ReportDescriptors.UUID));
 			assertTrue(adherence.getStartOnStartup());
 			// A context test has no daemon token, so the attempt shows as its logged failure.
 			assertTrue(logged.toString(),
@@ -417,6 +413,38 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
+	public void contextRefreshed_shouldPutBackATaskAnEarlierStartCouldNot() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
+		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
+		stoppedAtRuntime();
+		new ActCoreActivator().stopped();
+		// Two tasks of one name make the scheduler's lookup by name throw.
+		TaskDefinition duplicate = registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, false);
+		ActCoreActivator activator = new ActCoreActivator();
+		activator.started();
+		assertEquals(ActCoreActivator.ADHERENCE_TASK_NAME,
+		    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED));
+		schedulerService.deleteTask(duplicate.getId());
+		
+		// Another module's start or stop refreshes the context, retrying what the record holds.
+		activator.willRefreshContext();
+		activator.contextRefreshed();
+		
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		try {
+			assertTrue(adherence.getStartOnStartup());
+			assertEquals("",
+			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, ""));
+		}
+		finally {
+			schedulerService.shutdownTask(flags);
+			schedulerService.shutdownTask(adherence);
+		}
+	}
+	
+	@Test
 	public void started_shouldKeepInTheRecordOnlyTheFirstTaskWhenItCouldNotBePutBack() throws Exception {
 		SchedulerService schedulerService = Context.getSchedulerService();
 		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
@@ -473,18 +501,41 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 	
+	@Test
+	public void contextRefreshed_shouldLoadTheReportDescriptorsWhenAUserWhoCanOnlyManageModulesStartsTheModule()
+	        throws Exception {
+		writeReportDescriptor();
+		User moduleManager = userWithOnly(PrivilegeConstants.MANAGE_MODULES);
+		MethodBeforeAdvice globalPropertyChecks = new GlobalPropertyChecksOfLaterCore();
+		Context.addAdvice(AdministrationService.class, globalPropertyChecks);
+		try {
+			Context.becomeUser(moduleManager.getSystemId());
+			ActCoreActivator activator = new ActCoreActivator();
+			activator.willRefreshContext();
+			activator.contextRefreshed();
+			assertFalse(Context.hasPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES));
+		}
+		finally {
+			Context.removeAdvice(AdministrationService.class, globalPropertyChecks);
+			Context.logout();
+			authenticate();
+		}
+		
+		SchedulerService schedulerService = Context.getSchedulerService();
+		try {
+			assertNotNull(Context.getService(ReportDefinitionService.class).getDefinitionByUuid(ReportDescriptors.UUID));
+		}
+		finally {
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME));
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		}
+	}
+	
 	/**
 	 * Puts one report descriptor in the configuration, and has reporting load descriptors at startup.
 	 */
 	private void writeReportDescriptor() throws Exception {
-		OpenmrsUtil.setApplicationDataDirectory(dataDirectory.getRoot().getAbsolutePath());
-		File dir = new File(dataDirectory.getRoot(), "configuration/reports/reportdescriptors/test");
-		new File(dir, "sql").mkdirs();
-		Files.write(new File(dir, "sql/patients.sql").toPath(), "select patient_id from patient".getBytes("UTF-8"));
-		String descriptor = "key: actcoreActivatorTestReport\n" + "uuid: \"" + REPORT_UUID + "\"\n"
-		        + "name: \"ACT Core activator test report\"\n" + "datasets:\n" + "  - key: patients\n" + "    type: sql\n"
-		        + "    config: \"sql/patients.sql\"\n";
-		Files.write(new File(dir, "patients.yml").toPath(), descriptor.getBytes("UTF-8"));
+		ReportDescriptors.write(dataDirectory.getRoot());
 		Context.getAdministrationService().saveGlobalProperty(
 		    new GlobalProperty(ReportingConstants.GLOBAL_PROPERTY_LOAD_REPORTS_FROM_CONFIGURATION_AT_STARTUP, "true"));
 	}
