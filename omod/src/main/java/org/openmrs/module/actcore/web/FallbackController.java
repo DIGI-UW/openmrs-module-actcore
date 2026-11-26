@@ -42,10 +42,13 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * it with 200 and the exception's stack trace, while a request that matches one of
  * webservices.rest's resource patterns, such as a POST to a path that takes only GET, reaches
  * webservices.rest as a request for a resource named v1/actcore. Spring prefers the pattern with
- * the fewest wildcards and path variables, which it counts alike: these patterns have fewer than
- * webservices.rest's that match the same paths and more than any ACT Core endpoint's, and the one
- * ending in {@code /**}, which Spring ranks below any pattern without one, takes only the paths too
- * deep for the others.
+ * the fewest wildcards and path variables, which it counts alike, and between equal counts the
+ * longer, counting a variable as one character. These patterns have more than any ACT Core
+ * endpoint's that match the same paths, and fewer than webservices.rest 3.5.0's, except
+ * {@code /{resource}/search/{searchHandlerId}}, which has as many as the two-segment pattern here
+ * and loses to it only on length, so shortening these patterns hands such a path back to
+ * webservices.rest. The one ending in {@code /**}, which Spring ranks below any pattern without
+ * one, takes only the paths too deep for the others.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")

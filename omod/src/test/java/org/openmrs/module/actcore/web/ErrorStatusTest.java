@@ -449,22 +449,82 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	/**
-	 * Every handler with a pattern under ACT Core's path is an ACT Core endpoint, so that
-	 * {@link FallbackController}, which lists the methods of ACT Core endpoints only, names its
-	 * methods.
+	 * Every handler with a pattern that matches a path under ACT Core's is an ACT Core endpoint or is
+	 * outranked there by {@link FallbackController}, which lists the methods of ACT Core endpoints
+	 * only, so that it names them. webservices.rest's resource patterns, such as
+	 * {@code /rest/v1/{resource}}, match such paths; they are let through because the fallback exists
+	 * to outrank them, which this test checks with the mapping's own pattern comparator on the path it
+	 * builds, among them {@code /{resource}/search/{searchHandlerId}}, which ties the fallback's count
+	 * and loses only on length. A pattern matches when the mapping's path matcher matches it to the
+	 * path built from it by {@link #actCorePathFor(String)}, which catches wildcards and variables
+	 * standing for {@code rest}, {@code v1} or {@code actcore}, and a {@code **} spanning them. It
+	 * misses a segment that mixes a wildcard or variable with literal text, such as {@code act*}. It
+	 * ranks the patterns at that one path and compares patterns alone, as Spring does for every method
+	 * but HEAD, which it compares by method first, so a handler that lists HEAD is not checked for it.
 	 */
 	@Test
 	public void makesEveryHandlerUnderActCoresPathAnActCoreEndpoint() {
+		Set<String> outranked = new HashSet<>();
 		for (RequestMappingHandlerMapping mapping : mappings) {
 			for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
+				if (ActCoreRestController.class.isAssignableFrom(entry.getValue().getBeanType())) {
+					continue;
+				}
 				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
-					if (pattern.equals("/rest/v1/actcore") || pattern.startsWith("/rest/v1/actcore/")) {
-						assertTrue(pattern + " " + entry.getValue(),
-						    ActCoreRestController.class.isAssignableFrom(entry.getValue().getBeanType()));
+					String path = actCorePathFor(pattern);
+					if (!mapping.getPathMatcher().match(pattern, path)
+					        || !(path.equals("/rest/v1/actcore") || path.startsWith("/rest/v1/actcore/"))) {
+						continue;
+					}
+					String fallback = fallbackPatternFor(mapping, path);
+					assertTrue(pattern + " " + entry.getValue() + " at " + path, fallback != null
+					        && mapping.getPathMatcher().getPatternComparator(path).compare(fallback, pattern) < 0);
+					outranked.add(pattern);
+				}
+			}
+		}
+		assertTrue(outranked.toString(), outranked.contains("/rest/v1/{resource}/search/{searchHandlerId}"));
+	}
+	
+	/**
+	 * Builds a path under ACT Core's from a pattern, keeping its literal segments and putting the
+	 * segments of {@code /rest/v1/actcore/probe} in place of its wildcards and variables, and the
+	 * segments up to {@code actcore} that a {@code **} reaches in its place.
+	 */
+	private static String actCorePathFor(String pattern) {
+		String[] actCore = { "rest", "v1", "actcore" };
+		List<String> segments = new ArrayList<>();
+		for (String segment : pattern.substring(1).split("/")) {
+			if (segment.equals("**")) {
+				while (segments.size() < actCore.length) {
+					segments.add(actCore[segments.size()]);
+				}
+			} else if (segment.contains("*") || segment.contains("{")) {
+				segments.add(segments.size() < actCore.length ? actCore[segments.size()] : "probe");
+			} else {
+				segments.add(segment);
+			}
+		}
+		return "/" + String.join("/", segments);
+	}
+	
+	/**
+	 * The pattern of {@link FallbackController} that Spring prefers for a path, or null when none
+	 * matches it.
+	 */
+	private static String fallbackPatternFor(RequestMappingHandlerMapping mapping, String path) {
+		List<String> patterns = new ArrayList<>();
+		for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
+			if (entry.getValue().getBeanType() == FallbackController.class) {
+				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
+					if (mapping.getPathMatcher().match(pattern, path)) {
+						patterns.add(pattern);
 					}
 				}
 			}
 		}
+		patterns.sort(mapping.getPathMatcher().getPatternComparator(path));
+		return patterns.isEmpty() ? null : patterns.get(0);
 	}
 	
 	/**
