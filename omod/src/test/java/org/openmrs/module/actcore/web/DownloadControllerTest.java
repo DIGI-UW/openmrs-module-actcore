@@ -93,7 +93,10 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	    recorded("ACT ID", false, false).replace("}", ",\"filters\":{\"cardiacClinic\":[\"Lira RRH\"]}}"),
 	    recorded("ACT ID", false, false).replace("}", ",\"filters\":{\"primaryCareClinic\":1}}"),
 	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{}]}"),
-	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{\"name\":{}}]}"));
+	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{\"name\":{}}]}"),
+	    recorded("ACT ID", false, false).replace("}", ",\"forms\":[{\"name\":\"RHD Echocardiogram\"},{}]}"),
+	    recorded("ACT ID", false, false).replace("\"withheld\":[]", "\"withheld\":[\"Given name\",1]"),
+	    recorded("ACT ID", false, false).replace("}", ",\"list\":\"registry\",\"filters\":\"x\"}"));
 	
 	@Autowired
 	private DownloadController controller;

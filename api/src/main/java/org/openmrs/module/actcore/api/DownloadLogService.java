@@ -40,8 +40,9 @@ public interface DownloadLogService extends OpenmrsService {
 	 *            {@code list}, a string; {@code forms}, a list of objects, each with a {@code name}
 	 *            that is a string; {@code rowPerPatient}, true or false; {@code filters}, an object,
 	 *            whose {@code status}, {@code cardiacClinic} and {@code primaryCareClinic} are each a
-	 *            string or null where present unless the detail has a {@code list}; and
-	 *            {@code patient}, a list of strings
+	 *            string or null where present unless the detail has a {@code list}, as a list the app
+	 *            made itself records its filters as the app sent them; and {@code patient}, a list of
+	 *            strings. It may have other keys as well
 	 * @throws org.openmrs.api.APIAuthenticationException when the user holds neither
 	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} nor
 	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}

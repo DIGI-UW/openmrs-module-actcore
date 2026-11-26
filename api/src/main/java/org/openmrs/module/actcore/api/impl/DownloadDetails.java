@@ -18,16 +18,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * The shape of a download's detail, which the download log holds a detail to both when it records
- * one and when it lists one. Every detail recorded since 1.0.0 is a JSON object that has
- * {@code fields} and {@code withheld}, each a list of labels; {@code startDate} and
- * {@code endDate}, each a string or null; {@code rows}, a number; and {@code identifiers} and
- * {@code researchOnly}, each true or false. A detail may also have {@code list}, a string;
- * {@code forms}, a list of objects, each with a {@code name} that is a string;
- * {@code rowPerPatient}, true or false; {@code filters}, an object; and {@code patient}, a list of
- * strings. In a detail without {@code list}, the {@code status}, {@code cardiacClinic} and
- * {@code primaryCareClinic} of its filters are each a string or null where present, as a form
- * download records them; a list the app made itself records its filters as the app sent them. A
- * detail may have other keys as well.
+ * one and when it lists one.
+ *
+ * @see org.openmrs.module.actcore.api.DownloadLogService#recordDownload(Integer, String)
  */
 final class DownloadDetails {
 	
