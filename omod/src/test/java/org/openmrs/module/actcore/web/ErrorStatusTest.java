@@ -67,7 +67,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
-import org.springframework.web.servlet.mvc.condition.PatternsRequestCondition;
+import org.springframework.web.servlet.mvc.condition.NameValueExpression;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
@@ -457,47 +457,83 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	/**
-	 * Every handler with a pattern that can match a path under ACT Core's is an ACT Core endpoint or is
-	 * outranked there by {@link FallbackController}, which lists the methods of ACT Core endpoints
-	 * only, so that it names them. webservices.rest's resource patterns, such as
-	 * {@code /rest/v1/{resource}}, match such paths; they are let through because the fallback exists
-	 * to outrank them, among them {@code /{resource}/search/{searchHandlerId}}, which ties the
-	 * fallback's count and loses only on length. A pattern is checked when the mapping's path matcher
-	 * matches its start to {@code /rest/v1/actcore}, and the test fails when it cannot build a path
-	 * under ACT Core's that the pattern matches, rather than passing the pattern by. The paths are
-	 * built by {@link #actCorePathsFor(PathMatcher, String)}. At each, the handler's best matching
-	 * pattern is compared with the fallback's in the same mapping by the mapping's own conditions, as
-	 * Spring compares them for every method but HEAD, which it compares by method first, so a handler
-	 * that lists HEAD is not checked for it.
+	 * Every handler not extending {@link ActCoreRestController} with a pattern that can match a path
+	 * under ACT Core's loses the paths built for that pattern to an ACT Core endpoint or
+	 * {@link FallbackController} when Spring itself chooses the handler. A pattern is checked when the
+	 * mapping's path matcher matches its start to {@code /rest/v1/actcore} or
+	 * {@code /rest/v1/actcore/}, or matches the latter whole. For each, the paths built by
+	 * {@link #actCorePathsFor(PathMatcher, String)} are requested with every method the handler takes,
+	 * and the handler {@link #handler(MockHttpServletRequest)} gets from the mappings must be an ACT
+	 * Core one. The test fails when no path can be built for a pattern, or when the handler takes none
+	 * of the requests built for a path, rather than passing it by. It sees only the handlers in the
+	 * test's context, so not those of modules it does not load, such as emrapi. Each request carries
+	 * the parameters, headers, content type and {@code Accept} the handler's mapping names, built by
+	 * {@link #requestFor(RequestMappingInfo, String, String)}, and no body.
 	 */
 	@Test
-	public void makesEveryHandlerUnderActCoresPathAnActCoreEndpoint() {
-		Set<String> outranked = new HashSet<>();
+	public void makesEveryHandlerUnderActCoresPathAnActCoreEndpoint() throws Exception {
+		Set<String> lostToTheFallback = new HashSet<>();
 		for (RequestMappingHandlerMapping mapping : mappings) {
+			PathMatcher matcher = mapping.getPathMatcher();
 			for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
 				if (ActCoreRestController.class.isAssignableFrom(entry.getValue().getBeanType())) {
 					continue;
 				}
 				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
-					if (!mapping.getPathMatcher().matchStart(pattern, "/rest/v1/actcore")) {
+					if (!matcher.matchStart(pattern, "/rest/v1/actcore") && !matcher.matchStart(pattern, "/rest/v1/actcore/")
+					        && !matcher.match(pattern, "/rest/v1/actcore/")) {
 						continue;
 					}
-					List<String> paths = actCorePathsFor(mapping.getPathMatcher(), pattern);
+					List<String> paths = actCorePathsFor(matcher, pattern);
 					assertFalse(pattern + " " + entry.getValue(), paths.isEmpty());
 					for (String path : paths) {
-						String what = pattern + " " + entry.getValue() + " at " + path;
-						MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
-						PatternsRequestCondition handler = entry.getKey().getPatternsCondition()
-						        .getMatchingCondition(request);
-						PatternsRequestCondition fallback = fallbackPatternsFor(mapping, request);
-						assertNotNull(what, handler);
-						assertTrue(what, fallback != null && fallback.compareTo(handler, request) < 0);
+						boolean taken = false;
+						for (String method : new String[] { "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" }) {
+							MockHttpServletRequest request = requestFor(entry.getKey(), method, path);
+							if (entry.getKey().getMatchingCondition(request) == null) {
+								continue;
+							}
+							taken = true;
+							Class<?> chosen = handler(request).getBeanType();
+							assertTrue(
+							    method + " " + path + " reaches " + entry.getValue() + " by " + pattern
+							            + "; extend ActCoreRestController or give the path to an ACT Core endpoint",
+							    ActCoreRestController.class.isAssignableFrom(chosen));
+							if (chosen == FallbackController.class) {
+								lostToTheFallback.add(pattern);
+							}
+						}
+						assertTrue(entry.getValue() + " takes no request built for " + path, taken);
 					}
-					outranked.add(pattern);
 				}
 			}
 		}
-		assertTrue(outranked.toString(), outranked.contains("/rest/v1/{resource}/search/{searchHandlerId}"));
+		assertTrue(lostToTheFallback.toString(), lostToTheFallback.contains("/rest/v1/{resource}/search/{searchHandlerId}"));
+	}
+	
+	/**
+	 * A request with the parameters, headers, content type and {@code Accept} a mapping names, other
+	 * than those it names as absent.
+	 */
+	private static MockHttpServletRequest requestFor(RequestMappingInfo info, String method, String path) {
+		MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+		for (NameValueExpression<String> param : info.getParamsCondition().getExpressions()) {
+			if (!param.isNegated()) {
+				request.setParameter(param.getName(), param.getValue() != null ? param.getValue() : "probe");
+			}
+		}
+		for (NameValueExpression<String> header : info.getHeadersCondition().getExpressions()) {
+			if (!header.isNegated()) {
+				request.addHeader(header.getName(), header.getValue() != null ? header.getValue() : "probe");
+			}
+		}
+		for (MediaType type : info.getConsumesCondition().getConsumableMediaTypes()) {
+			request.setContentType(type.toString());
+		}
+		for (MediaType type : info.getProducesCondition().getProducibleMediaTypes()) {
+			request.addHeader("Accept", type.toString());
+		}
+		return request;
 	}
 	
 	/**
@@ -567,24 +603,6 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		}
 		fail("no filler makes a segment that " + segment + " matches");
 		return null;
-	}
-	
-	/**
-	 * The patterns of {@link FallbackController} that Spring prefers for a request, or null when none
-	 * matches it.
-	 */
-	private static PatternsRequestCondition fallbackPatternsFor(RequestMappingHandlerMapping mapping,
-	        MockHttpServletRequest request) {
-		PatternsRequestCondition best = null;
-		for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
-			if (entry.getValue().getBeanType() == FallbackController.class) {
-				PatternsRequestCondition patterns = entry.getKey().getPatternsCondition().getMatchingCondition(request);
-				if (patterns != null && (best == null || patterns.compareTo(best, request) < 0)) {
-					best = patterns;
-				}
-			}
-		}
-		return best;
 	}
 	
 	/**
