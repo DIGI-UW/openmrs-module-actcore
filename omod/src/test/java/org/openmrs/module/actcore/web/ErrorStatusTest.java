@@ -62,10 +62,12 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.util.PathMatcher;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
+import org.springframework.web.servlet.mvc.condition.PatternsRequestCondition;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
@@ -98,6 +100,12 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	private static final String[] BODY_URIS = { "/rest/v1/actcore/download", "/rest/v1/actcore/download/record",
 	        "/rest/v1/actcore/raisedflags/dismiss", "/rest/v1/actcore/screeningcounts", "/rest/v1/actcore/studies",
 	        "/rest/v1/actcore/studies/" + UUID.randomUUID() };
+	
+	/** The segments of ACT Core's path. */
+	private static final String[] ACT_CORE = { "rest", "v1", "actcore" };
+	
+	/** The values tried for a wildcard or variable in a segment of a pattern. */
+	private static final String[] FILLERS = { "probe", "1", "a", "A" };
 	
 	/** What a client may accept, which an error answers in JSON unless it is XML. */
 	private static final String[] ACCEPTS = { "application/json", "text/plain", "text/csv" };
@@ -449,18 +457,18 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	/**
-	 * Every handler with a pattern that matches a path under ACT Core's is an ACT Core endpoint or is
+	 * Every handler with a pattern that can match a path under ACT Core's is an ACT Core endpoint or is
 	 * outranked there by {@link FallbackController}, which lists the methods of ACT Core endpoints
 	 * only, so that it names them. webservices.rest's resource patterns, such as
 	 * {@code /rest/v1/{resource}}, match such paths; they are let through because the fallback exists
-	 * to outrank them, which this test checks with the mapping's own pattern comparator on the path it
-	 * builds, among them {@code /{resource}/search/{searchHandlerId}}, which ties the fallback's count
-	 * and loses only on length. A pattern matches when the mapping's path matcher matches it to the
-	 * path built from it by {@link #actCorePathFor(String)}, which catches wildcards and variables
-	 * standing for {@code rest}, {@code v1} or {@code actcore}, and a {@code **} spanning them. It
-	 * misses a segment that mixes a wildcard or variable with literal text, such as {@code act*}. It
-	 * ranks the patterns at that one path and compares patterns alone, as Spring does for every method
-	 * but HEAD, which it compares by method first, so a handler that lists HEAD is not checked for it.
+	 * to outrank them, among them {@code /{resource}/search/{searchHandlerId}}, which ties the
+	 * fallback's count and loses only on length. A pattern is checked when the mapping's path matcher
+	 * matches its start to {@code /rest/v1/actcore}, and the test fails when it cannot build a path
+	 * under ACT Core's that the pattern matches, rather than passing the pattern by. The paths are
+	 * built by {@link #actCorePathsFor(PathMatcher, String)}. At each, the handler's best matching
+	 * pattern is compared with the fallback's in the same mapping by the mapping's own conditions, as
+	 * Spring compares them for every method but HEAD, which it compares by method first, so a handler
+	 * that lists HEAD is not checked for it.
 	 */
 	@Test
 	public void makesEveryHandlerUnderActCoresPathAnActCoreEndpoint() {
@@ -471,14 +479,20 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 					continue;
 				}
 				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
-					String path = actCorePathFor(pattern);
-					if (!mapping.getPathMatcher().match(pattern, path)
-					        || !(path.equals("/rest/v1/actcore") || path.startsWith("/rest/v1/actcore/"))) {
+					if (!mapping.getPathMatcher().matchStart(pattern, "/rest/v1/actcore")) {
 						continue;
 					}
-					String fallback = fallbackPatternFor(mapping, path);
-					assertTrue(pattern + " " + entry.getValue() + " at " + path, fallback != null
-					        && mapping.getPathMatcher().getPatternComparator(path).compare(fallback, pattern) < 0);
+					List<String> paths = actCorePathsFor(mapping.getPathMatcher(), pattern);
+					assertFalse(pattern + " " + entry.getValue(), paths.isEmpty());
+					for (String path : paths) {
+						String what = pattern + " " + entry.getValue() + " at " + path;
+						MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+						PatternsRequestCondition handler = entry.getKey().getPatternsCondition()
+						        .getMatchingCondition(request);
+						PatternsRequestCondition fallback = fallbackPatternsFor(mapping, request);
+						assertNotNull(what, handler);
+						assertTrue(what, fallback != null && fallback.compareTo(handler, request) < 0);
+					}
 					outranked.add(pattern);
 				}
 			}
@@ -487,44 +501,90 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	/**
-	 * Builds a path under ACT Core's from a pattern, keeping its literal segments and putting the
-	 * segments of {@code /rest/v1/actcore/probe} in place of its wildcards and variables, and the
-	 * segments up to {@code actcore} that a {@code **} reaches in its place.
+	 * Builds the paths under ACT Core's that a pattern matches, putting {@code rest}, {@code v1} and
+	 * {@code actcore} in the first three segments and, below them, each segment of the pattern with a
+	 * wildcard or variable filled by {@link #fill(PathMatcher, String)}. A {@code **} spans every
+	 * number of segments that leaves the path at most four below ACT Core's, or no longer in all than
+	 * the pattern has segments: from four down the fallback's only match is its {@code /**}, so a
+	 * deeper path meets the same fallback pattern. A path ends with a slash when the pattern does.
 	 */
-	private static String actCorePathFor(String pattern) {
-		String[] actCore = { "rest", "v1", "actcore" };
-		List<String> segments = new ArrayList<>();
-		for (String segment : pattern.substring(1).split("/")) {
-			if (segment.equals("**")) {
-				while (segments.size() < actCore.length) {
-					segments.add(actCore[segments.size()]);
-				}
-			} else if (segment.contains("*") || segment.contains("{")) {
-				segments.add(segments.size() < actCore.length ? actCore[segments.size()] : "probe");
-			} else {
-				segments.add(segment);
-			}
+	private static List<String> actCorePathsFor(PathMatcher matcher, String pattern) {
+		String[] segments = pattern.substring(1).split("/");
+		List<String> paths = new ArrayList<>();
+		addActCorePaths(matcher, segments, 0, new ArrayList<>(), Math.max(ACT_CORE.length + 4, segments.length), paths);
+		if (pattern.endsWith("/")) {
+			paths.replaceAll(path -> path + "/");
 		}
-		return "/" + String.join("/", segments);
+		return paths;
+	}
+	
+	private static void addActCorePaths(PathMatcher matcher, String[] segments, int next, List<String> path, int deepest,
+	        List<String> paths) {
+		if (next == segments.length) {
+			if (path.size() >= ACT_CORE.length && path.size() <= deepest) {
+				paths.add("/" + String.join("/", path));
+			}
+			return;
+		}
+		String segment = segments[next];
+		List<String> longer = new ArrayList<>(path);
+		if (segment.equals("**")) {
+			while (longer.size() <= deepest) {
+				addActCorePaths(matcher, segments, next + 1, new ArrayList<>(longer), deepest, paths);
+				longer.add(longer.size() < ACT_CORE.length ? ACT_CORE[longer.size()] : "probe");
+			}
+			return;
+		}
+		String value = path.size() < ACT_CORE.length ? ACT_CORE[path.size()] : fill(matcher, segment);
+		if (matcher.match("/" + segment, "/" + value)) {
+			longer.add(value);
+			addActCorePaths(matcher, segments, next + 1, longer, deepest, paths);
+		}
 	}
 	
 	/**
-	 * The pattern of {@link FallbackController} that Spring prefers for a path, or null when none
+	 * Fills each wildcard and variable of a pattern's segment with one of {@link #FILLERS}, keeping its
+	 * literal text, and fails when no filler gives a segment the pattern matches.
+	 */
+	private static String fill(PathMatcher matcher, String segment) {
+		for (String filler : FILLERS) {
+			StringBuilder value = new StringBuilder();
+			int depth = 0;
+			for (char c : segment.toCharArray()) {
+				if (c == '{') {
+					depth++;
+				} else if (c == '}') {
+					if (--depth == 0) {
+						value.append(filler);
+					}
+				} else if (depth == 0) {
+					value.append(c == '*' ? filler : c == '?' ? filler.substring(0, 1) : String.valueOf(c));
+				}
+			}
+			if (matcher.match("/" + segment, "/" + value)) {
+				return value.toString();
+			}
+		}
+		fail("no filler makes a segment that " + segment + " matches");
+		return null;
+	}
+	
+	/**
+	 * The patterns of {@link FallbackController} that Spring prefers for a request, or null when none
 	 * matches it.
 	 */
-	private static String fallbackPatternFor(RequestMappingHandlerMapping mapping, String path) {
-		List<String> patterns = new ArrayList<>();
+	private static PatternsRequestCondition fallbackPatternsFor(RequestMappingHandlerMapping mapping,
+	        MockHttpServletRequest request) {
+		PatternsRequestCondition best = null;
 		for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mapping.getHandlerMethods().entrySet()) {
 			if (entry.getValue().getBeanType() == FallbackController.class) {
-				for (String pattern : entry.getKey().getPatternsCondition().getPatterns()) {
-					if (mapping.getPathMatcher().match(pattern, path)) {
-						patterns.add(pattern);
-					}
+				PatternsRequestCondition patterns = entry.getKey().getPatternsCondition().getMatchingCondition(request);
+				if (patterns != null && (best == null || patterns.compareTo(best, request) < 0)) {
+					best = patterns;
 				}
 			}
 		}
-		patterns.sort(mapping.getPathMatcher().getPatternComparator(path));
-		return patterns.isEmpty() ? null : patterns.get(0);
+		return best;
 	}
 	
 	/**
