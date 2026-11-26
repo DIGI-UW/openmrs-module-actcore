@@ -38,6 +38,7 @@ import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
@@ -59,6 +60,7 @@ import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.util.AntPathMatcher;
@@ -92,6 +94,13 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private ScreeningCountController screeningCounts;
+	
+	/**
+	 * An exception resolver with only a JSON converter, which {@link #dispatch} runs first, as the
+	 * metadataexport module's runs ahead of webservices.rest's in the distro. It logs a warning and
+	 * resolves nothing when a handler gives it a body to write in XML.
+	 */
+	private ExceptionHandlerExceptionResolver jsonOnly;
 	
 	/** Unknown Location in the standard test dataset. */
 	private static final String CLINIC = "8d6c993e-c2cc-11de-8d13-0010c6dffd0f";
@@ -142,6 +151,13 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	private static final String[] UNKNOWN_PATHS = { "", "/", "/nosuch", "/nosuch/x", "/search/x", "/studies/x/y",
 	        "/nosuch/x/y", "/nosuch/x/y/z", "/nosuch/x/y/z/w" };
 	
+	@Before
+	public void resolveWithJsonAloneFirst() {
+		jsonOnly = new ExceptionHandlerExceptionResolver();
+		jsonOnly.setMessageConverters(Collections.singletonList(new MappingJackson2HttpMessageConverter()));
+		jsonOnly.afterPropertiesSet();
+	}
+	
 	@After
 	public void forgetTheDaemonToken() {
 		new ActCoreActivator().setDaemonToken(null);
@@ -174,7 +190,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void givesTheServicesRefusalAsTheGlobalErrorOfTheBadRequest() {
+	public void givesTheServicesRefusalAsTheGlobalErrorOfTheBadRequest() throws Exception {
 		ModuleTables.create();
 		try {
 			screeningCounts.save("8d6c993e-c2cc-11de-8d13-0010c6dffd0f", "2026-09",
@@ -183,12 +199,13 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		}
 		catch (ValidationException e) {
 			MockHttpServletResponse response = new MockHttpServletResponse();
-			SimpleObject body = screeningCounts.validationExceptionHandler(e, new MockHttpServletRequest(), response);
+			screeningCounts.validationExceptionHandler(e, new MockHttpServletRequest(), response);
 			
 			assertEquals(400, response.getStatus());
-			List<?> globalErrors = (List<?>) ((SimpleObject) body.get("error")).get("globalErrors");
+			SimpleObject body = SimpleObject.parseJson(response.getContentAsString());
+			List<?> globalErrors = (List<?>) ((Map<?, ?>) body.get("error")).get("globalErrors");
 			assertEquals("The school age groups add up to 0, not the 5 screened",
-			    ((SimpleObject) globalErrors.get(0)).get("message"));
+			    ((Map<?, ?>) globalErrors.get(0)).get("message"));
 		}
 	}
 	
@@ -222,17 +239,16 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void namesTheUnsupportedContentTypeWithoutAStackTrace() {
+	public void namesTheUnsupportedContentTypeWithoutAStackTrace() throws Exception {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		
-		SimpleObject body = screeningCounts
-		        .unsupportedMediaTypeHandler(new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN,
-		                Collections.singletonList(MediaType.APPLICATION_JSON)),
-		            new MockHttpServletRequest(), response);
+		screeningCounts.unsupportedMediaTypeHandler(new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN,
+		        Collections.singletonList(MediaType.APPLICATION_JSON)),
+		    new MockHttpServletRequest(), response);
 		
 		assertEquals(415, response.getStatus());
 		assertEquals("application/json", response.getHeader("Accept"));
-		assertEquals("{error={message=Content type 'text/plain' not supported}}", body.toString());
+		assertEquals("{\"error\":{\"message\":\"Content type 'text/plain' not supported\"}}", response.getContentAsString());
 	}
 	
 	@Test
@@ -240,6 +256,27 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		for (String uri : BODY_URIS) {
 			for (String json : new String[] { "", "{\"name\":", "[]" }) {
 				assertEquals(uri + " " + json, 400, dispatch(bodyPost(uri, json)).getStatus());
+			}
+		}
+	}
+	
+	@Test
+	public void givesTheReasonForAMissingOrMalformedBodyWithoutAStackTrace() throws Exception {
+		for (String uri : BODY_URIS) {
+			for (String json : new String[] { "", "{\"name\":", "[]" }) {
+				MockHttpServletResponse response = dispatch(bodyPost(uri, json));
+				
+				assertJsonError(uri + " " + json, 400, response);
+				Map<?, ?> error = (Map<?, ?>) SimpleObject.parseJson(response.getContentAsString()).get("error");
+				String message = (String) error.get("message");
+				assertEquals(uri + " " + json, Collections.singleton("message"), error.keySet());
+				if (json.isEmpty()) {
+					assertEquals(uri, "Required request body is missing", message);
+				} else {
+					assertTrue(message, message.startsWith("JSON parse error: "));
+					assertFalse(message, message.contains("nested exception"));
+					assertFalse(message, message.contains("org.openmrs"));
+				}
 			}
 		}
 	}
@@ -330,16 +367,18 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	public void answersAFailedConversionInJsonUnlessTheRequestAcceptsXml() throws Exception {
 		for (String accept : new String[] { "application/json", "text/plain", "text/csv", "not a type",
 		        "application/xml" }) {
-			MockHttpServletRequest request = cardiology(null);
-			accept(request, accept);
-			MockHttpServletResponse response = new MockHttpServletResponse();
-			
-			assertNotNull(accept,
-			    resolver.resolveException(request, response, handler(request), new ConversionException("unconvertible")));
-			if (accept.endsWith("xml")) {
-				assertXmlError(accept, 400, response);
-			} else {
-				assertJsonError(accept, 400, response);
+			for (ExceptionHandlerExceptionResolver each : new ExceptionHandlerExceptionResolver[] { jsonOnly, resolver }) {
+				MockHttpServletRequest request = cardiology(null);
+				accept(request, accept);
+				MockHttpServletResponse response = new MockHttpServletResponse();
+				
+				assertNotNull(accept,
+				    each.resolveException(request, response, handler(request), new ConversionException("unconvertible")));
+				if (accept.endsWith("xml")) {
+					assertXmlError(accept, 400, response);
+				} else {
+					assertJsonError(accept, 400, response);
+				}
 			}
 		}
 	}
@@ -971,7 +1010,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 			adapter.handle(request, response, handler);
 		}
 		catch (Exception e) {
-			assertNotNull(e.toString(), resolver.resolveException(request, response, handler, e));
+			assertNotNull(e.toString(), jsonOnly.resolveException(request, response, handler, e));
 		}
 		return response;
 	}

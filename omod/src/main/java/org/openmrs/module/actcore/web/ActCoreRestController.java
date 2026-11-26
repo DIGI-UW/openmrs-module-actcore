@@ -36,17 +36,25 @@ import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.support.ModelAndViewContainer;
+import org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor;
 
 /**
  * The base class of the module's REST controllers. It answers a request parameter that is missing
@@ -56,9 +64,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * or 403, as for an {@link APIAuthenticationException}. BaseRestController would answer each of
  * these with 500. Each handler that writes a body writes it in the JSON or XML the request accepts,
  * and in JSON when it accepts neither: Spring could not write the body in a type such a request
- * accepts, and the request would end in the web application's 500 page instead. It also holds the
- * request helpers the controllers share, which find a request's patient and location, read its
- * dates and months, and describe a user.
+ * accepts, and the request would end in the web application's 500 page instead. The handlers write
+ * their bodies themselves and give Spring nothing to write, so that whichever exception resolver
+ * runs them finishes the answer. A resolver with only a JSON converter, as the metadataexport
+ * module registers ahead of webservices.rest's, cannot write an XML body: it logs a warning with a
+ * stack trace and leaves the exception to the next resolver, which runs the handler again. It also
+ * holds the request helpers the controllers share, which find a request's patient and location,
+ * read its dates and months, and describe a user.
  */
 public abstract class ActCoreRestController extends BaseRestController {
 	
@@ -72,6 +84,20 @@ public abstract class ActCoreRestController extends BaseRestController {
 	private static final List<MediaType> WRITTEN = Arrays.asList(MediaType.APPLICATION_JSON,
 	    new MediaType("application", "*+json"), MediaType.APPLICATION_XML, MediaType.TEXT_XML,
 	    new MediaType("application", "*+xml"));
+	
+	/** The type of an error body, from which Spring chooses the converters that can write one. */
+	private static final MethodParameter ERROR_BODY = new MethodParameter(
+	        ReflectionUtils.findMethod(ActCoreRestController.class, "error", String.class), -1);
+	
+	/** The JSON converter webservices.rest's exception resolver writes with. */
+	@Autowired
+	@Qualifier("jsonHttpMessageConverter")
+	private HttpMessageConverter<?> jsonConverter;
+	
+	/** The XML converter webservices.rest's exception resolver writes with. */
+	@Autowired
+	@Qualifier("xmlMarshallingHttpMessageConverter")
+	private HttpMessageConverter<?> xmlConverter;
 	
 	/**
 	 * Refuses a request whose {@code Accept} admits neither JSON nor XML, or is not a list of media
@@ -100,14 +126,12 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 *
 	 * @param e the MethodArgumentTypeMismatchException or MissingServletRequestParameterException
 	 * @param request the request
-	 * @param response the response, whose status is set to 400
-	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 * @param response the response, whose status is set to 400 and which gets an {@code error} holding
+	 *            the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler({ MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class })
-	@ResponseBody
-	public SimpleObject badParameterHandler(Exception e, HttpServletRequest request, HttpServletResponse response) {
+	public void badParameterHandler(Exception e, HttpServletRequest request, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		String message;
 		if (e instanceof MethodArgumentTypeMismatchException) {
 			MethodArgumentTypeMismatchException mismatch = (MethodArgumentTypeMismatchException) e;
@@ -116,7 +140,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 			message = ((MissingServletRequestParameterException) e).getParameterName() + " is required";
 		}
 		// No stack trace or code: the caller sent the request wrong, and the server has nothing to show.
-		return new SimpleObject().add("error", new SimpleObject().add("message", message));
+		writeError(error(message), request, response);
 	}
 	
 	/**
@@ -126,17 +150,15 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 *
 	 * @param e the HttpMediaTypeNotSupportedException
 	 * @param request the request
-	 * @param response the response, whose status is set to 415
-	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 * @param response the response, whose status is set to 415 and which gets an {@code error} holding
+	 *            the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-	@ResponseBody
-	public SimpleObject unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletRequest request,
+	public void unsupportedMediaTypeHandler(HttpMediaTypeNotSupportedException e, HttpServletRequest request,
 	        HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
 		response.setHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
-		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
+		writeError(error(e.getMessage()), request, response);
 	}
 	
 	/**
@@ -157,103 +179,133 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 *
 	 * @param e the ContextAuthenticationException
 	 * @param request the request
-	 * @param response the response, whose status is set to 401 or 403
-	 * @return an {@code error} holding the {@code message} and the exception's detail
+	 * @param response the response, whose status is set to 401 or 403 and which gets an {@code error}
+	 *            holding the {@code message} and the exception's detail
 	 * @throws Exception if BaseRestController's handler fails
 	 */
 	@ExceptionHandler(ContextAuthenticationException.class)
-	@ResponseBody
-	public SimpleObject privilegeRequiredHandler(ContextAuthenticationException e, HttpServletRequest request,
+	public void privilegeRequiredHandler(ContextAuthenticationException e, HttpServletRequest request,
 	        HttpServletResponse response) throws Exception {
-		return apiAuthenticationExceptionHandler(e, request, response);
+		apiAuthenticationExceptionHandler(e, request, response);
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
+	 * Answers as BaseRestController does, but writes the body itself, in JSON when the request accepts
+	 * neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#apiAuthenticationExceptionHandler(Exception, HttpServletRequest,
 	 *      HttpServletResponse)
 	 */
 	@Override
 	@ExceptionHandler(APIAuthenticationException.class)
-	@ResponseBody
 	public SimpleObject apiAuthenticationExceptionHandler(Exception ex, HttpServletRequest request,
 	        HttpServletResponse response) throws Exception {
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return super.apiAuthenticationExceptionHandler(ex, request, response);
+		writeError(super.apiAuthenticationExceptionHandler(ex, request, response), request, response);
+		return null;
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
+	 * Answers as BaseRestController does, but writes the body itself, in JSON when the request accepts
+	 * neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#validationExceptionHandler(ValidationException, HttpServletRequest,
 	 *      HttpServletResponse)
 	 */
 	@Override
 	@ExceptionHandler(ValidationException.class)
-	@ResponseBody
 	public SimpleObject validationExceptionHandler(ValidationException validationException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return super.validationExceptionHandler(validationException, request, response);
+		writeError(super.validationExceptionHandler(validationException, request, response), request, response);
+		return null;
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
+	 * Answers as BaseRestController does, but writes the body itself, in JSON when the request accepts
+	 * neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#conversionExceptionHandler(ConversionException, HttpServletRequest,
 	 *      HttpServletResponse)
 	 */
 	@Override
 	@ExceptionHandler(ConversionException.class)
-	@ResponseBody
 	public SimpleObject conversionExceptionHandler(ConversionException conversionException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return super.conversionExceptionHandler(conversionException, request, response);
+		writeError(super.conversionExceptionHandler(conversionException, request, response), request, response);
+		return null;
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
+	 * Answers a missing or unreadable request body with 400 as BaseRestController does, but with the
+	 * reason alone, without the stack trace and code BaseRestController adds. The reason is the
+	 * exception's message without the nested exception Spring 5 appends to it, and without the
+	 * endpoint's method that Spring names when the body is missing. It writes the body itself, in JSON
+	 * when the request accepts neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#httpMessageNotReadableExceptionHandler(HttpMessageNotReadableException,
 	 *      HttpServletRequest, HttpServletResponse)
 	 */
 	@Override
 	@ExceptionHandler(HttpMessageNotReadableException.class)
-	@ResponseBody
 	public SimpleObject httpMessageNotReadableExceptionHandler(
 	        HttpMessageNotReadableException httpMessageNotReadableException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return super.httpMessageNotReadableExceptionHandler(httpMessageNotReadableException, request, response);
+		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+		String reason = StringUtils.substringBefore(httpMessageNotReadableException.getMessage(), "; nested exception is ");
+		writeError(error(StringUtils.substringBefore(reason, ": public ")), request, response);
+		return null;
 	}
 	
 	/**
-	 * Answers as BaseRestController does, in JSON when the request accepts neither JSON nor XML.
+	 * Answers as BaseRestController does, but writes the body itself, in JSON when the request accepts
+	 * neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#handleException(Exception, HttpServletRequest, HttpServletResponse)
 	 */
 	@Override
 	@ExceptionHandler(Exception.class)
-	@ResponseBody
 	public SimpleObject handleException(Exception ex, HttpServletRequest request, HttpServletResponse response)
 	        throws Exception {
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return super.handleException(ex, request, response);
+		SimpleObject body = super.handleException(ex, request, response);
+		// Null when BaseRestController handed the exception to apiAuthenticationExceptionHandler, which wrote it.
+		if (body != null) {
+			writeError(body, request, response);
+		}
+		return null;
 	}
 	
 	/**
-	 * Sets the response's type to JSON when the request accepts neither JSON nor XML, so that an error
-	 * body can be written. Otherwise the type is left for Spring to choose from what the request
-	 * accepts.
+	 * Builds an error body holding a message.
 	 *
-	 * @param request the request
-	 * @param response the response
+	 * @param message the message
+	 * @return an {@code error} holding the {@code message}
 	 */
-	static void jsonUnlessJsonOrXmlIsAccepted(HttpServletRequest request, HttpServletResponse response) {
+	static SimpleObject error(String message) {
+		return new SimpleObject().add("error", new SimpleObject().add("message", message));
+	}
+	
+	/**
+	 * Writes an error body in the JSON or XML the request accepts, choosing between them as Spring
+	 * does, with the converters webservices.rest's exception resolver writes with. When the request
+	 * accepts neither, it writes JSON, which Spring would refuse to.
+	 *
+	 * @param body the error body
+	 * @param request the request
+	 * @param response the response, whose status the handler has set
+	 * @throws HttpMessageNotWritableException when the body cannot be written
+	 */
+	void writeError(SimpleObject body, HttpServletRequest request, HttpServletResponse response) {
 		if (!acceptsJsonOrXml(request)) {
 			response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		}
+		try {
+			new RequestResponseBodyMethodProcessor(Arrays.asList(jsonConverter, xmlConverter)).handleReturnValue(body,
+			    ERROR_BODY, new ModelAndViewContainer(), new ServletWebRequest(request, response));
+		}
+		catch (RuntimeException e) {
+			throw e;
+		}
+		catch (Exception e) {
+			throw new HttpMessageNotWritableException("Could not write the error body", e);
 		}
 	}
 	

@@ -19,7 +19,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -28,7 +27,6 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
@@ -105,17 +103,15 @@ public class FallbackController extends ActCoreRestController {
 	 *
 	 * @param e the HttpRequestMethodNotSupportedException
 	 * @param request the request
-	 * @param response the response, whose status is set to 405
-	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 * @param response the response, whose status is set to 405 and which gets an {@code error} holding
+	 *            the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-	@ResponseBody
-	public SimpleObject methodNotAllowedHandler(HttpRequestMethodNotSupportedException e, HttpServletRequest request,
+	public void methodNotAllowedHandler(HttpRequestMethodNotSupportedException e, HttpServletRequest request,
 	        HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
 		response.setHeader(HttpHeaders.ALLOW, StringUtils.join(e.getSupportedMethods(), ","));
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
+		writeError(error(e.getMessage()), request, response);
 	}
 	
 	/**
@@ -124,16 +120,13 @@ public class FallbackController extends ActCoreRestController {
 	 *
 	 * @param e the NoHandlerFoundException
 	 * @param request the request
-	 * @param response the response, whose status is set to 404
-	 * @return an {@code error} holding the {@code message}, without a stack trace
+	 * @param response the response, whose status is set to 404 and which gets an {@code error} holding
+	 *            the {@code message}, without a stack trace
 	 */
 	@ExceptionHandler(NoHandlerFoundException.class)
-	@ResponseBody
-	public SimpleObject notFoundHandler(NoHandlerFoundException e, HttpServletRequest request,
-	        HttpServletResponse response) {
+	public void notFoundHandler(NoHandlerFoundException e, HttpServletRequest request, HttpServletResponse response) {
 		response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-		jsonUnlessJsonOrXmlIsAccepted(request, response);
-		return new SimpleObject().add("error", new SimpleObject().add("message", e.getMessage()));
+		writeError(error(e.getMessage()), request, response);
 	}
 	
 	/**
