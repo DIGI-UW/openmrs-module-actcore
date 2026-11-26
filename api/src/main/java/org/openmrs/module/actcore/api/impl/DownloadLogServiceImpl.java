@@ -125,9 +125,9 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	
 	/**
 	 * Reads a download's detail into a new item, with what the identifiers filter calls it. A detail
-	 * recorded that does not read as a JSON object of the shape {@link DownloadDetails} describes, the
-	 * JSON null among them, is logged and left out, and the item is marked unreadable and called
-	 * "with", since it may have given identifiers and an auditor must not miss it.
+	 * recorded that does not read as a JSON object of the shape a download records, the JSON null among
+	 * them, is logged and left out, and the item is marked unreadable and called "with", since it may
+	 * have given identifiers and an auditor must not miss it.
 	 */
 	private static DownloadLogItem read(DownloadLogEntry entry) {
 		DownloadLogItem download = new DownloadLogItem();
