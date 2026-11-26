@@ -46,6 +46,7 @@ import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.patientflags.DisplayPoint;
 import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.api.impl.FlagServiceImpl;
@@ -135,6 +136,16 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		FlagService service = service(true, false);
 		AtomicReference<Throwable> failure = coldReaders(service,
 		    () -> service.getFlagsForPatient(new Patient(2), new HashSet<Role>(), (DisplayPoint) null));
+		
+		assertNull(failure.get());
+		assertEquals(1, tagQueries.get());
+	}
+	
+	@Test
+	public void getPatientFlags_shouldFillAnEmptyCacheOnceBeforeItFiltersByTag() throws Exception {
+		FlagService service = service(true, false);
+		AtomicReference<Throwable> failure = coldReaders(service,
+		    () -> service.getPatientFlags(new Patient(2), new HashSet<Role>(), (String) null));
 		
 		assertNull(failure.get());
 		assertEquals(1, tagQueries.get());
@@ -270,6 +281,29 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		
 		// A Groovy flag's evaluator thread asks for the privileges while its evaluation waits for it.
 		Thread groovy = start(failure, () -> service.getPrivileges());
+		groovy.join(TimeUnit.SECONDS.toMillis(HOLD_SECONDS));
+		boolean groovyWaited = groovy.isAlive();
+		released.countDown();
+		join(reader, writer, groovy);
+		
+		assertFalse(groovyWaited);
+		assertNull(failure.get());
+	}
+	
+	@Test
+	public void getPrivileges_shouldFillAReplacementWhileARebuildWaitsForAnEvaluation() throws Exception {
+		FlagService evaluated = service(true);
+		// The service a context refresh puts in its place, whose cache is still empty.
+		FlagService replacement = service(true, false);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		Thread reader = start(failure,
+		    () -> evaluated.generateFlagsForPatient(new Patient(1), new HashMap<Object, Object>()));
+		assertTrue(evaluating.await(WAIT_SECONDS, TimeUnit.SECONDS));
+		Thread writer = start(failure, () -> evaluated.saveFlag(new Flag()));
+		waitUntilWaiting(writer);
+		
+		// A Groovy flag's evaluator thread asks the current service for privileges while its evaluation waits for it.
+		Thread groovy = start(failure, replacement::getPrivileges);
 		groovy.join(TimeUnit.SECONDS.toMillis(HOLD_SECONDS));
 		boolean groovyWaited = groovy.isAlive();
 		released.countDown();
@@ -444,6 +478,10 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 					    }
 				    case "getFlagsForPatient":
 					    return new ArrayList<Flag>();
+				    case "getPatientFlags":
+					    return new ArrayList<PatientFlag>();
+				    case "getDisplayPoint":
+					    return null;
 				    case "saveFlag":
 					    return null;
 				    default:
