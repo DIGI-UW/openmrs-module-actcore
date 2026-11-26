@@ -235,8 +235,11 @@ public abstract class ActCoreRestController extends BaseRestController {
 	}
 	
 	/**
-	 * Answers as BaseRestController does, but writes the body itself, in JSON when the request accepts
-	 * neither JSON nor XML, and returns null.
+	 * Answers a missing or unreadable request body with 400 as BaseRestController does, but with the
+	 * reason alone, without the stack trace and code BaseRestController adds. The reason is the
+	 * exception's message without the nested exception Spring 5 appends to it, and without the
+	 * endpoint's method that Spring names when the body is missing. It writes the body itself, in JSON
+	 * when the request accepts neither JSON nor XML, and returns null.
 	 *
 	 * @see BaseRestController#httpMessageNotReadableExceptionHandler(HttpMessageNotReadableException,
 	 *      HttpServletRequest, HttpServletResponse)
@@ -246,8 +249,9 @@ public abstract class ActCoreRestController extends BaseRestController {
 	public SimpleObject httpMessageNotReadableExceptionHandler(
 	        HttpMessageNotReadableException httpMessageNotReadableException, HttpServletRequest request,
 	        HttpServletResponse response) {
-		writeError(super.httpMessageNotReadableExceptionHandler(httpMessageNotReadableException, request, response), request,
-		    response);
+		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+		String reason = StringUtils.substringBefore(httpMessageNotReadableException.getMessage(), "; nested exception is ");
+		writeError(error(StringUtils.substringBefore(reason, ": public ")), request, response);
 		return null;
 	}
 	

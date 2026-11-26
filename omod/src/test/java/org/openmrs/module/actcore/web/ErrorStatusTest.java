@@ -213,6 +213,27 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void givesTheReasonForAMissingOrMalformedBodyWithoutAStackTrace() throws Exception {
+		for (String uri : BODY_URIS) {
+			for (String json : new String[] { "", "{\"name\":", "[]" }) {
+				MockHttpServletResponse response = dispatch(bodyPost(uri, json));
+				
+				assertJsonError(uri + " " + json, 400, response);
+				Map<?, ?> error = (Map<?, ?>) SimpleObject.parseJson(response.getContentAsString()).get("error");
+				String message = (String) error.get("message");
+				assertEquals(uri + " " + json, Collections.singleton("message"), error.keySet());
+				if (json.isEmpty()) {
+					assertEquals(uri, "Required request body is missing", message);
+				} else {
+					assertTrue(message, message.startsWith("JSON parse error: "));
+					assertFalse(message, message.contains("nested exception"));
+					assertFalse(message, message.contains("org.openmrs"));
+				}
+			}
+		}
+	}
+	
+	@Test
 	public void answersARefreshThatIsNotJsonWithUnsupportedMediaTypeWithoutRunningIt() throws Exception {
 		DaemonTokens.pass("actcore", new ActCoreActivator());
 		String lastFinished = lastRefreshFinished();
