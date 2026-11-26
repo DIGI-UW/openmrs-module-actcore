@@ -11,12 +11,16 @@ package org.openmrs.module.actcore;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -26,7 +30,10 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Person;
 import org.openmrs.PersonName;
 import org.openmrs.Privilege;
@@ -38,14 +45,22 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
+import org.openmrs.module.reporting.ReportingConstants;
+import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.openmrs.scheduler.timer.TimerSchedulerServiceImpl;
+import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.aop.MethodBeforeAdvice;
 
 public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest {
+	
+	private static final String REPORT_UUID = "0d3c2b1a-9f8e-4d7c-8b6a-5e4f3a2b1c0d";
+	
+	@Rule
+	public TemporaryFolder dataDirectory = new TemporaryFolder();
 	
 	@Test
 	public void updatesTheDescriptionOfATaskAnEarlierVersionRegistered() {
@@ -263,17 +278,80 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
-	public void contextRefreshed_shouldLeaveTheTasksAsTheyAreWhenNoStopTookThemOff() {
+	public void contextRefreshed_shouldDoTheStartUpWorkWhenTheStartSkipsStarted() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		writeReportDescriptor();
 		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
+		stoppedAtRuntime();
+		new ActCoreActivator().stopped();
 		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.MODULE_STARTED_PROPERTY, "true");
 		
-		// Another module's start or stop refreshes the context while ACT Core keeps running.
-		new ActCoreActivator().contextRefreshed();
+		// A start through REST refreshes the context without naming the module, so core skips started().
+		ActCoreActivator activator = new ActCoreActivator();
+		List<String> logged = loggedWhile(ActCoreActivator.class, Level.INFO, () -> {
+			activator.willRefreshContext();
+			activator.contextRefreshed();
+		});
 		
-		TaskDefinition flags = Context.getSchedulerService().getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		try {
+			assertNotNull(Context.getService(ReportDefinitionService.class).getDefinitionByUuid(REPORT_UUID));
+			assertTrue(adherence.getStartOnStartup());
+			// A context test has no daemon token, so the attempt shows as its logged failure.
+			assertTrue(logged.toString(),
+			    logged.contains("Could not end the open enrolments of patients already recorded dead"));
+			assertEquals(logged.toString(), "ACT Core module started", logged.get(logged.size() - 1));
+		}
+		finally {
+			schedulerService.shutdownTask(adherence);
+		}
+	}
+	
+	@Test
+	public void started_shouldNotRedoTheStartUpWorkContextRefreshedDidForTheSameStart() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		
+		// Boot and a start from Manage Modules run started() right after contextRefreshed().
+		ActCoreActivator activator = new ActCoreActivator();
+		List<String> logged = loggedWhile(ActCoreActivator.class, Level.INFO, () -> {
+			activator.contextRefreshed();
+			activator.started();
+		});
+		
+		try {
+			assertEquals(logged.toString(), 1, Collections.frequency(logged, "ACT Core module started"));
+		}
+		finally {
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME));
+			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		}
+	}
+	
+	@Test
+	public void contextRefreshed_shouldLeaveTheTasksAsTheyAreWhenNoStopTookThemOff() throws Exception {
+		SchedulerService schedulerService = Context.getSchedulerService();
+		ActCoreActivator activator = new ActCoreActivator();
+		activator.started();
+		// An administrator then turns one task off and deletes the other.
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		schedulerService.shutdownTask(flags);
+		flags.setStartOnStartup(Boolean.FALSE);
+		schedulerService.saveTaskDefinition(flags);
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
+		schedulerService.shutdownTask(adherence);
+		schedulerService.deleteTask(adherence.getId());
+		
+		// Another module's start or stop refreshes the context while ACT Core keeps running.
+		List<String> logged = loggedWhile(ActCoreActivator.class, Level.INFO, () -> {
+			activator.willRefreshContext();
+			activator.contextRefreshed();
+		});
+		
+		flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
 		assertFalse(flags.getStartOnStartup());
 		assertFalse(flags.getStarted());
-		assertNull(Context.getSchedulerService().getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		assertNull(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+		assertEquals(new ArrayList<String>(), logged);
 	}
 	
 	@Test
@@ -305,44 +383,59 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 	}
 	
 	@Test
-	public void started_shouldKeepTheRecordOfTheTasksTakenOffWhenOneCouldNotBeScheduled() throws Exception {
+	public void started_shouldKeepInTheRecordOnlyTheTaskItCouldNotPutBack() throws Exception {
 		SchedulerService schedulerService = Context.getSchedulerService();
 		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
+		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
 		stoppedAtRuntime();
 		new ActCoreActivator().stopped();
 		// Two tasks of one name make the scheduler's lookup by name throw.
 		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, false);
-		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, false);
 		
-		new ActCoreActivator().started();
+		ActCoreActivator activator = new ActCoreActivator();
+		activator.started();
+		assertEquals(ActCoreActivator.ADHERENCE_TASK_NAME,
+		    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED));
+		// An administrator then turns off the task that was put back.
+		TaskDefinition flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
+		schedulerService.shutdownTask(flags);
+		flags.setStartOnStartup(Boolean.FALSE);
+		schedulerService.saveTaskDefinition(flags);
 		
+		// Another module's start or stop refreshes the context, retrying what the record holds.
+		activator.willRefreshContext();
+		activator.contextRefreshed();
+		
+		flags = schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME);
 		try {
-			assertEquals(ActCoreActivator.REFRESH_TASK_NAME,
-			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED));
+			assertFalse(flags.getStartOnStartup());
+			assertFalse(flags.getStarted());
 		}
 		finally {
-			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.REFRESH_TASK_NAME));
+			schedulerService.shutdownTask(flags);
 		}
 	}
 	
 	@Test
-	public void started_shouldKeepTheRecordOfTheTasksTakenOffWhenTheFirstCouldNotBeScheduled() throws Exception {
+	public void started_shouldKeepInTheRecordOnlyTheFirstTaskWhenItCouldNotBePutBack() throws Exception {
 		SchedulerService schedulerService = Context.getSchedulerService();
+		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, true);
 		registered(ActCoreActivator.ADHERENCE_TASK_NAME, AdherenceRefreshTask.class, true);
 		stoppedAtRuntime();
 		new ActCoreActivator().stopped();
 		// Two tasks of one name make the scheduler's lookup by name throw.
 		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
-		registered(ActCoreActivator.REFRESH_TASK_NAME, PatientFlagRefreshTask.class, false);
 		
 		new ActCoreActivator().started();
 		
+		TaskDefinition adherence = schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME);
 		try {
-			assertEquals(ActCoreActivator.ADHERENCE_TASK_NAME,
+			assertTrue(adherence.getStartOnStartup());
+			assertEquals(ActCoreActivator.REFRESH_TASK_NAME,
 			    Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED));
 		}
 		finally {
-			schedulerService.shutdownTask(schedulerService.getTaskByName(ActCoreActivator.ADHERENCE_TASK_NAME));
+			schedulerService.shutdownTask(adherence);
 		}
 	}
 	
@@ -378,6 +471,22 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		finally {
 			schedulerService.shutdownTask(flags);
 		}
+	}
+	
+	/**
+	 * Puts one report descriptor in the configuration, and has reporting load descriptors at startup.
+	 */
+	private void writeReportDescriptor() throws Exception {
+		OpenmrsUtil.setApplicationDataDirectory(dataDirectory.getRoot().getAbsolutePath());
+		File dir = new File(dataDirectory.getRoot(), "configuration/reports/reportdescriptors/test");
+		new File(dir, "sql").mkdirs();
+		Files.write(new File(dir, "sql/patients.sql").toPath(), "select patient_id from patient".getBytes("UTF-8"));
+		String descriptor = "key: actcoreActivatorTestReport\n" + "uuid: \"" + REPORT_UUID + "\"\n"
+		        + "name: \"ACT Core activator test report\"\n" + "datasets:\n" + "  - key: patients\n" + "    type: sql\n"
+		        + "    config: \"sql/patients.sql\"\n";
+		Files.write(new File(dir, "patients.yml").toPath(), descriptor.getBytes("UTF-8"));
+		Context.getAdministrationService().saveGlobalProperty(
+		    new GlobalProperty(ReportingConstants.GLOBAL_PROPERTY_LOAD_REPORTS_FROM_CONFIGURATION_AT_STARTUP, "true"));
 	}
 	
 	/** Sets what core sets on a stop made while OpenMRS runs, before it calls the activator. */
