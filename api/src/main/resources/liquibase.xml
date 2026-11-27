@@ -473,4 +473,26 @@
     <comment>A replaced month stays as a voided row, so a clinic's month is no longer unique</comment>
     <dropIndex tableName="actcore_screening_count" indexName="actcore_screening_count_location_month"/>
   </changeSet>
+  <changeSet id="actcore-2026-11-25-moved-task-classes" author="mherman22">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <sqlCheck expectedResult="0">
+          select count(*) from scheduler_task_config where schedulable_class in (
+            'org.openmrs.module.actcore.task.PatientFlagRefreshTask',
+            'org.openmrs.module.rhdflags.task.PatientFlagRefreshTask',
+            'org.openmrs.module.actcore.adherence.AdherenceRefreshTask',
+            'org.openmrs.module.rhdflags.adherence.AdherenceRefreshTask')
+        </sqlCheck>
+      </not>
+    </preConditions>
+    <comment>Moves the refresh tasks saved under a class an earlier version had to its class now, before core's scheduler loads them at startup</comment>
+    <update tableName="scheduler_task_config">
+      <column name="schedulable_class" value="org.openmrs.module.actcore.tasks.PatientFlagRefreshTask"/>
+      <where>schedulable_class in ('org.openmrs.module.actcore.task.PatientFlagRefreshTask', 'org.openmrs.module.rhdflags.task.PatientFlagRefreshTask')</where>
+    </update>
+    <update tableName="scheduler_task_config">
+      <column name="schedulable_class" value="org.openmrs.module.actcore.tasks.AdherenceRefreshTask"/>
+      <where>schedulable_class in ('org.openmrs.module.actcore.adherence.AdherenceRefreshTask', 'org.openmrs.module.rhdflags.adherence.AdherenceRefreshTask')</where>
+    </update>
+  </changeSet>
 </databaseChangeLog>

@@ -18,10 +18,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,7 +32,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.openmrs.Cohort;
-import org.openmrs.Patient;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -43,6 +45,8 @@ public class PatientFlagRefreshTest {
 	private Set<Integer> alreadyFlagged;
 	
 	private PatientFlagRefresh task;
+	
+	private List<Integer> deleted;
 	
 	@Before
 	public void setUp() {
@@ -60,6 +64,7 @@ public class PatientFlagRefreshTest {
 		flag.setMessage("overdue");
 		flag.setEnabled(Boolean.TRUE);
 		alreadyFlagged = new LinkedHashSet<Integer>();
+		deleted = new ArrayList<Integer>();
 		
 		task = new PatientFlagRefresh() {
 			
@@ -74,6 +79,16 @@ public class PatientFlagRefreshTest {
 			
 			@Override
 			void trackRaised(Flag flag, Set<Integer> matching) {
+			}
+			
+			@Override
+			void inPatientTransaction(int patientId, Runnable work) {
+				work.run();
+			}
+			
+			@Override
+			void deleteFlagRows(Flag flag, int patientId) {
+				deleted.add(patientId);
 			}
 		};
 	}
@@ -108,7 +123,7 @@ public class PatientFlagRefreshTest {
 		
 		assertEquals(0, task.raised);
 		assertEquals(1, task.cleared);
-		verify(flagService).deletePatientFlagForPatient(any(Patient.class), eq(flag));
+		assertEquals(Arrays.asList(7), deleted);
 	}
 	
 	/**
@@ -124,7 +139,7 @@ public class PatientFlagRefreshTest {
 		assertEquals(0, task.raised);
 		assertEquals(0, task.cleared);
 		verify(flagService, never()).savePatientFlag(any(PatientFlag.class));
-		verify(flagService, never()).deletePatientFlagForPatient(any(Patient.class), any(Flag.class));
+		assertEquals(Collections.emptyList(), deleted);
 	}
 	
 	@Test
@@ -137,7 +152,7 @@ public class PatientFlagRefreshTest {
 		assertEquals(1, task.raised);
 		assertEquals(1, task.cleared);
 		verify(flagService, times(1)).savePatientFlag(any(PatientFlag.class));
-		verify(flagService, times(1)).deletePatientFlagForPatient(any(Patient.class), eq(flag));
+		assertEquals(Arrays.asList(7), deleted);
 	}
 	
 	@Test

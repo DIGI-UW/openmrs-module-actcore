@@ -9,7 +9,12 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
+import static org.mockito.Mockito.mock;
+
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -37,5 +42,29 @@ public final class AdherenceRefreshInTest {
 				return histories;
 			}
 		}::refreshAll;
+	}
+	
+	/**
+	 * Runs a full adherence refresh that reads no history and writes nothing, and runs the step while
+	 * it holds every patient's rows, as it holds them while it rewrites them.
+	 *
+	 * @param step what to run while the refresh holds the rows
+	 * @return the patients the refresh read one by one, as it does for those left to it
+	 */
+	public static List<Integer> whileRewritingEveryPatient(final Runnable step) {
+		final List<Integer> readAfter = new ArrayList<Integer>();
+		new AdherenceRefresh(mock(AdherenceDAO.class)) {
+			
+			@Override
+			Map<Integer, AdherenceReplay.History> read(Integer patientId) {
+				if (patientId == null) {
+					step.run();
+				} else {
+					readAfter.add(patientId);
+				}
+				return new HashMap<Integer, AdherenceReplay.History>();
+			}
+		}.refreshAll(LocalDate.now());
+		return readAfter;
 	}
 }

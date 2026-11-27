@@ -18,7 +18,7 @@ public class DownloadLogItem {
 	/** When the download was recorded. */
 	public Date date;
 	
-	/** The user who downloaded, or null when no user has the uuid recorded. */
+	/** The user who downloaded. */
 	public LogUser user;
 	
 	/** The uuid of the form downloaded when the download held exactly one form, else null. */
@@ -27,6 +27,21 @@ public class DownloadLogItem {
 	/** The name users see for the form. It is null whenever {@link #formUuid} is null. */
 	public String formName;
 	
-	/** What the download held, read from its JSON, or null when nothing was recorded. */
+	/**
+	 * What the download held, read from its JSON, or null when nothing was recorded or what was
+	 * recorded cannot be read as a JSON object of the shape every download records.
+	 */
 	public Map<?, ?> detail;
+	
+	/**
+	 * Whether a detail was recorded that cannot be read as a JSON object of the shape every download
+	 * records.
+	 */
+	public boolean unreadable;
+	
+	/**
+	 * The value of the identifiers filter that matches the download: "with", "without" or "research".
+	 * It is "with" for an {@link #unreadable} download.
+	 */
+	public String identifiers;
 }
