@@ -9,7 +9,7 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Date;
@@ -20,7 +20,6 @@ import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Form;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -34,14 +33,16 @@ import org.openmrs.module.actcore.model.DownloadPage;
 import org.openmrs.module.actcore.model.DownloadRecord;
 import org.openmrs.module.actcore.model.LogUser;
 import org.openmrs.util.PrivilegeConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Default implementation of {@link org.openmrs.module.actcore.api.DownloadLogService}. */
 @Transactional
 public class DownloadLogServiceImpl extends BaseOpenmrsService implements DownloadLogService {
+	
+	private static final Logger log = LoggerFactory.getLogger(DownloadLogServiceImpl.class);
 	
 	private DownloadLogDAO dao;
 	
@@ -55,6 +56,12 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	@Override
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void recordDownload(Integer formId, String detail) {
+		if (detail != null && detail.getBytes(StandardCharsets.UTF_8).length > ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES) {
+			throw Rows.refusal("download", "Too many or too long columns and filters to record");
+		}
+		if (detail != null && DownloadDetails.read(detail) == null) {
+			throw Rows.refusal("download", "A download's detail must be a JSON object of the shape a download records");
+		}
 		int userId = Context.getAuthenticatedUser().getUserId();
 		dao.saveDownloadRecord(new DownloadRecord(userId, formId, detail, new Date()));
 	}
@@ -94,19 +101,18 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		List<DownloadLogItem> matching = new ArrayList<DownloadLogItem>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLogEntry entry : entries) {
-			Map<?, ?> detail = read(entry.detail);
-			if (filter.identifiers != null && !filter.identifiers.equals(identifiersOf(detail))) {
+			DownloadLogItem download = read(entry);
+			if (filter.identifiers != null && !filter.identifiers.equals(download.identifiers)) {
 				continue;
 			}
-			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
+			if (chosenForm != null && !(download.unreadable && entry.formUuid == null) && !chosenForm.equals(entry.formUuid)
+			        && !formsOf(download.detail).contains(chosenForm)) {
 				continue;
 			}
-			DownloadLogItem download = new DownloadLogItem();
 			download.date = entry.date;
 			download.user = users.get(entry.userUuid);
 			download.formUuid = entry.formUuid;
 			download.formName = Names.shown("Form", entry.formUuid, entry.formName);
-			download.detail = detail;
 			matching.add(download);
 		}
 		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
@@ -117,16 +123,25 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		return page;
 	}
 	
-	private static Map<?, ?> read(String detail) {
-		if (detail == null) {
-			return null;
+	/**
+	 * Reads a download's detail into a new item, with what the identifiers filter calls it. A detail
+	 * recorded that does not read as a JSON object of the shape a download records, the JSON null among
+	 * them, is logged and left out, and the item is marked unreadable and called "with", since it may
+	 * have given identifiers and an auditor must not miss it.
+	 */
+	private static DownloadLogItem read(DownloadLogEntry entry) {
+		DownloadLogItem download = new DownloadLogItem();
+		if (entry.detail != null) {
+			download.detail = DownloadDetails.read(entry.detail);
+			download.unreadable = download.detail == null;
 		}
-		try {
-			return new ObjectMapper().readValue(detail, Map.class);
+		if (download.unreadable) {
+			log.warn(
+			    "Download {} has a recorded detail that cannot be read as a JSON object of the shape a download records, so the detail is left out when the download is listed",
+			    entry.uuid);
 		}
-		catch (IOException e) {
-			throw new APIException("A recorded download's detail cannot be read as JSON", e);
-		}
+		download.identifiers = download.unreadable ? "with" : identifiersOf(download.detail);
+		return download;
 	}
 	
 	/**

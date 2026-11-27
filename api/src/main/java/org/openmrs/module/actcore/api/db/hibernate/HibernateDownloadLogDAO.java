@@ -58,7 +58,7 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 			params.put("to", before);
 		}
 		Query query = sessionFactory.getCurrentSession()
-		        .createQuery("select d.dateCreated, u.uuid, f.uuid, f.name, d.detail from DownloadRecord d"
+		        .createQuery("select d.uuid, d.dateCreated, u.uuid, f.uuid, f.name, d.detail from DownloadRecord d"
 		                + " join User u on u.userId = d.userId left join Form f on f.formId = d.formId where 1 = 1" + where
 		                + " order by d.dateCreated desc, d.downloadId desc");
 		for (Map.Entry<String, Object> param : params.entrySet()) {
@@ -68,11 +68,12 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 		for (Object row : query.list()) {
 			Object[] columns = (Object[]) row;
 			DownloadLogEntry entry = new DownloadLogEntry();
-			entry.date = (Date) columns[0];
-			entry.userUuid = (String) columns[1];
-			entry.formUuid = (String) columns[2];
-			entry.formName = (String) columns[3];
-			entry.detail = (String) columns[4];
+			entry.uuid = (String) columns[0];
+			entry.date = (Date) columns[1];
+			entry.userUuid = (String) columns[2];
+			entry.formUuid = (String) columns[3];
+			entry.formName = (String) columns[4];
+			entry.detail = (String) columns[5];
 			entries.add(entry);
 		}
 		return entries;

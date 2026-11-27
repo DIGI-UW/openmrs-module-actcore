@@ -26,4 +26,14 @@ public interface RegistryDAO {
 	 * @return the patients' ids, each once; empty when there are none
 	 */
 	List<Integer> getDeadPatientsWithOpenEnrolments(Collection<Integer> programIds);
+	
+	/**
+	 * Locks the patient's row until the current transaction ends, as openmrs-core locks a user's row
+	 * before it counts their failed logins. It flushes the session first, then selects the row for
+	 * update, so a second transaction that locks the same patient waits for this one to end. Call it
+	 * first in a transaction, so the transaction holds no other lock while it waits.
+	 *
+	 * @param patientId the patient whose row to lock; when no patient has that id, nothing is locked
+	 */
+	void lockPatient(Integer patientId);
 }

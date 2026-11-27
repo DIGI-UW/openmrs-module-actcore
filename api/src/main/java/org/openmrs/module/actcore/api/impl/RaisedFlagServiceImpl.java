@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Patient;
-import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -185,16 +184,10 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
-			        || Boolean.TRUE.equals(flag.getRetired())
-			        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
-				return DismissalOutcome.NOT_RAISED;
-			}
-			Integer userId = Context.getAuthenticatedUser().getUserId();
-			recordDismissal(flag.getFlagId(), patient.getPatientId(), userId);
-			new FlagListSync().syncPatient(flag.getFlagId(), patient.getPatientId());
-			log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patient.getPatientId(), userId);
-			return DismissalOutcome.DISMISSED;
+			DismissalOutcome[] outcome = { DismissalOutcome.REFRESH_RUNNING };
+			// Not waited on either: the adherence rewrite holds the patient's row until it commits.
+			AdherenceRefresh.unlessRefreshingAll(patient.getPatientId(), () -> outcome[0] = dismissIfRaised(patient, flag));
+			return outcome[0];
 		}
 		finally {
 			for (String privilege : DISMISS_PRIVILEGES) {
@@ -204,24 +197,35 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 		}
 	}
 	
-	// Committed before the list sync, so a failing sync leaves the dismissal recorded.
-	private void recordDismissal(Integer flagId, Integer patientId, Integer userId) {
-		try {
-			Transactions.inTransaction(() -> {
-				raise(flagId, patientId);
-				Date now = new Date();
-				if (dao.dismissRaisedFlag(flagId, patientId, userId, now)) {
-					dao.saveFlagDismissal(new FlagDismissal(patientId, flagId, userId, now));
-				}
-				return null;
-			});
+	private DismissalOutcome dismissIfRaised(Patient patient, Flag flag) {
+		if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
+		        || Boolean.TRUE.equals(flag.getRetired())
+		        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
+			return DismissalOutcome.NOT_RAISED;
 		}
-		catch (RuntimeException e) {
-			throw e;
-		}
-		catch (Throwable e) {
-			throw new APIException("Could not record the dismissal", e);
-		}
+		Integer flagId = flag.getFlagId();
+		Integer patientId = patient.getPatientId();
+		Integer userId = Context.getAuthenticatedUser().getUserId();
+		inPatientTransaction(patientId, () -> {
+			raise(flagId, patientId);
+			Date now = new Date();
+			if (dao.dismissRaisedFlag(flagId, patientId, userId, now)) {
+				dao.saveFlagDismissal(new FlagDismissal(patientId, flagId, userId, now));
+			}
+		});
+		new FlagListSync().syncPatient(flagId, patientId);
+		log.debug("Flag '{}' of patient {} dismissed by user {}", flag.getName(), patientId, userId);
+		return DismissalOutcome.DISMISSED;
+	}
+	
+	/**
+	 * Records the dismissal as a unit of its own, with the patient's row locked, so that a refresh of
+	 * the patient cannot raise the flag beside it. The unit commits before the list sync, so a failing
+	 * sync leaves the dismissal recorded, and a caller's transaction that rolls back afterwards leaves
+	 * it recorded too.
+	 */
+	void inPatientTransaction(int patientId, Runnable work) {
+		Transactions.inPatientTransaction(patientId, work);
 	}
 	
 	private static boolean carriesDismissTag(Flag flag) {

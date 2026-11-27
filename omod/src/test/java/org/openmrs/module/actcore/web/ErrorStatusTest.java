@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,7 @@ import java.util.UUID;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
@@ -52,10 +54,12 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.ConversionException;
+import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -97,6 +101,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Autowired
 	private ScreeningCountController screeningCounts;
+	
+	@Autowired
+	private DownloadController downloads;
 	
 	/**
 	 * An exception resolver with only a JSON converter, which {@link #dispatch} runs first, as the
@@ -1016,6 +1023,32 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(what + " " + response.getContentType(),
 		    MediaType.APPLICATION_JSON.equalsTypeAndSubtype(MediaType.parseMediaType(response.getContentType())));
 		assertTrue(what + " " + response.getContentAsString(), response.getContentAsString().startsWith("{\"error\":{"));
+	}
+	
+	@Test
+	public void answersADownloadRecordTooLongToKeepWithABadRequestNamingIt() throws Exception {
+		ModuleTables.create();
+		authenticateWith(ActCorePrivileges.DOWNLOAD_DATA);
+		String name = StringUtils.repeat("x", ActCoreConstants.MAX_DOWNLOAD_DETAIL_BYTES);
+		
+		assertEquals(400, dispatch(post("/rest/v1/actcore/download/record",
+		    "{\"list\":\"registry\",\"columns\":[\"ACT ID\"],\"filters\":{\"name\":\"" + name + "\"}}")).getStatus());
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("list", "registry");
+		body.put("columns", Collections.singletonList("ACT ID"));
+		body.put("filters", Collections.singletonMap("name", name));
+		try {
+			downloads.record(body);
+			fail("expected the record to be refused");
+		}
+		catch (IllegalRequestException e) {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			downloads.handleException(e, new MockHttpServletRequest(), response);
+			
+			assertEquals(400, response.getStatus());
+			Map<?, ?> error = (Map<?, ?>) SimpleObject.parseJson(response.getContentAsString()).get("error");
+			assertEquals("[Too many or too long columns and filters to record]", error.get("message"));
+		}
 	}
 	
 	private static MockHttpServletRequest post(String uri, String json) {
