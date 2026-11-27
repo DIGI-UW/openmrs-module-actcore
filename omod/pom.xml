@@ -31,6 +31,13 @@
     <dependency>
       <groupId>org.openmrs.web</groupId>
       <artifactId>openmrs-web</artifactId>
+      <exclusions>
+        <!-- through jsp-api 2.0; servlet 2.4 has no HttpServletResponse.getHeader, which Spring's body writing calls -->
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.openmrs.module</groupId>
@@ -98,7 +105,7 @@
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
       <version>3.0.1</version>
-      <scope>test</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
