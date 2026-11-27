@@ -18,6 +18,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.junit.Test;
 import org.openmrs.api.APIException;
@@ -33,6 +34,40 @@ public class AdherenceRefreshTest {
 		assertEquals(DAY, AdherenceRefresh.localDate(Timestamp.valueOf(DAY.atTime(23, 30))));
 		assertEquals(DAY, AdherenceRefresh.localDate(LocalDateTime.of(DAY, java.time.LocalTime.of(0, 15))));
 		assertEquals(DAY, AdherenceRefresh.localDate(DAY));
+	}
+	
+	@Test
+	public void rowsWaitMillis_shouldBeAMinute() {
+		assertEquals(60000, new AdherenceRefresh(mock(AdherenceDAO.class)).rowsWaitMillis());
+	}
+	
+	@Test(timeout = 10000)
+	public void lockWithin_shouldTakeTheLockWhenItsHolderLetsGoWithinTheWait() throws InterruptedException {
+		ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+		CountDownLatch holding = new CountDownLatch(1);
+		Thread patient = new Thread(() -> {
+			lock.readLock().lock();
+			try {
+				holding.countDown();
+				Thread.sleep(300);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			finally {
+				lock.readLock().unlock();
+			}
+		});
+		patient.start();
+		holding.await();
+		try {
+			AdherenceRefresh.lockWithin(lock.writeLock(), 5000, "The adherence refresh", "the adherence rows");
+			assertTrue(lock.isWriteLockedByCurrentThread());
+			lock.writeLock().unlock();
+		}
+		finally {
+			patient.join();
+		}
 	}
 	
 	@Test(timeout = 10000)

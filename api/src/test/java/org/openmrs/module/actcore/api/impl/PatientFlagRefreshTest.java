@@ -210,4 +210,9 @@ public class PatientFlagRefreshTest {
 			patient.join();
 		}
 	}
+	
+	@Test
+	public void rowsWaitMillis_shouldBeAMinute() {
+		assertEquals(60000, new PatientFlagRefresh().rowsWaitMillis());
+	}
 }

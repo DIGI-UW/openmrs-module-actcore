@@ -82,7 +82,8 @@ class AdherenceRefresh {
 	 * can miss the evaluator's notify; without a bound the refresh would wait with it. The refresh
 	 * endpoint waits for the run behind a gateway that may give up first, the distro's after 300 s, and
 	 * a flag refresh waits twice, for the flag rows and then for the adherence rows, so the bound stays
-	 * well under that.
+	 * well under that. {@link org.openmrs.module.actcore.api.AdherenceService#refreshAll} states it in
+	 * words.
 	 */
 	static final long ROWS_WAIT_MINUTES = 1;
 	
