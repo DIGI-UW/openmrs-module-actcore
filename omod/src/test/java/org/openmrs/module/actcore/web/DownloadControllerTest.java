@@ -70,7 +70,7 @@ import org.openmrs.module.actcore.api.impl.DownloadLogServiceImpl;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadPage;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.util.PrivilegeConstants;
@@ -223,7 +223,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	/** In a transaction of its own, so the DDL does not commit what setUp saved. */
 	private static void renameDownloadLog(String from, String to) {
-		Transactions.inNewTransaction(
+		TransactionsInTest.inNewTransaction(
 		    () -> Context.getAdministrationService().executeSQL("alter table " + from + " rename to " + to, false));
 	}
 	
@@ -1095,7 +1095,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	 */
 	private void signInAs(String username, String... privileges) {
 		Context.authenticate("admin", "test");
-		Transactions.inNewTransaction(() -> {
+		TransactionsInTest.inNewTransaction(() -> {
 			UserService users = Context.getUserService();
 			Role role = users.getRole("download caller " + username);
 			if (role == null) {

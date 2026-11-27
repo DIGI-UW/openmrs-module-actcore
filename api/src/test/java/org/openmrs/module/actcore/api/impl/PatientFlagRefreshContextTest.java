@@ -257,6 +257,23 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	@Test
+	public void refreshingAPatientRunsEachFlagsUnitsOnceWhenAUnitIsRunAgain() {
+		saveFlag("overdue", MATCHES_BOTH);
+		Context.flushSession();
+		List<Runnable> units = new ArrayList<Runnable>();
+		
+		// Run twice, as a unit that fails on a concurrent write is run again.
+		PatientFlagRefresh.refreshPatient(MATCHING_PATIENT, work -> {
+			units.add(work);
+			work.run();
+			work.run();
+			Context.flushSession();
+		});
+		
+		assertEquals(1 + 2 * flagService.getAllFlags().size(), units.size());
+	}
+	
+	@Test
 	public void refreshingAPatientSavedDuringTheFullRefreshIsLeftToItsEnd() throws Exception {
 		saveFlag("overdue", MATCHES_BOTH);
 		final List<Integer> deferred = new ArrayList<Integer>();
@@ -837,8 +854,7 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		flagService.saveFlag(flag);
 		flagService.savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(OTHER_PATIENT), flag, "overdue"));
 		
-		String summary = theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
-		        .getFormattedMessage();
+		String summary = summaryOfARun();
 		
 		assertTrue(summary, summary.contains("1 cleared"));
 		assertEquals(0, count("select count(*) from patientflags_patient_flag where flag_id = " + flag.getFlagId()
@@ -846,8 +862,8 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	private String summaryOfARun() {
-		return theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, new PatientFlagRefresh())).getMessage()
-		        .getFormattedMessage();
+		return theSummaryIn(logged(PatientFlagRefresh.class, Level.INFO, PatientFlagRefreshInTest.inTestTransaction()))
+		        .getMessage().getFormattedMessage();
 	}
 	
 	private void refreshPatient(int patientId) {
@@ -872,7 +888,7 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	}
 	
 	private void runScheduledWork() {
-		runScheduledWork(new PatientFlagRefresh());
+		runScheduledWork(PatientFlagRefreshInTest.inTestTransaction());
 	}
 	
 	private void runScheduledWork(PatientFlagRefresh task) {

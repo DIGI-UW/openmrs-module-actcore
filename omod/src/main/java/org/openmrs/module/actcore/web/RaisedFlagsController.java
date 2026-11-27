@@ -83,7 +83,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 	 * @throws ObjectNotFoundException when no patient or no flag has the uuid
 	 * @throws APIAuthenticationException when the user lacks Get Patients, View Patient Flags or
 	 *             {@link ActCorePrivileges#DISMISS_FLAGS}
-	 * @throws ResponseException with 409 Conflict while the patient flag refresh runs
+	 * @throws ResponseException with 409 Conflict while the full patient flag or adherence refresh runs
 	 */
 	@RequestMapping(value = "/dismiss", method = RequestMethod.POST)
 	@ResponseBody
@@ -110,8 +110,8 @@ public class RaisedFlagsController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Thrown when a dismissal is asked for while the patient flag refresh runs, which the REST layer
-	 * answers with 409 Conflict.
+	 * Thrown when a dismissal is asked for while the full patient flag or adherence refresh runs, which
+	 * the REST layer answers with 409 Conflict.
 	 */
 	@ResponseStatus(HttpStatus.CONFLICT)
 	static class RefreshRunning extends ResponseException {
@@ -119,7 +119,7 @@ public class RaisedFlagsController extends ActCoreRestController {
 		private static final long serialVersionUID = 1L;
 		
 		RefreshRunning() {
-			super("The patient flag refresh is running; dismiss the flag again once it has finished");
+			super("A refresh of the registry is running; dismiss the flag again once it has finished");
 		}
 	}
 	

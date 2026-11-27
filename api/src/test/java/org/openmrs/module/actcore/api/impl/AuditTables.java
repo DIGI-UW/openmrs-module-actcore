@@ -24,7 +24,7 @@ import org.apache.commons.io.IOUtils;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.ModuleTables;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 
 /**
  * Makes the module's tables and the audit tables of audit-tables.sql, which the test context does
@@ -37,7 +37,7 @@ public final class AuditTables {
 	
 	public static void create() {
 		ModuleTables.create();
-		Transactions.inNewTransaction(() -> {
+		TransactionsInTest.inNewTransaction(() -> {
 			for (String statement : script().replaceAll("(?m)^--.*$", "").split(";")) {
 				if (statement.trim().startsWith("create table")) {
 					Context.getAdministrationService().executeSQL(statement.trim(), false);
