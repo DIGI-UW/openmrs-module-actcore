@@ -11,10 +11,11 @@ package org.openmrs.module.actcore;
 
 /**
  * The names that ACT Core shares with its config.xml, its database and the modules it depends on:
- * the global properties it declares, its user property, its tables, and the privileges of other
- * modules that it checks or proxies, and the page sizes of its logs. Each is spelled here once, and
- * the code refers to it through these constants. The config.xml describes each global property. ACT
- * Core's own privileges are in {@link ActCorePrivileges}.
+ * the global properties it declares, the one core keeps of whether it is started, its user
+ * property, its tables, and the privileges of other modules that it checks or proxies, and the page
+ * sizes of its logs. Each is spelled here once, and the code refers to it through these constants.
+ * The config.xml describes each global property. ACT Core's own privileges are in
+ * {@link ActCorePrivileges}.
  */
 public final class ActCoreConstants {
 	
@@ -109,6 +110,14 @@ public final class ActCoreConstants {
 	public static final String GP_RUN_CHARTS_REPORT = "actcore.runCharts.report";
 	
 	public static final String GP_FORMS_FEMALE_ONLY = "actcore.forms.femaleOnly";
+	
+	public static final String GP_TASKS_OFF_WHILE_STOPPED = "actcore.tasksOffWhileStopped";
+	
+	/**
+	 * The global property core keeps of whether ACT Core is started. Core sets it to false on a stop,
+	 * or a failed start that core records as stopped, and leaves it as it is when OpenMRS shuts down.
+	 */
+	public static final String MODULE_STARTED_PROPERTY = "actcore.started";
 	
 	/**
 	 * The name of the user property that holds the user's clinics, as location uuids separated by
