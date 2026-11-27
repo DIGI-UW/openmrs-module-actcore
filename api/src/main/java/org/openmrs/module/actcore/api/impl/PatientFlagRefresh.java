@@ -274,7 +274,7 @@ public class PatientFlagRefresh {
 		}
 		Map<Object, Object> evaluationContext = new HashMap<Object, Object>();
 		boolean matches = !Boolean.TRUE.equals(patient.getVoided())
-		        && Boolean.TRUE.equals(flag.eval(patient, evaluationContext));
+		        && Boolean.TRUE.equals(BoundedFlagEvaluation.within(flag, () -> flag.eval(patient, evaluationContext)));
 		Map<Integer, String> alreadyFlagged = flaggedMessages(flag, patientId);
 		
 		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
@@ -465,7 +465,7 @@ public class PatientFlagRefresh {
 	
 	private Set<Integer> evaluate(FlagService flagService, Flag flag, Map<Object, Object> evaluationContext) {
 		Set<Integer> patientIds = new HashSet<Integer>();
-		Cohort cohort = flagService.getFlaggedPatients(flag, evaluationContext);
+		Cohort cohort = BoundedFlagEvaluation.within(flag, () -> flagService.getFlaggedPatients(flag, evaluationContext));
 		if (cohort != null) {
 			for (CohortMembership membership : cohort.getMemberships()) {
 				patientIds.add(membership.getPatientId());

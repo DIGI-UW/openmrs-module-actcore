@@ -199,8 +199,8 @@ public class RaisedFlagServiceImpl extends BaseOpenmrsService implements RaisedF
 	
 	private DismissalOutcome dismissIfRaised(Patient patient, Flag flag) {
 		if (Boolean.TRUE.equals(patient.getVoided()) || !Boolean.TRUE.equals(flag.getEnabled())
-		        || Boolean.TRUE.equals(flag.getRetired())
-		        || !Boolean.TRUE.equals(flag.eval(patient, new HashMap<Object, Object>()))) {
+		        || Boolean.TRUE.equals(flag.getRetired()) || !Boolean.TRUE.equals(
+		            BoundedFlagEvaluation.within(flag, () -> flag.eval(patient, new HashMap<Object, Object>())))) {
 			return DismissalOutcome.NOT_RAISED;
 		}
 		Integer flagId = flag.getFlagId();
