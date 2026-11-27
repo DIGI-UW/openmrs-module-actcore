@@ -767,7 +767,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		String table = ActCoreConstants.DOWNLOAD_LOG_TABLE;
 		String last = "(select max(download_id) from " + table + ")";
 		AtomicReference<String> uuid = new AtomicReference<String>();
-		Transactions.inNewTransaction(() -> {
+		TransactionsInTest.inNewTransaction(() -> {
 			DbSession session = Context.getRegisteredComponent("dbSessionFactory", DbSessionFactory.class)
 			        .getCurrentSession();
 			session.createSQLQuery("update " + table + " set detail = :detail where download_id = " + last)
