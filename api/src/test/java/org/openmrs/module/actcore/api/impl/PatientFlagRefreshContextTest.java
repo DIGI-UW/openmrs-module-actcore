@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -58,6 +59,7 @@ import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.FlagEvaluator;
+import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
@@ -76,6 +78,11 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	        + MATCHING_PATIENT + ", " + OTHER_PATIENT + ")";
 	
 	private static final String MATCHES_NONE = "select p.patient_id from patient p where p.patient_id = -1";
+	
+	private static final long HANG_MILLIS = 5000;
+	
+	// A Groovy criterion that outlasts the evaluation bound the tests set; it matches every patient once it wakes.
+	private static final String HANGS = "Thread.sleep(" + HANG_MILLIS + "); return testCohort";
 	
 	private FlagService flagService;
 	
@@ -311,6 +318,36 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		assertEquals(Arrays.asList(MATCHING_PATIENT), deferred);
 		assertEquals(Arrays.asList(MATCHING_PATIENT), refreshedAtTheEnd);
 		assertEquals(1, activeMembers("overdue", MATCHING_PATIENT));
+	}
+	
+	@Test(timeout = 60000)
+	public void aRunRecordsAGroovyFlagThatDoesNotEndAsFailedAndGoesOnToTheFlagsAfterIt() {
+		Flag hung = saveGroovyFlag("hung", HANGS);
+		Flag overdue = saveFlag("overdue", MATCHES_ONE);
+		assertEquals(Arrays.asList(hung.getFlagId(), overdue.getFlagId()), flagIds());
+		
+		long startedAt = System.currentTimeMillis();
+		PatientFlagRefresh.Result ran = withShortEvaluationBound(PatientFlagRefreshInTest::runInTestTransaction);
+		
+		assertTrue(System.currentTimeMillis() - startedAt < HANG_MILLIS);
+		assertEquals(1, ran.flagsFailed);
+		assertEquals(1, liveRows(overdue));
+	}
+	
+	@Test(timeout = 60000)
+	public void refreshingAPatientGivesUpAGroovyFlagThatDoesNotEndAndRefreshesTheFlagsAfterIt() {
+		Flag hung = saveGroovyFlag("hung", HANGS);
+		Flag overdue = saveFlag("overdue", MATCHES_BOTH);
+		assertEquals(Arrays.asList(hung.getFlagId(), overdue.getFlagId()), flagIds());
+		
+		long startedAt = System.currentTimeMillis();
+		withShortEvaluationBound(() -> {
+			refreshPatient(MATCHING_PATIENT);
+			return null;
+		});
+		
+		assertTrue(System.currentTimeMillis() - startedAt < HANG_MILLIS);
+		assertEquals(1, liveRows(overdue));
 	}
 	
 	@Test
@@ -957,6 +994,36 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		flag.setEnabled(Boolean.TRUE);
 		flagService.saveFlag(flag);
 		return flag;
+	}
+	
+	private Flag saveGroovyFlag(String name, String criteria) {
+		Flag flag = new Flag();
+		flag.setName(name);
+		flag.setCriteria(criteria);
+		flag.setEvaluator(GroovyFlagEvaluator.class.getName());
+		flag.setMessage(name);
+		flag.setEnabled(Boolean.TRUE);
+		flagService.saveFlag(flag);
+		return flag;
+	}
+	
+	private List<Integer> flagIds() {
+		List<Integer> ids = new ArrayList<Integer>();
+		for (Flag flag : flagService.getAllFlags()) {
+			ids.add(flag.getFlagId());
+		}
+		return ids;
+	}
+	
+	private static <T> T withShortEvaluationBound(Supplier<T> work) {
+		long bound = BoundedFlagEvaluation.waitMillis;
+		BoundedFlagEvaluation.waitMillis = 300;
+		try {
+			return work.get();
+		}
+		finally {
+			BoundedFlagEvaluation.waitMillis = bound;
+		}
 	}
 	
 	private void rename(Flag flag, String name) {

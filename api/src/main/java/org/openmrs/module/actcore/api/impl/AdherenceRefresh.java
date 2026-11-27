@@ -77,13 +77,13 @@ class AdherenceRefresh {
 	
 	/**
 	 * How long a full refresh waits for the patients' refreshes in progress before it stops without
-	 * running. A patient's refresh that evaluates a Groovy flag can wait forever in patientflags
-	 * 3.0.10, whose {@code GroovyFlagEvaluatorThread.fetchResultCohort} waits with no condition and so
-	 * can miss the evaluator's notify; without a bound the refresh would wait with it. The refresh
-	 * endpoint waits for the run behind a gateway that may give up first, the distro's after 300 s, and
-	 * a flag refresh waits twice, for the flag rows and then for the adherence rows, so the bound stays
-	 * well under that. {@link org.openmrs.module.actcore.api.AdherenceService#refreshAll} states it in
-	 * words.
+	 * running. A patient's refresh gives up each Groovy flag's evaluation after
+	 * {@link BoundedFlagEvaluation#WAIT_SECONDS} seconds, so one with several Groovy flags that do not
+	 * end takes that long for each, which can pass this bound; without it the full refresh would wait
+	 * for such a refresh, or for any other that runs long. The refresh endpoint waits for the run
+	 * behind a gateway that may give up first, the distro's after 300 s, and a flag refresh waits
+	 * twice, for the flag rows and then for the adherence rows, so the bound stays well under that.
+	 * {@link org.openmrs.module.actcore.api.AdherenceService#refreshAll} states it in words.
 	 */
 	static final long ROWS_WAIT_MINUTES = 1;
 	
