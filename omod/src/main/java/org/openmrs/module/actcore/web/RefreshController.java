@@ -18,12 +18,12 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreActivator;
-import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
+import org.openmrs.module.actcore.model.PatientFlagRefreshResult;
+import org.openmrs.module.actcore.model.PatientFlagRefreshStatus;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
@@ -72,12 +72,12 @@ public class RefreshController extends ActCoreRestController {
 	@ResponseBody
 	public SimpleObject refresh() {
 		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
-		PatientFlagRefresh.Result ran = ActCoreActivator.runAsDaemon("run the refresh", "The patient flag refresh failed",
-		    () -> new PatientFlagRefresh().runIfIdle());
+		PatientFlagRefreshResult ran = ActCoreActivator.runAsDaemon("run the refresh", "The patient flag refresh failed",
+		    () -> Context.getService(PatientFlagRefreshService.class).refreshAll());
 		SimpleObject response = status().add("refreshed", ran != null);
 		if (ran != null) {
-			response.add("flagsFailed", ran.flagsFailed).add("listsFailed", ran.listsFailed).add("adherenceFailed",
-			    ran.adherenceFailed);
+			response.add("flagsFailed", ran.getFlagsFailed()).add("listsFailed", ran.getListsFailed()).add("adherenceFailed",
+			    ran.isAdherenceFailed());
 		}
 		return response;
 	}
@@ -103,15 +103,7 @@ public class RefreshController extends ActCoreRestController {
 	}
 	
 	private static SimpleObject status() {
-		String lastFinished;
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-			lastFinished = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-		}
-		return new SimpleObject().add("lastRefreshed", StringUtils.defaultIfBlank(lastFinished, null)).add("running",
-		    PatientFlagRefresh.isRunning());
+		PatientFlagRefreshStatus status = Context.getService(PatientFlagRefreshService.class).getStatus();
+		return new SimpleObject().add("lastRefreshed", status.getLastFinished()).add("running", status.isRunning());
 	}
 }

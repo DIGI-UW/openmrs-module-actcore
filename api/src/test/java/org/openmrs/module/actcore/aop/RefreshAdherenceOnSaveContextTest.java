@@ -38,9 +38,9 @@ import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
 import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
 import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.patientflags.Flag;
@@ -481,7 +481,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		Flag overdue = committed(overdueFlag());
 		prescribe(committed(encounter(7, 40)), q28, 40, null);
 		refresh.refreshAll(TODAY);
-		PatientFlagRefresh.refreshPatient(7);
+		Context.getService(PatientFlagRefreshService.class).refreshPatient(7);
 		assertEquals(1, flagged(overdue, 7));
 		return overdue;
 	}
@@ -504,7 +504,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 						try {
 							Context.authenticate("admin", "test");
 							Context.getService(AdherenceService.class).refreshPatient(7, TODAY);
-							PatientFlagRefresh.refreshPatient(7);
+							Context.getService(PatientFlagRefreshService.class).refreshPatient(7);
 						}
 						catch (Throwable e) {
 							failed.add(e);

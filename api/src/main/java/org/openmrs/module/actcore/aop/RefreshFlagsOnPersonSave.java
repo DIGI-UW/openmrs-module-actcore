@@ -18,7 +18,7 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Person;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
@@ -49,7 +49,7 @@ public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 			// Not in one transaction: it runs each flag in its own, so one that fails loses no other.
 			@Override
 			public void accept(int patientId) {
-				PatientFlagRefresh.refreshPatient(patientId);
+				Context.getService(PatientFlagRefreshService.class).refreshPatient(patientId);
 			}
 		});
 	}

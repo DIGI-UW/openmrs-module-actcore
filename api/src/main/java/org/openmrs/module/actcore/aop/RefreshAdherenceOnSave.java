@@ -17,8 +17,9 @@ import java.util.function.IntConsumer;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
 import org.openmrs.module.actcore.api.impl.FullAdherenceRefresh;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,8 +35,9 @@ import org.slf4j.LoggerFactory;
  * and a step that fails is logged and leaves the save as it is. While a full refresh is rewriting
  * the rows, each step leaves the patient to it at once, as
  * {@link FullAdherenceRefresh#refreshPatient(int)} and
- * {@link PatientFlagRefresh#refreshPatient(int)} describe. The flags are refreshed again here
- * because the patientflags module's own pass may run before the commit, and so miss the change.
+ * {@link PatientFlagRefreshService#refreshPatient(int)} describe. The flags are refreshed again
+ * here because the patientflags module's own pass may run before the commit, and so miss the
+ * change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
@@ -69,7 +71,7 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 			// Not in one transaction: it runs each flag in its own, so one that fails loses no other.
 			@Override
 			public void accept(int patientId) {
-				PatientFlagRefresh.refreshPatient(patientId);
+				Context.getService(PatientFlagRefreshService.class).refreshPatient(patientId);
 			}
 		});
 	}

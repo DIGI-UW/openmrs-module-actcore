@@ -33,6 +33,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
 import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
+import org.openmrs.module.actcore.model.PatientFlagRefreshResult;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
@@ -44,13 +45,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The refresh of the patient flags that
- * {@link org.openmrs.module.actcore.tasks.PatientFlagRefreshTask} runs. It first refreshes
+ * {@link org.openmrs.module.actcore.api.PatientFlagRefreshService} runs. It first refreshes
  * adherence, then re-evaluates every enabled, unretired flag, writing only the flag rows that
  * changed, and then syncs the flag lists. The patientflags module evaluates a flag only when a
  * patient's data is written, so without this refresh a criterion that becomes true with the passing
  * of time would never raise its flag.
  */
-public class PatientFlagRefresh {
+class PatientFlagRefresh {
 	
 	private static final Logger log = LoggerFactory.getLogger(PatientFlagRefresh.class);
 	
@@ -80,25 +81,6 @@ public class PatientFlagRefresh {
 	
 	int cleared;
 	
-	/** What failed in a run of the refresh, which the refresh endpoint reports. */
-	public static class Result {
-		
-		/** How many flags failed to be evaluated or written. */
-		public final int flagsFailed;
-		
-		/** How many flag lists failed to sync. */
-		public final int listsFailed;
-		
-		/** Whether the adherence refresh that runs first failed. */
-		public final boolean adherenceFailed;
-		
-		Result(int flagsFailed, int listsFailed, boolean adherenceFailed) {
-			this.flagsFailed = flagsFailed;
-			this.listsFailed = listsFailed;
-			this.adherenceFailed = adherenceFailed;
-		}
-	}
-	
 	/**
 	 * Runs the refresh now unless another run is in progress, and reports what failed in it. When the
 	 * run finishes, it refreshes the patients whose own refresh was left to it.
@@ -109,7 +91,7 @@ public class PatientFlagRefresh {
 	 *             {@link AdherenceRefresh#ROWS_WAIT_MINUTES} minutes, or the wait for them is
 	 *             interrupted; the next run can then start
 	 */
-	public Result runIfIdle() {
+	PatientFlagRefreshResult runIfIdle() {
 		if (!RUNNING.tryLock()) {
 			log.warn("Patient flag refresh skipped: another run is in progress");
 			return null;
@@ -160,7 +142,7 @@ public class PatientFlagRefresh {
 	 *
 	 * @return true while a run holds the refresh, whichever instance started it
 	 */
-	public static boolean isRunning() {
+	static boolean isRunning() {
 		return RUNNING.isLocked();
 	}
 	
@@ -172,7 +154,7 @@ public class PatientFlagRefresh {
 	 *
 	 * @param patientId the patient whose flags to refresh
 	 */
-	public static void refreshPatient(final int patientId) {
+	static void refreshPatient(final int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {
 			
 			@Override
@@ -295,7 +277,7 @@ public class PatientFlagRefresh {
 		}
 	}
 	
-	private Result refresh() {
+	private PatientFlagRefreshResult refresh() {
 		long startedAt = System.currentTimeMillis();
 		log.info("Patient flag refresh starting");
 		
@@ -338,7 +320,7 @@ public class PatientFlagRefresh {
 		
 		report(evaluated, failed, raised, cleared, lists, System.currentTimeMillis() - startedAt);
 		recordFinished();
-		return new Result(failed, lists.failures, adherenceFailed);
+		return new PatientFlagRefreshResult(failed, lists.failures, adherenceFailed);
 	}
 	
 	/**

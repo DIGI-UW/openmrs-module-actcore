@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.actcore.api.impl;
 
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.model.PatientFlagRefreshResult;
 
 /**
  * One patient's flag refresh run inside the test's transaction, which a transaction of its own per
@@ -22,7 +24,7 @@ public final class PatientFlagRefreshInTest {
 	private PatientFlagRefreshInTest() {
 	}
 	
-	public static PatientFlagRefresh.Result runWithAdherence(final Runnable adherence) {
+	public static PatientFlagRefreshResult runWithAdherence(final Runnable adherence) {
 		return new PatientFlagRefresh() {
 			
 			@Override
@@ -32,7 +34,7 @@ public final class PatientFlagRefreshInTest {
 		}.runIfIdle();
 	}
 	
-	public static PatientFlagRefresh.Result runInTestTransaction() {
+	public static PatientFlagRefreshResult runInTestTransaction() {
 		return new PatientFlagRefresh() {
 			
 			@Override
@@ -48,7 +50,7 @@ public final class PatientFlagRefreshInTest {
 		}.runIfIdle();
 	}
 	
-	public static PatientFlagRefresh inTestTransaction() {
+	static PatientFlagRefresh inTestTransaction() {
 		return new PatientFlagRefresh() {
 			
 			@Override
@@ -70,5 +72,13 @@ public final class PatientFlagRefreshInTest {
 				Context.flushSession();
 			}
 		});
+	}
+	
+	public static boolean isRunning() {
+		return PatientFlagRefresh.isRunning();
+	}
+	
+	public static ReentrantReadWriteLock rows() {
+		return PatientFlagRefresh.ROWS;
 	}
 }

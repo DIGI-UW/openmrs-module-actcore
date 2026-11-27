@@ -89,6 +89,18 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void patientFlagRefreshService_shouldRefuseAUserWithoutTheRefreshPrivilege() {
+		PatientFlagRefreshService service = Context.getService(PatientFlagRefreshService.class);
+		assertNotNull(service);
+		refused(() -> service.refreshAll(), ActCorePrivileges.REFRESH_FLAGS);
+		refused(() -> service.getStatus(), ActCorePrivileges.REFRESH_FLAGS);
+		holding(PatientFlagsConstants.PRIV_TEST_FLAGS, () -> {
+			refused(() -> service.refreshAll(), ActCorePrivileges.REFRESH_FLAGS);
+			refused(() -> service.getStatus(), ActCorePrivileges.REFRESH_FLAGS);
+		});
+	}
+	
+	@Test
 	public void saveMonth_shouldRefuseAUserWhoMayOnlyReadTheCounts() {
 		ScreeningCountService service = Context.getService(ScreeningCountService.class);
 		for (String read : new String[] { ActCorePrivileges.SCREENING_COUNTS, ActCorePrivileges.DASHBOARD }) {
@@ -258,6 +270,7 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 	public void refreshPatient_shouldRefuseACallerWhoIsNotSignedIn() {
 		Context.logout();
 		refusedSignedOut(() -> Context.getService(AdherenceService.class).refreshPatient(2, TODAY));
+		refusedSignedOut(() -> Context.getService(PatientFlagRefreshService.class).refreshPatient(2));
 	}
 	
 	@Test

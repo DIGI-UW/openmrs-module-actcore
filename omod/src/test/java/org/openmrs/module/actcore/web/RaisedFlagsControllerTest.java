@@ -14,7 +14,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,7 +39,7 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.aop.HideDismissedFlags;
 import org.openmrs.module.actcore.api.RaisedFlagService;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
 import org.openmrs.module.actcore.api.impl.RaisedFlagServiceInTest;
 import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.patientflags.Flag;
@@ -138,9 +137,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	@Test
 	public void answersConflictWhileTheFullRefreshHoldsTheRows() throws Exception {
 		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
-		Field field = PatientFlagRefresh.class.getDeclaredField("ROWS");
-		field.setAccessible(true);
-		final ReentrantReadWriteLock rows = (ReentrantReadWriteLock) field.get(null);
+		final ReentrantReadWriteLock rows = PatientFlagRefreshInTest.rows();
 		ExecutorService refresh = Executors.newSingleThreadExecutor();
 		final CountDownLatch done = new CountDownLatch(1);
 		Future<?> held = refresh.submit(new Callable<Void>() {

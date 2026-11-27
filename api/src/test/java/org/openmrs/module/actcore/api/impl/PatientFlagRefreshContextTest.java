@@ -50,6 +50,7 @@ import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.model.PatientFlagRefreshResult;
 import org.openmrs.module.cohort.CohortM;
 import org.openmrs.module.cohort.CohortMember;
 import org.openmrs.module.cohort.CohortType;
@@ -101,16 +102,16 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	public void recordsWhenItFinished() {
 		Instant before = Instant.now();
 		
-		PatientFlagRefresh.Result ran = new PatientFlagRefresh() {
+		PatientFlagRefreshResult ran = new PatientFlagRefresh() {
 			
 			@Override
 			void refreshAdherence() {
 			}
 		}.runIfIdle();
 		
-		assertEquals(0, ran.flagsFailed);
-		assertEquals(0, ran.listsFailed);
-		assertTrue(!ran.adherenceFailed);
+		assertEquals(0, ran.getFlagsFailed());
+		assertEquals(0, ran.getListsFailed());
+		assertTrue(!ran.isAdherenceFailed());
 		Instant finished = Instant
 		        .parse(Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED));
 		assertTrue(!finished.isBefore(before) && !finished.isAfter(Instant.now()));
@@ -140,11 +141,11 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 			}
 		};
 		
-		PatientFlagRefresh.Result ran = failing.runIfIdle();
+		PatientFlagRefreshResult ran = failing.runIfIdle();
 		
-		assertEquals(1, ran.flagsFailed);
-		assertEquals(2, ran.listsFailed);
-		assertTrue(ran.adherenceFailed);
+		assertEquals(1, ran.getFlagsFailed());
+		assertEquals(2, ran.getListsFailed());
+		assertTrue(ran.isAdherenceFailed());
 		assertNotNull(Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED));
 	}
 	
@@ -331,10 +332,10 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		assertEquals(Arrays.asList(hung.getFlagId(), overdue.getFlagId()), flagIds());
 		
 		long startedAt = System.currentTimeMillis();
-		PatientFlagRefresh.Result ran = withShortEvaluationBound(PatientFlagRefreshInTest::runInTestTransaction);
+		PatientFlagRefreshResult ran = withShortEvaluationBound(PatientFlagRefreshInTest::runInTestTransaction);
 		
 		assertTrue(System.currentTimeMillis() - startedAt < HANG_MILLIS);
-		assertEquals(1, ran.flagsFailed);
+		assertEquals(1, ran.getFlagsFailed());
 		assertEquals(1, liveRows(overdue));
 	}
 	

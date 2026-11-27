@@ -9,19 +9,20 @@
  */
 package org.openmrs.module.actcore.tasks;
 
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
 import org.openmrs.scheduler.tasks.AbstractTask;
 
 /**
- * The scheduled task that refreshes the patient flags, as {@link PatientFlagRefresh} describes. A
- * run that starts while another is in progress is skipped. The scheduler stores this class's name,
- * so it keeps its name and package.
+ * The scheduled task that refreshes the patient flags, as
+ * {@link PatientFlagRefreshService#refreshAll()} describes. A run that starts while another is in
+ * progress is skipped. The scheduler stores this class's name, so it keeps its name and package.
  */
 public class PatientFlagRefreshTask extends AbstractTask {
 	
 	/** @see org.openmrs.scheduler.tasks.AbstractTask#execute() */
 	@Override
 	public void execute() {
-		new PatientFlagRefresh().runIfIdle();
+		Context.getService(PatientFlagRefreshService.class).refreshAll();
 	}
 }

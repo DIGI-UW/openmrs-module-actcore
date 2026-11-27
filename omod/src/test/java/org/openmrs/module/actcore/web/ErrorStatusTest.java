@@ -56,7 +56,7 @@ import org.openmrs.module.actcore.ActCoreActivator;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
-import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.ConversionException;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -309,7 +309,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 				assertJsonError(contentType + " " + accept, 415, response);
 				assertEquals("application/json", response.getHeader("Accept"));
 				assertEquals(contentType + " " + accept, lastFinished, lastRefreshFinished());
-				assertFalse(PatientFlagRefresh.isRunning());
+				assertFalse(PatientFlagRefreshInTest.isRunning());
 			}
 		}
 	}
@@ -436,7 +436,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 			
 			assertNotAcceptable(accept, dispatch(request));
 			assertEquals(accept, lastFinished, lastRefreshFinished());
-			assertFalse(PatientFlagRefresh.isRunning());
+			assertFalse(PatientFlagRefreshInTest.isRunning());
 		}
 	}
 	

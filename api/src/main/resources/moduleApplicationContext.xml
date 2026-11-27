@@ -89,6 +89,23 @@
         </property>
     </bean>
 
+    <bean id="actcore.PatientFlagRefreshService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.PatientFlagRefreshServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.PatientFlagRefreshService</value>
+                <ref bean="actcore.PatientFlagRefreshService"/>
+            </list>
+        </property>
+    </bean>
+
     <bean id="actcore.StudyService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
         <property name="transactionManager" ref="transactionManager"/>
         <property name="target">
