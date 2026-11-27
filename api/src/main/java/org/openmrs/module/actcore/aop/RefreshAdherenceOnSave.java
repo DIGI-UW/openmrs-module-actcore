@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.actcore.aop;
 
-import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -18,8 +17,7 @@ import java.util.function.IntConsumer;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.Encounter;
-import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.api.AdherenceService;
+import org.openmrs.module.actcore.api.impl.FullAdherenceRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.utils.Transactions;
 import org.slf4j.Logger;
@@ -32,8 +30,11 @@ import org.slf4j.LoggerFactory;
  * request, the service has already committed and the refresh runs at once, before the call returns.
  * Otherwise, as inside a wider transaction, the refresh waits as
  * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each step of the refresh
- * runs in a new transaction, as {@link Transactions#inNewTransaction(Runnable)} describes, and a
- * step that fails is logged and leaves the save as it is. The flags are refreshed again here
+ * runs as a unit of its own, as {@link Transactions#inPatientTransaction(int, Runnable)} describes,
+ * and a step that fails is logged and leaves the save as it is. While a full refresh is rewriting
+ * the rows, each step leaves the patient to it at once, as
+ * {@link FullAdherenceRefresh#refreshPatient(int)} and
+ * {@link PatientFlagRefresh#refreshPatient(int)} describe. The flags are refreshed again here
  * because the patientflags module's own pass may run before the commit, and so miss the change.
  */
 public class RefreshAdherenceOnSave implements MethodInterceptor {
@@ -42,9 +43,12 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 	
 	/**
 	 * The time, in milliseconds, beyond which a patient's refresh is logged as a warning rather than at
-	 * debug level, since the save waits for the refresh to finish.
+	 * debug level, since the save waits for the refresh to finish. It is several times longer than a
+	 * save waits under many concurrent saves, waiting for another refresh of the same patient included,
+	 * and shorter than MySQL's default lock wait timeout of 50 seconds, so a refresh that waited on a
+	 * lock for most of that is still reported.
 	 */
-	static final long SLOW_MILLIS = 1000L;
+	static final long SLOW_MILLIS = 10000L;
 	
 	private static final Set<String> METHODS = new HashSet<String>(
 	        Arrays.asList("saveEncounter", "voidEncounter", "unvoidEncounter", "purgeEncounter"));
@@ -57,14 +61,8 @@ public class RefreshAdherenceOnSave implements MethodInterceptor {
 		this(new IntConsumer() {
 			
 			@Override
-			public void accept(final int patientId) {
-				Transactions.inNewTransaction(new Runnable() {
-					
-					@Override
-					public void run() {
-						Context.getService(AdherenceService.class).refreshPatient(patientId, LocalDate.now());
-					}
-				});
+			public void accept(int patientId) {
+				FullAdherenceRefresh.refreshPatient(patientId);
 			}
 		}, new IntConsumer() {
 			
