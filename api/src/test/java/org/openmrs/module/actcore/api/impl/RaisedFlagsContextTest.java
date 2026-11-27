@@ -33,6 +33,7 @@ import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -51,6 +52,7 @@ import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
 import org.openmrs.module.patientflags.Tag;
 import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
@@ -317,6 +319,31 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, listMembers());
 		assertEquals(DismissalOutcome.DISMISSED, dismiss());
 		assertEquals(0, PatientFlagRefresh.ROWS.getReadLockCount());
+	}
+	
+	@Test(timeout = 60000)
+	public void givesUpADismissalWhoseGroovyFlagDoesNotEndAndLetsGoOfTheRows() {
+		Flag hung = flagService.getFlag(flag.getFlagId());
+		hung.setEvaluator(GroovyFlagEvaluator.class.getName());
+		hung.setCriteria("Thread.sleep(5000); return testCohort");
+		flagService.saveFlag(hung);
+		long bound = BoundedFlagEvaluation.waitMillis;
+		BoundedFlagEvaluation.waitMillis = 300;
+		long startedAt = System.currentTimeMillis();
+		try {
+			dismiss();
+			fail("The dismissal did not give up the evaluation");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().startsWith("Gave up evaluating flag 'missing data'"));
+		}
+		finally {
+			BoundedFlagEvaluation.waitMillis = bound;
+		}
+		
+		assertTrue(System.currentTimeMillis() - startedAt < 5000);
+		assertEquals(0, PatientFlagRefresh.ROWS.getReadLockCount());
+		assertEquals(0, rows());
 	}
 	
 	@Test

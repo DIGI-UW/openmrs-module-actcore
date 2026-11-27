@@ -131,12 +131,11 @@ public class BoundedFlagEvaluationContextTest extends BaseModuleContextSensitive
 		}
 	}
 	
-	// No timeout: JUnit would run the test on a daemon thread of its own, which the worker would take after.
+	// No timeout: JUnit would run the test on a daemon thread, and the worker would be one too.
 	@Test
 	public void within_shouldRunTheWorkerOnADaemonThreadAsTheCallerWithItsProxyPrivileges() {
 		Thread callerThread = Thread.currentThread();
 		assertFalse(callerThread.isDaemon());
-		System.err.println("PROBE caller " + callerThread.getName() + " daemon=" + callerThread.isDaemon());
 		Context.logout();
 		UserContext caller = Context.getUserContext();
 		Context.addProxyPrivilege(PrivilegeConstants.GET_PATIENTS);
