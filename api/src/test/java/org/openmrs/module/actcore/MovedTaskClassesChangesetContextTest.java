@@ -21,7 +21,7 @@ import org.junit.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.tasks.AdherenceRefreshTask;
 import org.openmrs.module.actcore.tasks.PatientFlagRefreshTask;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.scheduler.TaskDefinition;
 import org.openmrs.scheduler.tasks.HelloWorldTask;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
@@ -48,7 +48,7 @@ public class MovedTaskClassesChangesetContextTest extends BaseModuleContextSensi
 			int other = savedUnder(HelloWorldTask.class.getName());
 			
 			// Liquibase skips a changeset it has recorded, and ModuleTables already ran this one.
-			Transactions.inNewTransaction(() -> Context.getAdministrationService()
+			TransactionsInTest.inNewTransaction(() -> Context.getAdministrationService()
 			        .executeSQL("delete from liquibasechangelog where id = '" + CHANGESET + "'", false));
 			DatabaseUpdater.executeChangelog("liquibase.xml", new Contexts(), null, getClass().getClassLoader());
 			
@@ -59,7 +59,7 @@ public class MovedTaskClassesChangesetContextTest extends BaseModuleContextSensi
 			assertEquals(HelloWorldTask.class.getName(), storedClass(other));
 		}
 		finally {
-			Transactions.inNewTransaction(() -> {
+			TransactionsInTest.inNewTransaction(() -> {
 				for (Integer id : saved) {
 					Context.getAdministrationService()
 					        .executeSQL("delete from scheduler_task_config where task_config_id = " + id, false);
@@ -74,7 +74,7 @@ public class MovedTaskClassesChangesetContextTest extends BaseModuleContextSensi
 	 */
 	private int savedUnder(String taskClass) {
 		TaskDefinition task = new TaskDefinition();
-		Transactions.inNewTransaction(() -> {
+		TransactionsInTest.inNewTransaction(() -> {
 			task.setName("Moved task classes test " + saved.size());
 			task.setTaskClass(HelloWorldTask.class.getName());
 			task.setRepeatInterval(3600L);
