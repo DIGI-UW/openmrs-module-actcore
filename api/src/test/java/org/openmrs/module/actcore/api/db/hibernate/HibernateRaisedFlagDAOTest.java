@@ -24,7 +24,7 @@ import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
-/** The reads of the patientflags module's rows and of cohorts give what their SQL gives. */
+/** The reads and deletes of the patientflags module's rows and the reads of cohorts. */
 public class HibernateRaisedFlagDAOTest extends BaseModuleContextSensitiveTest {
 	
 	private HibernateRaisedFlagDAO dao;
@@ -60,6 +60,17 @@ public class HibernateRaisedFlagDAOTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void deletePatientFlagRows_shouldDeleteThePatientsUnvoidedRowsOfTheFlagOnly() {
+		row(8, "live", false);
+		
+		dao.deletePatientFlagRows(flag.getFlagId(), 7);
+		dao.deletePatientFlagRows(flag.getFlagId(), 8);
+		dao.deletePatientFlagRows(flag.getFlagId(), 7);
+		
+		assertEquals("2 first false, 8 voided true", rows());
+	}
+	
+	@Test
 	public void hasCohort_shouldTellWhetherItsSqlCountsACohort() {
 		String uuid = UUID.randomUUID().toString();
 		assertFalse(dao.hasCohort(uuid));
@@ -69,6 +80,18 @@ public class HibernateRaisedFlagDAOTest extends BaseModuleContextSensitiveTest {
 		            false);
 		assertTrue(dao.hasCohort(uuid));
 		assertFalse(dao.hasCohort("o'brien"));
+	}
+	
+	private String rows() {
+		StringBuilder rows = new StringBuilder();
+		for (List<Object> row : Context.getAdministrationService()
+		        .executeSQL("select patient_id, message, voided from patientflags_patient_flag where flag_id = "
+		                + flag.getFlagId() + " order by patient_id, message",
+		            true)) {
+			rows.append(rows.length() == 0 ? "" : ", ").append(row.get(0)).append(' ').append(row.get(1)).append(' ')
+			        .append(row.get(2));
+		}
+		return rows.toString();
 	}
 	
 	private void row(int patientId, String message, boolean voided) {

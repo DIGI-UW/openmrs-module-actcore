@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.openmrs.Patient;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.actcore.api.db.RegistryDAO;
 import org.openmrs.util.DatabaseUtil;
@@ -45,5 +46,15 @@ public class HibernateRegistryDAO implements RegistryDAO {
 			patientIds.add(((Number) row.get(0)).intValue());
 		}
 		return patientIds;
+	}
+	
+	/**
+	 * @see org.openmrs.module.actcore.api.db.RegistryDAO#lockPatient(Integer)
+	 */
+	@Override
+	public void lockPatient(Integer patientId) {
+		sessionFactory.getCurrentSession().flush();
+		sessionFactory.getCurrentSession().createSQLQuery("select patient_id from patient where patient_id = ?1 for update")
+		        .addSynchronizedEntityClass(Patient.class).setParameter(1, patientId).uniqueResult();
 	}
 }

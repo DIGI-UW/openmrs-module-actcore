@@ -9,6 +9,10 @@
  */
 package org.openmrs.module.actcore.web;
 
+import java.util.Collections;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
@@ -20,8 +24,10 @@ import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -74,6 +80,26 @@ public class RefreshController extends ActCoreRestController {
 			    ran.adherenceFailed);
 		}
 		return response;
+	}
+	
+	/**
+	 * Refuses a POST that is not JSON, which {@link #refresh()} does not take, with 415. Without it the
+	 * POST would reach {@link FallbackController}, which answers 405.
+	 *
+	 * @param request the request
+	 * @throws HttpMediaTypeNotSupportedException always, naming the request's content type
+	 */
+	@RequestMapping(value = "/refresh", method = RequestMethod.POST)
+	public void refuseAnythingButJson(HttpServletRequest request) throws HttpMediaTypeNotSupportedException {
+		MediaType given;
+		try {
+			given = StringUtils.isBlank(request.getContentType()) ? null
+			        : MediaType.parseMediaType(request.getContentType());
+		}
+		catch (InvalidMediaTypeException e) {
+			throw new HttpMediaTypeNotSupportedException(e.getMessage());
+		}
+		throw new HttpMediaTypeNotSupportedException(given, Collections.singletonList(MediaType.APPLICATION_JSON));
 	}
 	
 	private static SimpleObject status() {

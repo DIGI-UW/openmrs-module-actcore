@@ -18,13 +18,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -101,6 +105,9 @@ public class PatientFlagRefresh {
 	 *
 	 * @return the flags and lists that failed and whether the adherence refresh failed, or null when
 	 *         another run was in progress
+	 * @throws APIException when a patient's refresh still holds the rows after
+	 *             {@link AdherenceRefresh#ROWS_WAIT_MINUTES} minutes, or the wait for them is
+	 *             interrupted; the next run can then start
 	 */
 	public Result runIfIdle() {
 		if (!RUNNING.tryLock()) {
@@ -108,8 +115,8 @@ public class PatientFlagRefresh {
 			return null;
 		}
 		try {
-			// Waits for the patients' refreshes already going.
-			ROWS.writeLock().lock();
+			// Waits for the patients' refreshes already going, as long as AdherenceRefresh waits for its rows.
+			AdherenceRefresh.lockWithin(ROWS.writeLock(), rowsWaitMillis(), "The patient flag refresh", "the flag rows");
 			try {
 				return refresh();
 			}
@@ -121,6 +128,10 @@ public class PatientFlagRefresh {
 		finally {
 			RUNNING.unlock();
 		}
+	}
+	
+	long rowsWaitMillis() {
+		return TimeUnit.MINUTES.toMillis(AdherenceRefresh.ROWS_WAIT_MINUTES);
 	}
 	
 	/**
@@ -156,16 +167,17 @@ public class PatientFlagRefresh {
 	/**
 	 * Re-evaluates one patient's flags and updates the patient's place on the flag lists, after a save
 	 * that the patientflags module's own pass may have evaluated before it committed. While a full
-	 * refresh is writing the rows, the patient is left to that run, which refreshes them when it ends.
+	 * refresh of the flags, or of adherence running on its own, is writing the rows, the patient is
+	 * left to that run at once, which refreshes them when it ends.
 	 *
 	 * @param patientId the patient whose flags to refresh
 	 */
-	public static void refreshPatient(int patientId) {
+	public static void refreshPatient(final int patientId) {
 		refreshPatient(patientId, new Consumer<Runnable>() {
 			
 			@Override
 			public void accept(Runnable work) {
-				Transactions.inNewTransaction(work);
+				Transactions.inPatientTransaction(patientId, work);
 			}
 		});
 	}
@@ -193,44 +205,7 @@ public class PatientFlagRefresh {
 			Context.addProxyPrivilege(privilege);
 		}
 		try {
-			final List<Integer> flagIds = new ArrayList<Integer>();
-			unit.accept(new Runnable() {
-				
-				@Override
-				public void run() {
-					for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
-						flagIds.add(flag.getFlagId());
-					}
-				}
-			});
-			for (final Integer flagId : flagIds) {
-				try {
-					unit.accept(new Runnable() {
-						
-						@Override
-						public void run() {
-							reconcile(flagId, patientId);
-						}
-					});
-				}
-				catch (RuntimeException e) {
-					log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
-				}
-			}
-			for (final Integer flagId : flagIds) {
-				try {
-					unit.accept(new Runnable() {
-						
-						@Override
-						public void run() {
-							new FlagListSync().syncPatient(flagId, patientId);
-						}
-					});
-				}
-				catch (RuntimeException e) {
-					log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
-				}
-			}
+			AdherenceRefresh.unlessRefreshingAll(patientId, () -> refreshEachFlag(patientId, unit));
 		}
 		finally {
 			for (String privilege : PATIENT_PRIVILEGES) {
@@ -238,6 +213,51 @@ public class PatientFlagRefresh {
 			}
 			ROWS.readLock().unlock();
 		}
+	}
+	
+	private static void refreshEachFlag(final int patientId, Consumer<Runnable> unit) {
+		List<Integer> flagIds = supply(unit, () -> {
+			List<Integer> ids = new ArrayList<Integer>();
+			for (Flag flag : Context.getService(FlagService.class).getAllFlags()) {
+				ids.add(flag.getFlagId());
+			}
+			return ids;
+		});
+		for (final Integer flagId : flagIds) {
+			try {
+				unit.accept(new Runnable() {
+					
+					@Override
+					public void run() {
+						reconcile(flagId, patientId);
+					}
+				});
+			}
+			catch (RuntimeException e) {
+				log.error("Could not refresh flag {} for patient {}", flagId, patientId, e);
+			}
+		}
+		for (final Integer flagId : flagIds) {
+			try {
+				unit.accept(new Runnable() {
+					
+					@Override
+					public void run() {
+						new FlagListSync().syncPatient(flagId, patientId);
+					}
+				});
+			}
+			catch (RuntimeException e) {
+				log.error("Could not sync the list of flag {} for patient {}", flagId, patientId, e);
+			}
+		}
+	}
+	
+	/** Runs the work as a unit and returns what its last run gave, so a run again replaces it. */
+	private static <T> T supply(Consumer<Runnable> unit, Supplier<T> work) {
+		AtomicReference<T> result = new AtomicReference<T>();
+		unit.accept(() -> result.set(work.get()));
+		return result.get();
 	}
 	
 	/**
@@ -260,7 +280,7 @@ public class PatientFlagRefresh {
 		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
 		if (!matches) {
 			if (alreadyFlagged.containsKey(patientId)) {
-				flagService.deletePatientFlagForPatient(patient, flag);
+				deleteFlagRows(flagId, patientId);
 			}
 			raisedFlags.lower(flagId, patientId);
 			return;
@@ -270,7 +290,7 @@ public class PatientFlagRefresh {
 		if (!alreadyFlagged.containsKey(patientId)) {
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
 		} else if (!message.equals(alreadyFlagged.get(patientId))) {
-			flagService.deletePatientFlagForPatient(patient, flag);
+			deleteFlagRows(flagId, patientId);
 			flagService.savePatientFlag(new PatientFlag(patient, flag, message));
 		}
 	}
@@ -384,7 +404,7 @@ public class PatientFlagRefresh {
 		// Clearing first, since evaluating a message can throw and end the flag's pass.
 		for (Integer patientId : alreadyFlagged.keySet()) {
 			if (!matching.contains(patientId)) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
+				inPatientTransaction(patientId, () -> deleteFlagRows(flag, patientId));
 				cleared++;
 			}
 		}
@@ -395,14 +415,37 @@ public class PatientFlagRefresh {
 				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
 				raised++;
 			} else if (!message.equals(alreadyFlagged.get(patientId))) {
-				flagService.deletePatientFlagForPatient(new Patient(patientId), flag);
-				flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
+				inPatientTransaction(patientId, () -> {
+					deleteFlagRows(flag, patientId);
+					flagService.savePatientFlag(new PatientFlag(new Patient(patientId), flag, message));
+				});
 			}
 		}
 		
 		if (raised > raisedBefore || cleared > clearedBefore) {
 			log.debug("Flag '{}': {} raised, {} cleared", flag.getName(), raised - raisedBefore, cleared - clearedBefore);
 		}
+	}
+	
+	/**
+	 * Runs the full refresh's delete of one patient's flag row, with the save that rewrites it when its
+	 * message changed, as a unit of its own, so that a deadlock with the patientflags module's own
+	 * thread is retried rather than ending the flag's pass.
+	 */
+	void inPatientTransaction(int patientId, Runnable work) {
+		Transactions.inPatientTransaction(patientId, work);
+	}
+	
+	void deleteFlagRows(Flag flag, int patientId) {
+		deleteFlagRows(flag.getFlagId(), patientId);
+	}
+	
+	/**
+	 * Deletes the patient's rows of the flag, as {@link RaisedFlagDAO#deletePatientFlagRows} describes,
+	 * so that a row the patientflags module's own thread has already deleted is no error.
+	 */
+	private static void deleteFlagRows(int flagId, int patientId) {
+		Context.getRegisteredComponents(RaisedFlagDAO.class).get(0).deletePatientFlagRows(flagId, patientId);
 	}
 	
 	void trackRaised(Flag flag, Set<Integer> matching) {

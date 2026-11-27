@@ -42,7 +42,7 @@ import org.openmrs.module.actcore.api.impl.AdherenceContextTest;
 import org.openmrs.module.actcore.api.impl.AdherenceRefreshInTest;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefresh;
 import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
@@ -321,7 +321,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		try {
 			Encounter report = unsaved(7, 0);
 			
-			committed(encounters(patientId -> Transactions.inNewTransaction(() -> {
+			committed(encounters(patientId -> TransactionsInTest.inNewTransaction(() -> {
 				throw new IllegalStateException("Deadlock found when trying to get lock");
 			}), patientId -> {}).saveEncounter(report));
 			
@@ -403,14 +403,33 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 	}
 	
 	@Test
-	public void saveEncounter_shouldNotWarnOfARefreshUnderASecond() {
+	public void saveEncounter_shouldNotWarnOfAQuickRefresh() {
 		List<LogEvent> logged = warnings(encounters());
 		
 		assertEquals(0, logged.size());
 	}
 	
+	/** The longest a save waited for its refresh under concurrent saves in the load tests was 2.4 s. */
 	@Test
-	public void saveEncounter_shouldWarnOfARefreshOverASecond() {
+	public void saveEncounter_shouldNotWarnOfARefreshAsSlowAsUnderConcurrentLoad() {
+		List<LogEvent> logged = warnings(encounters(new IntConsumer() {
+			
+			@Override
+			public void accept(int patientId) {
+				try {
+					Thread.sleep(2500);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+		}));
+		
+		assertEquals(0, logged.size());
+	}
+	
+	@Test
+	public void saveEncounter_shouldWarnOfARefreshOverTheSlowThreshold() {
 		List<LogEvent> logged = warnings(encounters(new IntConsumer() {
 			
 			@Override

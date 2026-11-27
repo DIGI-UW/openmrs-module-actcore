@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.Test;
-import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -73,14 +72,14 @@ public class BadParametersTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
-	public void namesTheBadParameterWithoutAStackTrace() {
+	public void namesTheBadParameterWithoutAStackTrace() throws Exception {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		
-		SimpleObject body = activity.badParameterHandler(new MissingServletRequestParameterException("month", "String"),
-		    response);
+		activity.badParameterHandler(new MissingServletRequestParameterException("month", "String"),
+		    new MockHttpServletRequest(), response);
 		
 		assertEquals(400, response.getStatus());
-		assertEquals("{error={message=month is required}}", body.toString());
+		assertEquals("{\"error\":{\"message\":\"month is required\"}}", response.getContentAsString());
 	}
 	
 	@Test

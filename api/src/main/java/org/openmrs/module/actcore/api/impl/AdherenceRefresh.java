@@ -27,12 +27,15 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -56,14 +59,33 @@ class AdherenceRefresh {
 	
 	/**
 	 * The lock that keeps a refresh of one patient from writing while the full refresh runs. Each
-	 * patient's refresh holds it shared, and the full refresh holds it alone, because the full refresh
-	 * reads every patient before it rewrites them all, so a row written in between would be put back as
-	 * it was.
+	 * patient's refresh, of their adherence or of their flags, and each dismissal holds it shared, and
+	 * the full refresh holds it alone, because the full refresh reads every patient before it rewrites
+	 * them all, so a row written in between would be put back as it was. The rewrite also holds each
+	 * patient's row in the patient table until it commits, through the rows' foreign keys, so a
+	 * patient's refresh that locked that row would wait for it.
 	 */
 	private static final ReentrantReadWriteLock ROWS = new ReentrantReadWriteLock();
 	
-	// The handshake PatientFlagRefresh uses for flags: a fix to one belongs in both.
+	/**
+	 * The patients left to the running full refresh, which refreshes their adherence and flags once it
+	 * has finished. A patient is added by their own refresh, or by a dismissal refused while the full
+	 * refresh runs, which then gets that refresh but no dismissal. PatientFlagRefresh keeps the same
+	 * handshake for flags, so a fix to one belongs in both.
+	 */
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
+	
+	/**
+	 * How long a full refresh waits for the patients' refreshes in progress before it stops without
+	 * running. A patient's refresh that evaluates a Groovy flag can wait forever in patientflags
+	 * 3.0.10, whose {@code GroovyFlagEvaluatorThread.fetchResultCohort} waits with no condition and so
+	 * can miss the evaluator's notify; without a bound the refresh would wait with it. The refresh
+	 * endpoint waits for the run behind a gateway that may give up first, the distro's after 300 s, and
+	 * a flag refresh waits twice, for the flag rows and then for the adherence rows, so the bound stays
+	 * well under that. {@link org.openmrs.module.actcore.api.AdherenceService#refreshAll} states it in
+	 * words.
+	 */
+	static final long ROWS_WAIT_MINUTES = 1;
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
@@ -97,9 +119,11 @@ class AdherenceRefresh {
 	 *
 	 * @param today the day to compute adherence and due dates as of
 	 * @return the number of patients written a row, 0 when none has a prescription
+	 * @throws APIException when a patient's refresh still holds the rows after
+	 *             {@link #ROWS_WAIT_MINUTES} minutes, or the wait for them is interrupted
 	 */
 	public int refreshAll(LocalDate today) {
-		ROWS.writeLock().lock();
+		lockWithin(ROWS.writeLock(), rowsWaitMillis(), "The adherence refresh", "the adherence rows");
 		try {
 			return refresh(today);
 		}
@@ -109,11 +133,40 @@ class AdherenceRefresh {
 		}
 	}
 	
+	long rowsWaitMillis() {
+		return TimeUnit.MINUTES.toMillis(ROWS_WAIT_MINUTES);
+	}
+	
+	/**
+	 * Takes a full refresh's lock on its rows, or stops the refresh when others still hold it after the
+	 * wait. An interrupt ends the wait and is kept on the thread.
+	 *
+	 * @param lock the lock to take
+	 * @param millis how long to wait for it
+	 * @param refresh the refresh, as "The adherence refresh"
+	 * @param rows the rows the lock guards, as "the adherence rows"
+	 * @throws APIException when the lock is not taken, saying why
+	 */
+	static void lockWithin(Lock lock, long millis, String refresh, String rows) {
+		try {
+			if (lock.tryLock(millis, TimeUnit.MILLISECONDS)) {
+				return;
+			}
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException(refresh + " did not run: it was interrupted while waiting for " + rows, e);
+		}
+		throw new APIException(refresh + " did not run: it could not take " + rows + " within "
+		        + TimeUnit.MILLISECONDS.toSeconds(millis) + " s, as a patient's refresh or a dismissal still held them");
+	}
+	
 	private void refreshDeferred(LocalDate today) {
 		for (Integer patientId : new ArrayList<Integer>(DEFERRED)) {
 			if (DEFERRED.remove(patientId)) {
 				try {
-					refreshPatient(patientId, today);
+					unlessRefreshingAll(patientId,
+					    () -> Transactions.inPatientTransaction(patientId, () -> rewritePatient(patientId, today)));
 					PatientFlagRefresh.refreshPatient(patientId);
 				}
 				catch (RuntimeException e) {
@@ -132,11 +185,25 @@ class AdherenceRefresh {
 	 * @param today the day to compute adherence and due dates as of
 	 */
 	public void refreshPatient(int patientId, LocalDate today) {
+		unlessRefreshingAll(patientId, () -> rewritePatient(patientId, today));
+	}
+	
+	/**
+	 * Runs one patient's work while holding the rows shared, unless a full refresh is running. The
+	 * patient is then left to that run at once, which refreshes the patient's adherence and flags once
+	 * it has finished, and the work does not run. When the work is a dismissal, the patient therefore
+	 * gets that refresh with no dismissal. It does not wait for the rows, so a refresh that then locks
+	 * the patient's row does not wait for the rewrite to commit.
+	 *
+	 * @param patientId the patient the work is for
+	 * @param work the work to run, a refresh of the patient or a dismissal
+	 */
+	static void unlessRefreshingAll(int patientId, Runnable work) {
 		if (!ROWS.readLock().tryLock()) {
 			DEFERRED.add(patientId);
 			// The full refresh may have let go, and refreshed the ones it was left, since the first try.
 			if (!ROWS.readLock().tryLock()) {
-				log.info("Adherence of patient {} left to the adherence refresh running now", patientId);
+				log.info("Patient {} left to the adherence refresh running now", patientId);
 				return;
 			}
 			if (!DEFERRED.remove(patientId)) {
@@ -146,14 +213,18 @@ class AdherenceRefresh {
 			}
 		}
 		try {
-			List<Object[]> rows = new ArrayList<Object[]>();
-			List<Object[]> timings = new ArrayList<Object[]>();
-			compute(read(patientId), today, rows, timings);
-			rewrite(patientId, rows, timings);
+			work.run();
 		}
 		finally {
 			ROWS.readLock().unlock();
 		}
+	}
+	
+	private void rewritePatient(int patientId, LocalDate today) {
+		List<Object[]> rows = new ArrayList<Object[]>();
+		List<Object[]> timings = new ArrayList<Object[]>();
+		compute(read(patientId), today, rows, timings);
+		rewrite(patientId, rows, timings);
 	}
 	
 	/**

@@ -262,6 +262,13 @@
     </description>
   </globalProperty>
   <globalProperty>
+    <property>actcore.tasksOffWhileStopped</property>
+    <defaultValue></defaultValue>
+    <description>
+      The names, separated by commas, of ACT Core's scheduler tasks that a stop of the module took off the scheduler's startup, so that its next start puts back those and leaves alone a task an administrator set not to start on startup. The module writes and clears it; do not edit it.
+    </description>
+  </globalProperty>
+  <globalProperty>
     <property>actcore.adherence.prescriptionConcept</property>
     <defaultValue>668e0221-8b41-5669-9ad8-78e193d42494</defaultValue>
     <description>
