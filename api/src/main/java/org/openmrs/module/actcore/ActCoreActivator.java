@@ -83,6 +83,9 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 	
 	private static volatile DaemonToken daemonToken;
 	
+	/** Whether this start's work is done; core makes a new activator for each start. */
+	private boolean startedWorkDone;
+	
 	/** @see org.openmrs.module.DaemonTokenAware#setDaemonToken(DaemonToken) */
 	@Override
 	public void setDaemonToken(DaemonToken token) {
@@ -138,35 +141,65 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return new Date(System.currentTimeMillis() + INITIAL_DELAY_MILLIS);
 	}
 	
-	/** @see org.openmrs.module.BaseModuleActivator#started() */
+	/**
+	 * Does the start-up work, unless {@link #contextRefreshed()} already did it for this start.
+	 *
+	 * @see org.openmrs.module.BaseModuleActivator#started()
+	 */
 	@Override
 	public void started() {
-		ReportDescriptorLoader.load();
+		start();
+	}
+	
+	/**
+	 * Does the start-up work on the first context refresh after the module starts, and on each later
+	 * one tries again to put back the tasks the record still holds. Core calls this on every context
+	 * refresh while the module is started, and on a start through REST it calls this but not
+	 * {@link #started()}, since that refresh names no module. On boot and on a start from Manage
+	 * Modules, started() runs right after this and finds the work done. A later refresh, which another
+	 * module's start or stop causes, registers no task and leaves alone those no record holds.
+	 *
+	 * @see org.openmrs.module.BaseModuleActivator#contextRefreshed()
+	 */
+	@Override
+	public void contextRefreshed() {
+		if (startedWorkDone) {
+			scheduleTasks(true);
+		} else {
+			start();
+		}
+	}
+	
+	private void start() {
+		if (startedWorkDone) {
+			return;
+		}
+		startedWorkDone = true;
+		loadReportDescriptors();
 		closeEnrolmentsOfTheDead();
 		scheduleTasks(false);
 		log.info("ACT Core module started");
 	}
 	
 	/**
-	 * Puts back the tasks a stop took off the scheduler's startup. Core calls this on every context
-	 * refresh while the module is started, and on a start through REST it calls this but not
-	 * {@link #started()}, since that refresh names no module. On boot and on a start from Manage
-	 * Modules, started() runs right after this and finds the tasks already back. A refresh with no
-	 * record of tasks taken off leaves the tasks as they are; one with a record a failed put-back kept
-	 * tries again.
-	 *
-	 * @see org.openmrs.module.BaseModuleActivator#contextRefreshed()
+	 * Loads the report descriptors with the privilege to read the property that says whether to.
 	 */
-	@Override
-	public void contextRefreshed() {
-		scheduleTasks(true);
+	private static void loadReportDescriptors() {
+		// Core starts a module as the user who asked, who may hold no more than Manage Modules.
+		Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		try {
+			ReportDescriptorLoader.load();
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		}
 	}
 	
 	/**
-	 * Registers or updates both tasks, putting back on startup those a stop took off, and clears the
-	 * record of them once both are scheduled.
+	 * Registers or updates the tasks, putting back on startup those a stop took off, and drops each
+	 * from the record of them once it is scheduled.
 	 *
-	 * @param onlyToPutBack whether to do nothing when no stop took tasks off
+	 * @param onlyToPutBack whether to schedule only the tasks the record holds
 	 */
 	private void scheduleTasks(boolean onlyToPutBack) {
 		// Core starts a module as the user who asked, who may hold no more than Manage Modules.
@@ -175,26 +208,36 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		}
 		try {
 			Set<String> takenOff = tasksTakenOff();
-			if (onlyToPutBack && takenOff.isEmpty()) {
-				return;
-			}
-			boolean scheduled = schedule(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
+			scheduleTask(REFRESH_TASK_NAME, PatientFlagRefreshTask.class.getName(),
 			    "Re-evaluates every enabled, unretired patient flag, then mirrors each flag into a patient list"
 			            + " of the same name.",
-			    soon(), takenOff.contains(REFRESH_TASK_NAME));
-			scheduled &= schedule(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
+			    takenOff, onlyToPutBack);
+			scheduleTask(ADHERENCE_TASK_NAME, AdherenceRefreshTask.class.getName(),
 			    "Recomputes each patient's prophylaxis adherence and next due date from their prescriptions,"
 			            + " injections and oral adherence estimates.",
-			    soon(), takenOff.contains(ADHERENCE_TASK_NAME));
-			// Kept on a failure, so that a later start still puts the tasks back.
-			if (scheduled && !takenOff.isEmpty()) {
-				forgetTasksTakenOff();
-			}
+			    takenOff, onlyToPutBack);
 		}
 		finally {
 			for (String privilege : TASK_PRIVILEGES) {
 				Context.removeProxyPrivilege(privilege);
 			}
+		}
+	}
+	
+	/**
+	 * Schedules the task, unless only the tasks a stop took off are wanted and this is not one, and
+	 * drops it from the record once it is scheduled. A task that fails stays in the record, so that a
+	 * later refresh or start tries it again.
+	 */
+	private void scheduleTask(String name, String taskClass, String description, Set<String> takenOff,
+	        boolean onlyToPutBack) {
+		boolean wasTakenOff = takenOff.contains(name);
+		if (onlyToPutBack && !wasTakenOff) {
+			return;
+		}
+		if (schedule(name, taskClass, description, soon(), wasTakenOff) && wasTakenOff) {
+			takenOff.remove(name);
+			recordTasksTakenOff(takenOff);
 		}
 	}
 	
@@ -351,12 +394,13 @@ public class ActCoreActivator extends BaseModuleActivator implements DaemonToken
 		return names;
 	}
 	
-	private static void forgetTasksTakenOff() {
+	private static void recordTasksTakenOff(Set<String> names) {
 		try {
-			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED, "");
+			Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_TASKS_OFF_WHILE_STOPPED,
+			    StringUtils.join(names, ","));
 		}
 		catch (Exception e) {
-			log.error("Could not clear the record of the tasks a stop took off the scheduler's startup", e);
+			log.error("Could not update the record of the tasks a stop took off the scheduler's startup", e);
 		}
 	}
 }
