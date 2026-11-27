@@ -28,23 +28,71 @@ import org.openmrs.module.actcore.ActCoreConstants;
 public class ReadSearchCriteria {
 	
 	/** The username, as the read audit recorded it, of the user whose reads to list. */
-	public String username;
+	private String username;
 	
 	/**
 	 * The patient whose reads to list: a patient uuid, or else an identifier to match exactly or part
 	 * of a name to search for.
 	 */
-	public String patient;
+	private String patient;
 	
 	/** The first day whose reads to list. */
-	public LocalDate from;
+	private LocalDate from;
 	
 	/** The last day whose reads to list. */
-	public LocalDate to;
+	private LocalDate to;
 	
 	/** The index, from 0, of the first matching row to return. */
-	public int startIndex;
+	private int startIndex;
 	
 	/** The most rows to return. */
-	public int limit = ActCoreConstants.LOG_DEFAULT_LIMIT;
+	private int limit = ActCoreConstants.LOG_DEFAULT_LIMIT;
+	
+	public String getUsername() {
+		return username;
+	}
+	
+	public void setUsername(String username) {
+		this.username = username;
+	}
+	
+	public String getPatient() {
+		return patient;
+	}
+	
+	public void setPatient(String patient) {
+		this.patient = patient;
+	}
+	
+	public LocalDate getFrom() {
+		return from;
+	}
+	
+	public void setFrom(LocalDate from) {
+		this.from = from;
+	}
+	
+	public LocalDate getTo() {
+		return to;
+	}
+	
+	public void setTo(LocalDate to) {
+		this.to = to;
+	}
+	
+	public int getStartIndex() {
+		return startIndex;
+	}
+	
+	public void setStartIndex(int startIndex) {
+		this.startIndex = startIndex;
+	}
+	
+	public int getLimit() {
+		return limit;
+	}
+	
+	public void setLimit(int limit) {
+		this.limit = limit;
+	}
 }

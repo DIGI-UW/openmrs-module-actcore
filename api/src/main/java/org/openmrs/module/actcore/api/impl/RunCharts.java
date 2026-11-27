@@ -358,8 +358,8 @@ public class RunCharts {
 	public static Double median(List<RunChartPoint> points) {
 		List<Double> values = new ArrayList<Double>();
 		for (RunChartPoint point : points) {
-			if (point.value != null) {
-				values.add(point.value);
+			if (point.getValue() != null) {
+				values.add(point.getValue());
 			}
 		}
 		if (values.isEmpty()) {

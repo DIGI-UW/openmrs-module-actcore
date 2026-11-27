@@ -79,39 +79,39 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	public void foldsAUsersReadsOfOnePatientWithinAnHourIntoOneRow() {
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		assertEquals(5, page.totalCount);
-		ReadRow folded = page.results.get(3);
-		assertEquals("communityClinician:" + collet.getUuid() + ":1", folded.id);
-		assertEquals(Timestamp.valueOf("2026-10-21 07:41:20"), folded.from);
-		assertEquals(Timestamp.valueOf("2026-10-21 07:48:17"), folded.to);
-		assertEquals(3, folded.reads.size());
-		assertEquals("the patient record", folded.reads.get(0).description);
-		assertEquals("2 encounters", folded.reads.get(1).description);
-		assertEquals("9 observations", folded.reads.get(2).description);
-		assertEquals("Joseph Odongo", folded.user.display);
-		assertEquals("Collet Test Chebaskwony", folded.patient.display);
-		assertEquals("6TS-4", folded.patient.actId);
-		assertEquals("7F6171EB", folded.sessionId);
-		assertEquals("Patient", folded.reads.get(0).entity);
+		assertEquals(5, page.getTotalCount());
+		ReadRow folded = page.getResults().get(3);
+		assertEquals("communityClinician:" + collet.getUuid() + ":1", folded.getId());
+		assertEquals(Timestamp.valueOf("2026-10-21 07:41:20"), folded.getFrom());
+		assertEquals(Timestamp.valueOf("2026-10-21 07:48:17"), folded.getTo());
+		assertEquals(3, folded.getReads().size());
+		assertEquals("the patient record", folded.getReads().get(0).getDescription());
+		assertEquals("2 encounters", folded.getReads().get(1).getDescription());
+		assertEquals("9 observations", folded.getReads().get(2).getDescription());
+		assertEquals("Joseph Odongo", folded.getUser().getDisplay());
+		assertEquals("Collet Test Chebaskwony", folded.getPatient().getDisplay());
+		assertEquals("6TS-4", folded.getPatient().getActId());
+		assertEquals("7F6171EB", folded.getSessionId());
+		assertEquals("Patient", folded.getReads().get(0).getEntity());
 	}
 	
 	@Test
 	public void startsANewRowForAnotherPatientAnotherUserOrALaterHour() {
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		assertEquals(Timestamp.valueOf("2026-10-21 09:00:00"), page.results.get(0).from);
-		assertEquals(1, page.results.get(0).reads.size());
-		assertEquals(anet.getUuid(), page.results.get(1).patient.uuid);
-		assertEquals("dataClerk", page.results.get(2).user.username);
-		assertEquals("dataClerk", page.results.get(2).user.display);
+		assertEquals(Timestamp.valueOf("2026-10-21 09:00:00"), page.getResults().get(0).getFrom());
+		assertEquals(1, page.getResults().get(0).getReads().size());
+		assertEquals(anet.getUuid(), page.getResults().get(1).getPatient().getUuid());
+		assertEquals("dataClerk", page.getResults().get(2).getUser().getUsername());
+		assertEquals("dataClerk", page.getResults().get(2).getUser().getDisplay());
 	}
 	
 	@Test
 	public void labelsEachSessionWithoutGivingItsId() {
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		for (ReadRow row : page.results) {
-			assertEquals("dataClerk".equals(((ReadLog.Row) row).username) ? "ABDBC2B5" : "7F6171EB", row.sessionId);
+		for (ReadRow row : page.getResults()) {
+			assertEquals("dataClerk".equals(((ReadLog.Row) row).username) ? "ABDBC2B5" : "7F6171EB", row.getSessionId());
 		}
 	}
 	
@@ -127,18 +127,18 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		assertEquals(6, page.totalCount);
-		assertEquals("no patient found", page.results.get(0).reads.get(0).description);
+		assertEquals(6, page.getTotalCount());
+		assertEquals("no patient found", page.getResults().get(0).getReads().get(0).getDescription());
 	}
 	
 	@Test
 	public void listsAReadOfSeveralPatientsAsASearchWithNoPatient() {
 		ReadPage page = log.getReads(new ReadSearchCriteria());
-		ReadRow search = page.results.get(4);
+		ReadRow search = page.getResults().get(4);
 		
-		assertNull(search.patient);
-		assertEquals("a search: 2 patients", search.reads.get(0).description);
-		assertEquals("communityClinician:-:7", search.id);
+		assertNull(search.getPatient());
+		assertEquals("a search: 2 patients", search.getReads().get(0).getDescription());
+		assertEquals("communityClinician:-:7", search.getId());
 	}
 	
 	@Test
@@ -160,10 +160,10 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		assertEquals(Boolean.TRUE, page.results.get(0).sameClinicAsUser);
-		assertEquals("Unknown Location", page.results.get(0).patient.primaryCareClinic);
-		assertEquals(Boolean.FALSE, page.results.get(1).sameClinicAsUser);
-		assertNull(page.results.get(2).sameClinicAsUser);
+		assertEquals(Boolean.TRUE, page.getResults().get(0).getSameClinicAsUser());
+		assertEquals("Unknown Location", page.getResults().get(0).getPatient().getPrimaryCareClinic());
+		assertEquals(Boolean.FALSE, page.getResults().get(1).getSameClinicAsUser());
+		assertNull(page.getResults().get(2).getSameClinicAsUser());
 	}
 	
 	@Test
@@ -178,10 +178,10 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		
 		ReadPage page = log.getReads(new ReadSearchCriteria());
 		
-		assertEquals(6, page.totalCount);
-		assertEquals(3, page.results.get(0).reads.size());
-		assertEquals("1 list", page.results.get(0).reads.get(0).description);
-		assertNull(page.results.get(0).patient);
+		assertEquals(6, page.getTotalCount());
+		assertEquals(3, page.getResults().get(0).getReads().size());
+		assertEquals("1 list", page.getResults().get(0).getReads().get(0).getDescription());
+		assertNull(page.getResults().get(0).getPatient());
 	}
 	
 	@Test
@@ -200,8 +200,8 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		// The privilege the log asks for, and not Get Patients, which the patient service would.
 		Context.addProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		try {
-			assertEquals(4, log.getReads(filter(null, "6TS-4", null, null)).totalCount);
-			assertEquals(4, log.getReads(filter(null, "chebask", null, null)).totalCount);
+			assertEquals(4, log.getReads(filter(null, "6TS-4", null, null)).getTotalCount());
+			assertEquals(4, log.getReads(filter(null, "chebask", null, null)).getTotalCount());
 		}
 		finally {
 			Context.removeProxyPrivilege(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
@@ -213,23 +213,24 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void filtersByUserPatientAndDatesAndPages() {
-		assertEquals(1, log.getReads(filter("dataClerk", null, null, null)).totalCount);
-		assertEquals(4, log.getReads(filter(null, collet.getUuid(), null, null)).totalCount);
-		assertEquals(4, log.getReads(filter(null, "6TS-4", null, null)).totalCount);
-		assertEquals(2, log.getReads(filter(null, "7TU-8", null, null)).totalCount);
-		assertEquals(0, log.getReads(filter(null, "nobody at all", null, null)).totalCount);
-		assertEquals(1, log.getReads(filter(null, null, LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 20))).totalCount);
+		assertEquals(1, log.getReads(filter("dataClerk", null, null, null)).getTotalCount());
+		assertEquals(4, log.getReads(filter(null, collet.getUuid(), null, null)).getTotalCount());
+		assertEquals(4, log.getReads(filter(null, "6TS-4", null, null)).getTotalCount());
+		assertEquals(2, log.getReads(filter(null, "7TU-8", null, null)).getTotalCount());
+		assertEquals(0, log.getReads(filter(null, "nobody at all", null, null)).getTotalCount());
+		assertEquals(1,
+		    log.getReads(filter(null, null, LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 20))).getTotalCount());
 		ReadSearchCriteria page = filter("communityClinician", null, null, null);
-		page.startIndex = 3;
-		page.limit = 10;
-		assertEquals(4, log.getReads(page).totalCount);
-		assertEquals(1, log.getReads(page).results.size());
+		page.setStartIndex(3);
+		page.setLimit(10);
+		assertEquals(4, log.getReads(page).getTotalCount());
+		assertEquals(1, log.getReads(page).getResults().size());
 	}
 	
 	@Test
 	public void takesThePercentAndUnderscoreOfAPatientSearchLiterally() {
-		assertEquals(0, log.getReads(filter(null, "%", null, null)).totalCount);
-		assertEquals(0, log.getReads(filter(null, "_", null, null)).totalCount);
+		assertEquals(0, log.getReads(filter(null, "%", null, null)).getTotalCount());
+		assertEquals(0, log.getReads(filter(null, "_", null, null)).getTotalCount());
 	}
 	
 	@Test
@@ -237,7 +238,7 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		for (int i = 0; i < ReadLog.PATIENT_MATCHES; i++) {
 			patientNamed("Grace");
 		}
-		assertEquals(0, log.getReads(filter(null, "grace", null, null)).totalCount);
+		assertEquals(0, log.getReads(filter(null, "grace", null, null)).getTotalCount());
 		patientNamed("Grace");
 		
 		try {
@@ -266,12 +267,12 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		ReadPage all = log.getReads(new ReadSearchCriteria());
 		ReadPage page = log.getReads(filter("bulk", null, null, null));
 		
-		assertEquals(1, page.totalCount);
-		assertEquals(bulk, page.results.get(0).reads.size());
-		assertEquals(4, log.getReads(filter("communityClinician", null, null, null)).totalCount);
-		assertEquals(log.getReads(filter("communityClinician", null, null, null)).totalCount + 1
-		        + log.getReads(filter("dataClerk", null, null, null)).totalCount,
-		    all.totalCount);
+		assertEquals(1, page.getTotalCount());
+		assertEquals(bulk, page.getResults().get(0).getReads().size());
+		assertEquals(4, log.getReads(filter("communityClinician", null, null, null)).getTotalCount());
+		assertEquals(log.getReads(filter("communityClinician", null, null, null)).getTotalCount() + 1
+		        + log.getReads(filter("dataClerk", null, null, null)).getTotalCount(),
+		    all.getTotalCount());
 	}
 	
 	@Test
@@ -283,9 +284,9 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		
 		ReadPage day = log.getReads(filter("lateReader", null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 22)));
 		
-		assertEquals(2, day.totalCount);
-		assertEquals("lateReader:" + anet.getUuid() + ":10", day.results.get(0).id);
-		assertEquals("lateReader:" + collet.getUuid() + ":300", day.results.get(1).id);
+		assertEquals(2, day.getTotalCount());
+		assertEquals("lateReader:" + anet.getUuid() + ":10", day.getResults().get(0).getId());
+		assertEquals("lateReader:" + collet.getUuid() + ":300", day.getResults().get(1).getId());
 	}
 	
 	@Test
@@ -298,7 +299,7 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 		
 		ReadPage day = log.getReads(filter(null, null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 22)));
 		
-		assertEquals(1, day.totalCount);
+		assertEquals(1, day.getTotalCount());
 		assertEquals(1,
 		    Rows.integer(AuditTables.select("select sum(execution_count) as spans"
 		            + " from information_schema.query_statistics where sql_statement like '%l.id > ?%'").get(0),
@@ -310,16 +311,16 @@ public class ReadLogContextTest extends BaseModuleContextSensitiveTest {
 	public void listsNothingForADayWithNoReads() {
 		ReadPage day = log.getReads(filter(null, null, LocalDate.of(2030, 1, 1), LocalDate.of(2030, 1, 1)));
 		
-		assertEquals(0, day.totalCount);
-		assertEquals(0, day.results.size());
+		assertEquals(0, day.getTotalCount());
+		assertEquals(0, day.getResults().size());
 	}
 	
 	private static ReadSearchCriteria filter(String username, String patient, LocalDate from, LocalDate to) {
 		ReadSearchCriteria filter = new ReadSearchCriteria();
-		filter.username = username;
-		filter.patient = patient;
-		filter.from = from;
-		filter.to = to;
+		filter.setUsername(username);
+		filter.setPatient(patient);
+		filter.setFrom(from);
+		filter.setTo(to);
 		return filter;
 	}
 	

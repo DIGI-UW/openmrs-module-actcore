@@ -13,17 +13,57 @@ package org.openmrs.module.actcore.model;
 public class ReadPatient {
 	
 	/** The patient's uuid. */
-	public String uuid;
+	private String uuid;
 	
 	/** The patient's name, or the name the read audit recorded once the patient is purged. */
-	public String display;
+	private String display;
 	
 	/** The patient's ACT ID, or null when they have none or are purged. */
-	public String actId;
+	private String actId;
 	
 	/** The name of the patient's primary care clinic, or null when none is recorded. */
-	public String primaryCareClinic;
+	private String primaryCareClinic;
 	
 	/** The name of the patient's cardiac clinic, or null when none is recorded. */
-	public String cardiacClinic;
+	private String cardiacClinic;
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public String getDisplay() {
+		return display;
+	}
+	
+	public void setDisplay(String display) {
+		this.display = display;
+	}
+	
+	public String getActId() {
+		return actId;
+	}
+	
+	public void setActId(String actId) {
+		this.actId = actId;
+	}
+	
+	public String getPrimaryCareClinic() {
+		return primaryCareClinic;
+	}
+	
+	public void setPrimaryCareClinic(String primaryCareClinic) {
+		this.primaryCareClinic = primaryCareClinic;
+	}
+	
+	public String getCardiacClinic() {
+		return cardiacClinic;
+	}
+	
+	public void setCardiacClinic(String cardiacClinic) {
+		this.cardiacClinic = cardiacClinic;
+	}
 }

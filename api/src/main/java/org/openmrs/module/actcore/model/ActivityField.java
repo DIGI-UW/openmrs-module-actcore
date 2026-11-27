@@ -16,13 +16,13 @@ package org.openmrs.module.actcore.model;
 public class ActivityField {
 	
 	/** The field's name as a reader would read it, such as "Visit date". */
-	public final String name;
+	private final String name;
 	
 	/** The value before the save, or null when there was none. */
-	public final String previous;
+	private final String previous;
 	
 	/** The value after the save, or null when there is none. */
-	public final String current;
+	private final String current;
 	
 	/**
 	 * Creates a field.
@@ -35,5 +35,17 @@ public class ActivityField {
 		this.name = name;
 		this.previous = previous;
 		this.current = current;
+	}
+	
+	public String getName() {
+		return name;
+	}
+	
+	public String getPrevious() {
+		return previous;
+	}
+	
+	public String getCurrent() {
+		return current;
 	}
 }

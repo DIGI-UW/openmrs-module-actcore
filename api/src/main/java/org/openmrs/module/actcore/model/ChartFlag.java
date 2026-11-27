@@ -21,13 +21,13 @@ import org.openmrs.module.patientflags.Flag;
 public class ChartFlag {
 	
 	/** The flag. */
-	public final Flag flag;
+	private final Flag flag;
 	
 	/** When ACT Core first recorded the flag as raised for the patient, or null when it has no date. */
-	public final Date since;
+	private final Date since;
 	
 	/** Whether the signed-in user may dismiss the flag. */
-	public final boolean dismissible;
+	private final boolean dismissible;
 	
 	/**
 	 * Creates a raised flag.
@@ -40,5 +40,17 @@ public class ChartFlag {
 		this.flag = flag;
 		this.since = since;
 		this.dismissible = dismissible;
+	}
+	
+	public Flag getFlag() {
+		return flag;
+	}
+	
+	public Date getSince() {
+		return since;
+	}
+	
+	public boolean isDismissible() {
+		return dismissible;
 	}
 }

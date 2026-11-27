@@ -15,14 +15,38 @@ import java.util.Date;
 public class ReadEvent {
 	
 	/** When the read happened. */
-	public Date time;
+	private Date time;
 	
 	/** The name of the entity read, such as Patient or Encounter. */
-	public String entity;
+	private String entity;
 	
 	/**
 	 * What was read, as the page shows it, such as "the patient record", "2 encounters" or "a search: 4
 	 * patients", prefixed with "failed: " for a read that failed.
 	 */
-	public String description;
+	private String description;
+	
+	public Date getTime() {
+		return time;
+	}
+	
+	public void setTime(Date time) {
+		this.time = time;
+	}
+	
+	public String getEntity() {
+		return entity;
+	}
+	
+	public void setEntity(String entity) {
+		this.entity = entity;
+	}
+	
+	public String getDescription() {
+		return description;
+	}
+	
+	public void setDescription(String description) {
+		this.description = description;
+	}
 }

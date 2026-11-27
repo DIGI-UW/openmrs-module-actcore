@@ -16,32 +16,88 @@ import java.util.Map;
 public class DownloadLogItem {
 	
 	/** When the download was recorded. */
-	public Date date;
+	private Date date;
 	
 	/** The user who downloaded. */
-	public LogUser user;
+	private LogUser user;
 	
 	/** The uuid of the form downloaded when the download held exactly one form, else null. */
-	public String formUuid;
+	private String formUuid;
 	
 	/** The name users see for the form. It is null whenever {@link #formUuid} is null. */
-	public String formName;
+	private String formName;
 	
 	/**
 	 * What the download held, read from its JSON, or null when nothing was recorded or what was
 	 * recorded cannot be read as a JSON object of the shape every download records.
 	 */
-	public Map<?, ?> detail;
+	private Map<?, ?> detail;
 	
 	/**
 	 * Whether a detail was recorded that cannot be read as a JSON object of the shape every download
 	 * records.
 	 */
-	public boolean unreadable;
+	private boolean unreadable;
 	
 	/**
 	 * The value of the identifiers filter that matches the download: "with", "without" or "research".
 	 * It is "with" for an {@link #unreadable} download.
 	 */
-	public String identifiers;
+	private String identifiers;
+	
+	public Date getDate() {
+		return date;
+	}
+	
+	public void setDate(Date date) {
+		this.date = date;
+	}
+	
+	public LogUser getUser() {
+		return user;
+	}
+	
+	public void setUser(LogUser user) {
+		this.user = user;
+	}
+	
+	public String getFormUuid() {
+		return formUuid;
+	}
+	
+	public void setFormUuid(String formUuid) {
+		this.formUuid = formUuid;
+	}
+	
+	public String getFormName() {
+		return formName;
+	}
+	
+	public void setFormName(String formName) {
+		this.formName = formName;
+	}
+	
+	public Map<?, ?> getDetail() {
+		return detail;
+	}
+	
+	public void setDetail(Map<?, ?> detail) {
+		this.detail = detail;
+	}
+	
+	public boolean isUnreadable() {
+		return unreadable;
+	}
+	
+	public void setUnreadable(boolean unreadable) {
+		this.unreadable = unreadable;
+	}
+	
+	public String getIdentifiers() {
+		return identifiers;
+	}
+	
+	public void setIdentifiers(String identifiers) {
+		this.identifiers = identifiers;
+	}
 }

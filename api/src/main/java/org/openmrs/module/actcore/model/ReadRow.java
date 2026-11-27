@@ -20,39 +20,115 @@ import java.util.List;
 public class ReadRow {
 	
 	/** An id for the row, made of the user, the patient and the id of the row's first read. */
-	public String id;
+	private String id;
 	
 	/** When the row's first read happened. */
-	public Date from;
+	private Date from;
 	
 	/** When the row's last read happened. */
-	public Date to;
+	private Date to;
 	
 	/** The user who read. */
-	public LogUser user;
+	private LogUser user;
 	
 	/** The patient read, or null when the reads found no single patient. */
-	public ReadPatient patient;
+	private ReadPatient patient;
 	
 	/** The row's reads, oldest first. */
-	public final List<ReadEvent> reads = new ArrayList<ReadEvent>();
+	private final List<ReadEvent> reads = new ArrayList<ReadEvent>();
 	
 	/**
 	 * A short label for the session the first read was made in, derived from the session id rather than
 	 * the id itself, or null when no session was recorded.
 	 */
-	public String sessionId;
+	private String sessionId;
 	
 	/** The IP address the first read came from. */
-	public String ip;
+	private String ip;
 	
 	/** The user agent of the browser that made the first read. */
-	public String userAgent;
+	private String userAgent;
 	
 	/**
 	 * Whether the user and the patient share a clinic. It is null when the reads found no single
 	 * patient, when the patient is purged, when the user has no clinics on their account, or when the
 	 * patient has none recorded.
 	 */
-	public Boolean sameClinicAsUser;
+	private Boolean sameClinicAsUser;
+	
+	public String getId() {
+		return id;
+	}
+	
+	public void setId(String id) {
+		this.id = id;
+	}
+	
+	public Date getFrom() {
+		return from;
+	}
+	
+	public void setFrom(Date from) {
+		this.from = from;
+	}
+	
+	public Date getTo() {
+		return to;
+	}
+	
+	public void setTo(Date to) {
+		this.to = to;
+	}
+	
+	public LogUser getUser() {
+		return user;
+	}
+	
+	public void setUser(LogUser user) {
+		this.user = user;
+	}
+	
+	public ReadPatient getPatient() {
+		return patient;
+	}
+	
+	public void setPatient(ReadPatient patient) {
+		this.patient = patient;
+	}
+	
+	public List<ReadEvent> getReads() {
+		return reads;
+	}
+	
+	public String getSessionId() {
+		return sessionId;
+	}
+	
+	public void setSessionId(String sessionId) {
+		this.sessionId = sessionId;
+	}
+	
+	public String getIp() {
+		return ip;
+	}
+	
+	public void setIp(String ip) {
+		this.ip = ip;
+	}
+	
+	public String getUserAgent() {
+		return userAgent;
+	}
+	
+	public void setUserAgent(String userAgent) {
+		this.userAgent = userAgent;
+	}
+	
+	public Boolean getSameClinicAsUser() {
+		return sameClinicAsUser;
+	}
+	
+	public void setSameClinicAsUser(Boolean sameClinicAsUser) {
+		this.sameClinicAsUser = sameClinicAsUser;
+	}
 }

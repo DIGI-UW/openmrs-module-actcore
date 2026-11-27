@@ -18,17 +18,57 @@ import java.util.Date;
 public class ActivityEncounter {
 	
 	/** The encounter's uuid. */
-	public String uuid;
+	private String uuid;
 	
 	/** The uuid of the form the encounter was entered through, or null when no form recorded it. */
-	public String formUuid;
+	private String formUuid;
 	
 	/** The name users see for the form, or null when no form recorded the encounter. */
-	public String formName;
+	private String formName;
 	
 	/** The name users see for the encounter's type. */
-	public String typeName;
+	private String typeName;
 	
 	/** The encounter's date and time. */
-	public Date visitDate;
+	private Date visitDate;
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public String getFormUuid() {
+		return formUuid;
+	}
+	
+	public void setFormUuid(String formUuid) {
+		this.formUuid = formUuid;
+	}
+	
+	public String getFormName() {
+		return formName;
+	}
+	
+	public void setFormName(String formName) {
+		this.formName = formName;
+	}
+	
+	public String getTypeName() {
+		return typeName;
+	}
+	
+	public void setTypeName(String typeName) {
+		this.typeName = typeName;
+	}
+	
+	public Date getVisitDate() {
+		return visitDate;
+	}
+	
+	public void setVisitDate(Date visitDate) {
+		this.visitDate = visitDate;
+	}
 }

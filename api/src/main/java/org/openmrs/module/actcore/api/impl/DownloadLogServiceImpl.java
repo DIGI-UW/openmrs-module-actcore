@@ -75,51 +75,51 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 		DownloadPage page = new DownloadPage();
 		AuditLogService logs = Context.getService(AuditLogService.class);
 		Integer userId = null;
-		if (StringUtils.isNotBlank(filter.username)) {
-			userId = logs.getUserId(filter.username.trim());
+		if (StringUtils.isNotBlank(filter.getUsername())) {
+			userId = logs.getUserId(filter.getUsername().trim());
 			if (userId == null) {
 				return page;
 			}
 		}
 		String chosenForm = null;
-		if (StringUtils.isNotBlank(filter.formUuid)) {
+		if (StringUtils.isNotBlank(filter.getFormUuid())) {
 			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
-			    () -> Context.getFormService().getFormByUuid(filter.formUuid.trim()));
+			    () -> Context.getFormService().getFormByUuid(filter.getFormUuid().trim()));
 			if (form == null) {
 				return page;
 			}
 			chosenForm = form.getUuid();
 		}
 		List<DownloadLogEntry> entries = dao.getDownloads(userId,
-		    filter.from == null ? null : Timestamp.valueOf(filter.from.atStartOfDay()),
-		    filter.to == null ? null : Timestamp.valueOf(filter.to.plusDays(1).atStartOfDay()));
+		    filter.getFrom() == null ? null : Timestamp.valueOf(filter.getFrom().atStartOfDay()),
+		    filter.getTo() == null ? null : Timestamp.valueOf(filter.getTo().plusDays(1).atStartOfDay()));
 		Set<String> userUuids = new HashSet<String>();
 		for (DownloadLogEntry entry : entries) {
-			userUuids.add(entry.userUuid);
+			userUuids.add(entry.getUserUuid());
 		}
 		Map<String, LogUser> users = logs.getUsers(userUuids);
 		List<DownloadLogItem> matching = new ArrayList<DownloadLogItem>();
 		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
 		for (DownloadLogEntry entry : entries) {
 			DownloadLogItem download = read(entry);
-			if (filter.identifiers != null && !filter.identifiers.equals(download.identifiers)) {
+			if (filter.getIdentifiers() != null && !filter.getIdentifiers().equals(download.getIdentifiers())) {
 				continue;
 			}
-			if (chosenForm != null && !(download.unreadable && entry.formUuid == null) && !chosenForm.equals(entry.formUuid)
-			        && !formsOf(download.detail).contains(chosenForm)) {
+			if (chosenForm != null && !(download.isUnreadable() && entry.getFormUuid() == null)
+			        && !chosenForm.equals(entry.getFormUuid()) && !formsOf(download.getDetail()).contains(chosenForm)) {
 				continue;
 			}
-			download.date = entry.date;
-			download.user = users.get(entry.userUuid);
-			download.formUuid = entry.formUuid;
-			download.formName = Names.shown("Form", entry.formUuid, entry.formName);
+			download.setDate(entry.getDate());
+			download.setUser(users.get(entry.getUserUuid()));
+			download.setFormUuid(entry.getFormUuid());
+			download.setFormName(Names.shown("Form", entry.getFormUuid(), entry.getFormName()));
 			matching.add(download);
 		}
-		int start = Math.min(Math.max(filter.startIndex, 0), matching.size());
-		int size = filter.limit < 1 ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT
-		        : Math.min(filter.limit, ActCoreConstants.DOWNLOAD_MAX_LIMIT);
-		page.results.addAll(matching.subList(start, Math.min(start + size, matching.size())));
-		page.totalCount = matching.size();
+		int start = Math.min(Math.max(filter.getStartIndex(), 0), matching.size());
+		int size = filter.getLimit() < 1 ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT
+		        : Math.min(filter.getLimit(), ActCoreConstants.DOWNLOAD_MAX_LIMIT);
+		page.getResults().addAll(matching.subList(start, Math.min(start + size, matching.size())));
+		page.setTotalCount(matching.size());
 		return page;
 	}
 	
@@ -131,16 +131,16 @@ public class DownloadLogServiceImpl extends BaseOpenmrsService implements Downlo
 	 */
 	private static DownloadLogItem read(DownloadLogEntry entry) {
 		DownloadLogItem download = new DownloadLogItem();
-		if (entry.detail != null) {
-			download.detail = DownloadDetails.read(entry.detail);
-			download.unreadable = download.detail == null;
+		if (entry.getDetail() != null) {
+			download.setDetail(DownloadDetails.read(entry.getDetail()));
+			download.setUnreadable(download.getDetail() == null);
 		}
-		if (download.unreadable) {
+		if (download.isUnreadable()) {
 			log.warn(
 			    "Download {} has a recorded detail that cannot be read as a JSON object of the shape a download records, so the detail is left out when the download is listed",
-			    entry.uuid);
+			    entry.getUuid());
 		}
-		download.identifiers = download.unreadable ? "with" : identifiersOf(download.detail);
+		download.setIdentifiers(download.isUnreadable() ? "with" : identifiersOf(download.getDetail()));
 		return download;
 	}
 	

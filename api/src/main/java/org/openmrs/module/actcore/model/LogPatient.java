@@ -13,14 +13,46 @@ package org.openmrs.module.actcore.model;
 public class LogPatient {
 	
 	/** The patient's person id. */
-	public Integer id;
+	private Integer id;
 	
 	/** The patient's uuid. */
-	public String uuid;
+	private String uuid;
 	
 	/** The patient's name, or their uuid when they have no name. */
-	public String display;
+	private String display;
 	
 	/** The patient's ACT ID, or null when they have no identifier that can serve as one. */
-	public String actId;
+	private String actId;
+	
+	public Integer getId() {
+		return id;
+	}
+	
+	public void setId(Integer id) {
+		this.id = id;
+	}
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public String getDisplay() {
+		return display;
+	}
+	
+	public void setDisplay(String display) {
+		this.display = display;
+	}
+	
+	public String getActId() {
+		return actId;
+	}
+	
+	public void setActId(String actId) {
+		this.actId = actId;
+	}
 }

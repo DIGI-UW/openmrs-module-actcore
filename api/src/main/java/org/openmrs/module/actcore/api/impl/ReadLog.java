@@ -108,13 +108,13 @@ class ReadLog {
 	public ReadPage list(ReadSearchCriteria filter) {
 		ReadPage page = new ReadPage();
 		List<String> uuids = null;
-		if (StringUtils.isNotBlank(filter.patient)) {
-			uuids = patientUuids(filter.patient.trim());
+		if (StringUtils.isNotBlank(filter.getPatient())) {
+			uuids = patientUuids(filter.getPatient().trim());
 			if (uuids.isEmpty()) {
 				return page;
 			}
 		}
-		Map<String, Object> ids = dao.getReadIdRange(filter.from, filter.to).get(0);
+		Map<String, Object> ids = dao.getReadIdRange(filter.getFrom(), filter.getTo()).get(0);
 		if (ids.get("lowest") == null) {
 			return page;
 		}
@@ -122,8 +122,8 @@ class ReadLog {
 		
 		List<Raw> reads = new ArrayList<Raw>();
 		for (long after = Rows.integer(ids, "lowest") - 1L; after < highest; after += READ_SPAN) {
-			for (Map<String, Object> read : dao.getReads(PATIENT_DATA, filter.username, filter.from, filter.to, uuids, after,
-			    after + READ_SPAN)) {
+			for (Map<String, Object> read : dao.getReads(PATIENT_DATA, filter.getUsername(), filter.getFrom(),
+			    filter.getTo(), uuids, after, after + READ_SPAN)) {
 				reads.add(new Raw(read));
 			}
 		}
@@ -131,11 +131,11 @@ class ReadLog {
 		    Comparator.comparing((Raw read) -> read.username, Comparator.nullsFirst(Comparator.<String> naturalOrder()))
 		            .thenComparing(read -> read.time).thenComparingLong(read -> read.id));
 		List<Row> rows = fold(reads);
-		rows.sort((a, b) -> b.from.compareTo(a.from));
-		page.totalCount = rows.size();
-		for (Row row : Rows.page(rows, filter.startIndex, filter.limit)) {
+		rows.sort((a, b) -> b.getFrom().compareTo(a.getFrom()));
+		page.setTotalCount(rows.size());
+		for (Row row : Rows.page(rows, filter.getStartIndex(), filter.getLimit())) {
 			name(row);
-			page.results.add(row);
+			page.getResults().add(row);
 		}
 		return page;
 	}
@@ -170,26 +170,26 @@ class ReadLog {
 			String patientUuid = read.patients == 1 ? read.patientUuid : null;
 			String key = username + ":" + (patientUuid == null ? "-:" + read.entity : patientUuid);
 			Row row = open.get(key);
-			if (row == null || read.time.getTime() - row.from.getTime() > WINDOW_MILLIS) {
+			if (row == null || read.time.getTime() - row.getFrom().getTime() > WINDOW_MILLIS) {
 				row = new Row();
-				row.id = username + ":" + (patientUuid == null ? "-" : patientUuid) + ":" + read.id;
-				row.from = read.time;
+				row.setId(username + ":" + (patientUuid == null ? "-" : patientUuid) + ":" + read.id);
+				row.setFrom(read.time);
 				row.username = username;
 				row.userUuid = read.userUuid;
 				row.patientUuid = patientUuid;
 				row.patientName = patientUuid == null ? null : read.patientName;
-				row.sessionId = read.sessionId;
-				row.ip = read.ip;
-				row.userAgent = read.userAgent;
+				row.setSessionId(read.sessionId);
+				row.setIp(read.ip);
+				row.setUserAgent(read.userAgent);
 				rows.add(row);
 				open.put(key, row);
 			}
-			row.to = read.time;
+			row.setTo(read.time);
 			ReadEvent event = new ReadEvent();
-			event.time = read.time;
-			event.entity = read.entity;
-			event.description = describe(read.entity, read.targets, read.patients, read.success);
-			row.reads.add(event);
+			event.setTime(read.time);
+			event.setEntity(read.entity);
+			event.setDescription(describe(read.entity, read.targets, read.patients, read.success));
+			row.getReads().add(event);
 		}
 		return rows;
 	}
@@ -289,27 +289,27 @@ class ReadLog {
 	}
 	
 	private void name(Row row) {
-		row.user = names.user(row.userUuid);
-		if (row.user == null) {
-			row.user = new LogUser();
-			row.user.uuid = row.userUuid;
-			row.user.username = row.username;
-			row.user.display = row.username;
+		row.setUser(names.user(row.userUuid));
+		if (row.getUser() == null) {
+			row.setUser(new LogUser());
+			row.getUser().setUuid(row.userUuid);
+			row.getUser().setUsername(row.username);
+			row.getUser().setDisplay(row.username);
 		}
 		if (row.patientUuid == null) {
 			return;
 		}
 		LogPatient found = names.patient(row.patientUuid);
-		row.patient = new ReadPatient();
-		row.patient.uuid = row.patientUuid;
-		row.patient.display = found == null ? row.patientName : found.display;
-		row.patient.actId = found == null ? null : found.actId;
+		row.setPatient(new ReadPatient());
+		row.getPatient().setUuid(row.patientUuid);
+		row.getPatient().setDisplay(found == null ? row.patientName : found.getDisplay());
+		row.getPatient().setActId(found == null ? null : found.getActId());
 		if (found == null) {
 			return;
 		}
 		List<String> clinicTypes = FormDownload.uuids(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES);
 		Set<String> patientClinics = new LinkedHashSet<String>();
-		for (Map<String, Object> attribute : dao.getLocationAttributes(found.id)) {
+		for (Map<String, Object> attribute : dao.getLocationAttributes(found.getId())) {
 			String value = Rows.string(attribute, "value");
 			int which = clinicTypes.indexOf(Rows.string(attribute, "type_uuid"));
 			if (which < 0 || value == null || !value.matches("\\d+")) {
@@ -318,17 +318,17 @@ class ReadLog {
 			String clinic = names.location(Integer.valueOf(value));
 			patientClinics.add(names.locationUuid(Integer.valueOf(value)));
 			if (which == 0) {
-				row.patient.primaryCareClinic = clinic;
+				row.getPatient().setPrimaryCareClinic(clinic);
 			} else {
-				row.patient.cardiacClinic = clinic;
+				row.getPatient().setCardiacClinic(clinic);
 			}
 		}
 		patientClinics.remove(null);
 		List<Map<String, Object>> property = dao.getUserProperty(row.userUuid, ActCoreConstants.USER_PROPERTY_CLINICS);
 		Set<String> userClinics = UserClinics
 		        .parse(property.isEmpty() ? null : Rows.string(property.get(0), "property_value"));
-		row.sameClinicAsUser = userClinics.isEmpty() || patientClinics.isEmpty() ? null
-		        : UserClinics.share(userClinics, patientClinics);
+		row.setSameClinicAsUser(
+		    userClinics.isEmpty() || patientClinics.isEmpty() ? null : UserClinics.share(userClinics, patientClinics));
 	}
 	
 	/**

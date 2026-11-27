@@ -21,11 +21,35 @@ public class ScreeningCountMonth {
 	 * Whether counts have been saved for the month. A month that has not been saved has every count at
 	 * zero.
 	 */
-	public boolean saved;
+	private boolean saved;
 	
 	/** Each column's count, keyed by the column's name. */
-	public Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+	private Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
 	
 	/** The notes saved with the counts, or null when there are none. */
-	public String notes;
+	private String notes;
+	
+	public boolean isSaved() {
+		return saved;
+	}
+	
+	public void setSaved(boolean saved) {
+		this.saved = saved;
+	}
+	
+	public Map<String, Integer> getCounts() {
+		return counts;
+	}
+	
+	public void setCounts(Map<String, Integer> counts) {
+		this.counts = counts;
+	}
+	
+	public String getNotes() {
+		return notes;
+	}
+	
+	public void setNotes(String notes) {
+		this.notes = notes;
+	}
 }

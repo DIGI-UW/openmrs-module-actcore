@@ -382,13 +382,13 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		runFullRefresh();
 		
 		ActivitySearchCriteria filter = new ActivitySearchCriteria();
-		filter.kind = "flag";
+		filter.setKind("flag");
 		ActivityPage page = Context.getService(AuditLogService.class).getActivity(filter);
 		
 		assertEquals(0, rows());
-		assertEquals(2, page.totalCount);
-		assertEquals("missing data", page.results.get(1).summary);
-		assertEquals("Dismissed flag", page.results.get(1).action);
+		assertEquals(2, page.getTotalCount());
+		assertEquals("missing data", page.getResults().get(1).getSummary());
+		assertEquals("Dismissed flag", page.getResults().get(1).getAction());
 	}
 	
 	@Test

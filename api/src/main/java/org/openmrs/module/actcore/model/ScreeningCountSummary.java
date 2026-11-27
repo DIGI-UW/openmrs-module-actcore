@@ -16,10 +16,10 @@ import java.util.Map;
 public class ScreeningCountSummary {
 	
 	/** How many clinic months were saved in the range. */
-	public int months;
+	private int months;
 	
 	/** Each column's sum, keyed by the column's name. */
-	public Map<String, Long> sums = new LinkedHashMap<String, Long>();
+	private Map<String, Long> sums = new LinkedHashMap<String, Long>();
 	
 	/**
 	 * Sums a metric over every setting.
@@ -61,5 +61,21 @@ public class ScreeningCountSummary {
 	 */
 	public Long negative() {
 		return screened() - positive();
+	}
+	
+	public int getMonths() {
+		return months;
+	}
+	
+	public void setMonths(int months) {
+		this.months = months;
+	}
+	
+	public Map<String, Long> getSums() {
+		return sums;
+	}
+	
+	public void setSums(Map<String, Long> sums) {
+		this.sums = sums;
 	}
 }

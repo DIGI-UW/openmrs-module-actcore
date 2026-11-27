@@ -16,14 +16,46 @@ package org.openmrs.module.actcore.model;
 public class ActivityTarget {
 	
 	/** The kind of target: patient, person, user, role, location or program. */
-	public String kind;
+	private String kind;
 	
 	/** The target's uuid, or null when it is not known, as for a role. */
-	public String uuid;
+	private String uuid;
 	
 	/** The target's name as the page shows it. */
-	public String display;
+	private String display;
 	
 	/** The patient's ACT ID for a patient, the username for a user, and null for other targets. */
-	public String actId;
+	private String actId;
+	
+	public String getKind() {
+		return kind;
+	}
+	
+	public void setKind(String kind) {
+		this.kind = kind;
+	}
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public String getDisplay() {
+		return display;
+	}
+	
+	public void setDisplay(String display) {
+		this.display = display;
+	}
+	
+	public String getActId() {
+		return actId;
+	}
+	
+	public void setActId(String actId) {
+		this.actId = actId;
+	}
 }

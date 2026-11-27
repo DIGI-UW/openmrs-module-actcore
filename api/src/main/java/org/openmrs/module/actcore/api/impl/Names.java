@@ -95,15 +95,15 @@ public class Names {
 		}
 		Map<String, Object> user = rows.get(0);
 		LogUser who = new LogUser();
-		who.uuid = Rows.string(user, "uuid");
-		who.username = StringUtils.defaultIfBlank(Rows.string(user, "username"), Rows.string(user, "system_id"));
-		who.display = StringUtils.defaultIfBlank(personName(dao.getUnvoidedPersonNames(Rows.integer(user, "person_id"))),
-		    who.username);
+		who.setUuid(Rows.string(user, "uuid"));
+		who.setUsername(StringUtils.defaultIfBlank(Rows.string(user, "username"), Rows.string(user, "system_id")));
+		who.setDisplay(StringUtils.defaultIfBlank(personName(dao.getUnvoidedPersonNames(Rows.integer(user, "person_id"))),
+		    who.getUsername()));
 		// The user's own roles before the ones they inherit: a site administrator's role inherits Clinician.
 		Integer userId = Rows.integer(user, "user_id");
-		who.role = organizationalRole(dao.getUserRoles(userId));
-		if (who.role == null) {
-			who.role = organizationalRole(dao.getInheritedRoles(userId));
+		who.setRole(organizationalRole(dao.getUserRoles(userId)));
+		if (who.getRole() == null) {
+			who.setRole(organizationalRole(dao.getInheritedRoles(userId)));
 		}
 		return who;
 	}
@@ -146,11 +146,11 @@ public class Names {
 	
 	private LogPatient subject(int personId, String uuid) {
 		LogPatient subject = new LogPatient();
-		subject.id = personId;
-		subject.uuid = uuid;
+		subject.setId(personId);
+		subject.setUuid(uuid);
 		// A voided patient keeps only voided names, so those are read after the unvoided.
-		subject.display = StringUtils.defaultIfBlank(personName(dao.getPersonNames(personId)), uuid);
-		subject.actId = actId(personId);
+		subject.setDisplay(StringUtils.defaultIfBlank(personName(dao.getPersonNames(personId)), uuid));
+		subject.setActId(actId(personId));
 		return subject;
 	}
 	

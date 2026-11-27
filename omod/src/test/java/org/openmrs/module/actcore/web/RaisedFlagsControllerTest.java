@@ -220,10 +220,10 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		
 		assertEquals(2, flags.size());
 		for (ChartFlag flag : flags) {
-			boolean isMissing = flag.flag.equals(missing);
-			assertTrue(isMissing || flag.flag.equals(risk));
-			assertEquals(isMissing, flag.since != null);
-			assertEquals(isMissing, flag.dismissible);
+			boolean isMissing = flag.getFlag().equals(missing);
+			assertTrue(isMissing || flag.getFlag().equals(risk));
+			assertEquals(isMissing, flag.getSince() != null);
+			assertEquals(isMissing, flag.isDismissible());
 		}
 	}
 	

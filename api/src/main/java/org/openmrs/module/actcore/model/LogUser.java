@@ -15,17 +15,49 @@ package org.openmrs.module.actcore.model;
 public class LogUser {
 	
 	/** The user's uuid. */
-	public String uuid;
+	private String uuid;
 	
 	/** The user's username, or their system ID when they have no username. */
-	public String username;
+	private String username;
 	
 	/** The user's person name, or their username when the person has no name. */
-	public String display;
+	private String display;
 	
 	/**
 	 * The user's organizational role, shortened as the Users page shows it, such as Clinician, or null
 	 * when they have none.
 	 */
-	public String role;
+	private String role;
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public String getUsername() {
+		return username;
+	}
+	
+	public void setUsername(String username) {
+		this.username = username;
+	}
+	
+	public String getDisplay() {
+		return display;
+	}
+	
+	public void setDisplay(String display) {
+		this.display = display;
+	}
+	
+	public String getRole() {
+		return role;
+	}
+	
+	public void setRole(String role) {
+		this.role = role;
+	}
 }

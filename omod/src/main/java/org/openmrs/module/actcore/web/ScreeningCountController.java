@@ -132,18 +132,19 @@ public class ScreeningCountController extends ActCoreRestController {
 		ScreeningCountSummary summary = service().getSummary(locationIds(clinics), start, end);
 		SimpleObject settings = new SimpleObject();
 		for (String setting : ScreeningCount.SETTINGS) {
-			settings.add(setting, summary.sums.get(setting + "_screened"));
+			settings.add(setting, summary.getSums().get(setting + "_screened"));
 		}
 		return new SimpleObject().add("startMonth", start.format(MONTH)).add("endMonth", end.format(MONTH))
-		        .add("months", summary.months).add("screened", summary.screened()).add("females", summary.total("females"))
-		        .add("positive", summary.positive()).add("negative", summary.negative())
-		        .add("children", summary.total("children")).add("adolescents", summary.total("adolescents"))
-		        .add("adults", summary.total("adults")).add("settings", settings);
+		        .add("months", summary.getMonths()).add("screened", summary.screened())
+		        .add("females", summary.total("females")).add("positive", summary.positive())
+		        .add("negative", summary.negative()).add("children", summary.total("children"))
+		        .add("adolescents", summary.total("adolescents")).add("adults", summary.total("adults"))
+		        .add("settings", settings);
 	}
 	
 	private static SimpleObject describe(Location clinic, YearMonth month, ScreeningCountMonth counts) {
 		return new SimpleObject().add("clinic", clinic.getUuid()).add("month", month.format(MONTH))
-		        .add("saved", counts.saved).add("counts", counts.counts).add("notes", counts.notes);
+		        .add("saved", counts.isSaved()).add("counts", counts.getCounts()).add("notes", counts.getNotes());
 	}
 	
 	private static Map<String, Integer> counts(Map<String, Object> body) {

@@ -63,11 +63,11 @@ public class RaisedFlagsController extends ActCoreRestController {
 		Patient patient = patient(patientUuid);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
 		for (ChartFlag raised : Context.getService(RaisedFlagService.class).getRaisedFlags(patient)) {
-			results.add(new SimpleObject().add("flag", raised.flag.getUuid()).add("display", raised.flag.getName())
+			results.add(new SimpleObject().add("flag", raised.getFlag().getUuid()).add("display", raised.getFlag().getName())
 			        .add("raisedSince",
-			            raised.since == null ? null
-			                    : ConversionUtil.convertToRepresentation(raised.since, Representation.REF))
-			        .add("dismissible", raised.dismissible));
+			            raised.getSince() == null ? null
+			                    : ConversionUtil.convertToRepresentation(raised.getSince(), Representation.REF))
+			        .add("dismissible", raised.isDismissible()));
 		}
 		return new SimpleObject().add("results", results);
 	}

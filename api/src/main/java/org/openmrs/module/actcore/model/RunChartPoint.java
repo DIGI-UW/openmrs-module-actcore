@@ -18,19 +18,19 @@ public class RunChartPoint {
 	 * The day the figure is as of: the last day of the point's period, or the end of the range for the
 	 * last point.
 	 */
-	public final LocalDate date;
+	private final LocalDate date;
 	
 	/**
 	 * The figure charted: the count for a count, or the percent rounded to one decimal for a percent.
 	 * It is null for a percent whose denominator is zero.
 	 */
-	public final Double value;
+	private final Double value;
 	
 	/** The count for a count, or the numerator for a percent. */
-	public final Long count;
+	private final Long count;
 	
 	/** The denominator for a percent, or null for a count. */
-	public final Long total;
+	private final Long total;
 	
 	/**
 	 * Creates a point that gives only its figure.
@@ -55,5 +55,21 @@ public class RunChartPoint {
 		this.value = value;
 		this.count = count;
 		this.total = total;
+	}
+	
+	public LocalDate getDate() {
+		return date;
+	}
+	
+	public Double getValue() {
+		return value;
+	}
+	
+	public Long getCount() {
+		return count;
+	}
+	
+	public Long getTotal() {
+		return total;
 	}
 }

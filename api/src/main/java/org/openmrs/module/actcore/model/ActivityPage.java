@@ -20,8 +20,20 @@ import java.util.List;
 public class ActivityPage {
 	
 	/** The entries on the page, newest first. */
-	public final List<ActivityEntry> results = new ArrayList<ActivityEntry>();
+	private final List<ActivityEntry> results = new ArrayList<ActivityEntry>();
 	
 	/** How many entries the search matches across every page. */
-	public int totalCount;
+	private int totalCount;
+	
+	public List<ActivityEntry> getResults() {
+		return results;
+	}
+	
+	public int getTotalCount() {
+		return totalCount;
+	}
+	
+	public void setTotalCount(int totalCount) {
+		this.totalCount = totalCount;
+	}
 }

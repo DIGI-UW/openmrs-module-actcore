@@ -105,7 +105,7 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 	private static List<LocalDate> dates(List<RunChartPoint> points) {
 		List<LocalDate> dates = new java.util.ArrayList<LocalDate>();
 		for (RunChartPoint point : points) {
-			dates.add(point.date);
+			dates.add(point.getDate());
 		}
 		return dates;
 	}
@@ -149,19 +149,19 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(RunCharts.METRICS, new java.util.ArrayList<String>(series.keySet()));
 		List<RunChartPoint> active = series.get("active_registrants");
 		assertEquals(Arrays.asList(LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 20), END), dates(active));
-		assertEquals(Double.valueOf(19), active.get(0).value);
-		assertEquals(Long.valueOf(19), active.get(0).count);
-		assertNull(active.get(0).total);
-		assertEquals(Double.valueOf(21), active.get(2).value);
+		assertEquals(Double.valueOf(19), active.get(0).getValue());
+		assertEquals(Long.valueOf(19), active.get(0).getCount());
+		assertNull(active.get(0).getTotal());
+		assertEquals(Double.valueOf(21), active.get(2).getValue());
 		// 5 of 21 active seen in 7 months; 1 of the clinic's 4 visits with an echo, none for every clinic.
-		assertEquals(Double.valueOf(23.8), series.get("active_registrants_seen_last_7_months").get(2).value);
-		assertEquals(Long.valueOf(5), series.get("active_registrants_seen_last_7_months").get(2).count);
-		assertEquals(Long.valueOf(21), series.get("active_registrants_seen_last_7_months").get(2).total);
-		assertEquals(Double.valueOf(25), series.get("consultation_visits_with_echocardiogram_resulted").get(2).value);
+		assertEquals(Double.valueOf(23.8), series.get("active_registrants_seen_last_7_months").get(2).getValue());
+		assertEquals(Long.valueOf(5), series.get("active_registrants_seen_last_7_months").get(2).getCount());
+		assertEquals(Long.valueOf(21), series.get("active_registrants_seen_last_7_months").get(2).getTotal());
+		assertEquals(Double.valueOf(25), series.get("consultation_visits_with_echocardiogram_resulted").get(2).getValue());
 		List<RunChartPoint> everyClinic = runCharts.calculate(null, LocalDate.of(2026, 10, 19), END, RunChartPeriod.DAY)
 		        .get("consultation_visits_with_echocardiogram_resulted");
-		assertNull(everyClinic.get(2).value);
-		assertEquals(Long.valueOf(0), everyClinic.get(2).total);
+		assertNull(everyClinic.get(2).getValue());
+		assertEquals(Long.valueOf(0), everyClinic.get(2).getTotal());
 	}
 	
 	@Test
@@ -174,12 +174,12 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		    RunChartPeriod.DAY);
 		
 		RunChartPoint count = series.get("active_registrants").get(1);
-		assertEquals(LocalDate.of(2026, 10, 20), count.date);
-		assertEquals(Double.valueOf(0), count.value);
+		assertEquals(LocalDate.of(2026, 10, 20), count.getDate());
+		assertEquals(Double.valueOf(0), count.getValue());
 		RunChartPoint percent = series.get("active_registrants_prescribed_prophylaxis").get(1);
-		assertNull(percent.value);
-		assertEquals(Long.valueOf(0), percent.count);
-		assertEquals(Long.valueOf(0), percent.total);
+		assertNull(percent.getValue());
+		assertEquals(Long.valueOf(0), percent.getCount());
+		assertEquals(Long.valueOf(0), percent.getTotal());
 	}
 	
 	@Test
@@ -189,9 +189,9 @@ public class RunChartsContextTest extends BaseModuleContextSensitiveTest {
 		RunChartPoint adherent = runCharts.calculate(clinic, END, END, RunChartPeriod.DAY).get("active_registrants_adherent")
 		        .get(0);
 		
-		assertEquals(Double.valueOf(0), adherent.value);
-		assertEquals(Long.valueOf(0), adherent.count);
-		assertEquals(Long.valueOf(21), adherent.total);
+		assertEquals(Double.valueOf(0), adherent.getValue());
+		assertEquals(Long.valueOf(0), adherent.getCount());
+		assertEquals(Long.valueOf(21), adherent.getTotal());
 	}
 	
 	@Test

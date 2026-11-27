@@ -36,26 +36,90 @@ public class ActivitySearchCriteria {
 	    "registered", "patientStatus", "user", "role", "clinic", "study", "flag", "other"));
 	
 	/** The username, or the system ID of a user without one, of the user whose changes to list. */
-	public String username;
+	private String username;
 	
 	/** The first day whose changes to list. */
-	public LocalDate from;
+	private LocalDate from;
 	
 	/** The last day whose changes to list. */
-	public LocalDate to;
+	private LocalDate to;
 	
 	/** The kind of entry to list, one of {@link #KINDS}. */
-	public String kind;
+	private String kind;
 	
 	/** The uuid of the form whose saves to list. */
-	public String formUuid;
+	private String formUuid;
 	
 	/** The uuid of the patient whose changes to list. */
-	public String patientUuid;
+	private String patientUuid;
 	
 	/** The index, from 0, of the first matching entry to return. */
-	public int startIndex;
+	private int startIndex;
 	
 	/** The most entries to return. */
-	public int limit = ActCoreConstants.LOG_DEFAULT_LIMIT;
+	private int limit = ActCoreConstants.LOG_DEFAULT_LIMIT;
+	
+	public String getUsername() {
+		return username;
+	}
+	
+	public void setUsername(String username) {
+		this.username = username;
+	}
+	
+	public LocalDate getFrom() {
+		return from;
+	}
+	
+	public void setFrom(LocalDate from) {
+		this.from = from;
+	}
+	
+	public LocalDate getTo() {
+		return to;
+	}
+	
+	public void setTo(LocalDate to) {
+		this.to = to;
+	}
+	
+	public String getKind() {
+		return kind;
+	}
+	
+	public void setKind(String kind) {
+		this.kind = kind;
+	}
+	
+	public String getFormUuid() {
+		return formUuid;
+	}
+	
+	public void setFormUuid(String formUuid) {
+		this.formUuid = formUuid;
+	}
+	
+	public String getPatientUuid() {
+		return patientUuid;
+	}
+	
+	public void setPatientUuid(String patientUuid) {
+		this.patientUuid = patientUuid;
+	}
+	
+	public int getStartIndex() {
+		return startIndex;
+	}
+	
+	public void setStartIndex(int startIndex) {
+		this.startIndex = startIndex;
+	}
+	
+	public int getLimit() {
+		return limit;
+	}
+	
+	public void setLimit(int limit) {
+		this.limit = limit;
+	}
 }

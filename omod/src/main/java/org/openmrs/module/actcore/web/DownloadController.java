@@ -170,27 +170,28 @@ public class DownloadController extends ActCoreRestController {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
 		DownloadSearchCriteria filter = new DownloadSearchCriteria();
-		filter.username = username;
-		filter.to = date("endDate", endDate, null);
-		filter.from = from(startDate, filter.to, Period.ofMonths(DEFAULT_MONTHS));
-		filter.formUuid = formUuid;
-		filter.identifiers = identifiers;
-		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT : limit;
+		filter.setUsername(username);
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(), Period.ofMonths(DEFAULT_MONTHS)));
+		filter.setFormUuid(formUuid);
+		filter.setIdentifiers(identifiers);
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT : limit);
 		DownloadPage page = Context.getService(DownloadLogService.class).getDownloads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (DownloadLogItem download : page.results) {
-			Object list = download.detail == null ? null : download.detail.get("list");
-			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.date, null))
-			        .add("user", who(download.user))
+		for (DownloadLogItem download : page.getResults()) {
+			Object list = download.getDetail() == null ? null : download.getDetail().get("list");
+			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.getDate(), null))
+			        .add("user", who(download.getUser()))
 			        .add("form",
-			            download.formName == null ? null
-			                    : new SimpleObject().add("uuid", download.formUuid).add("name", download.formName))
-			        .add("list", list == null ? null : list(list.toString())).add("detail", download.detail)
-			        .add("identifiers", download.identifiers).add("unreadable", download.unreadable));
+			            download.getFormName() == null ? null
+			                    : new SimpleObject().add("uuid", download.getFormUuid()).add("name", download.getFormName()))
+			        .add("list", list == null ? null : list(list.toString())).add("detail", download.getDetail())
+			        .add("identifiers", download.getIdentifiers()).add("unreadable", download.isUnreadable()));
 		}
-		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
-		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 	
 	/**

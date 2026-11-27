@@ -200,23 +200,23 @@ class ActivityLog {
 	public ActivityPage list(ActivitySearchCriteria filter) {
 		ActivityPage page = new ActivityPage();
 		Integer userId = null;
-		if (filter.username != null) {
-			userId = names.userId(filter.username);
+		if (filter.getUsername() != null) {
+			userId = names.userId(filter.getUsername());
 			if (userId == null) {
 				return page;
 			}
 		}
 		Integer patientId = null;
-		if (filter.patientUuid != null) {
-			LogPatient patient = names.patient(filter.patientUuid);
+		if (filter.getPatientUuid() != null) {
+			LogPatient patient = names.patient(filter.getPatientUuid());
 			if (patient == null) {
 				return page;
 			}
-			patientId = patient.id;
+			patientId = patient.getId();
 		}
 		Integer formId = null;
-		if (filter.formUuid != null) {
-			List<Map<String, Object>> forms = dao.getFormId(filter.formUuid);
+		if (filter.getFormUuid() != null) {
+			List<Map<String, Object>> forms = dao.getFormId(filter.getFormUuid());
 			if (forms.isEmpty()) {
 				return page;
 			}
@@ -225,7 +225,7 @@ class ActivityLog {
 		
 		List<String> candidates = new ArrayList<String>();
 		for (Map.Entry<String, List<String>> table : TABLES.entrySet()) {
-			boolean fits = (filter.kind == null || table.getValue().contains(filter.kind))
+			boolean fits = (filter.getKind() == null || table.getValue().contains(filter.getKind()))
 			        && (patientId == null || PATIENT_COLUMNS.containsKey(table.getKey()))
 			        && (formId == null || table.getKey().equals("encounter_AUD") || table.getKey().equals("obs_AUD"));
 			if (fits) {
@@ -234,37 +234,39 @@ class ActivityLog {
 		}
 		List<Entry> entries = new ArrayList<Entry>();
 		for (Map<String, Object> row : candidates.isEmpty() ? Collections.<Map<String, Object>> emptyList()
-		        : revisions(candidates, userId, filter.from, filter.to, patientId, formId)) {
+		        : revisions(candidates, userId, filter.getFrom(), filter.getTo(), patientId, formId)) {
 			Entry entry = new Entry();
-			entry.revisionId = Rows.integer(row, "id");
-			entry.time = Rows.date(row, "rev_time");
+			entry.setRevisionId(Rows.integer(row, "id"));
+			entry.setTime(Rows.date(row, "rev_time"));
 			entry.userId = Rows.integer(row, "rev_user");
 			entries.add(entry);
 		}
 		// A revision found through one kind's tables may be another, so a kind filter classifies all.
-		if (filter.kind != null) {
+		if (filter.getKind() != null) {
 			if (entries.size() > MAX_CLASSIFIED) {
 				throw new TooManyResultsException(
 				        "More than " + MAX_CLASSIFIED + " changes to sort by action; narrow the dates or the user");
 			}
 			entries = classified(entries);
-			entries.removeIf(entry -> !filter.kind.equals(entry.kind));
+			entries.removeIf(entry -> !filter.getKind().equals(entry.getKind()));
 		}
-		if (formId == null && (filter.kind == null || filter.kind.equals("flag"))) {
-			entries.addAll(dismissals(userId, filter.from, filter.to, patientId));
+		if (formId == null && (filter.getKind() == null || filter.getKind().equals("flag"))) {
+			entries.addAll(dismissals(userId, filter.getFrom(), filter.getTo(), patientId));
 		}
 		entries.sort((a, b) -> {
-			int byTime = Long.compare(b.time == null ? 0 : b.time.getTime(), a.time == null ? 0 : a.time.getTime());
+			int byTime = Long.compare(b.getTime() == null ? 0 : b.getTime().getTime(),
+			    a.getTime() == null ? 0 : a.getTime().getTime());
 			if (byTime != 0) {
 				return byTime;
 			}
-			return Integer.compare(b.revisionId == null ? -1 : b.revisionId, a.revisionId == null ? -1 : a.revisionId);
+			return Integer.compare(b.getRevisionId() == null ? -1 : b.getRevisionId(),
+			    a.getRevisionId() == null ? -1 : a.getRevisionId());
 		});
-		page.totalCount = entries.size();
-		List<Entry> shown = Rows.page(entries, filter.startIndex, filter.limit);
-		for (Entry entry : filter.kind == null ? classified(shown) : shown) {
+		page.setTotalCount(entries.size());
+		List<Entry> shown = Rows.page(entries, filter.getStartIndex(), filter.getLimit());
+		for (Entry entry : filter.getKind() == null ? classified(shown) : shown) {
 			name(entry);
-			page.results.add(entry);
+			page.getResults().add(entry);
 		}
 		return page;
 	}
@@ -276,8 +278,8 @@ class ActivityLog {
 	private List<Entry> classified(List<Entry> entries) {
 		List<Integer> ids = new ArrayList<Integer>();
 		for (Entry entry : entries) {
-			if (entry.revisionId != null) {
-				ids.add(entry.revisionId);
+			if (entry.getRevisionId() != null) {
+				ids.add(entry.getRevisionId());
 			}
 		}
 		Map<Integer, Revision> revisions = new HashMap<Integer, Revision>();
@@ -289,11 +291,11 @@ class ActivityLog {
 		}
 		List<Entry> result = new ArrayList<Entry>();
 		for (Entry entry : entries) {
-			if (entry.revisionId == null) {
+			if (entry.getRevisionId() == null) {
 				result.add(entry);
 				continue;
 			}
-			Revision revision = revisions.get(entry.revisionId);
+			Revision revision = revisions.get(entry.getRevisionId());
 			Entry classified = revision == null ? null : classify(revision);
 			if (classified != null) {
 				result.add(classified);
@@ -321,9 +323,9 @@ class ActivityLog {
 			return null;
 		}
 		ActivityDetails details = new ActivityDetails();
-		details.revisionId = revisionId;
-		details.voidReason = entry.voidReason;
-		details.fields.addAll(fields(entry));
+		details.setRevisionId(revisionId);
+		details.setVoidReason(entry.voidReason);
+		details.getFields().addAll(fields(entry));
 		return details;
 	}
 	
@@ -368,12 +370,12 @@ class ActivityLog {
 		List<Entry> entries = new ArrayList<Entry>();
 		for (Map<String, Object> row : dao.getFlagDismissals(userId, from, to, patientId)) {
 			Entry entry = new Entry();
-			entry.time = Rows.date(row, "date_dismissed");
+			entry.setTime(Rows.date(row, "date_dismissed"));
 			entry.userId = Rows.integer(row, "dismissed_by");
 			entry.patientId = Rows.integer(row, "patient_id");
-			entry.kind = "flag";
-			entry.action = "Dismissed flag";
-			entry.summary = Rows.string(row, "name");
+			entry.setKind("flag");
+			entry.setAction("Dismissed flag");
+			entry.setSummary(Rows.string(row, "name"));
 			entries.add(entry);
 		}
 		return entries;
@@ -386,8 +388,8 @@ class ActivityLog {
 	Entry classify(Revision revision) {
 		Entry entry = new Entry();
 		entry.revision = revision;
-		entry.revisionId = revision.id;
-		entry.time = revision.time;
+		entry.setRevisionId(revision.id);
+		entry.setTime(revision.time);
 		entry.userId = revision.userId;
 		
 		List<Map<String, Object>> encounters = revision.of("encounter_AUD");
@@ -398,26 +400,26 @@ class ActivityLog {
 			entry.patientId = encounter != null ? Rows.integer(encounter, "patient_id")
 			        : Rows.integer(obs.get(0), "person_id");
 			if (encounter != null && type(encounter) == ADD) {
-				entry.kind = "saved";
+				entry.setKind("saved");
 			} else if (encounter != null && became(encounter, "encounter_AUD", "encounter_id", "voided", revision.id)) {
-				entry.kind = "voided";
+				entry.setKind("voided");
 				entry.voidReason = Rows.string(encounter, "void_reason");
 			} else {
-				entry.kind = "edited";
+				entry.setKind("edited");
 			}
 			return entry;
 		}
 		
 		Map<String, Object> newPerson = revision.first("person_AUD", ADD);
 		if (newPerson != null && !revision.of("patient_AUD").isEmpty()) {
-			entry.kind = "registered";
+			entry.setKind("registered");
 			entry.patientId = Rows.integer(newPerson, "person_id");
 			return entry;
 		}
 		for (Map<String, Object> person : revision.of("person_AUD")) {
 			if (type(person) == MOD && became(person, "person_AUD", "person_id", "dead", revision.id)
 			        && isPatient(Rows.integer(person, "person_id"))) {
-				entry.kind = "patientStatus";
+				entry.setKind("patientStatus");
 				entry.patientId = Rows.integer(person, "person_id");
 				return entry;
 			}
@@ -430,7 +432,7 @@ class ActivityLog {
 			Map<String, Object> enrolment = names.row("patient_program", "patient_program_id", entry.patientProgramId);
 			entry.patientId = enrolment == null ? null : Rows.integer(enrolment, "patient_id");
 			entry.programId = enrolment == null ? null : Rows.integer(enrolment, "program_id");
-			entry.kind = isRegistry(entry.programId) ? "patientStatus" : "study";
+			entry.setKind(isRegistry(entry.programId) ? "patientStatus" : "study");
 			return entry;
 		}
 		List<Map<String, Object>> enrolments = revision.of("patient_program_AUD");
@@ -439,13 +441,13 @@ class ActivityLog {
 			entry.patientProgramId = Rows.integer(enrolment, "patient_program_id");
 			entry.patientId = Rows.integer(enrolment, "patient_id");
 			entry.programId = Rows.integer(enrolment, "program_id");
-			entry.kind = isRegistry(entry.programId) ? "patientStatus" : "study";
+			entry.setKind(isRegistry(entry.programId) ? "patientStatus" : "study");
 			return entry;
 		}
 		
 		Integer personId = personChanged(revision);
 		if (personId != null && isPatient(personId)) {
-			entry.kind = "edited";
+			entry.setKind("edited");
 			entry.patientId = personId;
 			// Not patient_AUD: it has no REVTYPE, so became() would read every voided row as the void.
 			Map<String, Object> voided = voiding(revision.first("person_AUD", MOD), "person_AUD", "person_id", revision.id);
@@ -458,40 +460,40 @@ class ActivityLog {
 		List<Map<String, Object>> users = revision.of("users_AUD");
 		List<Map<String, Object>> userRoles = revision.of("user_role_AUD");
 		if (!users.isEmpty() || !userRoles.isEmpty()) {
-			entry.kind = "user";
+			entry.setKind("user");
 			entry.targetUserId = Rows.integer(users.isEmpty() ? userRoles.get(0) : users.get(0), "user_id");
 			return entry;
 		}
 		if (personId != null) {
 			List<Map<String, Object>> owners = dao.getUserIdsByPerson(personId);
 			if (owners.isEmpty()) {
-				entry.kind = "other";
+				entry.setKind("other");
 				entry.personId = personId;
 				return entry;
 			}
-			entry.kind = "user";
+			entry.setKind("user");
 			entry.targetUserId = Rows.integer(owners.get(0), "user_id");
 			return entry;
 		}
 		List<Map<String, Object>> roles = revision.of("role_AUD");
 		List<Map<String, Object>> privileges = revision.of("role_privilege_AUD");
 		if (!roles.isEmpty() || !privileges.isEmpty()) {
-			entry.kind = "role";
+			entry.setKind("role");
 			entry.role = Rows.string(roles.isEmpty() ? privileges.get(0) : roles.get(0), "role");
 			return entry;
 		}
 		if (!revision.of("location_AUD").isEmpty()) {
-			entry.kind = "clinic";
+			entry.setKind("clinic");
 			entry.locationId = Rows.integer(revision.of("location_AUD").get(0), "location_id");
 			return entry;
 		}
 		if (!revision.of("program_AUD").isEmpty()) {
-			entry.kind = "study";
+			entry.setKind("study");
 			entry.programId = Rows.integer(revision.of("program_AUD").get(0), "program_id");
 			return entry;
 		}
 		if (!revision.of("visit_AUD").isEmpty()) {
-			entry.kind = "other";
+			entry.setKind("other");
 			entry.patientId = Rows.integer(revision.of("visit_AUD").get(0), "patient_id");
 			return entry;
 		}
@@ -532,65 +534,65 @@ class ActivityLog {
 	 * change saved on an encounter, the encounter.
 	 */
 	private void name(Entry entry) {
-		entry.user = names.user(entry.userId);
+		entry.setUser(names.user(entry.userId));
 		Revision revision = entry.revision;
-		switch (entry.kind) {
+		switch (entry.getKind()) {
 			case "saved":
 			case "edited":
 			case "voided": {
-				entry.target = patient(entry.patientId, revision);
+				entry.setTarget(patient(entry.patientId, revision));
 				if (entry.encounterId == null && entry.patientVoided) {
-					entry.action = "Voided the patient";
-					entry.summary = StringUtils.isBlank(entry.voidReason) ? "No reason given"
-					        : "Reason: " + entry.voidReason;
+					entry.setAction("Voided the patient");
+					entry.setSummary(
+					    StringUtils.isBlank(entry.voidReason) ? "No reason given" : "Reason: " + entry.voidReason);
 					return;
 				}
 				if (entry.encounterId == null) {
-					entry.action = "Edited patient details";
-					entry.summary = changed(fields(entry), "Details changed");
+					entry.setAction("Edited patient details");
+					entry.setSummary(changed(fields(entry), "Details changed"));
 					return;
 				}
-				entry.encounter = encounter(entry);
+				entry.setEncounter(encounter(entry));
 				// An encounter no form recorded, such as a referral, is named by its type.
-				String form = entry.encounter.formName != null ? entry.encounter.formName
-				        : entry.encounter.typeName != null ? entry.encounter.typeName : "a form";
-				if (entry.kind.equals("saved")) {
-					entry.action = "Saved " + form;
+				String form = entry.getEncounter().getFormName() != null ? entry.getEncounter().getFormName()
+				        : entry.getEncounter().getTypeName() != null ? entry.getEncounter().getTypeName() : "a form";
+				if (entry.getKind().equals("saved")) {
+					entry.setAction("Saved " + form);
 					int set = obsFields(entry).size();
-					entry.summary = set == 0 && entry.encounter.formName == null ? null
-					        : set == 1 ? "1 field set" : set + " fields set";
-				} else if (entry.kind.equals("voided")) {
-					entry.action = "Voided " + form;
-					entry.summary = StringUtils.isBlank(entry.voidReason) ? "No reason given"
-					        : "Reason: " + entry.voidReason;
+					entry.setSummary(set == 0 && entry.getEncounter().getFormName() == null ? null
+					        : set == 1 ? "1 field set" : set + " fields set");
+				} else if (entry.getKind().equals("voided")) {
+					entry.setAction("Voided " + form);
+					entry.setSummary(
+					    StringUtils.isBlank(entry.voidReason) ? "No reason given" : "Reason: " + entry.voidReason);
 				} else {
-					entry.action = "Edited " + form;
-					entry.summary = changed(fields(entry), "Encounter details changed");
+					entry.setAction("Edited " + form);
+					entry.setSummary(changed(fields(entry), "Encounter details changed"));
 				}
 				return;
 			}
 			case "registered":
-				entry.target = patient(entry.patientId, revision);
-				entry.action = "Registered a patient";
-				entry.summary = registrationSummary(entry);
+				entry.setTarget(patient(entry.patientId, revision));
+				entry.setAction("Registered a patient");
+				entry.setSummary(registrationSummary(entry));
 				return;
 			case "patientStatus":
 			case "study":
 				if (entry.patientProgramId == null && entry.patientId == null) {
 					Map<String, Object> row = revision.of("program_AUD").get(0);
-					entry.action = type(row) == ADD ? "Created study"
-					        : Rows.truthy(row, "retired") ? "Retired study" : "Changed study";
+					entry.setAction(type(row) == ADD ? "Created study"
+					        : Rows.truthy(row, "retired") ? "Retired study" : "Changed study");
 					Map<String, Object> program = names.row("program", "program_id", entry.programId);
-					entry.target = target("program", program == null ? null : Rows.string(program, "uuid"),
-					    program == null ? Rows.string(row, "name") : Rows.string(program, "name"));
-					entry.summary = type(row) == ADD ? null : changed(fields(entry), null);
+					entry.setTarget(target("program", program == null ? null : Rows.string(program, "uuid"),
+					    program == null ? Rows.string(row, "name") : Rows.string(program, "name")));
+					entry.setSummary(type(row) == ADD ? null : changed(fields(entry), null));
 					return;
 				}
-				entry.target = patient(entry.patientId, revision);
+				entry.setTarget(patient(entry.patientId, revision));
 				nameProgramChange(entry);
 				return;
 			case "flag":
-				entry.target = patient(entry.patientId, null);
+				entry.setTarget(patient(entry.patientId, null));
 				return;
 			case "user":
 				nameUserChange(entry);
@@ -600,28 +602,28 @@ class ActivityLog {
 				return;
 			case "clinic": {
 				Map<String, Object> row = revision.of("location_AUD").get(0);
-				entry.action = type(row) == ADD ? "Created clinic"
-				        : Rows.truthy(row, "retired") ? "Retired clinic" : "Changed clinic";
-				entry.target = target("location", names.locationUuid(entry.locationId),
-				    StringUtils.defaultIfBlank(names.location(entry.locationId), Rows.string(row, "name")));
-				entry.summary = type(row) == ADD ? null : changed(fields(entry), null);
+				entry.setAction(
+				    type(row) == ADD ? "Created clinic" : Rows.truthy(row, "retired") ? "Retired clinic" : "Changed clinic");
+				entry.setTarget(target("location", names.locationUuid(entry.locationId),
+				    StringUtils.defaultIfBlank(names.location(entry.locationId), Rows.string(row, "name"))));
+				entry.setSummary(type(row) == ADD ? null : changed(fields(entry), null));
 				return;
 			}
 			case "other": {
 				if (entry.personId != null) {
 					LogPatient person = names.patient(entry.personId);
-					entry.target = person == null ? null : target("person", person.uuid, person.display);
-					entry.action = "Edited a person's details";
-					entry.summary = changed(fields(entry), "Details changed");
+					entry.setTarget(person == null ? null : target("person", person.getUuid(), person.getDisplay()));
+					entry.setAction("Edited a person's details");
+					entry.setSummary(changed(fields(entry), "Details changed"));
 					return;
 				}
 				Map<String, Object> row = revision.of("visit_AUD").get(0);
-				entry.target = patient(entry.patientId, revision);
-				entry.action = type(row) == ADD ? "Started a visit"
+				entry.setTarget(patient(entry.patientId, revision));
+				entry.setAction(type(row) == ADD ? "Started a visit"
 				        : Rows.truthy(row, "voided") ? "Voided a visit"
-				                : row.get("date_stopped") != null ? "Ended a visit" : "Changed a visit";
+				                : row.get("date_stopped") != null ? "Ended a visit" : "Changed a visit");
 				String visitType = names.visitTypeName(Rows.integer(row, "visit_type_id"));
-				entry.summary = (visitType == null ? "" : visitType + ", ") + Names.date(Rows.date(row, "date_started"));
+				entry.setSummary((visitType == null ? "" : visitType + ", ") + Names.date(Rows.date(row, "date_started")));
 				return;
 			}
 			default:
@@ -635,34 +637,34 @@ class ActivityLog {
 		String program = registry ? "the registry" : "study " + StringUtils.defaultString(names.program(entry.programId));
 		Map<String, Object> person = revision.first("person_AUD", MOD);
 		if (person != null && became(person, "person_AUD", "person_id", "dead", revision.id)) {
-			entry.action = "Marked deceased";
-			entry.summary = person.get("death_date") == null ? null
-			        : "Date of death " + Names.date(Rows.date(person, "death_date"));
+			entry.setAction("Marked deceased");
+			entry.setSummary(
+			    person.get("death_date") == null ? null : "Date of death " + Names.date(Rows.date(person, "death_date")));
 			return;
 		}
 		Map<String, Object> enrolled = revision.first("patient_program_AUD", ADD);
 		if (enrolled != null) {
-			entry.action = "Enrolled in " + program;
-			entry.summary = "From " + Names.date(Rows.date(enrolled, "date_enrolled"));
+			entry.setAction("Enrolled in " + program);
+			entry.setSummary("From " + Names.date(Rows.date(enrolled, "date_enrolled")));
 			return;
 		}
 		if (!revision.of("patient_state_AUD").isEmpty()) {
 			Map<String, Object> state = revision.of("patient_state_AUD").get(0);
-			entry.action = (Rows.truthy(state, "voided") ? "Removed status " : "Set status ")
-			        + StringUtils.defaultString(names.state(entry.stateId));
-			entry.summary = registry ? null : names.program(entry.programId);
+			entry.setAction((Rows.truthy(state, "voided") ? "Removed status " : "Set status ")
+			        + StringUtils.defaultString(names.state(entry.stateId)));
+			entry.setSummary(registry ? null : names.program(entry.programId));
 			return;
 		}
 		Map<String, Object> enrolment = revision.of("patient_program_AUD").get(0);
 		if (became(enrolment, "patient_program_AUD", "patient_program_id", "voided", revision.id)) {
-			entry.action = "Removed enrolment in " + program;
-			entry.summary = Rows.string(enrolment, "void_reason");
+			entry.setAction("Removed enrolment in " + program);
+			entry.setSummary(Rows.string(enrolment, "void_reason"));
 		} else if (gained(enrolment, "patient_program_AUD", "patient_program_id", "date_completed", revision.id)) {
-			entry.action = "Ended enrolment in " + program;
-			entry.summary = "On " + Names.date(Rows.date(enrolment, "date_completed"));
+			entry.setAction("Ended enrolment in " + program);
+			entry.setSummary("On " + Names.date(Rows.date(enrolment, "date_completed")));
 		} else {
-			entry.action = "Changed enrolment in " + program;
-			entry.summary = changed(fields(entry), null);
+			entry.setAction("Changed enrolment in " + program);
+			entry.setSummary(changed(fields(entry), null));
 		}
 	}
 	
@@ -672,12 +674,12 @@ class ActivityLog {
 		LogUser who = names.user(entry.targetUserId);
 		if (who == null && user != null) {
 			who = new LogUser();
-			who.username = Rows.string(user, "username");
-			who.display = who.username;
+			who.setUsername(Rows.string(user, "username"));
+			who.setDisplay(who.getUsername());
 		}
 		if (who != null) {
-			entry.target = target("user", who.uuid, who.display);
-			entry.target.actId = who.username;
+			entry.setTarget(target("user", who.getUuid(), who.getDisplay()));
+			entry.getTarget().setActId(who.getUsername());
 		}
 		List<String> given = new ArrayList<String>();
 		List<String> removed = new ArrayList<String>();
@@ -685,24 +687,24 @@ class ActivityLog {
 			(type(role) == DEL ? removed : given).add(roleName(Rows.string(role, "role")));
 		}
 		if (user != null && type(user) == ADD) {
-			entry.action = "Created user";
-			entry.summary = given.isEmpty() ? null : StringUtils.join(given, ", ");
+			entry.setAction("Created user");
+			entry.setSummary(given.isEmpty() ? null : StringUtils.join(given, ", "));
 			return;
 		}
 		if (user != null && type(user) == DEL) {
-			entry.action = "Deleted user";
+			entry.setAction("Deleted user");
 			return;
 		}
 		if (user != null && type(user) == MOD) {
 			Map<String, Object> before = previous("users_AUD", "user_id", entry.targetUserId, revision.id);
 			boolean retired = Rows.truthy(user, "retired");
 			if (before != null && retired != Rows.truthy(before, "retired")) {
-				entry.action = retired ? "Disabled user" : "Enabled user";
-				entry.summary = retired ? Rows.string(user, "retire_reason") : null;
+				entry.setAction(retired ? "Disabled user" : "Enabled user");
+				entry.setSummary(retired ? Rows.string(user, "retire_reason") : null);
 				return;
 			}
 		}
-		entry.action = "Changed user";
+		entry.setAction("Changed user");
 		List<String> parts = new ArrayList<String>();
 		if (!given.isEmpty()) {
 			parts.add("Gave " + StringUtils.join(given, ", "));
@@ -711,20 +713,20 @@ class ActivityLog {
 			parts.add("Removed " + StringUtils.join(removed, ", "));
 		}
 		// User properties, such as the Users page's clinics, are outside Envers: nothing to itemise.
-		entry.summary = parts.isEmpty() ? changed(fields(entry), "Account settings changed; not itemised")
-		        : StringUtils.join(parts, "; ");
+		entry.setSummary(parts.isEmpty() ? changed(fields(entry), "Account settings changed; not itemised")
+		        : StringUtils.join(parts, "; "));
 	}
 	
 	private void nameRoleChange(Entry entry) {
 		Revision revision = entry.revision;
-		entry.target = target("role", null, entry.role);
+		entry.setTarget(target("role", null, entry.role));
 		Map<String, Object> role = revision.of("role_AUD").isEmpty() ? null : revision.of("role_AUD").get(0);
 		if (role != null && type(role) == ADD) {
-			entry.action = "Created role " + entry.role;
+			entry.setAction("Created role " + entry.role);
 		} else if (role != null && type(role) == DEL) {
-			entry.action = "Deleted role " + entry.role;
+			entry.setAction("Deleted role " + entry.role);
 		} else {
-			entry.action = "Changed role " + entry.role;
+			entry.setAction("Changed role " + entry.role);
 		}
 		List<String> added = new ArrayList<String>();
 		List<String> removed = new ArrayList<String>();
@@ -738,8 +740,8 @@ class ActivityLog {
 		if (!removed.isEmpty()) {
 			parts.add("Removed " + StringUtils.join(removed, ", "));
 		}
-		entry.summary = parts.isEmpty() ? (type(role) == ADD ? null : changed(fields(entry), null))
-		        : StringUtils.join(parts, "; ");
+		entry.setSummary(
+		    parts.isEmpty() ? (type(role) == ADD ? null : changed(fields(entry), null)) : StringUtils.join(parts, "; "));
 	}
 	
 	/**
@@ -784,7 +786,7 @@ class ActivityLog {
 	List<ActivityField> fields(Entry entry) {
 		Revision revision = entry.revision;
 		List<ActivityField> fields = new ArrayList<ActivityField>();
-		switch (entry.kind) {
+		switch (entry.getKind()) {
 			case "saved":
 				return obsFields(entry);
 			case "voided":
@@ -874,7 +876,7 @@ class ActivityLog {
 		Map<Integer, List<String>> added = new LinkedHashMap<Integer, List<String>>();
 		Map<Integer, List<String>> removed = new LinkedHashMap<Integer, List<String>>();
 		Set<Integer> order = new LinkedHashSet<Integer>();
-		for (Map<String, Object> obs : dao.getAuditedObs(entry.revisionId, entry.encounterId)) {
+		for (Map<String, Object> obs : dao.getAuditedObs(entry.getRevisionId(), entry.encounterId)) {
 			String value = obsValue(obs);
 			if (value == null) {
 				continue;
@@ -886,7 +888,8 @@ class ActivityLog {
 			} else if (Rows.truthy(obs, "voided")) {
 				put(removed, concept, value);
 			} else {
-				Map<String, Object> before = previous("obs_AUD", "obs_id", Rows.integer(obs, "obs_id"), entry.revisionId);
+				Map<String, Object> before = previous("obs_AUD", "obs_id", Rows.integer(obs, "obs_id"),
+				    entry.getRevisionId());
 				String was = before == null ? null : obsValue(before);
 				if (!value.equals(was)) {
 					put(added, concept, value);
@@ -1138,8 +1141,8 @@ class ActivityLog {
 		}
 		List<String> labels = new ArrayList<String>();
 		for (ActivityField field : fields) {
-			if (!labels.contains(field.name)) {
-				labels.add(field.name);
+			if (!labels.contains(field.getName())) {
+				labels.add(field.getName());
 			}
 		}
 		return (fields.size() == 1 ? "1 field changed: " : fields.size() + " fields changed: ")
@@ -1163,22 +1166,22 @@ class ActivityLog {
 	private ActivityTarget patient(Integer patientId, Revision revision) {
 		LogPatient subject = names.patient(patientId);
 		ActivityTarget target = new ActivityTarget();
-		target.kind = "patient";
+		target.setKind("patient");
 		if (subject != null) {
-			target.uuid = subject.uuid;
-			target.display = subject.display;
-			target.actId = subject.actId;
+			target.setUuid(subject.getUuid());
+			target.setDisplay(subject.getDisplay());
+			target.setActId(subject.getActId());
 			return target;
 		}
 		if (patientId == null) {
 			return null;
 		}
-		target.display = StringUtils.defaultIfBlank(
+		target.setDisplay(StringUtils.defaultIfBlank(
 		    Names.personName(dao.getAuditedPersonNames(patientId, revision == null ? Integer.MAX_VALUE : revision.id)),
-		    "Patient " + patientId);
+		    "Patient " + patientId));
 		List<Map<String, Object>> identifiers = dao.getAuditedIdentifiers(patientId,
 		    revision == null ? Integer.MAX_VALUE : revision.id);
-		target.actId = identifiers.isEmpty() ? null : Rows.string(identifiers.get(0), "identifier");
+		target.setActId(identifiers.isEmpty() ? null : Rows.string(identifiers.get(0), "identifier"));
 		return target;
 	}
 	
@@ -1195,22 +1198,22 @@ class ActivityLog {
 		if (row == null) {
 			return ref;
 		}
-		ref.uuid = Rows.string(row, "uuid");
-		ref.visitDate = Rows.date(row, "encounter_datetime");
-		ref.typeName = names.encounterTypeName(Rows.integer(row, "encounter_type"));
+		ref.setUuid(Rows.string(row, "uuid"));
+		ref.setVisitDate(Rows.date(row, "encounter_datetime"));
+		ref.setTypeName(names.encounterTypeName(Rows.integer(row, "encounter_type")));
 		Map<String, Object> form = names.form(Rows.integer(row, "form_id"));
 		if (form != null) {
-			ref.formUuid = Rows.string(form, "uuid");
-			ref.formName = Names.shown("Form", form);
+			ref.setFormUuid(Rows.string(form, "uuid"));
+			ref.setFormName(Names.shown("Form", form));
 		}
 		return ref;
 	}
 	
 	private static ActivityTarget target(String kind, String uuid, String display) {
 		ActivityTarget target = new ActivityTarget();
-		target.kind = kind;
-		target.uuid = uuid;
-		target.display = display;
+		target.setKind(kind);
+		target.setUuid(uuid);
+		target.setDisplay(display);
 		return target;
 	}
 	

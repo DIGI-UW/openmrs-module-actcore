@@ -73,33 +73,35 @@ public class ReadsController extends ActCoreRestController {
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
 		ReadSearchCriteria filter = new ReadSearchCriteria();
-		filter.username = StringUtils.trimToNull(username);
-		filter.patient = StringUtils.trimToNull(patient);
-		filter.to = date("endDate", endDate, null);
-		filter.from = from(startDate, filter.to, Period.ofDays(DEFAULT_DAYS));
-		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit;
+		filter.setUsername(StringUtils.trimToNull(username));
+		filter.setPatient(StringUtils.trimToNull(patient));
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(), Period.ofDays(DEFAULT_DAYS)));
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit);
 		
 		ReadPage page = Context.getService(AuditLogService.class).getReads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (ReadRow row : page.results) {
+		for (ReadRow row : page.getResults()) {
 			List<SimpleObject> reads = new ArrayList<SimpleObject>();
-			for (ReadEvent read : row.reads) {
-				reads.add(new SimpleObject().add("time", ConversionUtil.convertToRepresentation(read.time, null))
-				        .add("entity", read.entity).add("description", read.description));
+			for (ReadEvent read : row.getReads()) {
+				reads.add(new SimpleObject().add("time", ConversionUtil.convertToRepresentation(read.getTime(), null))
+				        .add("entity", read.getEntity()).add("description", read.getDescription()));
 			}
-			SimpleObject subject = row.patient == null ? null
-			        : new SimpleObject().add("uuid", row.patient.uuid).add("display", row.patient.display)
-			                .add("actId", row.patient.actId).add("primaryCareClinic", row.patient.primaryCareClinic)
-			                .add("cardiacClinic", row.patient.cardiacClinic);
-			results.add(
-			    new SimpleObject().add("id", row.id).add("from", ConversionUtil.convertToRepresentation(row.from, null))
-			            .add("to", ConversionUtil.convertToRepresentation(row.to, null)).add("user", who(row.user))
-			            .add("patient", subject).add("count", row.reads.size()).add("reads", reads)
-			            .add("sessionId", row.sessionId).add("ip", row.ip).add("userAgent", row.userAgent)
-			            .add("sameClinicAsUser", row.sameClinicAsUser));
+			SimpleObject subject = row.getPatient() == null ? null
+			        : new SimpleObject().add("uuid", row.getPatient().getUuid())
+			                .add("display", row.getPatient().getDisplay()).add("actId", row.getPatient().getActId())
+			                .add("primaryCareClinic", row.getPatient().getPrimaryCareClinic())
+			                .add("cardiacClinic", row.getPatient().getCardiacClinic());
+			results.add(new SimpleObject().add("id", row.getId())
+			        .add("from", ConversionUtil.convertToRepresentation(row.getFrom(), null))
+			        .add("to", ConversionUtil.convertToRepresentation(row.getTo(), null)).add("user", who(row.getUser()))
+			        .add("patient", subject).add("count", row.getReads().size()).add("reads", reads)
+			        .add("sessionId", row.getSessionId()).add("ip", row.getIp()).add("userAgent", row.getUserAgent())
+			        .add("sameClinicAsUser", row.getSameClinicAsUser()));
 		}
-		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
-		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 }

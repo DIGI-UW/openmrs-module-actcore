@@ -356,7 +356,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
 		controller.download(body());
 		
-		String detail = logged().get(0).detail;
+		String detail = logged().get(0).getDetail();
 		
 		assertTrue(detail, detail.startsWith("{\"fields\":[\"Mitral regurgitation\"],\"withheld\":[]"));
 	}
@@ -414,7 +414,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		controller.record(body);
 		
-		String detail = logged().get(0).detail;
+		String detail = logged().get(0).getDetail();
 		assertTrue(detail, detail.contains("\"researchOnly\":false"));
 	}
 	
@@ -539,23 +539,23 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		DownloadLogService service = Context.getService(DownloadLogService.class);
 		
 		DownloadPage every = service.getDownloads(new DownloadSearchCriteria());
-		assertEquals(3, every.totalCount);
-		assertEquals("researcher", every.results.get(0).user.username);
-		assertEquals(Boolean.TRUE, every.results.get(0).detail.get("researchOnly"));
-		assertEquals("registry", every.results.get(1).detail.get("list"));
-		assertEquals(2, service.getDownloads(filter(f -> f.username = "downloadcaller")).totalCount);
-		assertEquals(0, service.getDownloads(filter(f -> f.username = "nobody")).totalCount);
-		assertEquals(2, service.getDownloads(filter(f -> f.formUuid = form.getUuid())).totalCount);
-		assertEquals(0, service.getDownloads(filter(f -> f.formUuid = "no-such-form")).totalCount);
-		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "research")).totalCount);
-		assertEquals(1, service.getDownloads(filter(f -> f.identifiers = "without")).totalCount);
+		assertEquals(3, every.getTotalCount());
+		assertEquals("researcher", every.getResults().get(0).getUser().getUsername());
+		assertEquals(Boolean.TRUE, every.getResults().get(0).getDetail().get("researchOnly"));
+		assertEquals("registry", every.getResults().get(1).getDetail().get("list"));
+		assertEquals(2, service.getDownloads(filter(f -> f.setUsername("downloadcaller"))).getTotalCount());
+		assertEquals(0, service.getDownloads(filter(f -> f.setUsername("nobody"))).getTotalCount());
+		assertEquals(2, service.getDownloads(filter(f -> f.setFormUuid(form.getUuid()))).getTotalCount());
+		assertEquals(0, service.getDownloads(filter(f -> f.setFormUuid("no-such-form"))).getTotalCount());
+		assertEquals(1, service.getDownloads(filter(f -> f.setIdentifiers("research"))).getTotalCount());
+		assertEquals(1, service.getDownloads(filter(f -> f.setIdentifiers("without"))).getTotalCount());
 		DownloadPage page = service.getDownloads(filter(f -> {
-			f.startIndex = 1;
-			f.limit = 1;
+			f.setStartIndex(1);
+			f.setLimit(1);
 		}));
-		assertEquals(3, page.totalCount);
-		assertEquals(1, page.results.size());
-		assertEquals("registry", page.results.get(0).detail.get("list"));
+		assertEquals(3, page.getTotalCount());
+		assertEquals(1, page.getResults().size());
+		assertEquals("registry", page.getResults().get(0).getDetail().get("list"));
 	}
 	
 	@Test
@@ -934,8 +934,8 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		assertTrue(headers.toString(), headers.contains("RHD Consultation Visit 1: Mitral regurgitation"));
 		assertEquals(1, ((List<?>) result.get("rows")).size());
 		DownloadLogEntry logged = logged().get(0);
-		assertNull(logged.formName);
-		assertTrue(logged.detail, logged.detail.contains("\"rowPerPatient\":true"));
+		assertNull(logged.getFormName());
+		assertTrue(logged.getDetail(), logged.getDetail().contains("\"rowPerPatient\":true"));
 		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		for (Form each : Arrays.asList(form, consult)) {
 			assertEquals(Integer.valueOf(1),
@@ -979,7 +979,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		SimpleObject result = controller.download(body);
 		
 		assertEquals(1, ((List<?>) result.get("rows")).size());
-		String detail = logged().get(0).detail;
+		String detail = logged().get(0).getDetail();
 		assertTrue(detail, detail.contains("\"status\":\"inactive\""));
 		assertTrue(detail, detail.contains("\"cardiacClinic\":\"" + one.getName()));
 	}
@@ -1013,7 +1013,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertEquals(Arrays.asList("ACT ID", "Age", "Form date", "Location", "Mitral regurgitation"), result.get("headers"));
 		assertEquals(Collections.singletonList("Given name"), result.get("withheld"));
-		String detail = logged().get(0).detail;
+		String detail = logged().get(0).getDetail();
 		assertTrue(detail, detail.contains("\"withheld\":[\"Given name\"]"));
 		assertTrue(detail, detail.contains("\"patient\":[\"age\"]"));
 		
@@ -1060,7 +1060,7 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	private static void assertIdentifiers(boolean expected, SimpleObject result) {
 		assertEquals(expected, result.get("identifiers"));
-		String detail = logged().get(0).detail;
+		String detail = logged().get(0).getDetail();
 		assertTrue(detail, detail.contains("\"identifiers\":" + expected));
 	}
 	

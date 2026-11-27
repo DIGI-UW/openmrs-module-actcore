@@ -102,8 +102,8 @@ public class RunChartController extends ActCoreRestController {
 	private static List<SimpleObject> describe(List<RunChartPoint> points) {
 		List<SimpleObject> values = new ArrayList<SimpleObject>();
 		for (RunChartPoint point : points) {
-			values.add(new SimpleObject().add("date", point.date.toString()).add("value", point.value)
-			        .add("count", point.count).add("total", point.total));
+			values.add(new SimpleObject().add("date", point.getDate().toString()).add("value", point.getValue())
+			        .add("count", point.getCount()).add("total", point.getTotal()));
 		}
 		return values;
 	}

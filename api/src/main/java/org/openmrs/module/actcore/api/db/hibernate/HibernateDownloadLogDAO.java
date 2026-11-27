@@ -68,12 +68,12 @@ public class HibernateDownloadLogDAO implements DownloadLogDAO {
 		for (Object row : query.list()) {
 			Object[] columns = (Object[]) row;
 			DownloadLogEntry entry = new DownloadLogEntry();
-			entry.uuid = (String) columns[0];
-			entry.date = (Date) columns[1];
-			entry.userUuid = (String) columns[2];
-			entry.formUuid = (String) columns[3];
-			entry.formName = (String) columns[4];
-			entry.detail = (String) columns[5];
+			entry.setUuid((String) columns[0]);
+			entry.setDate((Date) columns[1]);
+			entry.setUserUuid((String) columns[2]);
+			entry.setFormUuid((String) columns[3]);
+			entry.setFormName((String) columns[4]);
+			entry.setDetail((String) columns[5]);
 			entries.add(entry);
 		}
 		return entries;

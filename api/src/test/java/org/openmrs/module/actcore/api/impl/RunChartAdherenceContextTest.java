@@ -86,13 +86,13 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		        .get("active_registrants_adherent");
 		
 		// On the earlier day the next injection, due 18 days ago, was not yet late; today it is 18 days late.
-		assertEquals(EARLIER, adherent.get(0).date);
-		assertEquals(Double.valueOf(100), adherent.get(0).value);
-		assertEquals(Long.valueOf(1), adherent.get(0).count);
-		assertEquals(TODAY, adherent.get(35).date);
-		assertEquals(Double.valueOf(0), adherent.get(35).value);
+		assertEquals(EARLIER, adherent.get(0).getDate());
+		assertEquals(Double.valueOf(100), adherent.get(0).getValue());
+		assertEquals(Long.valueOf(1), adherent.get(0).getCount());
+		assertEquals(TODAY, adherent.get(35).getDate());
+		assertEquals(Double.valueOf(0), adherent.get(35).getValue());
 		// A day the report lists nobody for counts nobody, whatever the patient's adherence then.
-		assertNull(adherent.get(1).value);
+		assertNull(adherent.get(1).getValue());
 		assertEquals(0, rows().size());
 	}
 	
@@ -104,7 +104,7 @@ public class RunChartAdherenceContextTest extends AdherenceContextTest {
 		RunChartPoint today = new RunCharts().calculate(null, TODAY, TODAY, RunChartPeriod.DAY)
 		        .get("active_registrants_adherent").get(0);
 		
-		assertEquals(Long.valueOf(1), today.count);
-		assertEquals(Double.valueOf(100), today.value);
+		assertEquals(Long.valueOf(1), today.getCount());
+		assertEquals(Double.valueOf(100), today.getValue());
 	}
 }

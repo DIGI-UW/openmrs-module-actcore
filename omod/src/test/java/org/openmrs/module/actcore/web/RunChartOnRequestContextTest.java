@@ -244,7 +244,7 @@ public class RunChartOnRequestContextTest extends BaseModuleWebContextSensitiveT
 		    LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 21), RunChartPeriod.DAY);
 		
 		assertEquals(3, series.get("active_registrants").size());
-		assertEquals(21.0, series.get("active_registrants").get(2).value, 0);
+		assertEquals(21.0, series.get("active_registrants").get(2).getValue(), 0);
 	}
 	
 	@Test

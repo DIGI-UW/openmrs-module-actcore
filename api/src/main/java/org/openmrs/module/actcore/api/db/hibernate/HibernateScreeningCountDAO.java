@@ -78,9 +78,9 @@ public class HibernateScreeningCountDAO implements ScreeningCountDAO {
 		}
 		Object[] row = (Object[]) query.uniqueResult();
 		ScreeningCountSummary summary = new ScreeningCountSummary();
-		summary.months = ((Number) row[0]).intValue();
+		summary.setMonths(((Number) row[0]).intValue());
 		for (int i = 0; i < ScreeningCount.COLUMNS.size(); i++) {
-			summary.sums.put(ScreeningCount.COLUMNS.get(i), ((Number) row[i + 1]).longValue());
+			summary.getSums().put(ScreeningCount.COLUMNS.get(i), ((Number) row[i + 1]).longValue());
 		}
 		return summary;
 	}

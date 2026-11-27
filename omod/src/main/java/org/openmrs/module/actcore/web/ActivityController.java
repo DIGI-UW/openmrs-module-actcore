@@ -84,31 +84,32 @@ public class ActivityController extends ActCoreRestController {
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
 		ActivitySearchCriteria filter = new ActivitySearchCriteria();
-		filter.username = StringUtils.trimToNull(username);
-		filter.kind = StringUtils.trimToNull(kind);
-		if (filter.kind != null && !ActivitySearchCriteria.KINDS.contains(filter.kind)) {
+		filter.setUsername(StringUtils.trimToNull(username));
+		filter.setKind(StringUtils.trimToNull(kind));
+		if (filter.getKind() != null && !ActivitySearchCriteria.KINDS.contains(filter.getKind())) {
 			throw new IllegalRequestException(
 			        "Not a kind of activity: " + kind + "; one of " + ActivitySearchCriteria.KINDS);
 		}
-		filter.to = date("endDate", endDate, null);
-		filter.from = from(startDate, filter.to,
-		    filter.kind == null ? Period.ofMonths(DEFAULT_MONTHS) : Period.ofDays(KIND_DEFAULT_DAYS));
-		filter.formUuid = StringUtils.trimToNull(form);
-		filter.patientUuid = StringUtils.trimToNull(patient);
-		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit;
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(),
+		    filter.getKind() == null ? Period.ofMonths(DEFAULT_MONTHS) : Period.ofDays(KIND_DEFAULT_DAYS)));
+		filter.setFormUuid(StringUtils.trimToNull(form));
+		filter.setPatientUuid(StringUtils.trimToNull(patient));
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit);
 		
 		ActivityPage page = Context.getService(AuditLogService.class).getActivity(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (ActivityEntry entry : page.results) {
-			results.add(new SimpleObject().add("revisionId", entry.revisionId)
-			        .add("time", ConversionUtil.convertToRepresentation(entry.time, null)).add("user", who(entry.user))
-			        .add("kind", entry.kind).add("action", entry.action).add("summary", entry.summary)
-			        .add("target", target(entry.target)).add("encounter", encounter(entry.encounter)).add("ip", null)
-			        .add("userAgent", null));
+		for (ActivityEntry entry : page.getResults()) {
+			results.add(new SimpleObject().add("revisionId", entry.getRevisionId())
+			        .add("time", ConversionUtil.convertToRepresentation(entry.getTime(), null))
+			        .add("user", who(entry.getUser())).add("kind", entry.getKind()).add("action", entry.getAction())
+			        .add("summary", entry.getSummary()).add("target", target(entry.getTarget()))
+			        .add("encounter", encounter(entry.getEncounter())).add("ip", null).add("userAgent", null));
 		}
-		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
-		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 	
 	/**
@@ -128,27 +129,27 @@ public class ActivityController extends ActCoreRestController {
 			throw new ObjectNotFoundException();
 		}
 		List<SimpleObject> fields = new ArrayList<SimpleObject>();
-		for (ActivityField field : details.fields) {
-			fields.add(
-			    new SimpleObject().add("name", field.name).add("previous", field.previous).add("current", field.current));
+		for (ActivityField field : details.getFields()) {
+			fields.add(new SimpleObject().add("name", field.getName()).add("previous", field.getPrevious()).add("current",
+			    field.getCurrent()));
 		}
-		return new SimpleObject().add("revisionId", details.revisionId).add("fields", fields).add("voidReason",
-		    details.voidReason);
+		return new SimpleObject().add("revisionId", details.getRevisionId()).add("fields", fields).add("voidReason",
+		    details.getVoidReason());
 	}
 	
 	private static SimpleObject target(ActivityTarget target) {
 		return target == null ? null
-		        : new SimpleObject().add("kind", target.kind).add("uuid", target.uuid).add("display", target.display)
-		                .add("actId", target.actId);
+		        : new SimpleObject().add("kind", target.getKind()).add("uuid", target.getUuid())
+		                .add("display", target.getDisplay()).add("actId", target.getActId());
 	}
 	
 	private static SimpleObject encounter(ActivityEncounter encounter) {
 		if (encounter == null) {
 			return null;
 		}
-		SimpleObject form = encounter.formUuid == null ? null
-		        : new SimpleObject().add("uuid", encounter.formUuid).add("name", encounter.formName);
-		return new SimpleObject().add("uuid", encounter.uuid).add("form", form).add("visitDate",
-		    encounter.visitDate == null ? null : new SimpleDateFormat("yyyy-MM-dd").format(encounter.visitDate));
+		SimpleObject form = encounter.getFormUuid() == null ? null
+		        : new SimpleObject().add("uuid", encounter.getFormUuid()).add("name", encounter.getFormName());
+		return new SimpleObject().add("uuid", encounter.getUuid()).add("form", form).add("visitDate",
+		    encounter.getVisitDate() == null ? null : new SimpleDateFormat("yyyy-MM-dd").format(encounter.getVisitDate()));
 	}
 }

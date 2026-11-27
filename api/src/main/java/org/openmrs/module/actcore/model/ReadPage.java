@@ -20,8 +20,20 @@ import java.util.List;
 public class ReadPage {
 	
 	/** The rows on the page, the row with the latest first read first. */
-	public final List<ReadRow> results = new ArrayList<ReadRow>();
+	private final List<ReadRow> results = new ArrayList<ReadRow>();
 	
 	/** How many rows the search matches across every page. */
-	public int totalCount;
+	private int totalCount;
+	
+	public List<ReadRow> getResults() {
+		return results;
+	}
+	
+	public int getTotalCount() {
+		return totalCount;
+	}
+	
+	public void setTotalCount(int totalCount) {
+		this.totalCount = totalCount;
+	}
 }

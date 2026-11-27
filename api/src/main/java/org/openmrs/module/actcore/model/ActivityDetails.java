@@ -19,11 +19,31 @@ import java.util.List;
 public class ActivityDetails {
 	
 	/** The id of the entry's revision. */
-	public int revisionId;
+	private int revisionId;
 	
 	/** The fields the save changed. */
-	public final List<ActivityField> fields = new ArrayList<ActivityField>();
+	private final List<ActivityField> fields = new ArrayList<ActivityField>();
 	
 	/** The reason given for a void, or null when the save voided nothing or gave no reason. */
-	public String voidReason;
+	private String voidReason;
+	
+	public int getRevisionId() {
+		return revisionId;
+	}
+	
+	public void setRevisionId(int revisionId) {
+		this.revisionId = revisionId;
+	}
+	
+	public List<ActivityField> getFields() {
+		return fields;
+	}
+	
+	public String getVoidReason() {
+		return voidReason;
+	}
+	
+	public void setVoidReason(String voidReason) {
+		this.voidReason = voidReason;
+	}
 }

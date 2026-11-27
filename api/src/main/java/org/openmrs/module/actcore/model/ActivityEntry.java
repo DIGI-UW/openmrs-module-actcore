@@ -21,29 +21,93 @@ public class ActivityEntry {
 	 * The id of the Envers revision the save was recorded under, by which its fields can be listed. It
 	 * is null for a flag dismissal, which ACT Core records outside the audit tables.
 	 */
-	public Integer revisionId;
+	private Integer revisionId;
 	
 	/** When the save was made. */
-	public Date time;
+	private Date time;
 	
 	/** The user who made the save, or null when the user is not known. */
-	public LogUser user;
+	private LogUser user;
 	
 	/**
 	 * The kind of entry, one of
 	 * {@link org.openmrs.module.actcore.api.search.ActivitySearchCriteria#KINDS}.
 	 */
-	public String kind;
+	private String kind;
 	
 	/** What was done, as the page shows it, such as "Saved RHD Consultation Visit". */
-	public String action;
+	private String action;
 	
 	/** A short account of what changed, or null when there is nothing to add to the action. */
-	public String summary;
+	private String summary;
 	
 	/** What the change was made to, or null when the entry names no target. */
-	public ActivityTarget target;
+	private ActivityTarget target;
 	
 	/** The encounter the change was saved on, or null for a change not saved on an encounter. */
-	public ActivityEncounter encounter;
+	private ActivityEncounter encounter;
+	
+	public Integer getRevisionId() {
+		return revisionId;
+	}
+	
+	public void setRevisionId(Integer revisionId) {
+		this.revisionId = revisionId;
+	}
+	
+	public Date getTime() {
+		return time;
+	}
+	
+	public void setTime(Date time) {
+		this.time = time;
+	}
+	
+	public LogUser getUser() {
+		return user;
+	}
+	
+	public void setUser(LogUser user) {
+		this.user = user;
+	}
+	
+	public String getKind() {
+		return kind;
+	}
+	
+	public void setKind(String kind) {
+		this.kind = kind;
+	}
+	
+	public String getAction() {
+		return action;
+	}
+	
+	public void setAction(String action) {
+		this.action = action;
+	}
+	
+	public String getSummary() {
+		return summary;
+	}
+	
+	public void setSummary(String summary) {
+		this.summary = summary;
+	}
+	
+	public ActivityTarget getTarget() {
+		return target;
+	}
+	
+	public void setTarget(ActivityTarget target) {
+		this.target = target;
+	}
+	
+	public ActivityEncounter getEncounter() {
+		return encounter;
+	}
+	
+	public void setEncounter(ActivityEncounter encounter) {
+		this.encounter = encounter;
+	}
 }

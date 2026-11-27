@@ -469,7 +469,7 @@ public abstract class ActCoreRestController extends BaseRestController {
 	 */
 	static SimpleObject who(LogUser who) {
 		return who == null ? null
-		        : new SimpleObject().add("uuid", who.uuid).add("username", who.username).add("display", who.display)
-		                .add("role", who.role);
+		        : new SimpleObject().add("uuid", who.getUuid()).add("username", who.getUsername())
+		                .add("display", who.getDisplay()).add("role", who.getRole());
 	}
 }

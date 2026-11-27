@@ -103,28 +103,28 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 	public void activity_shouldGiveTheEntriesAsBefore() throws Exception {
 		ActivityPage page = new ActivityPage();
 		ActivityEntry entry = new ActivityEntry();
-		entry.revisionId = 42;
-		entry.time = TIME;
-		entry.user = user();
-		entry.kind = "edited";
-		entry.action = "Edited";
-		entry.summary = "Echo saved";
+		entry.setRevisionId(42);
+		entry.setTime(TIME);
+		entry.setUser(user());
+		entry.setKind("edited");
+		entry.setAction("Edited");
+		entry.setSummary("Echo saved");
 		ActivityTarget target = new ActivityTarget();
-		target.kind = "patient";
-		target.uuid = "target-uuid";
-		target.display = "Jane Doe";
-		target.actId = "6TS-4";
-		entry.target = target;
+		target.setKind("patient");
+		target.setUuid("target-uuid");
+		target.setDisplay("Jane Doe");
+		target.setActId("6TS-4");
+		entry.setTarget(target);
 		ActivityEncounter encounter = new ActivityEncounter();
-		encounter.uuid = "encounter-uuid";
-		encounter.formUuid = "form-uuid";
-		encounter.formName = "RHD Echocardiogram";
-		encounter.typeName = "Echo";
-		encounter.visitDate = TIME;
-		entry.encounter = encounter;
-		page.results.add(entry);
-		page.results.add(new ActivityEntry());
-		page.totalCount = 7;
+		encounter.setUuid("encounter-uuid");
+		encounter.setFormUuid("form-uuid");
+		encounter.setFormName("RHD Echocardiogram");
+		encounter.setTypeName("Echo");
+		encounter.setVisitDate(TIME);
+		entry.setEncounter(encounter);
+		page.getResults().add(entry);
+		page.getResults().add(new ActivityEntry());
+		page.setTotalCount(7);
 		stub(AuditLogService.class, "getActivity", page);
 		
 		String body = get("/rest/v1/actcore/activity", "username", "nurse", "startDate", "2026-03-01", "endDate",
@@ -141,17 +141,17 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 		    body);
 		ActivitySearchCriteria filter = (ActivitySearchCriteria) calls.get("getActivity")[0];
 		assertEquals(Arrays.asList("nurse", "2026-03-01", "2026-03-31", "edited", "form-uuid", "patient-uuid", 5, 20),
-		    Arrays.asList(filter.username, filter.from.toString(), filter.to.toString(), filter.kind, filter.formUuid,
-		        filter.patientUuid, filter.startIndex, filter.limit));
+		    Arrays.asList(filter.getUsername(), filter.getFrom().toString(), filter.getTo().toString(), filter.getKind(),
+		        filter.getFormUuid(), filter.getPatientUuid(), filter.getStartIndex(), filter.getLimit()));
 	}
 	
 	@Test
 	public void activityDetails_shouldGiveTheFieldsAsBefore() throws Exception {
 		ActivityDetails details = new ActivityDetails();
-		details.revisionId = 42;
-		details.fields.add(new ActivityField("EF", "50", "55"));
-		details.fields.add(new ActivityField("Notes", null, "Seen"));
-		details.voidReason = "Entered twice";
+		details.setRevisionId(42);
+		details.getFields().add(new ActivityField("EF", "50", "55"));
+		details.getFields().add(new ActivityField("Notes", null, "Seen"));
+		details.setVoidReason("Entered twice");
 		stub(AuditLogService.class, "getActivityDetails", details);
 		
 		assertEquals(
@@ -165,30 +165,30 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 	public void reads_shouldGiveTheRowsAsBefore() throws Exception {
 		ReadPage page = new ReadPage();
 		ReadRow row = new ReadRow();
-		row.id = "row-1";
-		row.from = TIME;
-		row.to = LATER;
-		row.user = user();
+		row.setId("row-1");
+		row.setFrom(TIME);
+		row.setTo(LATER);
+		row.setUser(user());
 		ReadPatient patient = new ReadPatient();
-		patient.uuid = "patient-uuid";
-		patient.display = "Jane Doe";
-		patient.actId = "6TS-4";
-		patient.primaryCareClinic = "Kira HC";
-		patient.cardiacClinic = "Lira RRH";
-		row.patient = patient;
+		patient.setUuid("patient-uuid");
+		patient.setDisplay("Jane Doe");
+		patient.setActId("6TS-4");
+		patient.setPrimaryCareClinic("Kira HC");
+		patient.setCardiacClinic("Lira RRH");
+		row.setPatient(patient);
 		ReadEvent read = new ReadEvent();
-		read.time = TIME;
-		read.entity = "Patient";
-		read.description = "Opened the chart";
-		row.reads.add(read);
-		row.reads.add(new ReadEvent());
-		row.sessionId = "session";
-		row.ip = "10.0.0.1";
-		row.userAgent = "Firefox";
-		row.sameClinicAsUser = Boolean.TRUE;
-		page.results.add(row);
-		page.results.add(new ReadRow());
-		page.totalCount = 3;
+		read.setTime(TIME);
+		read.setEntity("Patient");
+		read.setDescription("Opened the chart");
+		row.getReads().add(read);
+		row.getReads().add(new ReadEvent());
+		row.setSessionId("session");
+		row.setIp("10.0.0.1");
+		row.setUserAgent("Firefox");
+		row.setSameClinicAsUser(Boolean.TRUE);
+		page.getResults().add(row);
+		page.getResults().add(new ReadRow());
+		page.setTotalCount(3);
 		stub(AuditLogService.class, "getReads", page);
 		
 		String body = get("/rest/v1/actcore/reads", "username", "nurse", "patient", "6TS-4", "startDate", "2026-03-01",
@@ -205,31 +205,32 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 		        + "\"totalCount\":3,\"from\":\"2026-03-01\",\"to\":\"2026-03-31\"}",
 		    body);
 		ReadSearchCriteria filter = (ReadSearchCriteria) calls.get("getReads")[0];
-		assertEquals(Arrays.asList("nurse", "6TS-4", "2026-03-01", "2026-03-31", 2, 10), Arrays.asList(filter.username,
-		    filter.patient, filter.from.toString(), filter.to.toString(), filter.startIndex, filter.limit));
+		assertEquals(Arrays.asList("nurse", "6TS-4", "2026-03-01", "2026-03-31", 2, 10),
+		    Arrays.asList(filter.getUsername(), filter.getPatient(), filter.getFrom().toString(), filter.getTo().toString(),
+		        filter.getStartIndex(), filter.getLimit()));
 	}
 	
 	@Test
 	public void downloads_shouldGiveTheDownloadsAsBefore() throws Exception {
 		DownloadPage page = new DownloadPage();
 		DownloadLogItem download = new DownloadLogItem();
-		download.date = TIME;
-		download.user = user();
-		download.formUuid = "form-uuid";
-		download.formName = "RHD Echocardiogram";
+		download.setDate(TIME);
+		download.setUser(user());
+		download.setFormUuid("form-uuid");
+		download.setFormName("RHD Echocardiogram");
 		Map<String, Object> detail = new LinkedHashMap<String, Object>();
 		detail.put("fields", Collections.singletonList("EF"));
 		detail.put("rows", 3);
-		download.detail = detail;
-		download.identifiers = "without";
+		download.setDetail(detail);
+		download.setIdentifiers("without");
 		DownloadLogItem list = new DownloadLogItem();
-		list.detail = Collections.singletonMap("list", "worklist:Overdue");
-		list.identifiers = "with";
+		list.setDetail(Collections.singletonMap("list", "worklist:Overdue"));
+		list.setIdentifiers("with");
 		DownloadLogItem unreadable = new DownloadLogItem();
-		unreadable.unreadable = true;
-		unreadable.identifiers = "with";
-		page.results.addAll(Arrays.asList(download, list, unreadable));
-		page.totalCount = 9;
+		unreadable.setUnreadable(true);
+		unreadable.setIdentifiers("with");
+		page.getResults().addAll(Arrays.asList(download, list, unreadable));
+		page.setTotalCount(9);
 		stub(DownloadLogService.class, "getDownloads", page);
 		
 		String body = get("/rest/v1/actcore/download", "username", "nurse", "startDate", "2026-03-01", "endDate",
@@ -245,17 +246,17 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 		    body);
 		DownloadSearchCriteria filter = (DownloadSearchCriteria) calls.get("getDownloads")[0];
 		assertEquals(Arrays.asList("nurse", "2026-03-01", "2026-03-31", "form-uuid", "without", 1, 50),
-		    Arrays.asList(filter.username, filter.from.toString(), filter.to.toString(), filter.formUuid, filter.identifiers,
-		        filter.startIndex, filter.limit));
+		    Arrays.asList(filter.getUsername(), filter.getFrom().toString(), filter.getTo().toString(), filter.getFormUuid(),
+		        filter.getIdentifiers(), filter.getStartIndex(), filter.getLimit()));
 	}
 	
 	@Test
 	public void screeningCounts_shouldGiveTheMonthAsBefore() throws Exception {
 		ScreeningCountMonth month = new ScreeningCountMonth();
-		month.saved = true;
-		month.counts.put("school_screened", 40);
-		month.counts.put("school_positive", 1);
-		month.notes = "Two schools";
+		month.setSaved(true);
+		month.getCounts().put("school_screened", 40);
+		month.getCounts().put("school_positive", 1);
+		month.setNotes("Two schools");
 		stub(ScreeningCountService.class, "getMonth", month);
 		
 		assertEquals(
@@ -269,10 +270,10 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void screeningCountSummary_shouldGiveTheSumsAsBefore() throws Exception {
 		ScreeningCountSummary summary = new ScreeningCountSummary();
-		summary.months = 4;
+		summary.setMonths(4);
 		long value = 1;
 		for (String column : ScreeningCount.COLUMNS) {
-			summary.sums.put(column, value++);
+			summary.getSums().put(column, value++);
 		}
 		stub(ScreeningCountService.class, "getSummary", summary);
 		
@@ -327,10 +328,10 @@ public class JsonBodiesTest extends BaseModuleWebContextSensitiveTest {
 	
 	private static LogUser user() {
 		LogUser user = new LogUser();
-		user.uuid = "user-uuid";
-		user.username = "nurse";
-		user.display = "Nurse Jane";
-		user.role = "Clinician";
+		user.setUuid("user-uuid");
+		user.setUsername("nurse");
+		user.setDisplay("Nurse Jane");
+		user.setRole("Clinician");
 		return user;
 	}
 	

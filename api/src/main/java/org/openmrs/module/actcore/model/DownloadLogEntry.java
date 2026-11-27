@@ -15,23 +15,71 @@ import java.util.Date;
 public class DownloadLogEntry {
 	
 	/** The uuid of the download's record. */
-	public String uuid;
+	private String uuid;
 	
 	/** When the download was recorded. */
-	public Date date;
+	private Date date;
 	
 	/** The uuid of the user who downloaded. */
-	public String userUuid;
+	private String userUuid;
 	
 	/**
 	 * The uuid of the form downloaded when the download held exactly one form. It is null for any other
 	 * download, and once the form is purged.
 	 */
-	public String formUuid;
+	private String formUuid;
 	
 	/** The form's stored name. It is null whenever {@link #formUuid} is null. */
-	public String formName;
+	private String formName;
 	
 	/** What the download held, such as its forms, columns and filters, as JSON. */
-	public String detail;
+	private String detail;
+	
+	public String getUuid() {
+		return uuid;
+	}
+	
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+	
+	public Date getDate() {
+		return date;
+	}
+	
+	public void setDate(Date date) {
+		this.date = date;
+	}
+	
+	public String getUserUuid() {
+		return userUuid;
+	}
+	
+	public void setUserUuid(String userUuid) {
+		this.userUuid = userUuid;
+	}
+	
+	public String getFormUuid() {
+		return formUuid;
+	}
+	
+	public void setFormUuid(String formUuid) {
+		this.formUuid = formUuid;
+	}
+	
+	public String getFormName() {
+		return formName;
+	}
+	
+	public void setFormName(String formName) {
+		this.formName = formName;
+	}
+	
+	public String getDetail() {
+		return detail;
+	}
+	
+	public void setDetail(String detail) {
+		this.detail = detail;
+	}
 }

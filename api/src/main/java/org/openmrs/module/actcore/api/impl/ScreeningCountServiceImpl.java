@@ -58,14 +58,14 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		List<ScreeningCount> rows = dao.getCurrentCounts(clinic.getLocationId(), firstDay(month));
 		ScreeningCountMonth result = new ScreeningCountMonth();
 		ScreeningCount saved = rows.isEmpty() ? null : rows.get(0);
-		result.saved = saved != null;
-		result.notes = saved == null ? null : saved.getNotes();
+		result.setSaved(saved != null);
+		result.setNotes(saved == null ? null : saved.getNotes());
 		if (saved == null) {
 			for (String column : ScreeningCount.COLUMNS) {
-				result.counts.put(column, 0);
+				result.getCounts().put(column, 0);
 			}
 		} else {
-			result.counts.putAll(saved.getCounts());
+			result.getCounts().putAll(saved.getCounts());
 		}
 		return result;
 	}
@@ -101,7 +101,7 @@ public class ScreeningCountServiceImpl extends BaseOpenmrsService implements Scr
 		if (clinics != null && clinics.isEmpty()) {
 			ScreeningCountSummary none = new ScreeningCountSummary();
 			for (String column : ScreeningCount.COLUMNS) {
-				none.sums.put(column, 0L);
+				none.getSums().put(column, 0L);
 			}
 			return none;
 		}
