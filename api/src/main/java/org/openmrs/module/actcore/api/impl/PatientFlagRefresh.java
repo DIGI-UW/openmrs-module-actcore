@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -27,6 +28,7 @@ import java.util.function.Supplier;
 import org.openmrs.Cohort;
 import org.openmrs.CohortMembership;
 import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.api.RaisedFlagService;
@@ -103,6 +105,9 @@ public class PatientFlagRefresh {
 	 *
 	 * @return the flags and lists that failed and whether the adherence refresh failed, or null when
 	 *         another run was in progress
+	 * @throws APIException when a patient's refresh still holds the rows after
+	 *             {@link AdherenceRefresh#ROWS_WAIT_MINUTES} minutes, or the wait for them is
+	 *             interrupted; the next run can then start
 	 */
 	public Result runIfIdle() {
 		if (!RUNNING.tryLock()) {
@@ -110,8 +115,8 @@ public class PatientFlagRefresh {
 			return null;
 		}
 		try {
-			// Waits for the patients' refreshes already going.
-			ROWS.writeLock().lock();
+			// Waits for the patients' refreshes already going, as long as AdherenceRefresh waits for its rows.
+			AdherenceRefresh.lockWithin(ROWS.writeLock(), rowsWaitMillis(), "The patient flag refresh", "the flag rows");
 			try {
 				return refresh();
 			}
@@ -123,6 +128,10 @@ public class PatientFlagRefresh {
 		finally {
 			RUNNING.unlock();
 		}
+	}
+	
+	long rowsWaitMillis() {
+		return TimeUnit.MINUTES.toMillis(AdherenceRefresh.ROWS_WAIT_MINUTES);
 	}
 	
 	/**

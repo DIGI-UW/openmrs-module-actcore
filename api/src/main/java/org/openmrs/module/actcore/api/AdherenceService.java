@@ -43,6 +43,8 @@ public interface AdherenceService extends OpenmrsService {
 	 * @return the number of patients written a row; 0 when none has a prescription
 	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
 	 *             {@link ActCorePrivileges#REFRESH_FLAGS}
+	 * @throws org.openmrs.api.APIException when a patient's refresh still holds the rows after a
+	 *             minute, or the wait for them is interrupted
 	 */
 	@Authorized(ActCorePrivileges.REFRESH_FLAGS)
 	int refreshAll(LocalDate today);
