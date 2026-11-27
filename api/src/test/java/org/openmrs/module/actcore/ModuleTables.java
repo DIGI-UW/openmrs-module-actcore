@@ -16,7 +16,7 @@ import java.util.List;
 import liquibase.Contexts;
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.util.DatabaseUpdater;
 
 /**
@@ -46,7 +46,7 @@ public final class ModuleTables {
 		try {
 			if (!changelogRan) {
 				// The test context's hbm2ddl makes the mapped tables first, and the changelog would skip them.
-				Transactions.inNewTransaction(() -> {
+				TransactionsInTest.inNewTransaction(() -> {
 					for (String table : moduleTables()) {
 						Context.getAdministrationService().executeSQL("drop table " + table, false);
 					}
@@ -59,7 +59,7 @@ public final class ModuleTables {
 			throw new IllegalStateException("The module's changelog does not run", e);
 		}
 		// Rows written by a transaction of their own outlive the test, so they are cleared in one too.
-		Transactions.inNewTransaction(() -> {
+		TransactionsInTest.inNewTransaction(() -> {
 			for (String table : moduleTables()) {
 				Context.getAdministrationService().executeSQL("delete from " + table, false);
 			}

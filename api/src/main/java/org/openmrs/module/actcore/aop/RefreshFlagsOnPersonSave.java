@@ -31,8 +31,8 @@ import org.slf4j.LoggerFactory;
  * request, the service has already committed and the refresh runs at once, before the call returns.
  * Otherwise, as inside a wider transaction, the refresh waits as
  * {@link Transactions#afterCommit(Object, int, IntConsumer)} describes. Each flag and list is
- * refreshed in a new transaction, as {@link Transactions#inNewTransaction(Runnable)} describes. It
- * leaves the adherence rows alone, since those are computed from encounters only.
+ * refreshed as a unit of its own, as {@link Transactions#inPatientTransaction(int, Runnable)}
+ * describes. It leaves the adherence rows alone, since those are computed from encounters only.
  */
 public class RefreshFlagsOnPersonSave implements MethodInterceptor {
 	

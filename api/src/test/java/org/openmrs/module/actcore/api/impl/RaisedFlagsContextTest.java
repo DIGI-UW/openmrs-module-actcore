@@ -72,6 +72,8 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private Flag flag;
 	
+	private Runnable restoreService;
+	
 	@Before
 	public void setUp() {
 		ModuleTables.create();
@@ -86,11 +88,19 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 		flagService.saveTag(critical);
 		flag = saveFlag("missing data", critical);
 		Context.addAdvice(FlagService.class, hide);
+		restoreService = RaisedFlagServiceInTest.recordInTestTransaction();
 	}
 	
 	@After
 	public void removeAdvice() {
-		Context.removeAdvice(FlagService.class, hide);
+		try {
+			if (restoreService != null) {
+				restoreService.run();
+			}
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, hide);
+		}
 	}
 	
 	@Test
@@ -416,12 +426,7 @@ public class RaisedFlagsContextTest extends BaseModuleContextSensitiveTest {
 	
 	private void runFullRefresh() {
 		Context.flushSession();
-		PatientFlagRefreshInTest.runWithAdherence(new Runnable() {
-			
-			@Override
-			public void run() {
-			}
-		});
+		PatientFlagRefreshInTest.runInTestTransaction();
 	}
 	
 	private void refreshPatient() {

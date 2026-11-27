@@ -152,6 +152,12 @@ public final class ActCoreConstants {
 	/** The table that holds one row per download recorded. */
 	public static final String DOWNLOAD_LOG_TABLE = "actcore_download_log";
 	
+	/**
+	 * The most bytes of UTF-8 a recorded download's detail holds, which is the size of MariaDB's TEXT,
+	 * the type of {@link #DOWNLOAD_LOG_TABLE}'s detail column. A longer detail is refused.
+	 */
+	public static final int MAX_DOWNLOAD_DETAIL_BYTES = 65535;
+	
 	/** The table that holds the screening counts, one row per saved clinic month. */
 	public static final String SCREENING_COUNT_TABLE = "actcore_screening_count";
 	
