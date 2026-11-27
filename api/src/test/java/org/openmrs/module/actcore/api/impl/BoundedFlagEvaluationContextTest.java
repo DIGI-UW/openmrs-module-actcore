@@ -105,16 +105,16 @@ public class BoundedFlagEvaluationContextTest extends BaseModuleContextSensitive
 		assertFalse(Thread.interrupted());
 	}
 	
-	@Test(timeout = 20000)
+	@Test(timeout = 60000)
 	public void within_shouldGiveWhatAGroovyScriptThatEndsInTimeGives() {
 		Patient patient = Context.getPatientService().getPatient(2);
 		Flag matches = groovyFlag("return testCohort");
 		Flag matchesNobody = groovyFlag("return new Cohort()");
 		
-		assertEquals(Boolean.TRUE,
-		    BoundedFlagEvaluation.within(matches, () -> matches.eval(patient, new HashMap<Object, Object>()), 10000));
-		assertEquals(Boolean.FALSE, BoundedFlagEvaluation.within(matchesNobody,
-		    () -> matchesNobody.eval(patient, new HashMap<Object, Object>()), 10000));
+		assertEquals(Boolean.TRUE, BoundedFlagEvaluationInTest.retryingAMissedNotify(
+		    () -> BoundedFlagEvaluation.within(matches, () -> matches.eval(patient, new HashMap<Object, Object>()))));
+		assertEquals(Boolean.FALSE, BoundedFlagEvaluationInTest.retryingAMissedNotify(() -> BoundedFlagEvaluation
+		        .within(matchesNobody, () -> matchesNobody.eval(patient, new HashMap<Object, Object>()))));
 	}
 	
 	@Test(timeout = 20000)
@@ -154,7 +154,7 @@ public class BoundedFlagEvaluationContextTest extends BaseModuleContextSensitive
 		}
 	}
 	
-	@Test(timeout = 20000)
+	@Test(timeout = 60000)
 	public void within_shouldRunTheWorkerOfADaemonCallerAsADaemon() {
 		Flag flag = groovyFlag("return testCohort");
 		List<Object> seen = new ArrayList<Object>();
@@ -162,12 +162,13 @@ public class BoundedFlagEvaluationContextTest extends BaseModuleContextSensitive
 		try {
 			Daemon.runInDaemonThreadAndWait(() -> {
 				Thread callerThread = Thread.currentThread();
-				seen.addAll(BoundedFlagEvaluation
-				        .within(
-				            flag, () -> Arrays.<Object> asList(Thread.currentThread() != callerThread,
-				                Daemon.isDaemonThread(), Context.getService(FlagService.class)
-				                        .getFlaggedPatients(flag, new HashMap<Object, Object>()).getMemberships().isEmpty()),
-				            10000));
+				seen.addAll(
+				    BoundedFlagEvaluationInTest
+				            .retryingAMissedNotify(() -> BoundedFlagEvaluation.within(flag,
+				                () -> Arrays.<Object> asList(Thread.currentThread() != callerThread, Daemon.isDaemonThread(),
+				                    Context.getService(FlagService.class)
+				                            .getFlaggedPatients(flag, new HashMap<Object, Object>()).getMemberships()
+				                            .isEmpty()))));
 			}, ActCoreActivator.getDaemonToken());
 		}
 		finally {

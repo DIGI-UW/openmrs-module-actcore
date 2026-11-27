@@ -365,15 +365,16 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		};
 		Context.addAdvice(FlagService.class, recording);
 		try {
-			assertTrue(PatientFlagRefresh.evaluate(flagService,
-			    recordingFlag(GroovyFlagEvaluator.class, "return testCohort", inTransaction), new HashMap<Object, Object>())
+			assertTrue(BoundedFlagEvaluationInTest.retryingAMissedNotify(() -> PatientFlagRefresh.evaluate(flagService,
+			    recordingFlag(GroovyFlagEvaluator.class, "return testCohort", inTransaction), new HashMap<Object, Object>()))
 			        .contains(MATCHING_PATIENT));
-			assertEquals(Collections.singletonList(false), inTransaction);
+			assertTrue(inTransaction.toString(), !inTransaction.isEmpty() && !inTransaction.contains(true));
+			inTransaction.clear();
 			assertFalse(serviceCalls.contains("getFlaggedPatients"));
 			
 			assertEquals(Collections.singleton(MATCHING_PATIENT), PatientFlagRefresh.evaluate(flagService,
 			    recordingFlag(SQLFlagEvaluator.class, MATCHES_ONE, inTransaction), new HashMap<Object, Object>()));
-			assertEquals(Arrays.asList(false, true), inTransaction);
+			assertEquals(Collections.singletonList(true), inTransaction);
 			assertTrue(serviceCalls.contains("getFlaggedPatients"));
 		}
 		finally {

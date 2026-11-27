@@ -12,8 +12,10 @@ package org.openmrs.module.actcore.api.impl;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
+import org.openmrs.api.APIException;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 
@@ -44,5 +46,31 @@ public class BoundedFlagEvaluationTest {
 	public void within_shouldWaitThirtySecondsByDefault() {
 		assertEquals(30, BoundedFlagEvaluation.WAIT_SECONDS);
 		assertEquals(30000, BoundedFlagEvaluation.waitMillis);
+	}
+	
+	@Test
+	public void retryingAMissedNotify_shouldEvaluateAgainOnlyAfterAGiveUp() {
+		int[] calls = { 0 };
+		
+		assertEquals("ended", BoundedFlagEvaluationInTest.retryingAMissedNotify(() -> {
+			if (++calls[0] < 3) {
+				throw new APIException("Gave up evaluating flag 'groovy' after 4 s: its Groovy evaluation had not ended");
+			}
+			return "ended";
+		}));
+		assertEquals(3, calls[0]);
+		
+		calls[0] = 0;
+		try {
+			BoundedFlagEvaluationInTest.retryingAMissedNotify(() -> {
+				calls[0]++;
+				throw new APIException("criteria is broken");
+			});
+			fail("The failure was not passed on");
+		}
+		catch (APIException e) {
+			assertEquals(1, calls[0]);
+		}
+		assertEquals(BoundedFlagEvaluation.WAIT_SECONDS * 1000, BoundedFlagEvaluation.waitMillis);
 	}
 }
