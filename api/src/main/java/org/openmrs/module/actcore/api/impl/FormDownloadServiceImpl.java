@@ -11,10 +11,13 @@ package org.openmrs.module.actcore.api.impl;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.openmrs.Form;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
@@ -40,6 +43,15 @@ public class FormDownloadServiceImpl extends BaseOpenmrsService implements FormD
 	// No @Transactional: the record commits in its own, before the rows are returned.
 	public FormDownloadTable download(List<FormDownloadChoice> choices, boolean rowPerPatient, FormDownloadFilters filters,
 	        LocalDate from, LocalDate to, List<String> patientFields) {
+		if (choices == null || choices.isEmpty()) {
+			throw Rows.refusal("download", "The form is required");
+		}
+		Set<Form> chosen = new HashSet<Form>();
+		for (FormDownloadChoice choice : choices) {
+			if (!chosen.add(choice.getForm())) {
+				throw Rows.refusal("download", "A form is asked for twice: " + choice.getForm().getUuid());
+			}
+		}
 		boolean all = Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA);
 		boolean identified = all && Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_IDENTIFIERS);
 		boolean researchOnly = !all;

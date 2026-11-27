@@ -12,6 +12,7 @@ package org.openmrs.module.actcore.api.impl;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -36,10 +37,13 @@ import org.openmrs.PersonAttributeType;
 import org.openmrs.PatientProgram;
 import org.openmrs.Program;
 import org.openmrs.Location;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.FormDownloadService;
 import org.openmrs.module.actcore.model.FormDownloadChoice;
 import org.openmrs.module.actcore.model.FormDownloadFilters;
+import org.openmrs.module.actcore.model.FormDownloadTable;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
@@ -245,6 +249,23 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		assertTrue(identified.rows.get(0).contains("Plot 12, Kira Road, Kampala"));
 	}
 	
+	@Test
+	public void download_shouldRefuseNoFormAndAFormChosenTwiceWithoutRecordingIt() {
+		Encounter echo = encounter(7, 0);
+		answer(echo, ejection, null, null, 55.0);
+		FormDownloadChoice echoChoice = choice(form, "Echo", ejection, "EF");
+		long recorded = downloadsRecorded();
+		
+		refused("The form is required", null);
+		refused("The form is required", Collections.<FormDownloadChoice> emptyList());
+		refused("A form is asked for twice: " + form.getUuid(), Arrays.asList(echoChoice,
+		    choice(otherForm("Consultation"), "Consultation", ejection, "EF"), choice(form, "Echo again", finding, "MR")));
+		assertEquals(recorded, downloadsRecorded());
+		
+		download(Arrays.asList(echoChoice, choice(otherForm("Follow-up"), "Follow-up", ejection, "EF")));
+		assertEquals(recorded + 1, downloadsRecorded());
+	}
+	
 	@Test(expected = UnsupportedOperationException.class)
 	public void patientFields_shouldNotBeChangeable() {
 		ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.put("address", "Address");
@@ -420,6 +441,26 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		new FormDownload().buildPerPatient(Collections.singletonList(choice(form, "Echo", ejection, "EF")), null, null,
 		    false, false, filters).rows.forEach(r -> ids.add(r.get(0)));
 		return ids;
+	}
+	
+	private static void refused(String message, List<FormDownloadChoice> choices) {
+		try {
+			download(choices);
+			fail("Expected a refusal: " + message);
+		}
+		catch (ValidationException e) {
+			assertEquals(message, e.getMessage());
+		}
+	}
+	
+	private static FormDownloadTable download(List<FormDownloadChoice> choices) {
+		return Context.getService(FormDownloadService.class).download(choices, false, filters(null, null, null), null, null,
+		    null);
+	}
+	
+	private static long downloadsRecorded() {
+		return ((Number) Context.getAdministrationService()
+		        .executeSQL("select count(*) from " + ActCoreConstants.DOWNLOAD_LOG_TABLE, true).get(0).get(0)).longValue();
 	}
 	
 	private static FormDownloadFilters filters(String status, Location cardiac, Location primaryCare) {

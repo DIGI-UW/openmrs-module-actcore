@@ -52,7 +52,8 @@ public interface FormDownloadService extends OpenmrsService {
 	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}; lacks Get Forms, Get Concepts, Get
 	 *             Encounters or Get Observations, which the forms and their answers are read with; or,
 	 *             with a status filter, lacks Get Patient Programs
-	 * @throws org.openmrs.api.ValidationException when the record of the download would be longer than
+	 * @throws org.openmrs.api.ValidationException when no form is chosen, a form is chosen twice, or
+	 *             the record of the download would be longer than
 	 *             {@link ActCoreConstants#MAX_DOWNLOAD_DETAIL_BYTES} bytes of UTF-8
 	 * @throws org.openmrs.api.APIException when the record of the download cannot be written as JSON
 	 */
