@@ -17,12 +17,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.openmrs.module.patientflags.api.FlagService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Advice on FlagService that keeps the patientflags module from rebuilding its flag cache while
@@ -50,12 +53,22 @@ import org.openmrs.module.patientflags.api.FlagService;
  * waits for the evaluation. getPrivileges returns a copy of the privilege cache, because a Groovy
  * flag's evaluator narrows the collection it gets to the privileges of the user it runs for.
  * <p>
+ * A rebuild waits for the evaluations in progress for at most WAIT_SECONDS, then rebuilds without
+ * the write lock and logs a warning. In patientflags 3.0.10 a Groovy flag's evaluation can miss the
+ * wake-up from its evaluator thread and wait forever, holding the read lock, and every later
+ * rebuild, and every evaluation that queues behind a waiting rebuild, would wait with it. A rebuild
+ * that gives up can race the evaluations still running, as it would without this advice.
+ * <p>
  * ACT Core's Spring context adds this advice to patientflags' flagService bean, which
  * ServiceContext keeps as the FlagService itself. So the FlagService that a context refresh creates
  * carries it before ServiceContext hands that service to any caller and before any module's advice
  * is loaded.
  */
 public class GuardFlagCache implements MethodInterceptor {
+	
+	static final long WAIT_SECONDS = 10;
+	
+	private static final Logger log = LoggerFactory.getLogger(GuardFlagCache.class);
 	
 	private static final ReentrantReadWriteLock CACHE = new ReentrantReadWriteLock();
 	
@@ -83,14 +96,21 @@ public class GuardFlagCache implements MethodInterceptor {
 			return invocation.proceed();
 		}
 		if (lock == CACHE.writeLock()) {
-			lock.lock();
+			boolean locked = lock.tryLock(WAIT_SECONDS, TimeUnit.SECONDS);
+			if (!locked) {
+				log.warn(
+				    "Rebuilding the patient flag cache in {} without its lock: a flag evaluation has run for at least {} s",
+				    invocation.getMethod().getName(), WAIT_SECONDS);
+			}
 			try {
 				synchronized (FILL) {
 					return invocation.proceed();
 				}
 			}
 			finally {
-				lock.unlock();
+				if (locked) {
+					lock.unlock();
+				}
 			}
 		}
 		fillOnce(invocation.getThis());

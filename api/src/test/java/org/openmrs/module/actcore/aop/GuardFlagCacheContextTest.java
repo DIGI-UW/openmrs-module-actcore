@@ -374,6 +374,33 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, mostFilling.get());
 	}
 	
+	@Test
+	public void saveFlag_shouldRebuildAndLetOtherPatientsBeEvaluatedWhenAnEvaluationNeverEnds() throws Exception {
+		FlagService service = service(true);
+		AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+		CountDownLatch ends = new CountDownLatch(1);
+		// As a Groovy flag's evaluation that missed its evaluator thread's wake-up.
+		onEvaluation = ends::await;
+		Thread hung = start(failure, () -> service.generateFlagsForPatient(new Patient(1), new HashMap<Object, Object>()));
+		try {
+			assertTrue(evaluating.await(WAIT_SECONDS, TimeUnit.SECONDS));
+			Thread writer = start(failure, () -> service.saveFlag(new Flag()));
+			waitUntilWaiting(writer);
+			Thread other = start(failure,
+			    () -> service.generateFlagsForPatient(new Patient(2), new HashMap<Object, Object>()));
+			waitUntilWaiting(other);
+			join(writer, other);
+			
+			assertTrue(hung.isAlive());
+			assertNull(failure.get());
+		}
+		finally {
+			ends.countDown();
+			released.countDown();
+			join(hung);
+		}
+	}
+	
 	/**
 	 * Saves a flag on one thread while a patient's flags are generated on another, and returns what the
 	 * generation threw.
@@ -570,10 +597,14 @@ public class GuardFlagCacheContextTest extends BaseModuleContextSensitiveTest {
 	
 	private static void waitUntilWaiting(Thread thread) throws InterruptedException {
 		long deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(WAIT_SECONDS);
-		while (thread.getState() != Thread.State.WAITING && System.currentTimeMillis() < deadline) {
+		while (!waiting(thread) && System.currentTimeMillis() < deadline) {
 			Thread.sleep(10);
 		}
-		assertEquals(Thread.State.WAITING, thread.getState());
+		assertTrue(thread.getState().toString(), waiting(thread));
+	}
+	
+	private static boolean waiting(Thread thread) {
+		return thread.getState() == Thread.State.WAITING || thread.getState() == Thread.State.TIMED_WAITING;
 	}
 	
 	private static void join(Thread... threads) throws InterruptedException {
