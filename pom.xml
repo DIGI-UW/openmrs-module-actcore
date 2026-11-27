@@ -10,12 +10,11 @@
 
   <groupId>org.openmrs.module</groupId>
   <artifactId>actcore</artifactId>
-  <version>1.1.0-SNAPSHOT</version>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>ACT Core</name>
-  <description>Scheduled re-evaluation of every enabled, unretired patient flag, mirrored into patient lists, and a look-up of the data missing behind a flag.</description>
-
+  <description>The server side of ACT 3.0, the OpenMRS 3 edition of the ACT rheumatic heart disease (RHD) registry.</description>
   <url>https://github.com/DIGI-UW/openmrs-module-actcore</url>
 
   <scm>
@@ -30,7 +29,7 @@
     <openmrsPlatformVersion>2.4.0</openmrsPlatformVersion>
     <patientflagsVersion>3.0.10</patientflagsVersion>
     <cohortVersion>3.7.3</cohortVersion>
-    <webservicesRestVersion>2.40.0</webservicesRestVersion>
+    <webservicesRestVersion>3.5.0</webservicesRestVersion>
     <reportingVersion>2.1.0</reportingVersion>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>

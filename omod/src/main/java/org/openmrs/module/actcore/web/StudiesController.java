@@ -19,13 +19,12 @@ import org.openmrs.ConceptName;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.studies.Studies;
+import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,44 +33,69 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Lists the research studies with their Study status states, and creates and renames them.
+ * Serves the research studies: lists them with their Study status states, and creates and renames
+ * them.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/studies")
 public class StudiesController extends ActCoreRestController {
 	
 	/**
-	 * The distribution creates it; a user without it, other than a superuser, cannot change studies.
+	 * Gets the studies that are not retired, by name, each with its uuid, name and Study status states,
+	 * the initial states first.
+	 *
+	 * @return the studies as {@code results}; empty when there are none
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Programs
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
 	 */
-	public static final String MANAGE_PRIVILEGE = "Task: act.manageStudies";
-	
-	private final Studies studies = new Studies();
-	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStudies() {
-		requirePrivilege(PrivilegeConstants.GET_PROGRAMS);
 		List<SimpleObject> results = new ArrayList<>();
-		for (Program study : studies.getStudies()) {
+		for (Program study : Context.getService(StudyService.class).getStudies()) {
 			results.add(toJson(study));
 		}
 		return new SimpleObject().add("results", results);
 	}
 	
+	/**
+	 * Creates a study, as {@link StudyService#createStudy(String)} does.
+	 *
+	 * @param body the request body, holding the study's name as {@code name}
+	 * @return the new study, with its uuid, name and states
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES}
+	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject create(@RequestBody Map<String, Object> body) {
-		requirePrivilege(MANAGE_PRIVILEGE);
-		return toJson(studies.create(name(body)));
+		return toJson(Context.getService(StudyService.class).createStudy(name(body)));
 	}
 	
+	/**
+	 * Renames a study, as {@link StudyService#renameStudy(Program, String)} does.
+	 *
+	 * @param uuid the study's uuid
+	 * @param body the request body, holding the new name as {@code name}
+	 * @return the renamed study, with its uuid, name and states
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks Get Programs and
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES}, or lacks
+	 *             {@link ActCorePrivileges#MANAGE_STUDIES} once the study is found
+	 * @throws ObjectNotFoundException when no unretired study has the uuid
+	 * @throws org.openmrs.api.ValidationException when the name is missing, too long or taken
+	 * @throws org.openmrs.api.APIException when the study template program is not configured
+	 */
 	@RequestMapping(value = "/{uuid}", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject rename(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> body) {
-		requirePrivilege(MANAGE_PRIVILEGE);
-		Program study = studies.getStudies().stream().filter(p -> p.getUuid().equals(uuid)).findFirst()
-		        .orElseThrow(ObjectNotFoundException::new);
-		return toJson(studies.rename(study, name(body)));
+		StudyService studies = Context.getService(StudyService.class);
+		Program study = studies.getStudyByUuid(uuid);
+		if (study == null) {
+			throw new ObjectNotFoundException();
+		}
+		return toJson(studies.renameStudy(study, name(body)));
 	}
 	
 	private static String name(Map<String, Object> body) {
@@ -96,15 +120,12 @@ public class StudiesController extends ActCoreRestController {
 		return new SimpleObject().add("uuid", study.getUuid()).add("name", study.getName()).add("states", states);
 	}
 	
-	/** The short name where there is one, as "Active" for Active (study status). */
+	/**
+	 * Gives a state's label: its concept's short name in the user's locale when it has one, such as
+	 * "Active" for Active (study status), or else its concept's name.
+	 */
 	private static String label(Concept concept) {
 		ConceptName shortName = concept.getShortNameInLocale(Context.getLocale());
 		return shortName != null ? shortName.getName() : concept.getName().getName();
-	}
-	
-	private static void requirePrivilege(String privilege) {
-		if (!Context.hasPrivilege(privilege)) {
-			throw new APIAuthenticationException("Privilege required: " + privilege);
-		}
 	}
 }

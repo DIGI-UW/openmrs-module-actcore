@@ -14,10 +14,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.logs.ReadLog;
-import org.openmrs.module.actcore.logs.Rows;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.AuditLogService;
+import org.openmrs.module.actcore.api.TooManyResultsException;
+import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.ReadEvent;
+import org.openmrs.module.actcore.model.ReadPage;
+import org.openmrs.module.actcore.model.ReadRow;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -28,14 +32,38 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-/** The Logs page's Patients opened tab: who read which patient's record, folded by the hour. */
+/**
+ * Serves the Logs page's Patients opened tab: who read which patient's record, with a user's reads
+ * of one patient within an hour folded into one row.
+ */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/reads")
 public class ReadsController extends ActCoreRestController {
 	
-	/** Shorter than the other logs' default, as every chart opened writes reads. */
+	/**
+	 * How many days back the log reads when the request gives no start date. It is shorter than the
+	 * other logs' default because every chart opened writes reads.
+	 */
 	static final int DEFAULT_DAYS = 30;
 	
+	/**
+	 * Gets a page of who opened which patient's record, newest first.
+	 *
+	 * @param username the user to list, or blank for no user filter
+	 * @param patient a patient uuid, or else an identifier to match exactly or part of a name to search
+	 *            for; blank for no patient filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_DAYS} days before the
+	 *            end date or today
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param startIndex the first row to give, from 0; null for 0
+	 * @param limit the most rows to give, capped at {@link ActCoreConstants#LOG_MAX_LIMIT}; null or
+	 *            below 1 for {@link ActCoreConstants#LOG_DEFAULT_LIMIT}
+	 * @return the rows as {@code results}, with {@code totalCount} and the days read
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
+	 * @throws IllegalRequestException when a date is not a date, or the start is after the end
+	 * @throws TooManyResultsException when too many patients match
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getReads(@RequestParam(value = "username", required = false) String username,
@@ -44,43 +72,36 @@ public class ReadsController extends ActCoreRestController {
 	        @RequestParam(value = "endDate", required = false) String endDate,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		if (!Context.hasPrivilege(ReadLog.VIEW_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + ReadLog.VIEW_PRIVILEGE);
-		}
-		ReadLog.Filter filter = new ReadLog.Filter();
-		filter.username = StringUtils.trimToNull(username);
-		filter.patient = StringUtils.trimToNull(patient);
-		filter.to = DownloadController.date(endDate);
-		filter.from = DownloadController.from(startDate, filter.to, Period.ofDays(DEFAULT_DAYS));
-		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? Rows.DEFAULT_LIMIT : limit;
+		ReadSearchCriteria filter = new ReadSearchCriteria();
+		filter.setUsername(StringUtils.trimToNull(username));
+		filter.setPatient(StringUtils.trimToNull(patient));
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(), Period.ofDays(DEFAULT_DAYS)));
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit);
 		
-		ReadLog.Page page;
-		try {
-			page = new ReadLog().list(filter);
-		}
-		catch (Rows.TooMany e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
+		ReadPage page = Context.getService(AuditLogService.class).getReads(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (ReadLog.Row row : page.results) {
+		for (ReadRow row : page.getResults()) {
 			List<SimpleObject> reads = new ArrayList<SimpleObject>();
-			for (ReadLog.Read read : row.reads) {
-				reads.add(new SimpleObject().add("time", ConversionUtil.convertToRepresentation(read.time, null))
-				        .add("entity", read.entity).add("description", read.description));
+			for (ReadEvent read : row.getReads()) {
+				reads.add(new SimpleObject().add("time", ConversionUtil.convertToRepresentation(read.getTime(), null))
+				        .add("entity", read.getEntity()).add("description", read.getDescription()));
 			}
-			SimpleObject subject = row.patient == null ? null
-			        : new SimpleObject().add("uuid", row.patient.uuid).add("display", row.patient.display)
-			                .add("actId", row.patient.actId).add("primaryCareClinic", row.patient.primaryCareClinic)
-			                .add("cardiacClinic", row.patient.cardiacClinic);
-			results.add(
-			    new SimpleObject().add("id", row.id).add("from", ConversionUtil.convertToRepresentation(row.from, null))
-			            .add("to", ConversionUtil.convertToRepresentation(row.to, null))
-			            .add("user", ActivityController.who(row.user)).add("patient", subject).add("count", row.reads.size())
-			            .add("reads", reads).add("sessionId", row.sessionId).add("ip", row.ip)
-			            .add("userAgent", row.userAgent).add("sameClinicAsUser", row.sameClinicAsUser));
+			SimpleObject subject = row.getPatient() == null ? null
+			        : new SimpleObject().add("uuid", row.getPatient().getUuid())
+			                .add("display", row.getPatient().getDisplay()).add("actId", row.getPatient().getActId())
+			                .add("primaryCareClinic", row.getPatient().getPrimaryCareClinic())
+			                .add("cardiacClinic", row.getPatient().getCardiacClinic());
+			results.add(new SimpleObject().add("id", row.getId())
+			        .add("from", ConversionUtil.convertToRepresentation(row.getFrom(), null))
+			        .add("to", ConversionUtil.convertToRepresentation(row.getTo(), null)).add("user", who(row.getUser()))
+			        .add("patient", subject).add("count", row.getReads().size()).add("reads", reads)
+			        .add("sessionId", row.getSessionId()).add("ip", row.getIp()).add("userAgent", row.getUserAgent())
+			        .add("sameClinicAsUser", row.getSameClinicAsUser()));
 		}
-		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
-		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 }

@@ -14,7 +14,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,9 +35,13 @@ import org.junit.Test;
 import org.openmrs.GlobalProperty;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.task.HideDismissedFlags;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
-import org.openmrs.module.actcore.task.RaisedFlags;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ModuleTables;
+import org.openmrs.module.actcore.aop.HideDismissedFlags;
+import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.api.impl.PatientFlagRefreshInTest;
+import org.openmrs.module.actcore.api.impl.RaisedFlagServiceInTest;
+import org.openmrs.module.actcore.model.ChartFlag;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.Tag;
@@ -65,29 +68,29 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	
 	private Tag critical;
 	
+	private Runnable restoreService;
+	
 	@Before
 	public void setUp() {
-		// The module's liquibase changeset is not run by the test context; H2 commits DDL at once.
-		Context.getAdministrationService().executeSQL("create table if not exists " + RaisedFlags.TABLE
-		        + " (patient_id int not null, flag_id int not null, raised_since datetime not null, dismissed_by int,"
-		        + " date_dismissed datetime, primary key (patient_id, flag_id))",
-		    false);
-		Context.getAdministrationService().executeSQL("delete from " + RaisedFlags.TABLE, false);
+		ModuleTables.create();
 		Context.getAdministrationService()
-		        .executeSQL("create table if not exists " + RaisedFlags.DISMISSAL_TABLE
-		                + " (dismissal_id int auto_increment primary key, patient_id int not null, flag_id int not null,"
-		                + " dismissed_by int, date_dismissed datetime not null)",
-		            false);
-		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(RaisedFlags.DISMISS_TAG_PROPERTY, "Critical data"));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_DISMISS_FLAG_TAG, "Critical data"));
 		critical = new Tag("Critical data");
 		Context.getService(FlagService.class).saveTag(critical);
 		Context.addAdvice(FlagService.class, hide);
+		restoreService = RaisedFlagServiceInTest.recordInTestTransaction();
 	}
 	
 	@After
 	public void removeAdvice() {
-		Context.removeAdvice(FlagService.class, hide);
+		try {
+			if (restoreService != null) {
+				restoreService.run();
+			}
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, hide);
+		}
 	}
 	
 	@Test
@@ -134,9 +137,7 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 	@Test
 	public void answersConflictWhileTheFullRefreshHoldsTheRows() throws Exception {
 		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
-		Field field = PatientFlagRefreshTask.class.getDeclaredField("ROWS");
-		field.setAccessible(true);
-		final ReentrantReadWriteLock rows = (ReentrantReadWriteLock) field.get(null);
+		final ReentrantReadWriteLock rows = PatientFlagRefreshInTest.rows();
 		ExecutorService refresh = Executors.newSingleThreadExecutor();
 		final CountDownLatch done = new CountDownLatch(1);
 		Future<?> held = refresh.submit(new Callable<Void>() {
@@ -188,11 +189,42 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		controller.dismiss(body(PATIENT_7, UUID.randomUUID().toString()));
 	}
 	
+	@Test
+	public void refusesToDismissForAUserWithoutViewPatientFlagsNamingThePrivilege() {
+		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), null);
+		FlagGapControllerTest.authenticateWith("Get Patients");
+		
+		try {
+			controller.dismiss(body(PATIENT_7, missing.getUuid()));
+			fail();
+		}
+		catch (APIAuthenticationException e) {
+			assertEquals("Privileges required: View Patient Flags", e.getMessage());
+		}
+	}
+	
 	@Test(expected = APIAuthenticationException.class)
 	public void refusesAUserWhoMayNotSeeFlags() {
 		Context.logout();
 		
 		controller.getRaisedFlags(PATIENT_7);
+	}
+	
+	@Test
+	public void service_shouldListEachRaisedFlagWithWhenItWasRaisedAndWhetherTheUserMayDismissIt() {
+		Flag missing = raised(saveFlag("missing data", MATCHES_7, critical), "2026-01-05 10:00:00");
+		Flag risk = raised(saveFlag("overdue", MATCHES_7, null), null);
+		
+		List<ChartFlag> flags = Context.getService(RaisedFlagService.class)
+		        .getRaisedFlags(Context.getPatientService().getPatient(7));
+		
+		assertEquals(2, flags.size());
+		for (ChartFlag flag : flags) {
+			boolean isMissing = flag.getFlag().equals(missing);
+			assertTrue(isMissing || flag.getFlag().equals(risk));
+			assertEquals(isMissing, flag.getSince() != null);
+			assertEquals(isMissing, flag.isDismissible());
+		}
 	}
 	
 	private Flag saveFlag(String name, String criteria, Tag tag) {
@@ -216,9 +248,10 @@ public class RaisedFlagsControllerTest extends BaseModuleWebContextSensitiveTest
 		        .savePatientFlag(new PatientFlag(Context.getPatientService().getPatient(7), flag, flag.getMessage()));
 		Context.flushSession();
 		if (since != null) {
-			Context.getAdministrationService().executeSQL("insert into " + RaisedFlags.TABLE
-			        + " (patient_id, flag_id, raised_since) values (7, " + flag.getFlagId() + ", '" + since + "')",
-			    false);
+			Context.getAdministrationService()
+			        .executeSQL("insert into " + ActCoreConstants.RAISED_FLAG_TABLE
+			                + " (patient_id, flag_id, raised_since) values (7, " + flag.getFlagId() + ", '" + since + "')",
+			            false);
 		}
 		return flag;
 	}

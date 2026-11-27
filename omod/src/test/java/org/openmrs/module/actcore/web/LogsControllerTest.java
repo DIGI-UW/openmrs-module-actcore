@@ -15,14 +15,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.Person;
@@ -32,10 +29,10 @@ import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.Transactions;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.logs.ReadLog;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.impl.AuditTables;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
@@ -55,22 +52,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Before
 	public void setUp() {
-		// The api's audit-tables.sql is on this module's test classpath too; H2 commits the DDL at once.
-		Transactions.inNewTransaction(() -> {
-			try (InputStream script = getClass().getClassLoader().getResourceAsStream("audit-tables.sql")) {
-				for (String statement : IOUtils.toString(script, StandardCharsets.UTF_8).replaceAll("(?m)^--.*$", "")
-				        .split(";")) {
-					if (statement.trim().startsWith("create table")) {
-						Context.getAdministrationService().executeSQL(statement.trim(), false);
-						Context.getAdministrationService().executeSQL("delete from " + statement.trim().split("\\s+")[5],
-						    false);
-					}
-				}
-			}
-			catch (java.io.IOException e) {
-				throw new IllegalStateException(e);
-			}
-		});
+		AuditTables.create();
 		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) values (10, 0, 1, '2026-10-21 10:52:14')");
 		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
 		        + " values (3, 10, 0, 'enc', false, '2026-10-21 10:52:00', 1, 7)");
@@ -81,7 +63,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesTheActivityToAUserWithoutViewAuditLogs() {
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		for (Runnable call : new Runnable[] { () -> activity.getActivity(null, null, null, null, null, null, null, null),
 		        () -> activity.getDetails(10) }) {
 			try {
@@ -89,14 +71,14 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 				fail("expected the activity to be refused");
 			}
 			catch (APIAuthenticationException e) {
-				assertTrue(e.getMessage().contains(ActivityLog.VIEW_PRIVILEGE));
+				assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS));
 			}
 		}
 	}
 	
 	@Test
 	public void listsTheActivityWithItsCountForAUserWithViewAuditLogs() {
-		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		signInAs("auditor", ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		
 		SimpleObject page = activity.getActivity(null, null, null, null, null, null, null, null);
 		
@@ -121,7 +103,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesABadKindDateOrUnknownRevision() {
-		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		signInAs("auditor", ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		try {
 			activity.getActivity(null, null, null, "deleted", null, null, null, null);
 			fail("expected the kind to be refused");
@@ -141,19 +123,19 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 	
 	@Test
 	public void refusesTheReadsToAUserWithoutViewReadAuditLogs() {
-		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		signInAs("auditor", ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		try {
 			reads.getReads(null, null, null, null, null, null);
 			fail("expected the reads to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(ReadLog.VIEW_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS));
 		}
 	}
 	
 	@Test
 	public void listsTheReadsWithTheirCountForAUserWithViewReadAuditLogs() {
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		
 		SimpleObject page = reads.getReads(null, null, null, null, null, null);
 		
@@ -173,13 +155,13 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) select 1000 + x, 0, 1, '"
 		        + Timestamp.valueOf(LocalDate.now().atStartOfDay()) + "' from system_range(1, 10001)");
 		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, 7 from system_range(1, 10001)");
-		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		signInAs("auditor", ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		
 		try {
 			activity.getActivity(null, null, null, "other", null, null, null, null);
 			fail("expected the kind filter to be refused");
 		}
-		catch (IllegalRequestException e) {
+		catch (ValidationException e) {
 			assertTrue(e.getMessage(), e.getMessage().startsWith("More than 10000 changes"));
 		}
 	}
@@ -189,7 +171,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) select 1000 + x, 0, 1, '"
 		        + Timestamp.valueOf(LocalDate.now().minusDays(40).atStartOfDay()) + "' from system_range(1, 10001)");
 		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, 7 from system_range(1, 10001)");
-		signInAs("auditor", ActivityLog.VIEW_PRIVILEGE);
+		signInAs("auditor", ActCoreConstants.AUDITLOGWEB_VIEW_AUDIT_LOGS);
 		
 		SimpleObject page = activity.getActivity(null, null, null, "other", null, null, null, null);
 		
@@ -204,7 +186,7 @@ public class LogsControllerTest extends BaseModuleWebContextSensitiveTest {
 		sql("insert into read_audit_log (entity_name, read_success, username, user_uuid, event_time, uuid)"
 		        + " select 'Patient', true, 'bulk', 'bulk-uuid', '" + Timestamp.valueOf(LocalDate.now().atStartOfDay())
 		        + "', random_uuid() from system_range(1, 50001)");
-		signInAs("reader", ReadLog.VIEW_PRIVILEGE);
+		signInAs("reader", ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
 		
 		SimpleObject page = reads.getReads("bulk", null, null, null, null, null);
 		

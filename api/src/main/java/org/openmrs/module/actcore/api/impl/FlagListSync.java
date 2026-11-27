@@ -1,0 +1,381 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.actcore.api.impl;
+
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.customdatatype.datatype.FreeTextDatatype;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.RaisedFlagService;
+import org.openmrs.module.actcore.api.db.RaisedFlagDAO;
+import org.openmrs.module.actcore.utils.Transactions;
+import org.openmrs.module.cohort.CohortAttribute;
+import org.openmrs.module.cohort.CohortAttributeType;
+import org.openmrs.module.cohort.CohortM;
+import org.openmrs.module.cohort.CohortMember;
+import org.openmrs.module.cohort.CohortType;
+import org.openmrs.module.cohort.api.CohortMemberService;
+import org.openmrs.module.cohort.api.CohortService;
+import org.openmrs.module.cohort.api.CohortTypeService;
+import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.api.FlagService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Mirrors each patient flag's current rows into a patient list, a cohort that shares the flag's
+ * uuid and name. Keying each list by the flag's uuid lets the list follow a rename of the flag, and
+ * leaves alone a hand-made cohort that happens to share its name.
+ */
+class FlagListSync {
+	
+	private static final String DEFAULT_COHORT_TYPE = "System List";
+	
+	// Marks the module's lists, so one whose flag was purged can be told from a hand-made cohort.
+	private static final String MARKER_TYPE_UUID = "11b3c2f6-b196-4476-8f2e-1f1147d6db31";
+	
+	private static final String PURGED_REASON = "Its patient flag was purged";
+	
+	private static final Logger log = LoggerFactory.getLogger(FlagListSync.class);
+	
+	/**
+	 * What a run of {@link #syncAll()} changed, and how many flags failed, so that the patient flag
+	 * refresh can report the run in one line.
+	 */
+	public static class Result {
+		
+		int created;
+		
+		int restored;
+		
+		int retired;
+		
+		int membersAdded;
+		
+		int membersEnded;
+		
+		int failures;
+	}
+	
+	/**
+	 * Brings every flag's list into line with the flag. It voids the lists of purged flags; creates,
+	 * restores or renames the list of each flag that should have one; and sets each list's members to
+	 * the patients the flag is raised for and not dismissed for. A flag has a list while it is enabled,
+	 * unretired and, when {@value ActCoreConstants#GP_LIST_FLAG_TAG} is set, carries that tag. A flag
+	 * whose list fails to sync is logged and counted, and the run goes on with the next flag.
+	 *
+	 * @return what the run changed, and how many flags failed
+	 */
+	public Result syncAll() {
+		Result result = new Result();
+		FlagService flagService = Context.getService(FlagService.class);
+		String requiredTag = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_FLAG_TAG);
+		List<Flag> flags = flagService.getAllFlags();
+		Set<String> flagUuids = new HashSet<String>();
+		for (Flag flag : flags) {
+			flagUuids.add(flag.getUuid());
+		}
+		
+		// Before the flags, so a new flag can take a purged flag's list name in the same run.
+		CohortService cohortService = Context.getService(CohortService.class);
+		Map<String, CohortM> marked = new HashMap<String, CohortM>();
+		for (CohortAttribute marker : cohortService.findCohortAttributesByTypeUuid(MARKER_TYPE_UUID)) {
+			marked.put(marker.getValueReference(), marker.getCohort());
+			if (!flagUuids.contains(marker.getValueReference()) && !Boolean.TRUE.equals(marker.getCohort().getVoided())) {
+				// Voiding the list voids its memberships too.
+				cohortService.voidCohortM(marker.getCohort(), PURGED_REASON);
+				result.retired++;
+				log.info("Retired list '{}': its patient flag no longer exists", marker.getCohort().getName());
+			}
+		}
+		
+		for (Flag flag : flags) {
+			boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
+			        && carriesTag(flag, requiredTag);
+			try {
+				sync(flag, listed, marked.get(flag.getUuid()), result);
+			}
+			catch (Exception e) {
+				result.failures++;
+				log.error("Could not sync the list for flag '{}'", flag.getName(), e);
+			}
+		}
+		return result;
+	}
+	
+	/**
+	 * Puts one patient on the flag's list, or takes them off it, as their flag rows and dismissal now
+	 * stand. Creating, renaming and retiring the list is left to {@link #syncAll()}.
+	 *
+	 * @param flagId the flag whose list to update; nothing happens when it or its list does not exist
+	 * @param patientId the patient; nothing happens when they do not exist
+	 */
+	public void syncPatient(int flagId, int patientId) {
+		Flag flag = Context.getService(FlagService.class).getFlag(flagId);
+		Patient patient = Context.getPatientService().getPatient(patientId);
+		CohortM list = flag == null ? null : Context.getService(CohortService.class).getCohortMByUuid(flag.getUuid());
+		if (list == null || patient == null) {
+			return;
+		}
+		boolean listed = Boolean.TRUE.equals(flag.getEnabled()) && !Boolean.TRUE.equals(flag.getRetired())
+		        && carriesTag(flag, Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_FLAG_TAG))
+		        && PatientFlagRefresh.flaggedMessages(flag, patientId).containsKey(patientId)
+		        && !Context.getService(RaisedFlagService.class).isDismissed(flagId, patientId);
+		
+		CohortMemberService memberService = Context.getService(CohortMemberService.class);
+		CohortMember member = null;
+		Collection<CohortMember> members = memberService.findCohortMembersByPatientUuid(patient.getUuid());
+		if (members != null) {
+			for (CohortMember candidate : members) {
+				if (!Boolean.TRUE.equals(candidate.getVoided()) && candidate.getEndDate() == null
+				        && candidate.getCohort() != null && list.getUuid().equals(candidate.getCohort().getUuid())) {
+					member = candidate;
+				}
+			}
+		}
+		
+		if (listed && member == null) {
+			addMember(memberService, list, patient,
+			    Context.getService(RaisedFlagService.class).getRaisedSinceByFlag(patientId).get(flagId));
+			log.debug("List '{}': patient {} added", list.getName(), patientId);
+		} else if (!listed && member != null) {
+			endMember(memberService, member);
+			log.debug("List '{}': patient {} ended", list.getName(), patientId);
+		}
+	}
+	
+	private boolean carriesTag(Flag flag, String requiredTag) {
+		if (requiredTag == null || requiredTag.trim().isEmpty()) {
+			return true;
+		}
+		if (flag.getTags() == null) {
+			return false;
+		}
+		for (org.openmrs.module.patientflags.Tag tag : flag.getTags()) {
+			if (requiredTag.trim().equalsIgnoreCase(tag.getName())) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	void sync(Flag flag, boolean listed, CohortM marked, Result result) {
+		CohortService cohortService = Context.getService(CohortService.class);
+		
+		CohortM list = cohortService.getCohortMByUuid(flag.getUuid());
+		if (list == null) {
+			if (!listed) {
+				return;
+			}
+			// Unvoid rather than create: a flag recreated under its uuid, as Initializer does, finds it taken.
+			if (marked != null && PURGED_REASON.equals(marked.getVoidReason())) {
+				// Check before unvoiding: a rejected save leaves the list unvoided for the next commit.
+				if (cohortService.getCohortM(flag.getName()) != null) {
+					log.warn("List '{}' stays voided: another cohort is already called '{}'", marked.getName(),
+					    flag.getName());
+					return;
+				}
+				marked.setVoided(false);
+				marked.setName(flag.getName());
+				marked.setDescription(description(flag));
+				list = cohortService.saveCohortM(marked);
+				result.restored++;
+				log.info("Restored list '{}': its patient flag exists again", flag.getName());
+			} else if (listWasVoided(flag)) {
+				// Don't recreate a list someone voided: its uuid still exists.
+				return;
+			} else {
+				list = createList(cohortService, flag);
+				result.created++;
+			}
+		} else if (!flag.getName().equals(list.getName())) {
+			// Check before setName: a rejected save leaves the name dirty for the next commit to write.
+			CohortM holder = cohortService.getCohortM(flag.getName());
+			if (holder == null || holder.getUuid().equals(list.getUuid())) {
+				log.info("Renaming list '{}' to '{}'", list.getName(), flag.getName());
+				list.setName(flag.getName());
+				list.setDescription(description(flag));
+				cohortService.saveCohortM(list);
+			} else if (inRenameCycle(cohortService, holder, list)) {
+				// Without one list stepping aside, flags that swap names block each other's lists for good.
+				log.info("Renaming list '{}' aside: '{}' is held by a flag renamed in the same run", list.getName(),
+				    flag.getName());
+				list.setName(flag.getName() + " (" + flag.getUuid() + ")");
+				cohortService.saveCohortM(list);
+			} else {
+				log.warn("List '{}' keeps its name: another cohort is already called '{}'", list.getName(), flag.getName());
+			}
+		}
+		
+		if (marked == null) {
+			mark(cohortService, list, flag);
+		}
+		
+		RaisedFlagService raisedFlags = Context.getService(RaisedFlagService.class);
+		Set<Integer> flagged = new HashSet<Integer>();
+		if (listed) {
+			flagged.addAll(PatientFlagRefresh.flaggedMessages(flag).keySet());
+			flagged.removeAll(raisedFlags.getDismissedPatients(flag.getFlagId()));
+		}
+		setMembers(list, flagged, raisedFlags.getRaisedSinceByPatient(flag.getFlagId()), result);
+	}
+	
+	private void setMembers(CohortM list, Set<Integer> flagged, Map<Integer, Date> raisedSince, Result result) {
+		CohortMemberService memberService = Context.getService(CohortMemberService.class);
+		Map<Integer, CohortMember> active = activeMembers(memberService, list);
+		
+		int added = 0;
+		for (Integer patientId : flagged) {
+			if (!active.containsKey(patientId)) {
+				addMember(memberService, list, Context.getPatientService().getPatient(patientId),
+				    raisedSince.get(patientId));
+				added++;
+			}
+		}
+		
+		int removed = 0;
+		for (Map.Entry<Integer, CohortMember> entry : active.entrySet()) {
+			if (!flagged.contains(entry.getKey())) {
+				endMember(memberService, entry.getValue());
+				removed++;
+			}
+		}
+		
+		result.membersAdded += added;
+		result.membersEnded += removed;
+		if (added > 0 || removed > 0) {
+			log.info("List '{}': {} added, {} ended", list.getName(), added, removed);
+		}
+	}
+	
+	/**
+	 * Adds the patient to the list, with a membership that starts when the flag was raised, or now when
+	 * no date is kept. Starting from the raised date keeps the patient's time on the list when the
+	 * patientflags module rewrites its rows.
+	 */
+	private static void addMember(CohortMemberService memberService, CohortM list, Patient patient, Date raisedSince) {
+		CohortMember member = new CohortMember();
+		member.setCohort(list);
+		member.setPatient(patient);
+		member.setStartDate(raisedSince != null ? raisedSince : new Date());
+		memberService.saveCohortMember(member);
+	}
+	
+	// End-date rather than void: the cohort REST resource counts voided rows as duplicates.
+	private static void endMember(CohortMemberService memberService, CohortMember member) {
+		member.setEndDate(new Date());
+		memberService.saveCohortMember(member);
+	}
+	
+	private void mark(CohortService cohortService, CohortM list, Flag flag) {
+		CohortAttributeType type = cohortService.getCohortAttributeTypeByUuid(MARKER_TYPE_UUID);
+		if (type == null) {
+			type = new CohortAttributeType();
+			type.setUuid(MARKER_TYPE_UUID);
+			type.setName("Source patient flag");
+			type.setDescription("The patient flag this list mirrors");
+			type.setDatatypeClassname(FreeTextDatatype.class.getName());
+			cohortService.saveCohortAttributeType(type);
+		}
+		CohortAttribute marker = new CohortAttribute();
+		marker.setAttributeType(type);
+		marker.setCohort(list);
+		marker.setValueReferenceInternal(flag.getUuid());
+		cohortService.saveCohortAttribute(marker);
+	}
+	
+	private boolean inRenameCycle(CohortService cohortService, CohortM holder, CohortM list) {
+		FlagService flagService = Context.getService(FlagService.class);
+		Set<String> seen = new HashSet<String>();
+		while (seen.add(holder.getUuid())) {
+			Flag owner = flagService.getFlagByUuid(holder.getUuid());
+			if (owner == null) {
+				return false;
+			}
+			CohortM next = cohortService.getCohortM(owner.getName());
+			if (next == null) {
+				return false;
+			}
+			if (next.getUuid().equals(list.getUuid())) {
+				return true;
+			}
+			holder = next;
+		}
+		return false;
+	}
+	
+	private CohortM createList(CohortService cohortService, Flag flag) {
+		CohortM list = new CohortM();
+		list.setUuid(flag.getUuid());
+		list.setName(flag.getName());
+		list.setDescription(description(flag));
+		list.setGroupCohort(Boolean.FALSE);
+		list.setCohortType(cohortType());
+		log.info("Creating list '{}'", flag.getName());
+		return cohortService.saveCohortM(list);
+	}
+	
+	private String description(Flag flag) {
+		return "Patients currently flagged: " + flag.getName();
+	}
+	
+	/**
+	 * Tells whether a cohort with the flag's uuid exists in the table, voided or not. It reads by SQL
+	 * because the cohort module's CohortService finds only unvoided cohorts by uuid.
+	 */
+	private boolean listWasVoided(Flag flag) {
+		return Transactions.supplyInTransaction(
+		    () -> Context.getRegisteredComponents(RaisedFlagDAO.class).get(0).hasCohort(flag.getUuid()));
+	}
+	
+	private CohortType cohortType() {
+		String configured = Context.getAdministrationService().getGlobalProperty(ActCoreConstants.GP_LIST_COHORT_TYPE);
+		String wanted = (configured == null || configured.trim().isEmpty()) ? DEFAULT_COHORT_TYPE : configured.trim();
+		CohortTypeService cohortTypeService = Context.getService(CohortTypeService.class);
+		for (CohortType type : cohortTypeService.findAllCohortTypes()) {
+			if (wanted.equalsIgnoreCase(type.getName())) {
+				return type;
+			}
+		}
+		if (cohortTypeService.getCohortTypeByName(wanted, true) != null) {
+			throw new IllegalStateException("The cohort type '" + wanted + "' has been voided");
+		}
+		CohortType type = new CohortType();
+		type.setName(wanted);
+		type.setDescription("Patient lists kept in step with patient flags");
+		log.info("Creating cohort type '{}'", wanted);
+		return cohortTypeService.saveCohortType(type);
+	}
+	
+	private Map<Integer, CohortMember> activeMembers(CohortMemberService memberService, CohortM list) {
+		Map<Integer, CohortMember> active = new HashMap<Integer, CohortMember>();
+		Collection<CohortMember> members = memberService.findCohortMembersByCohortUuid(list.getUuid());
+		if (members != null) {
+			for (CohortMember member : members) {
+				if (Boolean.TRUE.equals(member.getVoided()) || member.getEndDate() != null) {
+					continue;
+				}
+				Patient patient = member.getPatient();
+				if (patient != null) {
+					active.put(patient.getPatientId(), member);
+				}
+			}
+		}
+		return active;
+	}
+}

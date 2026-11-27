@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.web;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -33,8 +34,11 @@ import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.studies.Studies;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.StudyService;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,12 +65,12 @@ public class StudiesControllerTest extends BaseModuleWebContextSensitiveTest {
 		template.setRetired(true);
 		Context.getProgramWorkflowService().saveProgram(template);
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(Studies.TEMPLATE_PROPERTY, template.getUuid()));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_STUDY_TEMPLATE_PROGRAM, template.getUuid()));
 	}
 	
 	@Test
 	public void createsAndRenamesAStudyForAUserWithOnlyThePrivileges() {
-		authenticateWith(StudiesController.MANAGE_PRIVILEGE, PrivilegeConstants.GET_PROGRAMS);
+		authenticateWith(ActCorePrivileges.MANAGE_STUDIES, PrivilegeConstants.GET_PROGRAMS);
 		
 		SimpleObject created = controller.create(Collections.singletonMap("name", "ARC"));
 		controller.rename((String) created.get("uuid"), Collections.singletonMap("name", "ARC 2"));
@@ -81,16 +85,40 @@ public class StudiesControllerTest extends BaseModuleWebContextSensitiveTest {
 	}
 	
 	@Test
+	public void renamesAStudyForAUserWithOnlyTheManagePrivilege() {
+		authenticateWith(ActCorePrivileges.MANAGE_STUDIES);
+		
+		SimpleObject created = controller.create(Collections.singletonMap("name", "ARC"));
+		SimpleObject renamed = controller.rename((String) created.get("uuid"), Collections.singletonMap("name", "ARC 2"));
+		
+		assertEquals((String) created.get("uuid"), (String) renamed.get("uuid"));
+		assertEquals("ARC 2", (String) renamed.get("name"));
+	}
+	
+	@Test(expected = ObjectNotFoundException.class)
+	public void refusesToRenameAProgramThatIsNotAStudy() {
+		Program program = new Program();
+		program.setName("HIV Program");
+		program.setDescription("Not a study");
+		program.setConcept(concept("HIV Program concept"));
+		Context.getProgramWorkflowService().saveProgram(program);
+		authenticateWith(ActCorePrivileges.MANAGE_STUDIES);
+		
+		controller.rename(program.getUuid(), Collections.singletonMap("name", "ARC"));
+	}
+	
+	@Test
 	public void refusesToChangeStudiesWithoutTheManagePrivilege() {
 		authenticateWith(PrivilegeConstants.GET_PROGRAMS);
 		
 		assertEquals(0, ((List<?>) controller.getStudies().get("results")).size());
+		assertNull(Context.getService(StudyService.class).getStudyByUuid(UUID.randomUUID().toString()));
 		try {
 			controller.create(Collections.singletonMap("name", "ARC"));
 			fail("expected the study to be refused");
 		}
 		catch (APIAuthenticationException e) {
-			assertTrue(e.getMessage().contains(StudiesController.MANAGE_PRIVILEGE));
+			assertTrue(e.getMessage().contains(ActCorePrivileges.MANAGE_STUDIES));
 		}
 	}
 	

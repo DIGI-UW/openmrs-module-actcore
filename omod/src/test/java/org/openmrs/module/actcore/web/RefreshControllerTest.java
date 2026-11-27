@@ -27,13 +27,14 @@ import org.openmrs.PersonName;
 import org.openmrs.Privilege;
 import org.openmrs.Role;
 import org.openmrs.User;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.DaemonTokens;
 import org.openmrs.module.actcore.ActCoreActivator;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,7 @@ public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void runsTheRefreshAsTheDaemonForAUserWithOnlyThePrivilege() {
 		DaemonTokens.pass("actcore", new ActCoreActivator());
-		authenticateWith(RefreshController.PRIVILEGE);
+		authenticateWith(ActCorePrivileges.REFRESH_FLAGS);
 		
 		SimpleObject response = controller.refresh();
 		
@@ -104,17 +105,17 @@ public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 				call.run();
 				fail("expected the request to be refused");
 			}
-			catch (APIAuthenticationException e) {
-				assertTrue(e.getMessage().contains(RefreshController.PRIVILEGE));
+			catch (ContextAuthenticationException e) {
+				assertTrue(e.getMessage().contains(ActCorePrivileges.REFRESH_FLAGS));
 			}
 		}
 	}
 	
 	@Test
 	public void tellsAUserWithOnlyThePrivilegeWhenTheRefreshLastFinished() {
-		Context.getAdministrationService().saveGlobalProperty(
-		    new GlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY, "2026-10-08T06:14:29Z"));
-		authenticateWith(RefreshController.PRIVILEGE);
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED, "2026-10-08T06:14:29Z"));
+		authenticateWith(ActCorePrivileges.REFRESH_FLAGS);
 		
 		SimpleObject status = controller.getStatus();
 		
@@ -125,7 +126,7 @@ public class RefreshControllerTest extends BaseModuleWebContextSensitiveTest {
 	@Test
 	public void saysNoRefreshHasFinishedYet() {
 		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY, ""));
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_REFRESH_LAST_FINISHED, ""));
 		
 		assertNull(controller.getStatus().get("lastRefreshed"));
 	}

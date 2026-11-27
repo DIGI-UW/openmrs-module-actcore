@@ -15,11 +15,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.logs.ActivityLog;
-import org.openmrs.module.actcore.logs.Names;
-import org.openmrs.module.actcore.logs.Rows;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.AuditLogService;
+import org.openmrs.module.actcore.api.TooManyResultsException;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityEncounter;
+import org.openmrs.module.actcore.model.ActivityEntry;
+import org.openmrs.module.actcore.model.ActivityField;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.actcore.model.ActivityTarget;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -33,16 +39,40 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The Logs page's Activity tab: what ACT's users changed, one entry per save, and each entry's
- * fields.
+ * Serves the Logs page's Activity tab: what ACT's users changed, one entry per save, and the fields
+ * each entry changed.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/activity")
 public class ActivityController extends ActCoreRestController {
 	
-	/** Short, so a kind filter without a start date rarely reaches ActivityLog.MAX_CLASSIFIED. */
+	/**
+	 * How many days back a request with a kind filter but no start date reads. The span is short so
+	 * that such a request rarely reaches the most changes the log will sort.
+	 */
 	static final int KIND_DEFAULT_DAYS = 30;
 	
+	/**
+	 * Gets a page of what ACT's users changed, newest first.
+	 *
+	 * @param username the user to list, or blank for no user filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for a default span before the end date, or
+	 *            before today without one, which is {@value #KIND_DEFAULT_DAYS} days with a kind and
+	 *            {@value ActCoreRestController#DEFAULT_MONTHS} months without
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param kind one of {@link ActivitySearchCriteria#KINDS}, or blank for no kind filter
+	 * @param form the uuid of the form whose saves to list, or blank for no form filter
+	 * @param patient the uuid of the patient whose changes to list, or blank for no patient filter
+	 * @param startIndex the first entry to give, from 0; null for 0
+	 * @param limit the most entries to give, capped at {@link ActCoreConstants#LOG_MAX_LIMIT}; null or
+	 *            below 1 for {@link ActCoreConstants#LOG_DEFAULT_LIMIT}
+	 * @return the entries as {@code results}, with {@code totalCount} and the days read
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
+	 * @throws IllegalRequestException when the kind or a date is not recognised, or the start is after
+	 *             the end
+	 * @throws TooManyResultsException when a kind filter has too many changes to sort
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getActivity(@RequestParam(value = "username", required = false) String username,
@@ -53,82 +83,73 @@ public class ActivityController extends ActCoreRestController {
 	        @RequestParam(value = "patient", required = false) String patient,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
 	        @RequestParam(value = "limit", required = false) Integer limit) {
-		requireViewPrivilege();
-		ActivityLog.Filter filter = new ActivityLog.Filter();
-		filter.username = StringUtils.trimToNull(username);
-		filter.kind = StringUtils.trimToNull(kind);
-		if (filter.kind != null && !ActivityLog.KINDS.contains(filter.kind)) {
-			throw new IllegalRequestException("Not a kind of activity: " + kind + "; one of " + ActivityLog.KINDS);
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
+		filter.setUsername(StringUtils.trimToNull(username));
+		filter.setKind(StringUtils.trimToNull(kind));
+		if (filter.getKind() != null && !ActivitySearchCriteria.KINDS.contains(filter.getKind())) {
+			throw new IllegalRequestException(
+			        "Not a kind of activity: " + kind + "; one of " + ActivitySearchCriteria.KINDS);
 		}
-		filter.to = DownloadController.date(endDate);
-		filter.from = filter.kind == null ? DownloadController.from(startDate, filter.to)
-		        : DownloadController.from(startDate, filter.to, Period.ofDays(KIND_DEFAULT_DAYS));
-		filter.formUuid = StringUtils.trimToNull(form);
-		filter.patientUuid = StringUtils.trimToNull(patient);
-		filter.startIndex = startIndex == null ? 0 : startIndex;
-		filter.limit = limit == null ? Rows.DEFAULT_LIMIT : limit;
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(),
+		    filter.getKind() == null ? Period.ofMonths(DEFAULT_MONTHS) : Period.ofDays(KIND_DEFAULT_DAYS)));
+		filter.setFormUuid(StringUtils.trimToNull(form));
+		filter.setPatientUuid(StringUtils.trimToNull(patient));
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.LOG_DEFAULT_LIMIT : limit);
 		
-		ActivityLog.Page page;
-		try {
-			page = new ActivityLog().list(filter);
-		}
-		catch (Rows.TooMany e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
+		ActivityPage page = Context.getService(AuditLogService.class).getActivity(filter);
 		List<SimpleObject> results = new ArrayList<SimpleObject>();
-		for (ActivityLog.Entry entry : page.results) {
-			results.add(new SimpleObject().add("revisionId", entry.revisionId)
-			        .add("time", ConversionUtil.convertToRepresentation(entry.time, null)).add("user", who(entry.user))
-			        .add("kind", entry.kind).add("action", entry.action).add("summary", entry.summary)
-			        .add("target", target(entry.target)).add("encounter", encounter(entry.encounter)).add("ip", null)
-			        .add("userAgent", null));
+		for (ActivityEntry entry : page.getResults()) {
+			results.add(new SimpleObject().add("revisionId", entry.getRevisionId())
+			        .add("time", ConversionUtil.convertToRepresentation(entry.getTime(), null))
+			        .add("user", who(entry.getUser())).add("kind", entry.getKind()).add("action", entry.getAction())
+			        .add("summary", entry.getSummary()).add("target", target(entry.getTarget()))
+			        .add("encounter", encounter(entry.getEncounter())).add("ip", null).add("userAgent", null));
 		}
-		return new SimpleObject().add("results", results).add("totalCount", page.totalCount)
-		        .add("from", filter.from.toString()).add("to", filter.to == null ? null : filter.to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 	
+	/**
+	 * Gets an entry's fields, each with its previous and current value, and its void reason.
+	 *
+	 * @param revisionId the entry's revision id
+	 * @return the revision id, the fields and the void reason, null when there is none
+	 * @throws org.openmrs.api.APIAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_AUDIT_LOGS}
+	 * @throws ObjectNotFoundException when the log has no entry for the revision
+	 */
 	@RequestMapping(value = "/{revisionId}", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getDetails(@PathVariable("revisionId") Integer revisionId) {
-		requireViewPrivilege();
-		ActivityLog.Details details = new ActivityLog().details(revisionId);
+		ActivityDetails details = Context.getService(AuditLogService.class).getActivityDetails(revisionId);
 		if (details == null) {
 			throw new ObjectNotFoundException();
 		}
 		List<SimpleObject> fields = new ArrayList<SimpleObject>();
-		for (ActivityLog.Field field : details.fields) {
-			fields.add(
-			    new SimpleObject().add("name", field.name).add("previous", field.previous).add("current", field.current));
+		for (ActivityField field : details.getFields()) {
+			fields.add(new SimpleObject().add("name", field.getName()).add("previous", field.getPrevious()).add("current",
+			    field.getCurrent()));
 		}
-		return new SimpleObject().add("revisionId", details.revisionId).add("fields", fields).add("voidReason",
-		    details.voidReason);
+		return new SimpleObject().add("revisionId", details.getRevisionId()).add("fields", fields).add("voidReason",
+		    details.getVoidReason());
 	}
 	
-	static void requireViewPrivilege() {
-		if (!Context.hasPrivilege(ActivityLog.VIEW_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + ActivityLog.VIEW_PRIVILEGE);
-		}
-	}
-	
-	static SimpleObject who(Names.Who who) {
-		return who == null ? null
-		        : new SimpleObject().add("uuid", who.uuid).add("username", who.username).add("display", who.display)
-		                .add("role", who.role);
-	}
-	
-	private static SimpleObject target(ActivityLog.Target target) {
+	private static SimpleObject target(ActivityTarget target) {
 		return target == null ? null
-		        : new SimpleObject().add("kind", target.kind).add("uuid", target.uuid).add("display", target.display)
-		                .add("actId", target.actId);
+		        : new SimpleObject().add("kind", target.getKind()).add("uuid", target.getUuid())
+		                .add("display", target.getDisplay()).add("actId", target.getActId());
 	}
 	
-	private static SimpleObject encounter(ActivityLog.EncounterRef encounter) {
+	private static SimpleObject encounter(ActivityEncounter encounter) {
 		if (encounter == null) {
 			return null;
 		}
-		SimpleObject form = encounter.formUuid == null ? null
-		        : new SimpleObject().add("uuid", encounter.formUuid).add("name", encounter.formName);
-		return new SimpleObject().add("uuid", encounter.uuid).add("form", form).add("visitDate",
-		    encounter.visitDate == null ? null : new SimpleDateFormat("yyyy-MM-dd").format(encounter.visitDate));
+		SimpleObject form = encounter.getFormUuid() == null ? null
+		        : new SimpleObject().add("uuid", encounter.getFormUuid()).add("name", encounter.getFormName());
+		return new SimpleObject().add("uuid", encounter.getUuid()).add("form", form).add("visitDate",
+		    encounter.getVisitDate() == null ? null : new SimpleDateFormat("yyyy-MM-dd").format(encounter.getVisitDate()));
 	}
 }

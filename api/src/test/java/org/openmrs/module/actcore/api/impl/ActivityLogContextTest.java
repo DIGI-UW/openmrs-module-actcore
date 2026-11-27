@@ -1,0 +1,764 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.actcore.api.impl;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.openmrs.Concept;
+import org.openmrs.ConceptName;
+import org.openmrs.ConceptNumeric;
+import org.openmrs.Encounter;
+import org.openmrs.EncounterType;
+import org.openmrs.Form;
+import org.openmrs.Person;
+import org.openmrs.PersonAttributeType;
+import org.openmrs.PersonName;
+import org.openmrs.Program;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.VisitType;
+import org.openmrs.api.context.Context;
+import org.openmrs.api.context.Daemon;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.api.AuditLogService;
+import org.openmrs.messagesource.MessageSourceService;
+import org.openmrs.messagesource.MutableMessageSource;
+import org.openmrs.messagesource.PresentationMessage;
+import org.openmrs.messagesource.impl.CachedMessageSource;
+import org.openmrs.module.actcore.api.TooManyResultsException;
+import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
+import org.openmrs.module.actcore.model.ActivityDetails;
+import org.openmrs.module.actcore.model.ActivityEntry;
+import org.openmrs.module.actcore.model.ActivityField;
+import org.openmrs.module.actcore.model.ActivityPage;
+import org.openmrs.module.patientflags.Flag;
+import org.openmrs.module.patientflags.api.FlagService;
+import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
+import org.openmrs.test.BaseModuleContextSensitiveTest;
+
+/**
+ * The audit rows are written here as Envers writes them on a save: one revision per save, a row per
+ * entity touched, with REVTYPE 0 added, 1 changed, 2 deleted.
+ */
+public class ActivityLogContextTest extends BaseModuleContextSensitiveTest {
+	
+	private static final int PATIENT = 7;
+	
+	private static final int SAVED = 10;
+	
+	private static final int EDITED = 11;
+	
+	private static final int VOIDED = 12;
+	
+	private static final int REGISTERED = 13;
+	
+	private static final int USER_CREATED = 14;
+	
+	private static final int SETUP_ONLY = 15;
+	
+	private static final int DECEASED = 16;
+	
+	private static final int MOVED = 17;
+	
+	private static final int REFERRED = 18;
+	
+	private AuditLogService log;
+	
+	private User clinician;
+	
+	private Form form;
+	
+	private Encounter encounter;
+	
+	private Concept given;
+	
+	private Concept dose;
+	
+	private Concept date;
+	
+	private Concept yes;
+	
+	private Flag flag;
+	
+	@Before
+	public void setUp() {
+		AuditTables.create();
+		log = Context.getService(AuditLogService.class);
+		Role role = new Role("Organizational: ACT Clinician");
+		Context.getUserService().saveRole(role);
+		Person person = new Person();
+		person.addName(new PersonName("Sarah", null, "Namusoke"));
+		person.setGender("F");
+		clinician = new User(person);
+		clinician.setUsername("clinician");
+		clinician.addRole(role);
+		Context.getUserService().createUser(clinician, "Clinician123");
+		
+		form = new Form();
+		form.setName("RHD BPG Delivery");
+		form.setVersion("1");
+		form.setEncounterType(Context.getEncounterService().getEncounterType(1));
+		Context.getFormService().saveForm(form);
+		yes = Context.getConceptService().getConceptByName("Yes");
+		given = concept("Was BPG given at this visit?", "Coded");
+		dose = concept("Dose given", "Numeric");
+		date = concept("Date of Injection", "Date");
+		encounter = new Encounter();
+		encounter.setPatient(Context.getPatientService().getPatient(PATIENT));
+		encounter.setEncounterType(form.getEncounterType());
+		encounter.setForm(form);
+		encounter.setLocation(Context.getLocationService().getLocation(1));
+		encounter.setEncounterDatetime(Timestamp.valueOf("2026-10-21 10:52:00"));
+		Context.getEncounterService().saveEncounter(encounter);
+		
+		flag = new Flag();
+		flag.setUuid(UUID.randomUUID().toString());
+		flag.setName("RHD prophylaxis not prescribed");
+		flag.setCriteria("select p.patient_id from patient p where p.patient_id = " + PATIENT);
+		flag.setEvaluator(SQLFlagEvaluator.class.getName());
+		flag.setMessage("not prescribed");
+		flag.setEnabled(Boolean.TRUE);
+		Context.getService(FlagService.class).saveFlag(flag);
+		
+		revision(SAVED, "2026-10-21 10:52:14", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, %d, 0, '%s', false, '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), SAVED, encounter.getUuid(), form.getFormId(), PATIENT);
+		obs(901, SAVED, 0, false, given, "value_coded", yes.getConceptId());
+		obs(902, SAVED, 0, false, dose, "value_numeric", 1.2);
+		obs(903, SAVED, 0, false, date, "value_datetime", "'2026-10-21 00:00:00'");
+		sql("insert into obs_AUD (obs_id, REV, REVTYPE, person_id, concept_id, encounter_id, voided) values (904, %d, 0, %d, %d, %d, false)",
+		    SAVED, PATIENT, given.getConceptId(), encounter.getEncounterId());
+		
+		revision(EDITED, "2026-10-21 11:10:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, %d, 1, '%s', false, '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), EDITED, encounter.getUuid(), form.getFormId(), PATIENT);
+		obs(902, EDITED, 1, true, dose, "value_numeric", 1.2);
+		obs(905, EDITED, 0, false, dose, "value_numeric", 0.6);
+		
+		revision(VOIDED, "2026-10-21 12:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, void_reason, encounter_datetime, form_id,"
+		        + " patient_id) values (%d, %d, 1, '%s', true, 'entered on the wrong patient', '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), VOIDED, encounter.getUuid(), form.getFormId(), PATIENT);
+		obs(901, VOIDED, 1, true, given, "value_coded", yes.getConceptId());
+		obs(905, VOIDED, 1, true, dose, "value_numeric", 0.6);
+		
+		revision(SETUP_ONLY, "2026-10-21 12:30:00", 1);
+	}
+	
+	@Test
+	public void namesAnEncounterNoFormRecordedByItsEncounterType() {
+		referral();
+		
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), REFERRED);
+		
+		assertEquals("Saved RHD Referral", entry.getAction());
+		assertNull(entry.getSummary());
+		assertNull(entry.getEncounter().getFormName());
+	}
+	
+	@Test
+	public void namesAnEncounterNoFormRecordedByTheNameUsersSeeForItsType() {
+		MutableMessageSource previous = showing("ui.i18n.EncounterType.name." + referral().getUuid(), "Referral");
+		try {
+			assertEquals("Saved Referral", entry(log.getActivity(new ActivitySearchCriteria()), REFERRED).getAction());
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesAStartedVisitsTypeByTheNameUsersSee() {
+		VisitType type = Context.getVisitService().getVisitType(1);
+		revision(41, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 41, 0, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, type.getVisitTypeId());
+		MutableMessageSource previous = showing("ui.i18n.VisitType.name." + type.getUuid(), "Clinic Visit");
+		try {
+			ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), 41);
+			
+			assertEquals("Started a visit", entry.getAction());
+			assertEquals("Clinic Visit, 21-Oct-2026", entry.getSummary());
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesTheTypeAnEditMovedTheEncounterToByTheNameUsersSee() {
+		EncounterType other = new EncounterType("RHD Pregnancy", "Pregnancy");
+		Context.getEncounterService().saveEncounterType(other);
+		revision(40, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, encounter_type,"
+		        + " form_id, patient_id) values (%d, 40, 1, '%s', false, '2026-10-21 10:52:00', %d, %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), other.getEncounterTypeId(), form.getFormId(), PATIENT);
+		MutableMessageSource previous = showing("ui.i18n.EncounterType.name." + other.getUuid(), "Pregnancy");
+		try {
+			assertTrue(currentValues(40).toString(), currentValues(40).contains("Pregnancy"));
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesTheTypeAnEditMovedTheVisitToByTheNameUsersSee() {
+		VisitType first = Context.getVisitService().getVisitType(1);
+		VisitType other = new VisitType("RHD Clinic Visit", "A visit to an RHD clinic");
+		Context.getVisitService().saveVisitType(other);
+		revision(41, "2026-10-21 13:00:00", clinician.getUserId());
+		revision(42, "2026-10-21 13:05:00", clinician.getUserId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 41, 0, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, first.getVisitTypeId());
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, voided, date_started, patient_id, visit_type_id)"
+		        + " values (90, 42, 1, false, '2026-10-21 08:00:00', %d, %d)",
+		    PATIENT, other.getVisitTypeId());
+		MutableMessageSource previous = showing("ui.i18n.VisitType.name." + other.getUuid(), "Clinic Visit");
+		try {
+			assertTrue(currentValues(42).toString(), currentValues(42).contains("Clinic Visit"));
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void groupsASavedFormWithItsObservationsIntoOneEntry() {
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), SAVED);
+		
+		assertEquals("saved", entry.getKind());
+		assertEquals("Saved RHD BPG Delivery", entry.getAction());
+		assertEquals("3 fields set", entry.getSummary());
+		assertEquals("clinician", entry.getUser().getUsername());
+		assertEquals("Sarah Namusoke", entry.getUser().getDisplay());
+		assertEquals("Clinician", entry.getUser().getRole());
+		assertEquals("patient", entry.getTarget().getKind());
+		assertEquals("Collet Test Chebaskwony", entry.getTarget().getDisplay());
+		assertEquals("6TS-4", entry.getTarget().getActId());
+		assertEquals(encounter.getUuid(), entry.getEncounter().getUuid());
+		assertEquals(form.getUuid(), entry.getEncounter().getFormUuid());
+		assertEquals(Timestamp.valueOf("2026-10-21 10:52:00"), entry.getEncounter().getVisitDate());
+	}
+	
+	@Test
+	public void namesAFormByTheNameUsersSeeWhenItHasOne() {
+		MutableMessageSource previous = showing("ui.i18n.Form.name." + form.getUuid(), "BPG Delivery");
+		try {
+			ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), SAVED);
+			
+			assertEquals("Saved BPG Delivery", entry.getAction());
+			assertEquals("BPG Delivery", entry.getEncounter().getFormName());
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void namesAFormAnEditMovedTheEncounterToByTheNameUsersSee() {
+		Form other = new Form();
+		other.setName("RHD Pregnancy");
+		other.setVersion("1");
+		other.setEncounterType(Context.getEncounterService().getEncounterType(1));
+		Context.getFormService().saveForm(other);
+		revision(40, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, 40, 1, '%s', false, '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), other.getFormId(), PATIENT);
+		MutableMessageSource previous = showing("ui.i18n.Form.name." + other.getUuid(), "Pregnancy");
+		try {
+			assertTrue(currentValues(40).toString(), currentValues(40).contains("Pregnancy"));
+		}
+		finally {
+			Context.getMessageSourceService().setActiveMessageSource(previous);
+		}
+	}
+	
+	@Test
+	public void listsAnEditedFormByWhatChanged() {
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), EDITED);
+		
+		assertEquals("edited", entry.getKind());
+		assertEquals("Edited RHD BPG Delivery", entry.getAction());
+		assertEquals("1 field changed: Dose given", entry.getSummary());
+		
+		ActivityDetails details = log.getActivityDetails(EDITED);
+		assertEquals(1, details.getFields().size());
+		assertEquals("Dose given", details.getFields().get(0).getName());
+		assertEquals("1.2", details.getFields().get(0).getPrevious());
+		assertEquals("0.6", details.getFields().get(0).getCurrent());
+		assertNull(details.getVoidReason());
+	}
+	
+	@Test
+	public void leavesOutAnAnswerResavedUnchangedWhenOnlyTheVisitDateMoves() {
+		sql("delete from obs_AUD where REV = %d", VOIDED);
+		sql("delete from encounter_AUD where REV = %d", VOIDED);
+		obs(907, SAVED, 0, false, date, "value_datetime", "'2026-10-22 00:00:00'");
+		revision(MOVED, "2026-10-21 13:30:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, %d, 1, '%s', false, '2026-10-20 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), MOVED, encounter.getUuid(), form.getFormId(), PATIENT);
+		obs(903, MOVED, 1, true, date, "value_datetime", "'2026-10-21 00:00:00'");
+		obs(907, MOVED, 1, true, date, "value_datetime", "'2026-10-22 00:00:00'");
+		obs(908, MOVED, 0, false, date, "value_datetime", "'2026-10-22 00:00:00'");
+		obs(909, MOVED, 0, false, date, "value_datetime", "'2026-10-21 00:00:00'");
+		
+		assertEquals("1 field changed: Visit date",
+		    entry(log.getActivity(new ActivitySearchCriteria()), MOVED).getSummary());
+		List<ActivityField> fields = log.getActivityDetails(MOVED).getFields();
+		assertEquals(1, fields.size());
+		assertEquals("Visit date", fields.get(0).getName());
+	}
+	
+	@Test
+	public void listsAVoidedFormWithItsReason() {
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), VOIDED);
+		
+		assertEquals("voided", entry.getKind());
+		assertEquals("Voided RHD BPG Delivery", entry.getAction());
+		assertEquals("Reason: entered on the wrong patient", entry.getSummary());
+		assertEquals("entered on the wrong patient", log.getActivityDetails(VOIDED).getVoidReason());
+		assertTrue(log.getActivityDetails(VOIDED).getFields().isEmpty());
+	}
+	
+	@Test
+	public void expandsASavedFormToEachQuestionAndAnswer() {
+		ActivityDetails details = log.getActivityDetails(SAVED);
+		
+		assertEquals(3, details.getFields().size());
+		assertEquals("Was BPG given at this visit?", details.getFields().get(0).getName());
+		assertEquals(yes.getName(Context.getLocale()).getName(), details.getFields().get(0).getCurrent());
+		assertNull(details.getFields().get(0).getPrevious());
+		assertEquals("Dose given", details.getFields().get(1).getName());
+		assertEquals("1.2", details.getFields().get(1).getCurrent());
+		assertEquals("Date of Injection", details.getFields().get(2).getName());
+		assertEquals("21-Oct-2026", details.getFields().get(2).getCurrent());
+	}
+	
+	@Test
+	public void groupsARegistrationIntoOneEntryNamingTheClinicAndConsent() {
+		registration();
+		
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), REGISTERED);
+		
+		assertEquals("registered", entry.getKind());
+		assertEquals("Registered a patient", entry.getAction());
+		assertEquals("Unknown Location, consent recorded", entry.getSummary());
+		assertEquals("Collet Test Chebaskwony", entry.getTarget().getDisplay());
+		assertNull(entry.getEncounter());
+		List<String> fields = new ArrayList<String>();
+		for (ActivityField field : log.getActivityDetails(REGISTERED).getFields()) {
+			fields.add(field.getName() + "=" + field.getCurrent());
+		}
+		assertTrue(fields.toString(), fields.contains("Gender=F"));
+		assertTrue(fields.toString(), fields.contains("Given name=Collet"));
+		assertTrue(fields.toString(), fields.contains("Primary Care Clinic=Unknown Location"));
+		assertTrue(fields.toString(), fields.contains("OpenMRS Identification Number=6TS-4"));
+		assertTrue(fields.toString(), fields.contains("Enrolled in=HIV PROGRAM"));
+	}
+	
+	@Test
+	public void namesAUserCreatedByTheirRole() {
+		userCreated();
+		
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), USER_CREATED);
+		
+		assertEquals("user", entry.getKind());
+		assertEquals("Created user", entry.getAction());
+		assertEquals("Clinician", entry.getSummary());
+		assertEquals("user", entry.getTarget().getKind());
+		assertEquals("Sarah Namusoke", entry.getTarget().getDisplay());
+		assertEquals("clinician", entry.getTarget().getActId());
+		assertEquals("admin", entry.getUser().getUsername());
+	}
+	
+	@Test
+	public void listsAFlagDismissalFromActCoreOwnRecord() {
+		sql("insert into actcore_flag_dismissal (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
+		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		ActivityEntry entry = page.getResults().get(page.getResults().size() - 1);
+		
+		assertNull(entry.getRevisionId());
+		assertEquals("flag", entry.getKind());
+		assertEquals("Dismissed flag", entry.getAction());
+		assertEquals("RHD prophylaxis not prescribed", entry.getSummary());
+		assertEquals("6TS-4", entry.getTarget().getActId());
+		assertEquals("clinician", entry.getUser().getUsername());
+	}
+	
+	@Test
+	public void marksADeathAsAPatientStatus() {
+		revision(DECEASED, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, dead, death_date) values (%d, %d, 1, 'F', true, '2026-10-18 00:00:00')",
+		    PATIENT, DECEASED);
+		
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), DECEASED);
+		
+		assertEquals("patientStatus", entry.getKind());
+		assertEquals("Marked deceased", entry.getAction());
+		assertEquals("Date of death 18-Oct-2026", entry.getSummary());
+	}
+	
+	@Test
+	public void leavesOutTheDaemonsRevisions() {
+		int daemon = Rows.integer(
+		    AuditTables.select("select user_id from users where uuid = ?", Daemon.getDaemonUserUuid()).get(0), "user_id");
+		revision(17, "2026-10-21 13:30:00", daemon);
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, form_id, patient_id)"
+		        + " values (%d, 17, 0, '%s', false, '2026-10-21 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), form.getFormId(), PATIENT);
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		
+		assertEquals(3, page.getTotalCount());
+		for (ActivityEntry entry : page.getResults()) {
+			assertTrue(entry.getRevisionId() != 17);
+		}
+	}
+	
+	@Test
+	public void listsOnlyDismissalsForTheFlagKind() {
+		sql("insert into actcore_flag_dismissal (uuid, patient_id, flag_id, dismissed_by, date_dismissed)"
+		        + " values ('%s', %d, %d, %d, '2026-10-21 08:30:00')",
+		    UUID.randomUUID(), PATIENT, flag.getFlagId(), clinician.getUserId());
+		
+		ActivityEntry entry = only(filter("flag", null, null, null, null, null));
+		
+		assertEquals("Dismissed flag", entry.getAction());
+		assertEquals(0, log.getActivity(filter("flag", "admin", null, null, null, null)).getTotalCount());
+	}
+	
+	@Test
+	public void listsAVoidedPatientByNameAsVoidedAndALaterEditAsAnEdit() {
+		sql("update person set voided = true where person_id = %d", PATIENT);
+		sql("update patient set voided = true where patient_id = %d", PATIENT);
+		sql("update person_name set voided = true where person_id = %d", PATIENT);
+		sql("update patient_identifier set voided = true where patient_id = %d", PATIENT);
+		revision(60, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, voided, void_reason) values (%d, 60, 1, 'F', true, 'entered twice')",
+		    PATIENT);
+		sql("insert into patient_AUD (patient_id, REV, voided, void_reason) values (%d, 60, true, 'entered twice')",
+		    PATIENT);
+		revision(61, "2026-10-21 14:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, birthdate, voided, void_reason) values (%d, 61, 1, 'F', '1976-08-26 00:00:00', true, 'entered twice')",
+		    PATIENT);
+		sql("insert into patient_AUD (patient_id, REV, voided, void_reason) values (%d, 61, true, 'entered twice')",
+		    PATIENT);
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		
+		ActivityEntry voided = entry(page, 60);
+		assertEquals("edited", voided.getKind());
+		assertEquals("Voided the patient", voided.getAction());
+		assertEquals("Reason: entered twice", voided.getSummary());
+		assertEquals("Collet Test Chebaskwony", voided.getTarget().getDisplay());
+		assertEquals("6TS-4", voided.getTarget().getActId());
+		assertEquals("Edited patient details", entry(page, 61).getAction());
+		assertEquals("Collet Test Chebaskwony", entry(page, 61).getTarget().getDisplay());
+	}
+	
+	@Test
+	public void listsALaterEditOfADeceasedPatientOrAVoidedFormAsAnEdit() {
+		revision(DECEASED, "2026-10-21 13:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, dead, death_date) values (%d, %d, 1, 'F', true, '2026-10-18 00:00:00')",
+		    PATIENT, DECEASED);
+		revision(18, "2026-10-21 14:00:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, birthdate, dead, death_date) values (%d, 18, 1, 'F', '1976-08-26 00:00:00', true, '2026-10-18 00:00:00')",
+		    PATIENT);
+		revision(19, "2026-10-21 15:00:00", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, void_reason, encounter_datetime, form_id,"
+		        + " patient_id) values (%d, 19, 1, '%s', true, 'entered on the wrong patient', '2026-10-22 10:52:00', %d, %d)",
+		    encounter.getEncounterId(), encounter.getUuid(), form.getFormId(), PATIENT);
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		
+		assertEquals("patientStatus", entry(page, DECEASED).getKind());
+		assertEquals("edited", entry(page, 18).getKind());
+		assertEquals("Edited patient details", entry(page, 18).getAction());
+		assertEquals("1 field changed: Birth date", entry(page, 18).getSummary());
+		assertEquals("edited", entry(page, 19).getKind());
+		assertEquals("1 field changed: Visit date", entry(page, 19).getSummary());
+		assertEquals(3, log.getActivity(filter("edited", null, null, null, null, null)).getTotalCount());
+	}
+	
+	@Test
+	public void saysAnEnrolmentEndedOnlyWhenItWasOpenBefore() {
+		Program program = Context.getProgramWorkflowService().getProgram(1);
+		revision(20, "2026-10-21 16:00:00", clinician.getUserId());
+		sql("insert into patient_program_AUD (patient_program_id, REV, REVTYPE, date_enrolled, date_completed, voided, program_id, patient_id)"
+		        + " values (701, 20, 1, '2026-10-01 00:00:00', '2026-10-21 00:00:00', false, %d, %d)",
+		    program.getProgramId(), PATIENT);
+		revision(21, "2026-10-21 17:00:00", clinician.getUserId());
+		sql("insert into patient_program_AUD (patient_program_id, REV, REVTYPE, date_enrolled, date_completed, voided, program_id, patient_id)"
+		        + " values (701, 21, 1, '2026-10-02 00:00:00', '2026-10-21 00:00:00', false, %d, %d)",
+		    program.getProgramId(), PATIENT);
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		
+		assertEquals("Ended enrolment in study HIV PROGRAM", entry(page, 20).getAction());
+		assertEquals("Changed enrolment in study HIV PROGRAM", entry(page, 21).getAction());
+		assertEquals("1 field changed: Date enrolled", entry(page, 21).getSummary());
+	}
+	
+	@Test
+	public void namesAnEnrolmentSavedWithItsFirstStatusAsTheEnrolment() {
+		java.util.Map<String, Object> enrolment = AuditTables
+		        .select("select patient_program_id, patient_id from patient_program where program_id = 1").get(0);
+		revision(22, "2026-10-21 18:00:00", clinician.getUserId());
+		sql("insert into patient_program_AUD (patient_program_id, REV, REVTYPE, date_enrolled, voided, program_id, patient_id)"
+		        + " values (%d, 22, 0, '2026-10-21 00:00:00', false, 1, %d)",
+		    Rows.integer(enrolment, "patient_program_id"), Rows.integer(enrolment, "patient_id"));
+		sql("insert into patient_state_AUD (patient_state_id, REV, REVTYPE, voided, start_date, patient_program_id, state)"
+		        + " values (901, 22, 0, false, '2026-10-21 00:00:00', %d, 1)",
+		    Rows.integer(enrolment, "patient_program_id"));
+		
+		ActivityEntry entry = entry(log.getActivity(new ActivitySearchCriteria()), 22);
+		
+		assertEquals("Enrolled in study HIV PROGRAM", entry.getAction());
+		assertEquals("From 21-Oct-2026", entry.getSummary());
+	}
+	
+	@Test
+	public void listsAnEditOfAPersonWhoIsNeitherPatientNorUserAsOther() {
+		Person person = new Person();
+		person.addName(new PersonName("Peter", null, "Okello"));
+		person.setGender("M");
+		Context.getPersonService().savePerson(person);
+		Context.flushSession();
+		revision(23, "2026-10-21 19:00:00", clinician.getUserId());
+		sql("insert into person_name_AUD (person_name_id, REV, REVTYPE, preferred, given_name, family_name, voided, person_id)"
+		        + " values (%d, 23, 1, true, 'Peter', 'Okello', false, %d)",
+		    person.getPersonName().getPersonNameId(), person.getPersonId());
+		
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		ActivityEntry entry = entry(page, 23);
+		
+		assertEquals(4, page.getTotalCount());
+		assertEquals("other", entry.getKind());
+		assertEquals("Edited a person's details", entry.getAction());
+		assertEquals("Peter Okello", entry.getTarget().getDisplay());
+		assertEquals(Integer.valueOf(23), only(filter("other", null, null, null, null, null)).getRevisionId());
+	}
+	
+	@Test
+	public void refusesAKindFilterOverMoreRevisionsThanItClassifies() {
+		sql("insert into revision_entity (id, timestamp, changedBy, changedOn)"
+		        + " select 1000 + x, 0, %d, '2026-10-21 09:00:00' from system_range(1, %d)",
+		    clinician.getUserId(), ActivityLog.MAX_CLASSIFIED + 1);
+		sql("insert into visit_AUD (visit_id, REV, REVTYPE, patient_id) select 1, 1000 + x, 0, %d from system_range(1, %d)",
+		    PATIENT, ActivityLog.MAX_CLASSIFIED + 1);
+		
+		try {
+			log.getActivity(filter("other", null, null, null, null, null));
+			fail("expected the kind filter to be refused");
+		}
+		catch (TooManyResultsException expected) {}
+		assertEquals(ActivityLog.MAX_CLASSIFIED + 4, log.getActivity(new ActivitySearchCriteria()).getTotalCount());
+	}
+	
+	@Test
+	public void leavesOutARevisionThatOnlyTouchesTheServerSetup() {
+		ActivityPage page = log.getActivity(new ActivitySearchCriteria());
+		
+		assertEquals(3, page.getTotalCount());
+		for (ActivityEntry entry : page.getResults()) {
+			assertTrue(entry.getRevisionId() != SETUP_ONLY);
+		}
+		assertNull(log.getActivityDetails(SETUP_ONLY));
+	}
+	
+	@Test
+	public void listsNewestFirstAndPages() {
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
+		filter.setStartIndex(1);
+		filter.setLimit(1);
+		
+		ActivityPage page = log.getActivity(filter);
+		
+		assertEquals(3, page.getTotalCount());
+		assertEquals(1, page.getResults().size());
+		assertEquals(Integer.valueOf(EDITED), page.getResults().get(0).getRevisionId());
+	}
+	
+	@Test
+	public void filtersByKindUserPatientFormAndDates() {
+		registration();
+		userCreated();
+		
+		assertEquals(Integer.valueOf(SAVED), only(filter("saved", null, null, null, null, null)).getRevisionId());
+		assertEquals(Integer.valueOf(USER_CREATED), only(filter("user", null, null, null, null, null)).getRevisionId());
+		assertEquals(4, log.getActivity(filter(null, "clinician", null, null, null, null)).getTotalCount());
+		assertEquals(0, log.getActivity(filter(null, "nobody", null, null, null, null)).getTotalCount());
+		assertEquals(4,
+		    log.getActivity(filter(null, null, encounter.getPatient().getUuid(), null, null, null)).getTotalCount());
+		assertEquals(3, log.getActivity(filter(null, null, null, form.getUuid(), null, null)).getTotalCount());
+		assertEquals(4,
+		    log.getActivity(filter(null, null, null, null, LocalDate.of(2026, 10, 21), LocalDate.of(2026, 10, 21)))
+		            .getTotalCount());
+		assertEquals(0, log.getActivity(filter(null, null, null, null, LocalDate.of(2026, 10, 22), null)).getTotalCount());
+	}
+	
+	private ActivitySearchCriteria filter(String kind, String username, String patient, String form, LocalDate from,
+	        LocalDate to) {
+		ActivitySearchCriteria filter = new ActivitySearchCriteria();
+		filter.setKind(kind);
+		filter.setUsername(username);
+		filter.setPatientUuid(patient);
+		filter.setFormUuid(form);
+		filter.setFrom(from);
+		filter.setTo(to);
+		return filter;
+	}
+	
+	private ActivityEntry only(ActivitySearchCriteria filter) {
+		ActivityPage page = log.getActivity(filter);
+		assertEquals(1, page.getTotalCount());
+		return page.getResults().get(0);
+	}
+	
+	/**
+	 * A registration as the registration page saves it: the person, patient, name, identifier,
+	 * attributes and enrolment.
+	 */
+	private void registration() {
+		PersonAttributeType clinic = attributeType("Primary Care Clinic", "org.openmrs.Location");
+		PersonAttributeType consent = attributeType("Registry Consent", "org.openmrs.Concept");
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_LOGS_CLINIC_ATTRIBUTE_TYPES,
+		    clinic.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_CONSENT_ATTRIBUTE_TYPE,
+		    consent.getUuid());
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_STUDIES_YES_CONCEPT, yes.getUuid());
+		Program program = Context.getProgramWorkflowService().getProgram(1);
+		revision(REGISTERED, "2026-10-21 08:58:00", clinician.getUserId());
+		sql("insert into person_AUD (person_id, REV, REVTYPE, gender, birthdate, dead, voided) values (%d, %d, 0, 'F', '1976-08-25 00:00:00', false, false)",
+		    PATIENT, REGISTERED);
+		sql("insert into patient_AUD (patient_id, REV, voided) values (%d, %d, false)", PATIENT, REGISTERED);
+		sql("insert into person_name_AUD (person_name_id, REV, REVTYPE, preferred, given_name, middle_name, family_name, voided, person_id)"
+		        + " values (7, %d, 0, true, 'Collet', 'Test', 'Chebaskwony', false, %d)",
+		    REGISTERED, PATIENT);
+		sql("insert into patient_identifier_AUD (patient_identifier_id, REV, REVTYPE, identifier, preferred, voided, patient_id, identifier_type)"
+		        + " values (4, %d, 0, '6TS-4', true, false, %d, 1)",
+		    REGISTERED, PATIENT);
+		sql("insert into person_attribute_AUD (person_attribute_id, REV, REVTYPE, value, voided, person_id, person_attribute_type_id)"
+		        + " values (801, %d, 0, '1', false, %d, %d)",
+		    REGISTERED, PATIENT, clinic.getPersonAttributeTypeId());
+		sql("insert into person_attribute_AUD (person_attribute_id, REV, REVTYPE, value, voided, person_id, person_attribute_type_id)"
+		        + " values (802, %d, 0, '%d', false, %d, %d)",
+		    REGISTERED, yes.getConceptId(), PATIENT, consent.getPersonAttributeTypeId());
+		sql("insert into patient_program_AUD (patient_program_id, REV, REVTYPE, date_enrolled, voided, program_id, patient_id)"
+		        + " values (701, %d, 0, '2026-10-21 00:00:00', false, %d, %d)",
+		    REGISTERED, program.getProgramId(), PATIENT);
+	}
+	
+	private void userCreated() {
+		revision(USER_CREATED, "2026-10-20 17:05:00", 1);
+		sql("insert into users_AUD (user_id, REV, REVTYPE, retired, username, system_id, person_id) values (%d, %d, 0, false, 'clinician', '2-4', %d)",
+		    clinician.getUserId(), USER_CREATED, clinician.getPerson().getPersonId());
+		sql("insert into user_role_AUD (REV, user_id, role, REVTYPE) values (%d, %d, 'Organizational: ACT Clinician', 0)",
+		    USER_CREATED, clinician.getUserId());
+	}
+	
+	private static void revision(int id, String time, int userId) {
+		sql("insert into revision_entity (id, timestamp, changedBy, changedOn) values (%d, %d, %d, '%s')", id,
+		    Timestamp.valueOf(time).getTime(), userId, time);
+	}
+	
+	private void obs(int obsId, int revision, int type, boolean voided, Concept concept, String column, Object value) {
+		sql("insert into obs_AUD (obs_id, REV, REVTYPE, person_id, concept_id, encounter_id, voided, %s) values (%d, %d, %d, %d, %d, %d, %s, %s)",
+		    column, obsId, revision, type, PATIENT, concept.getConceptId(), encounter.getEncounterId(), voided, value);
+	}
+	
+	private static void sql(String statement, Object... args) {
+		Context.getAdministrationService().executeSQL(String.format(statement, args), false);
+	}
+	
+	private EncounterType referral() {
+		EncounterType type = new EncounterType("RHD Referral", "A referral to a clinician");
+		Context.getEncounterService().saveEncounterType(type);
+		Encounter sent = new Encounter();
+		sent.setPatient(Context.getPatientService().getPatient(PATIENT));
+		sent.setEncounterType(type);
+		sent.setLocation(Context.getLocationService().getLocation(1));
+		sent.setEncounterDatetime(Timestamp.valueOf("2026-10-21 13:00:00"));
+		Context.getEncounterService().saveEncounter(sent);
+		revision(REFERRED, "2026-10-21 13:00:14", clinician.getUserId());
+		sql("insert into encounter_AUD (encounter_id, REV, REVTYPE, uuid, voided, encounter_datetime, patient_id)"
+		        + " values (%d, %d, 0, '%s', false, '2026-10-21 13:00:00', %d)",
+		    sent.getEncounterId(), REFERRED, sent.getUuid(), PATIENT);
+		return type;
+	}
+	
+	/** Makes the message source give the code the text, returning the source to restore after. */
+	private static MutableMessageSource showing(String code, String text) {
+		MessageSourceService service = Context.getMessageSourceService();
+		MutableMessageSource previous = service.getActiveMessageSource();
+		CachedMessageSource shown = new CachedMessageSource();
+		shown.addPresentation(new PresentationMessage(code, Context.getLocale(), text, null));
+		service.setActiveMessageSource(shown);
+		return previous;
+	}
+	
+	private List<String> currentValues(int revisionId) {
+		List<String> values = new ArrayList<String>();
+		for (ActivityField field : log.getActivityDetails(revisionId).getFields()) {
+			values.add(field.getCurrent());
+		}
+		return values;
+	}
+	
+	private static ActivityEntry entry(ActivityPage page, int revisionId) {
+		for (ActivityEntry entry : page.getResults()) {
+			if (entry.getRevisionId() != null && entry.getRevisionId() == revisionId) {
+				return entry;
+			}
+		}
+		fail("no entry for revision " + revisionId + " among " + page.getResults().size());
+		return null;
+	}
+	
+	private static Concept concept(String name, String datatype) {
+		Concept concept = "Numeric".equals(datatype) ? new ConceptNumeric() : new Concept();
+		concept.setFullySpecifiedName(new ConceptName(name, Context.getLocale()));
+		concept.setDatatype(Context.getConceptService().getConceptDatatypeByName(datatype));
+		concept.setConceptClass(Context.getConceptService().getConceptClass(1));
+		Context.getConceptService().saveConcept(concept);
+		assertNotNull(concept.getConceptId());
+		return concept;
+	}
+	
+	private static PersonAttributeType attributeType(String name, String format) {
+		PersonAttributeType type = new PersonAttributeType();
+		type.setName(name);
+		type.setFormat(format);
+		Context.getPersonService().savePersonAttributeType(type);
+		return type;
+	}
+}

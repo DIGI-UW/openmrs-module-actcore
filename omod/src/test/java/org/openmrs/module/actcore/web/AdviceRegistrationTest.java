@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,14 +31,15 @@ import org.openmrs.api.PatientService;
 import org.openmrs.api.PersonService;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.UserService;
-import org.openmrs.module.actcore.adherence.RefreshAdherenceOnSave;
-import org.openmrs.module.actcore.clinics.ClinicScopedUserAdministration;
-import org.openmrs.module.actcore.registry.CloseEnrolmentsOnDeath;
-import org.openmrs.module.actcore.registry.OneOpenRegistryEnrolment;
-import org.openmrs.module.actcore.studies.StudyEnrolmentRules;
-import org.openmrs.module.actcore.studies.StudyEnrolmentStatus;
-import org.openmrs.module.actcore.task.HideDismissedFlags;
-import org.openmrs.module.actcore.users.AdministratorRoleAssignment;
+import org.openmrs.module.actcore.aop.AdministratorRoleAssignment;
+import org.openmrs.module.actcore.aop.ClinicScopedUserAdministration;
+import org.openmrs.module.actcore.aop.CloseEnrolmentsOnDeath;
+import org.openmrs.module.actcore.aop.GuardFlagCache;
+import org.openmrs.module.actcore.aop.HideDismissedFlags;
+import org.openmrs.module.actcore.aop.OneOpenRegistryEnrolment;
+import org.openmrs.module.actcore.aop.RefreshAdherenceOnSave;
+import org.openmrs.module.actcore.aop.StudyEnrolmentRules;
+import org.openmrs.module.actcore.aop.StudyEnrolmentStatus;
 import org.openmrs.module.patientflags.api.FlagService;
 import org.w3c.dom.NodeList;
 
@@ -51,6 +53,11 @@ public class AdviceRegistrationTest {
 	@Test
 	public void configRegistersTheDismissedFlagFilterOnFlagService() throws Exception {
 		assertEquals(points(FlagService.class), pointsOf(HideDismissedFlags.class));
+	}
+	
+	@Test
+	public void configLeavesTheFlagCacheGuardToTheSpringContextThatAddsIt() throws Exception {
+		assertEquals(Collections.emptySet(), pointsOf(GuardFlagCache.class));
 	}
 	
 	@Test

@@ -22,6 +22,7 @@ import org.openmrs.Form;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.MainResourceController;
 import org.openmrs.web.test.BaseModuleWebContextSensitiveTest;
@@ -44,8 +45,8 @@ public class FormsForPatientSearchHandlerTest extends BaseModuleWebContextSensit
 		form("RHD Consultation Visit", true);
 		form("RHD Draft", false);
 		form("Vitals component", true);
-		Context.getAdministrationService().saveGlobalProperty(
-		    new GlobalProperty(FormsForPatientSearchHandler.FEMALE_ONLY_PROPERTY, pregnancy.getUuid()));
+		Context.getAdministrationService()
+		        .saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_FORMS_FEMALE_ONLY, pregnancy.getUuid()));
 	}
 	
 	@Test
@@ -75,8 +76,7 @@ public class FormsForPatientSearchHandlerTest extends BaseModuleWebContextSensit
 	
 	@Test
 	public void offersEveryFormWhenNoFormIsFemaleOnly() throws Exception {
-		Context.getAdministrationService()
-		        .saveGlobalProperty(new GlobalProperty(FormsForPatientSearchHandler.FEMALE_ONLY_PROPERTY, ""));
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(ActCoreConstants.GP_FORMS_FEMALE_ONLY, ""));
 		
 		assertTrue(formNames(patientOfGender("M")).contains("RHD Pregnancy"));
 	}

@@ -9,95 +9,101 @@
  */
 package org.openmrs.module.actcore.web;
 
+import java.util.Collections;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.commons.lang3.StringUtils;
-import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.Daemon;
-import org.openmrs.module.DaemonToken;
+import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.actcore.ActCoreActivator;
-import org.openmrs.module.actcore.task.PatientFlagRefreshTask;
+import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.PatientFlagRefreshService;
+import org.openmrs.module.actcore.model.PatientFlagRefreshResult;
+import org.openmrs.module.actcore.model.PatientFlagRefreshStatus;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
-import org.openmrs.util.PrivilegeConstants;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Runs the patient flag refresh, adherence first, on demand, and says when it last finished.
+ * Runs the patient flag refresh on demand, refreshing adherence first, and says when the refresh
+ * last finished and whether it is running.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class RefreshController extends ActCoreRestController {
 	
-	/** The distribution creates it; a user without it, other than a superuser, is refused. */
-	public static final String PRIVILEGE = "Task: act.refreshFlags";
-	
+	/**
+	 * Gets when the refresh last finished and whether it is running now.
+	 *
+	 * @return {@code lastRefreshed}, an ISO-8601 instant or null before the first run finishes, and
+	 *         {@code running}
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#REFRESH_FLAGS}
+	 */
 	@RequestMapping(value = "/refresh", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getStatus() {
-		requirePrivilege();
+		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
 		return status();
 	}
 	
 	/**
-	 * Runs as the scheduler's daemon user, as the nightly run does: the refresh reads and writes far
-	 * more than the caller's own privileges allow, and on their request it would fail flag by flag.
+	 * Runs the refresh now and waits for it, unless a run is already in progress. Runs as the
+	 * scheduler's daemon user, as the nightly run does: the refresh reads and writes far more than the
+	 * caller's own privileges allow, and on their request it would fail flag by flag.
+	 *
+	 * @return the status, as {@link #getStatus()} gives it, with {@code refreshed}, false when another
+	 *         run was in progress; after a run, also how many flags and lists failed and whether the
+	 *         adherence refresh failed
+	 * @throws ContextAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#REFRESH_FLAGS}
+	 * @throws APIException when the module has not started or the refresh throws
 	 */
 	// JSON only: another site's page can post a form here with the user's cookie, but not JSON.
 	@RequestMapping(value = "/refresh", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public SimpleObject refresh() {
-		requirePrivilege();
-		DaemonToken token = ActCoreActivator.getDaemonToken();
-		if (token == null) {
-			throw new APIException("ACT Core has not started, so it cannot run the refresh");
-		}
-		final PatientFlagRefreshTask.Result[] ran = new PatientFlagRefreshTask.Result[1];
-		final RuntimeException[] failure = new RuntimeException[1];
-		Daemon.runInDaemonThreadAndWait(new Runnable() {
-			
-			@Override
-			public void run() {
-				try {
-					ran[0] = new PatientFlagRefreshTask().runIfIdle();
-				}
-				catch (RuntimeException e) {
-					failure[0] = e;
-				}
-			}
-		}, token);
-		if (failure[0] != null) {
-			throw new APIException("The patient flag refresh failed", failure[0]);
-		}
-		SimpleObject response = status().add("refreshed", ran[0] != null);
-		if (ran[0] != null) {
-			response.add("flagsFailed", ran[0].flagsFailed).add("listsFailed", ran[0].listsFailed).add("adherenceFailed",
-			    ran[0].adherenceFailed);
+		Context.requirePrivilege(ActCorePrivileges.REFRESH_FLAGS);
+		PatientFlagRefreshResult ran = ActCoreActivator.runAsDaemon("run the refresh", "The patient flag refresh failed",
+		    () -> Context.getService(PatientFlagRefreshService.class).refreshAll());
+		SimpleObject response = status().add("refreshed", ran != null);
+		if (ran != null) {
+			response.add("flagsFailed", ran.getFlagsFailed()).add("listsFailed", ran.getListsFailed()).add("adherenceFailed",
+			    ran.isAdherenceFailed());
 		}
 		return response;
 	}
 	
-	private static SimpleObject status() {
-		String lastFinished;
+	/**
+	 * Refuses a POST that is not JSON, which {@link #refresh()} does not take, with 415. Without it the
+	 * POST would reach {@link FallbackController}, which answers 405.
+	 *
+	 * @param request the request
+	 * @throws HttpMediaTypeNotSupportedException always, naming the request's content type
+	 */
+	@RequestMapping(value = "/refresh", method = RequestMethod.POST)
+	public void refuseAnythingButJson(HttpServletRequest request) throws HttpMediaTypeNotSupportedException {
+		MediaType given;
 		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
-			lastFinished = Context.getAdministrationService()
-			        .getGlobalProperty(PatientFlagRefreshTask.LAST_FINISHED_PROPERTY);
+			given = StringUtils.isBlank(request.getContentType()) ? null
+			        : MediaType.parseMediaType(request.getContentType());
 		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		catch (InvalidMediaTypeException e) {
+			throw new HttpMediaTypeNotSupportedException(e.getMessage());
 		}
-		return new SimpleObject().add("lastRefreshed", StringUtils.defaultIfBlank(lastFinished, null)).add("running",
-		    PatientFlagRefreshTask.isRunning());
+		throw new HttpMediaTypeNotSupportedException(given, Collections.singletonList(MediaType.APPLICATION_JSON));
 	}
 	
-	private static void requirePrivilege() {
-		if (!Context.hasPrivilege(PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + PRIVILEGE);
-		}
+	private static SimpleObject status() {
+		PatientFlagRefreshStatus status = Context.getService(PatientFlagRefreshService.class).getStatus();
+		return new SimpleObject().add("lastRefreshed", status.getLastFinished()).add("running", status.isRunning());
 	}
 }

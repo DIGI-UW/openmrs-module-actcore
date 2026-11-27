@@ -11,10 +11,8 @@ package org.openmrs.module.actcore.web;
 
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,13 +23,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Location;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.clinics.UserClinics;
-import org.openmrs.module.actcore.screening.ScreeningCounts;
+import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.ScreeningCountService;
+import org.openmrs.module.actcore.model.ScreeningCount;
+import org.openmrs.module.actcore.model.ScreeningCountMonth;
+import org.openmrs.module.actcore.model.ScreeningCountSummary;
+import org.openmrs.module.actcore.utils.UserClinics;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,81 +42,109 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * A clinic's monthly screening counts, read and saved, and their sums over clinics and months for
- * the Dashboard; a site administrator works with the clinics on their account only.
+ * Serves the monthly screening counts: a clinic's counts for a month, read and saved on the
+ * Screening counts page, and their sums over clinics and months for the Dashboard. A site
+ * administrator works only with the clinics on their account, which {@link ScreeningCountService}
+ * enforces.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/screeningcounts")
 public class ScreeningCountController extends ActCoreRestController {
 	
-	/** Opens the Screening counts page, where they are read. */
-	public static final String READ_PRIVILEGE = "App: act.screeningCounts";
-	
-	/** The Dashboard's, whose screening section reads them. */
-	public static final String DASHBOARD_PRIVILEGE = RunChartController.READ_PRIVILEGE;
-	
-	public static final String ENTER_PRIVILEGE = "Task: act.enterScreeningCounts";
-	
 	private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("uuuu-MM");
 	
-	private final ScreeningCounts screeningCounts = new ScreeningCounts();
-	
+	/**
+	 * Gets the clinic's counts for the month.
+	 *
+	 * @param clinic the clinic's location uuid
+	 * @param month the month as YYYY-MM
+	 * @return the clinic, the month, whether it was saved, each column's count, all zero when it was
+	 *         not, and the notes
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#SCREENING_COUNTS}, {@link ActCorePrivileges#DASHBOARD} and
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
+	 * @throws IllegalRequestException when the clinic or month is blank or not recognised; a request
+	 *             without one of them is answered with 400 before this method runs
+	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject get(@RequestParam("clinic") String clinic, @RequestParam("month") String month) {
-		requireReader();
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
-		return describe(location, yearMonth, screeningCounts.get(location, yearMonth));
+		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
+	/**
+	 * Saves the clinic's counts for the month, replacing the counts saved before.
+	 *
+	 * @param clinic the clinic's location uuid
+	 * @param month the month as YYYY-MM
+	 * @param body the request body, holding each column's count as {@code counts}, a column not given
+	 *            being zero, and optional {@code notes}
+	 * @return the month as saved, as {@link #get(String, String)} gives it
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}, or is a site administrator without
+	 *             the clinic on their account
+	 * @throws IllegalRequestException when the clinic or month is blank or not recognised, the counts
+	 *             are missing, or a count is not a whole number; a request without the clinic or month
+	 *             is answered with 400 before this method runs
+	 * @throws ValidationException when the service refuses the counts, notes or month, saying why
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject save(@RequestParam("clinic") String clinic, @RequestParam("month") String month,
 	        @RequestBody Map<String, Object> body) {
-		requirePrivilege(ENTER_PRIVILEGE);
 		Location location = clinicOf(clinic);
 		YearMonth yearMonth = month("month", month, null);
 		Object notes = body == null ? null : body.get("notes");
-		try {
-			screeningCounts.save(location, yearMonth, counts(body), notes == null ? null : notes.toString());
-		}
-		catch (IllegalArgumentException e) {
-			throw new IllegalRequestException(e.getMessage());
-		}
-		return describe(location, yearMonth, screeningCounts.get(location, yearMonth));
+		service().saveMonth(location, yearMonth, counts(body), notes == null ? null : notes.toString());
+		return describe(location, yearMonth, service().getMonth(location, yearMonth));
 	}
 	
 	/**
-	 * The sums from startMonth to endMonth, both included, by default the twelve months to this one, of
-	 * the clinics given or of every clinic.
+	 * Gets the sums of the counts from startMonth to endMonth, both included, of the clinics given or
+	 * of every clinic. Without months, the range is the twelve months up to and including this one.
+	 *
+	 * @param clinics the clinics' location uuids, or none for no clinic filter; a site administrator's
+	 *            are limited to the clinics on their account, which none stands for, and one of those
+	 *            that names no location any more is skipped
+	 * @param startMonth the first month as YYYY-MM; blank for eleven months before the end
+	 * @param endMonth the last month as YYYY-MM; blank for this month
+	 * @return the months, how many clinic months were saved, the totals screened, female, positive,
+	 *         negative and by age group, and the screened by setting
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCorePrivileges#SCREENING_COUNTS}, {@link ActCorePrivileges#DASHBOARD} and
+	 *             {@link ActCorePrivileges#ENTER_SCREENING_COUNTS}
+	 * @throws IllegalRequestException when a month or clinic is not recognised or the start is after
+	 *             the end
 	 */
 	@RequestMapping(value = "/summary", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject summary(@RequestParam(value = "clinic", required = false) String[] clinics,
 	        @RequestParam(value = "startMonth", required = false) String startMonth,
 	        @RequestParam(value = "endMonth", required = false) String endMonth) {
-		requireReader();
 		YearMonth end = month("endMonth", endMonth, YearMonth.now());
 		YearMonth start = month("startMonth", startMonth, end.minusMonths(11));
 		if (start.isAfter(end)) {
 			throw new IllegalRequestException("startMonth is after endMonth");
 		}
-		ScreeningCounts.Summary summary = screeningCounts.summary(locationIds(clinics), start, end);
+		ScreeningCountSummary summary = service().getSummary(locationIds(clinics), start, end);
 		SimpleObject settings = new SimpleObject();
-		for (String setting : ScreeningCounts.SETTINGS) {
-			settings.add(setting, summary.sums.get(setting + "_screened"));
+		for (String setting : ScreeningCount.SETTINGS) {
+			settings.add(setting, summary.getSums().get(setting + "_screened"));
 		}
 		return new SimpleObject().add("startMonth", start.format(MONTH)).add("endMonth", end.format(MONTH))
-		        .add("months", summary.months).add("screened", summary.screened()).add("females", summary.total("females"))
-		        .add("positive", summary.positive()).add("negative", summary.negative())
-		        .add("children", summary.total("children")).add("adolescents", summary.total("adolescents"))
-		        .add("adults", summary.total("adults")).add("settings", settings);
+		        .add("months", summary.getMonths()).add("screened", summary.screened())
+		        .add("females", summary.total("females")).add("positive", summary.positive())
+		        .add("negative", summary.negative()).add("children", summary.total("children"))
+		        .add("adolescents", summary.total("adolescents")).add("adults", summary.total("adults"))
+		        .add("settings", settings);
 	}
 	
-	private static SimpleObject describe(Location clinic, YearMonth month, ScreeningCounts.Month counts) {
+	private static SimpleObject describe(Location clinic, YearMonth month, ScreeningCountMonth counts) {
 		return new SimpleObject().add("clinic", clinic.getUuid()).add("month", month.format(MONTH))
-		        .add("saved", counts.saved).add("counts", counts.counts).add("notes", counts.notes);
+		        .add("saved", counts.isSaved()).add("counts", counts.getCounts()).add("notes", counts.getNotes());
 	}
 	
 	private static Map<String, Integer> counts(Map<String, Object> body) {
@@ -140,8 +170,9 @@ public class ScreeningCountController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Ids to sum: those given (a site administrator's own only, maybe none), or null for all. An
-	 * unknown uuid is a bad request unless it is on the site administrator's account.
+	 * Gets the location ids of the clinics given, or null for none, which stands for every clinic the
+	 * user may sum. A uuid that names no location is a bad request, unless it is a clinic on a site
+	 * administrator's account, which is skipped.
 	 */
 	private static Collection<Integer> locationIds(String[] clinics) {
 		Set<String> uuids = new LinkedHashSet<String>();
@@ -152,82 +183,31 @@ public class ScreeningCountController extends ActCoreRestController {
 				}
 			}
 		}
-		User user = Context.getAuthenticatedUser();
-		boolean limited = UserClinics.isLimited(user);
-		Set<String> own = limited ? UserClinics.of(user) : Collections.<String> emptySet();
-		for (String uuid : uuids) {
-			if (!own.contains(uuid) && location(uuid) == null) {
-				throw new IllegalRequestException("No location has the uuid " + uuid);
-			}
-		}
-		if (limited) {
-			if (uuids.isEmpty()) {
-				uuids.addAll(own);
-			} else {
-				uuids.retainAll(own);
-			}
-		} else if (uuids.isEmpty()) {
+		if (uuids.isEmpty()) {
 			return null;
 		}
+		User user = Context.getAuthenticatedUser();
 		List<Integer> ids = new ArrayList<Integer>();
 		for (String uuid : uuids) {
 			Location location = location(uuid);
 			if (location != null) {
 				ids.add(location.getLocationId());
+			} else if (!UserClinics.isLimited(user) || !UserClinics.of(user).contains(uuid)) {
+				throw new IllegalRequestException("No location has the uuid " + uuid);
 			}
 		}
 		return ids;
 	}
 	
-	/** The clinic, which a site administrator must have on their account. */
 	private static Location clinicOf(String uuid) {
-		Location location = StringUtils.isBlank(uuid) ? null : location(uuid.trim());
+		Location location = location(uuid);
 		if (location == null) {
 			throw new IllegalRequestException("No location has the uuid " + uuid);
-		}
-		User user = Context.getAuthenticatedUser();
-		if (UserClinics.isLimited(user) && !UserClinics.of(user).contains(location.getUuid())) {
-			throw new APIAuthenticationException(location.getName() + " is not one of your clinics");
 		}
 		return location;
 	}
 	
-	private static Location location(String uuid) {
-		try {
-			Context.addProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-			return Context.getLocationService().getLocationByUuid(uuid);
-		}
-		finally {
-			Context.removeProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
-		}
-	}
-	
-	private static YearMonth month(String name, String value, YearMonth fallback) {
-		if (StringUtils.isBlank(value)) {
-			if (fallback == null) {
-				throw new IllegalRequestException(name + " must be a month as YYYY-MM");
-			}
-			return fallback;
-		}
-		try {
-			return YearMonth.parse(value.trim(), MONTH);
-		}
-		catch (DateTimeParseException e) {
-			throw new IllegalRequestException(name + " must be a month as YYYY-MM");
-		}
-	}
-	
-	private static void requireReader() {
-		if (!Context.hasPrivilege(READ_PRIVILEGE) && !Context.hasPrivilege(DASHBOARD_PRIVILEGE)
-		        && !Context.hasPrivilege(ENTER_PRIVILEGE)) {
-			throw new APIAuthenticationException(
-			        "Privilege required: " + READ_PRIVILEGE + ", " + DASHBOARD_PRIVILEGE + " or " + ENTER_PRIVILEGE);
-		}
-	}
-	
-	private static void requirePrivilege(String privilege) {
-		if (!Context.hasPrivilege(privilege)) {
-			throw new APIAuthenticationException("Privilege required: " + privilege);
-		}
+	private static ScreeningCountService service() {
+		return Context.getService(ScreeningCountService.class);
 	}
 }

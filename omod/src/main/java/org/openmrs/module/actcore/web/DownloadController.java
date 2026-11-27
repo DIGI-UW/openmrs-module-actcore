@@ -9,11 +9,8 @@
  */
 package org.openmrs.module.actcore.web;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.Period;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,16 +23,24 @@ import org.openmrs.Concept;
 import org.openmrs.Form;
 import org.openmrs.Location;
 import org.openmrs.api.APIAuthenticationException;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.download.DownloadLog;
-import org.openmrs.module.actcore.download.FormDownload;
-import org.openmrs.module.actcore.logs.Names;
+import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.ActCorePrivileges;
+import org.openmrs.module.actcore.api.DownloadLogService;
+import org.openmrs.module.actcore.api.FormDownloadService;
+import org.openmrs.module.actcore.api.impl.Names;
+import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
+import org.openmrs.module.actcore.model.DownloadLogItem;
+import org.openmrs.module.actcore.model.DownloadPage;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
+import org.openmrs.module.actcore.model.FormDownloadTable;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,37 +52,22 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * ACT 2.0's Download, each recorded in the download log, under privileges the distribution creates.
- * Identifiers only with IDENTIFIERS_PRIVILEGE; a research download is never identified.
+ * Serves ACT 2.0's Download, which exports saved forms as CSV, and the download log. Every download
+ * is recorded in the download log before its data is returned. A download gives the patient fields
+ * and questions that identify a patient only to a user who also holds
+ * ActCorePrivileges.DOWNLOAD_IDENTIFIERS, and a research download never gives them.
  */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore/download")
 public class DownloadController extends ActCoreRestController {
 	
-	/** Download any patient's forms, without identifiers. */
-	public static final String DOWNLOAD_PRIVILEGE = "Task: act.downloadData";
-	
-	/** With DOWNLOAD_PRIVILEGE, also give what identifies the patient, as FormDownload lists it. */
-	public static final String IDENTIFIERS_PRIVILEGE = "Task: act.downloadIdentifiers";
-	
-	/** Without DOWNLOAD_PRIVILEGE, download only the forms of patients who opted in to research. */
-	public static final String RESEARCH_PRIVILEGE = "Task: act.downloadResearchData";
-	
 	static final int MAX_LABEL = 255;
-	
-	static final int DEFAULT_LIMIT = 100;
-	
-	static final int MAX_LIMIT = 500;
 	
 	static final int MAX_COLUMNS = 200;
 	
-	/** MariaDB's TEXT, the log's detail column, which refuses a longer value. */
-	static final int MAX_DETAIL_BYTES = 65535;
-	
-	/** How far back a log without its own default reaches when the request gives no start date. */
-	static final int DEFAULT_MONTHS = 12;
-	
-	/** The Logs page's tabs as it names them, by the key the app records a tab's CSV under. */
+	/**
+	 * The names the Logs page gives its tabs, keyed by the name the app records a tab's CSV under.
+	 */
 	static final Map<String, String> LOG_TABS = new LinkedHashMap<String, String>();
 	
 	static {
@@ -87,80 +77,85 @@ public class DownloadController extends ActCoreRestController {
 		LOG_TABS.put("signIns", "Sign-ins");
 	}
 	
-	private final DownloadLog downloadLog = new DownloadLog();
-	
+	/**
+	 * Gets the CSV of the forms asked for and records the download, as
+	 * {@link FormDownloadService#download} does: a row per save of one form, or a row per patient
+	 * across several forms or when asked. Without {@link ActCorePrivileges#DOWNLOAD_DATA} it is of the
+	 * patients who opted in to research.
+	 *
+	 * @param body the request body: {@code forms}, each a form uuid and its chosen fields, or one
+	 *            {@code form} and its {@code fields}; and optionally {@code rowPerPatient},
+	 *            {@code status}, {@code cardiacClinic}, {@code primaryCareClinic}, {@code startDate},
+	 *            {@code endDate} and the {@code patient} fields
+	 * @return the headers and rows, whether identifiers were given, whether it is research only, and
+	 *         the labels of the fields withheld
+	 * @throws APIAuthenticationException when the user lacks both
+	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} and
+	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}; lacks Get Forms, Get Concepts, Get
+	 *             Encounters or Get Observations, which the forms and their answers are read with; or,
+	 *             with a status filter, lacks Get Patient Programs
+	 * @throws ObjectNotFoundException when a form is missing or no form has its uuid
+	 * @throws IllegalRequestException when no form is asked for, a form is asked for twice or has no
+	 *             field, a field, status, clinic, date or patient field is not recognised, the start is
+	 *             after the end, or the record of the download would be too long
+	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
-	public SimpleObject download(@RequestBody Map<String, Object> body) throws JsonProcessingException {
-		boolean all = Context.hasPrivilege(DOWNLOAD_PRIVILEGE);
-		if (!all && !Context.hasPrivilege(RESEARCH_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DOWNLOAD_PRIVILEGE);
+	public SimpleObject download(@RequestBody Map<String, Object> body) {
+		// Refused before the body is read, which the service could refuse only after.
+		if (!Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA)
+		        && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
+			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.DOWNLOAD_DATA);
 		}
-		boolean identified = all && Context.hasPrivilege(IDENTIFIERS_PRIVILEGE);
-		boolean researchOnly = !all;
-		List<FormDownload.Choice> choices = choices(body);
-		boolean rowPerPatient = choices.size() > 1 || Boolean.TRUE.equals(body.get("rowPerPatient"));
+		List<FormDownloadChoice> choices = choices(body);
 		Object status = body.get("status");
 		if (status != null && !Arrays.asList("active", "inactive").contains(status.toString())) {
 			throw new IllegalRequestException("status must be active or inactive");
 		}
-		FormDownload.Filters filters = new FormDownload.Filters(status == null ? null : status.toString(),
+		FormDownloadFilters filters = new FormDownloadFilters(status == null ? null : status.toString(),
 		        clinic(body.get("cardiacClinic")), clinic(body.get("primaryCareClinic")));
-		LocalDate from = date(body.get("startDate"));
-		LocalDate to = date(body.get("endDate"));
+		LocalDate from = date("startDate", body.get("startDate"), null);
+		LocalDate to = date("endDate", body.get("endDate"), null);
 		if (from != null && to != null && from.isAfter(to)) {
 			throw new IllegalRequestException("The start date is after the end date");
 		}
 		List<String> patient = patient(body.get("patient"));
-		FormDownload.Choice only = choices.get(0);
-		FormDownload.Table table = rowPerPatient
-		        ? new FormDownload().buildPerPatient(choices, from, to, identified, researchOnly, filters, patient)
-		        : new FormDownload().build(only.form, only.concepts, only.labels, from, to, identified, researchOnly,
-		            filters, patient);
-		List<String> withheld = new ArrayList<String>();
-		table.withheldPatient.forEach(key -> withheld.add(FormDownload.PATIENT_FIELDS.get(key)));
-		withheld.addAll(table.withheld);
-		List<String> given = new ArrayList<String>();
-		List<Map<String, Object>> forms = new ArrayList<Map<String, Object>>();
-		for (FormDownload.Choice choice : choices) {
-			List<String> fields = new ArrayList<String>();
-			for (String label : choice.labels) {
-				if (!table.withheld.contains(rowPerPatient ? choice.name + ": " + label : label)) {
-					fields.add(label);
-					given.add(choices.size() > 1 ? choice.name + ": " + label : label);
-				}
-			}
-			Map<String, Object> form = new LinkedHashMap<String, Object>();
-			form.put("uuid", choice.form.getUuid());
-			form.put("name", choice.name);
-			form.put("fields", fields);
-			forms.add(form);
+		FormDownloadTable table;
+		try {
+			table = Context.getService(FormDownloadService.class).download(choices,
+			    Boolean.TRUE.equals(body.get("rowPerPatient")), filters, from, to, patient);
 		}
-		Map<String, Object> shown = new LinkedHashMap<String, Object>();
-		shown.put("status", filters.status);
-		shown.put("cardiacClinic", filters.cardiacClinic == null ? null : filters.cardiacClinic.getName());
-		shown.put("primaryCareClinic", filters.primaryCareClinic == null ? null : filters.primaryCareClinic.getName());
-		Map<String, Object> detail = new LinkedHashMap<String, Object>();
-		detail.put("fields", given);
-		detail.put("withheld", withheld);
-		detail.put("startDate", from == null ? null : from.toString());
-		detail.put("endDate", to == null ? null : to.toString());
-		detail.put("rows", table.rows.size());
-		detail.put("identifiers", table.identifiers);
-		detail.put("researchOnly", researchOnly);
-		detail.put("forms", forms);
-		detail.put("rowPerPatient", rowPerPatient);
-		detail.put("filters", shown);
-		detail.put("patient", table.patient);
-		// Recorded before the rows are returned, so no download goes unrecorded.
-		log(choices.size() == 1 ? only.form.getFormId() : null, detail);
-		
-		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", table.identifiers)
-		        .add("researchOnly", researchOnly).add("withheld", withheld);
+		catch (ValidationException e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
+		return new SimpleObject().add("headers", table.getHeaders()).add("rows", table.getRows())
+		        .add("identifiers", table.isIdentifiers()).add("researchOnly", table.isResearchOnly())
+		        .add("withheld", table.getWithheld());
 	}
 	
 	/**
-	 * The downloads matching the filters, newest first, for a user who may read the audit log's reads.
+	 * Gets a page of the downloads recorded that match the filters, newest first, for a user who may
+	 * read the audit log's reads.
+	 *
+	 * @param username the user whose downloads to list, or blank for no user filter
+	 * @param startDate the first day as YYYY-MM-DD; blank for {@value #DEFAULT_MONTHS} months before
+	 *            the end date or today
+	 * @param endDate the last day as YYYY-MM-DD; blank for no end
+	 * @param formUuid the uuid of a form the downloads must hold, or blank for no form filter
+	 * @param identifiers with, without or research, or null for no identifiers filter
+	 * @param startIndex the first download to give, from 0; null for 0
+	 * @param limit the most downloads to give, capped at {@value ActCoreConstants#DOWNLOAD_MAX_LIMIT};
+	 *            null or below 1 for {@value ActCoreConstants#DOWNLOAD_DEFAULT_LIMIT}
+	 * @return the downloads as {@code results}, with {@code totalCount} and the days read; empty when
+	 *         no user has the username or no form has the uuid. Each download gives its {@code date},
+	 *         {@code user}, {@code form}, {@code list} and {@code detail}; {@code identifiers}, the
+	 *         value of the identifiers filter that matches it; and {@code unreadable}, true when its
+	 *         recorded detail cannot be read as a JSON object of the shape every download records,
+	 *         which leaves {@code detail} and {@code list} null and {@code identifiers} {@code "with"}
+	 * @throws APIAuthenticationException when the user lacks
+	 *             {@link ActCoreConstants#AUDITLOGWEB_VIEW_READ_AUDIT_LOGS}
+	 * @throws IllegalRequestException when a date or identifiers is not recognised, or the start is
+	 *             after the end
 	 */
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
@@ -170,70 +165,56 @@ public class DownloadController extends ActCoreRestController {
 	        @RequestParam(value = "form", required = false) String formUuid,
 	        @RequestParam(value = "identifiers", required = false) String identifiers,
 	        @RequestParam(value = "startIndex", required = false) Integer startIndex,
-	        @RequestParam(value = "limit", required = false) Integer limit) throws IOException {
-		if (!Context.hasPrivilege(DownloadLog.VIEW_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DownloadLog.VIEW_PRIVILEGE);
-		}
-		LocalDate to = date(endDate);
-		LocalDate from = from(startDate, to);
-		SimpleObject none = new SimpleObject().add("results", new ArrayList<SimpleObject>()).add("totalCount", 0)
-		        .add("from", from.toString()).add("to", to == null ? null : to.toString());
-		Integer userId = null;
-		if (StringUtils.isNotBlank(username)) {
-			userId = Names.userId(username.trim());
-			if (userId == null) {
-				return none;
-			}
-		}
-		String chosenForm = null;
-		if (StringUtils.isNotBlank(formUuid)) {
-			Form form = Names.proxied(PrivilegeConstants.GET_FORMS,
-			    () -> Context.getFormService().getFormByUuid(formUuid.trim()));
-			if (form == null) {
-				return none;
-			}
-			chosenForm = form.getUuid();
-		}
+	        @RequestParam(value = "limit", required = false) Integer limit) {
 		if (identifiers != null && !Arrays.asList("with", "without", "research").contains(identifiers)) {
 			throw new IllegalRequestException("identifiers must be with, without or research");
 		}
-		ObjectMapper json = new ObjectMapper();
-		Names names = new Names();
-		List<SimpleObject> matching = new ArrayList<SimpleObject>();
-		// Matched here rather than by the log's form_id, which a download of several forms leaves empty.
-		for (DownloadLog.Entry entry : downloadLog.list(userId, from, to)) {
-			Map<?, ?> detail = entry.detail == null ? null : json.readValue(entry.detail, Map.class);
-			if (identifiers != null && !identifiers.equals(identifiersOf(detail))) {
-				continue;
-			}
-			if (chosenForm != null && !chosenForm.equals(entry.formUuid) && !formsOf(detail).contains(chosenForm)) {
-				continue;
-			}
-			Object list = detail == null ? null : detail.get("list");
-			matching.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(entry.date, null))
-			        .add("user", ActivityController.who(names.user(entry.userUuid)))
+		DownloadSearchCriteria filter = new DownloadSearchCriteria();
+		filter.setUsername(username);
+		filter.setTo(date("endDate", endDate, null));
+		filter.setFrom(from(startDate, filter.getTo(), Period.ofMonths(DEFAULT_MONTHS)));
+		filter.setFormUuid(formUuid);
+		filter.setIdentifiers(identifiers);
+		filter.setStartIndex(startIndex == null ? 0 : startIndex);
+		filter.setLimit(limit == null ? ActCoreConstants.DOWNLOAD_DEFAULT_LIMIT : limit);
+		DownloadPage page = Context.getService(DownloadLogService.class).getDownloads(filter);
+		List<SimpleObject> results = new ArrayList<SimpleObject>();
+		for (DownloadLogItem download : page.getResults()) {
+			Object list = download.getDetail() == null ? null : download.getDetail().get("list");
+			results.add(new SimpleObject().add("date", ConversionUtil.convertToRepresentation(download.getDate(), null))
+			        .add("user", who(download.getUser()))
 			        .add("form",
-			            entry.formName == null ? null
-			                    : new SimpleObject().add("uuid", entry.formUuid).add("name", entry.formName))
-			        .add("list", list == null ? null : list(list.toString())).add("detail", detail));
+			            download.getFormName() == null ? null
+			                    : new SimpleObject().add("uuid", download.getFormUuid()).add("name", download.getFormName()))
+			        .add("list", list == null ? null : list(list.toString())).add("detail", download.getDetail())
+			        .add("identifiers", download.getIdentifiers()).add("unreadable", download.isUnreadable()));
 		}
-		int start = Math.min(startIndex == null ? 0 : Math.max(startIndex, 0), matching.size());
-		int size = limit == null || limit < 1 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
-		return new SimpleObject().add("results", matching.subList(start, Math.min(start + size, matching.size())))
-		        .add("totalCount", matching.size()).add("from", from.toString())
-		        .add("to", to == null ? null : to.toString());
+		return new SimpleObject().add("results", results).add("totalCount", page.getTotalCount())
+		        .add("from", filter.getFrom().toString())
+		        .add("to", filter.getTo() == null ? null : filter.getTo().toString());
 	}
 	
 	/**
-	 * Records a CSV the app made itself: the registry, a worklist or a Logs tab. Recorded before the
-	 * app writes the file, which it does not when this fails.
+	 * Records a download of a CSV that the app made itself: the registry list, a worklist or a Logs
+	 * tab. The app records it before writing the file, and does not write the file when this fails.
+	 *
+	 * @param body the request body: the {@code list}, as registry, worklist:&lt;name&gt; or
+	 *            logs:&lt;tab&gt;, its {@code columns}, and optionally the number of {@code rows},
+	 *            whether it holds {@code identifiers} and its {@code filters}
+	 * @return {@code recorded} true
+	 * @throws APIAuthenticationException when the user lacks both
+	 *             {@link ActCorePrivileges#DOWNLOAD_DATA} and
+	 *             {@link ActCorePrivileges#DOWNLOAD_RESEARCH_DATA}
+	 * @throws IllegalRequestException when the list or columns are missing, there are more than
+	 *             {@value #MAX_COLUMNS} columns, or the record would be too long
+	 * @throws JsonProcessingException when the record cannot be written as JSON
 	 */
 	@RequestMapping(value = "/record", method = RequestMethod.POST)
 	@ResponseBody
 	public SimpleObject record(@RequestBody Map<String, Object> body) throws JsonProcessingException {
-		boolean all = Context.hasPrivilege(DOWNLOAD_PRIVILEGE);
-		if (!all && !Context.hasPrivilege(RESEARCH_PRIVILEGE)) {
-			throw new APIAuthenticationException("Privilege required: " + DOWNLOAD_PRIVILEGE);
+		boolean all = Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA);
+		if (!all && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
+			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.DOWNLOAD_DATA);
 		}
 		Object list = body == null ? null : body.get("list");
 		if (list == null || StringUtils.isBlank(list.toString())) {
@@ -265,24 +246,25 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * The forms asked for, each with its chosen fields: forms [{form, fields}], or one form and its
-	 * fields.
+	 * Reads the forms a download asks for, each with its chosen fields. The body gives them either as
+	 * {@code forms}, a list of form and fields pairs, or as one {@code form} with its {@code fields}. A
+	 * field asked for twice in one form is kept once.
 	 */
-	private static List<FormDownload.Choice> choices(Map<String, Object> body) {
+	private static List<FormDownloadChoice> choices(Map<String, Object> body) {
 		List<?> asked = body == null ? null
 		        : body.get("forms") instanceof List ? (List<?>) body.get("forms")
 		                : body.get("form") == null ? null : Collections.singletonList(body);
 		if (asked == null || asked.isEmpty()) {
 			throw new IllegalRequestException("The form is required");
 		}
-		List<FormDownload.Choice> choices = new ArrayList<FormDownload.Choice>();
+		List<FormDownloadChoice> choices = new ArrayList<FormDownloadChoice>();
 		for (Object each : asked) {
 			Object formUuid = each instanceof Map ? ((Map<?, ?>) each).get("form") : null;
 			Form form = formUuid == null ? null : Context.getFormService().getFormByUuid(formUuid.toString());
 			if (form == null) {
 				throw new ObjectNotFoundException();
 			}
-			if (choices.stream().anyMatch(choice -> choice.form.equals(form))) {
+			if (choices.stream().anyMatch(choice -> choice.getForm().equals(form))) {
 				throw new IllegalRequestException("A form is asked for twice: " + formUuid);
 			}
 			List<Concept> concepts = new ArrayList<Concept>();
@@ -306,25 +288,29 @@ public class DownloadController extends ActCoreRestController {
 				labels.add(StringUtils.isBlank(label == null ? null : label.toString()) ? concept.getName().getName()
 				        : StringUtils.left(label.toString().trim(), MAX_LABEL));
 			}
-			choices.add(
-			    new FormDownload.Choice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
+			choices.add(new FormDownloadChoice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
 		}
 		return choices;
 	}
 	
-	/** The patient fields asked for, by FormDownload.PATIENT_FIELDS's keys, or null when not asked. */
+	/**
+	 * Reads the patient fields a download asks for, as keys of
+	 * {@link ActCoreConstants#DOWNLOAD_PATIENT_FIELDS}. It is null when the request does not say, which
+	 * leaves the default fields to the download.
+	 */
 	private static List<String> patient(Object asked) {
 		if (asked == null) {
 			return null;
 		}
 		if (!(asked instanceof List)) {
-			throw new IllegalRequestException("patient must be a list of " + FormDownload.PATIENT_FIELDS.keySet());
+			throw new IllegalRequestException(
+			        "patient must be a list of " + ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet());
 		}
 		List<String> keys = new ArrayList<String>();
 		for (Object key : (List<?>) asked) {
-			if (!FormDownload.PATIENT_FIELDS.containsKey(String.valueOf(key))) {
+			if (!ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.containsKey(String.valueOf(key))) {
 				throw new IllegalRequestException(
-				        "Not a patient field: " + key + "; one of " + FormDownload.PATIENT_FIELDS.keySet());
+				        "Not a patient field: " + key + "; one of " + ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet());
 			}
 			keys.add(String.valueOf(key));
 		}
@@ -335,52 +321,27 @@ public class DownloadController extends ActCoreRestController {
 		if (uuid == null || StringUtils.isBlank(uuid.toString())) {
 			return null;
 		}
-		// A clinic is configuration, so a downloader needs no privilege to read it.
-		Location clinic = Names.proxied(PrivilegeConstants.GET_LOCATIONS,
-		    () -> Context.getLocationService().getLocationByUuid(uuid.toString().trim()));
+		Location clinic = location(uuid.toString());
 		if (clinic == null) {
 			throw new IllegalRequestException("Not a clinic: " + uuid);
 		}
 		return clinic;
 	}
 	
-	/**
-	 * The uuids of the forms a download recorded, empty for a list or an entry from before they were
-	 * recorded.
-	 */
-	private static List<String> formsOf(Map<?, ?> detail) {
-		List<String> uuids = new ArrayList<String>();
-		Object forms = detail == null ? null : detail.get("forms");
-		if (forms instanceof List) {
-			for (Object form : (List<?>) forms) {
-				if (form instanceof Map && ((Map<?, ?>) form).get("uuid") != null) {
-					uuids.add(((Map<?, ?>) form).get("uuid").toString());
-				}
-			}
-		}
-		return uuids;
-	}
-	
 	private void log(Integer formId, Map<String, Object> detail) throws JsonProcessingException {
 		String json = new ObjectMapper().writeValueAsString(detail);
-		if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DETAIL_BYTES) {
-			throw new IllegalRequestException("Too many or too long columns and filters to record");
+		try {
+			Context.getService(DownloadLogService.class).recordDownload(formId, json);
 		}
-		downloadLog.record(formId, json);
+		catch (ValidationException e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
 	}
 	
-	/** with, without or research, as the identifiers filter names what a download held. */
-	private static String identifiersOf(Map<?, ?> detail) {
-		if (detail == null) {
-			return "without";
-		}
-		if (Boolean.TRUE.equals(detail.get("researchOnly"))) {
-			return "research";
-		}
-		return Boolean.TRUE.equals(detail.get("identifiers")) ? "with" : "without";
-	}
-	
-	/** The list a recorded CSV was of, named as the Logs page shows it. */
+	/**
+	 * Names the list that a recorded CSV was of, as the Logs page shows it, with its kind: registry,
+	 * worklist, logs or other.
+	 */
 	static SimpleObject list(String list) {
 		if (list.equals("registry")) {
 			return new SimpleObject().add("name", "Registry list").add("kind", "registry");
@@ -396,36 +357,5 @@ public class DownloadController extends ActCoreRestController {
 			        .add("kind", "logs");
 		}
 		return new SimpleObject().add("name", list).add("kind", "other");
-	}
-	
-	static LocalDate from(String startDate, LocalDate to) {
-		return from(startDate, to, Period.ofMonths(DEFAULT_MONTHS));
-	}
-	
-	/**
-	 * The start date the log reads from: the one given, else {@code back} before the end date or today,
-	 * so a request without dates does not read the whole log.
-	 */
-	static LocalDate from(String startDate, LocalDate to, Period back) {
-		LocalDate from = date(startDate);
-		if (from == null) {
-			return (to == null ? LocalDate.now() : to).minus(back);
-		}
-		if (to != null && from.isAfter(to)) {
-			throw new IllegalRequestException("The start date is after the end date");
-		}
-		return from;
-	}
-	
-	static LocalDate date(Object value) {
-		if (value == null || StringUtils.isBlank(value.toString())) {
-			return null;
-		}
-		try {
-			return LocalDate.parse(value.toString().trim());
-		}
-		catch (DateTimeParseException e) {
-			throw new IllegalRequestException("Not a date (yyyy-MM-dd): " + value);
-		}
 	}
 }

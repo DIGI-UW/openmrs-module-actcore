@@ -13,44 +13,43 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.actcore.nextsteps.NextStep;
-import org.openmrs.module.actcore.nextsteps.NextSteps;
+import org.openmrs.module.actcore.api.NextStepsService;
+import org.openmrs.module.actcore.model.NextStep;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+/** Serves the next steps the chart suggests for a patient. */
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/actcore")
 public class NextStepsController extends ActCoreRestController {
 	
+	/**
+	 * Gets the patient's next steps, as {@link NextStepsService#getNextSteps(Patient, LocalDate)} gives
+	 * them as of today.
+	 *
+	 * @param patientUuid the patient's uuid
+	 * @return the steps as {@code steps}, each with its key, form, title, reason, referral type and
+	 *         whether it is new, done, on hold or an alert
+	 * @throws IllegalRequestException when no patient is given
+	 * @throws ObjectNotFoundException when no patient has the uuid
+	 * @throws APIAuthenticationException when the user lacks Get Patients or Get Observations
+	 */
 	@RequestMapping(value = "/nextsteps", method = RequestMethod.GET)
 	@ResponseBody
 	public SimpleObject getNextSteps(@RequestParam(value = "patient", required = false) String patientUuid) {
-		if (StringUtils.isBlank(patientUuid)) {
-			throw new IllegalRequestException("The patient is required");
-		}
-		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
-		if (patient == null) {
-			throw new ObjectNotFoundException();
-		}
-		// Thrown here: the REST layer answers requirePrivilege's exception with a 500.
-		if (!Context.hasPrivilege(PrivilegeConstants.GET_OBS)) {
-			throw new APIAuthenticationException("Privilege required: " + PrivilegeConstants.GET_OBS);
-		}
-		
+		Patient patient = patient(patientUuid);
 		List<SimpleObject> steps = new ArrayList<SimpleObject>();
-		for (NextStep step : NextSteps.of(patient, LocalDate.now())) {
+		for (NextStep step : Context.getService(NextStepsService.class).getNextSteps(patient, LocalDate.now())) {
 			steps.add(new SimpleObject().add("key", step.getKey()).add("form", step.getForm()).add("title", step.getTitle())
 			        .add("reason", step.getReason()).add("isNew", step.isNew()).add("done", step.isDone())
 			        .add("onHold", step.isOnHold()).add("referralType", step.getReferralType())
