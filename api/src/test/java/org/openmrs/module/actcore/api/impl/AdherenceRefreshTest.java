@@ -10,12 +10,18 @@
 package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Test;
+import org.openmrs.api.APIException;
+import org.openmrs.module.actcore.api.db.AdherenceDAO;
 
 public class AdherenceRefreshTest {
 	
@@ -27,5 +33,39 @@ public class AdherenceRefreshTest {
 		assertEquals(DAY, AdherenceRefresh.localDate(Timestamp.valueOf(DAY.atTime(23, 30))));
 		assertEquals(DAY, AdherenceRefresh.localDate(LocalDateTime.of(DAY, java.time.LocalTime.of(0, 15))));
 		assertEquals(DAY, AdherenceRefresh.localDate(DAY));
+	}
+	
+	@Test(timeout = 10000)
+	public void refreshAll_shouldStopWhenAPatientsRefreshHoldsTheRowsPastTheWait() throws InterruptedException {
+		CountDownLatch holding = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		Thread patient = new Thread(() -> AdherenceRefresh.unlessRefreshingAll(7, () -> {
+			holding.countDown();
+			try {
+				release.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}));
+		patient.start();
+		holding.await();
+		try {
+			new AdherenceRefresh(mock(AdherenceDAO.class)) {
+				
+				@Override
+				long rowsWaitMillis() {
+					return 100;
+				}
+			}.refreshAll(DAY);
+			fail("The refresh ran while a patient's refresh held the rows");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().startsWith("The adherence refresh did not run"));
+		}
+		finally {
+			release.countDown();
+			patient.join();
+		}
 	}
 }

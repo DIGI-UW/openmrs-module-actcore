@@ -27,12 +27,15 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.Patient;
+import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
@@ -72,6 +75,14 @@ class AdherenceRefresh {
 	 */
 	private static final Set<Integer> DEFERRED = ConcurrentHashMap.newKeySet();
 	
+	/**
+	 * How long a full refresh waits for the patients' refreshes in progress before it stops without
+	 * running. A patient's refresh that evaluates a Groovy flag can wait forever in patientflags
+	 * 3.0.10, whose {@code GroovyFlagEvaluatorThread.fetchResultCohort} waits with no condition and so
+	 * can miss the evaluator's notify; without a bound the refresh would wait with it.
+	 */
+	static final long ROWS_WAIT_MINUTES = 5;
+	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
 	
@@ -104,15 +115,42 @@ class AdherenceRefresh {
 	 *
 	 * @param today the day to compute adherence and due dates as of
 	 * @return the number of patients written a row, 0 when none has a prescription
+	 * @throws APIException when a patient's refresh still holds the rows after
+	 *             {@link #ROWS_WAIT_MINUTES} minutes
 	 */
 	public int refreshAll(LocalDate today) {
-		ROWS.writeLock().lock();
+		if (!lockWithin(ROWS.writeLock(), rowsWaitMillis())) {
+			throw new APIException("The adherence refresh did not run: a patient's refresh has held the adherence rows for "
+			        + TimeUnit.MILLISECONDS.toSeconds(rowsWaitMillis()) + " s");
+		}
 		try {
 			return refresh(today);
 		}
 		finally {
 			ROWS.writeLock().unlock();
 			refreshDeferred(today);
+		}
+	}
+	
+	long rowsWaitMillis() {
+		return TimeUnit.MINUTES.toMillis(ROWS_WAIT_MINUTES);
+	}
+	
+	/**
+	 * Takes the lock unless it is still held by others after the wait. An interrupt ends the wait and
+	 * is kept on the thread.
+	 *
+	 * @param lock the lock to take
+	 * @param millis how long to wait for it
+	 * @return true when the lock was taken
+	 */
+	static boolean lockWithin(Lock lock, long millis) {
+		try {
+			return lock.tryLock(millis, TimeUnit.MILLISECONDS);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
 		}
 	}
 	

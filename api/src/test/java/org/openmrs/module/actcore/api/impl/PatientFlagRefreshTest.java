@@ -10,6 +10,9 @@
 package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -27,11 +30,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.openmrs.Cohort;
+import org.openmrs.api.APIException;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlag;
 import org.openmrs.module.patientflags.api.FlagService;
@@ -164,5 +169,45 @@ public class PatientFlagRefreshTest {
 		
 		assertEquals(0, task.raised);
 		assertEquals(1, task.cleared);
+	}
+	
+	@Test(timeout = 10000)
+	public void runIfIdle_shouldStopAndLetTheNextRunStartWhenAPatientsRefreshHoldsTheRowsPastTheWait()
+	        throws InterruptedException {
+		CountDownLatch holding = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		Thread patient = new Thread(() -> {
+			PatientFlagRefresh.ROWS.readLock().lock();
+			try {
+				holding.countDown();
+				release.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			finally {
+				PatientFlagRefresh.ROWS.readLock().unlock();
+			}
+		});
+		patient.start();
+		holding.await();
+		try {
+			new PatientFlagRefresh() {
+				
+				@Override
+				long rowsWaitMillis() {
+					return 100;
+				}
+			}.runIfIdle();
+			fail("The refresh ran while a patient's refresh held the rows");
+		}
+		catch (APIException e) {
+			assertTrue(e.getMessage(), e.getMessage().startsWith("The patient flag refresh did not run"));
+			assertFalse(PatientFlagRefresh.isRunning());
+		}
+		finally {
+			release.countDown();
+			patient.join();
+		}
 	}
 }
