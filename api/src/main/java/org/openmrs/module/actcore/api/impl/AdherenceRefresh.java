@@ -79,9 +79,12 @@ class AdherenceRefresh {
 	 * How long a full refresh waits for the patients' refreshes in progress before it stops without
 	 * running. A patient's refresh that evaluates a Groovy flag can wait forever in patientflags
 	 * 3.0.10, whose {@code GroovyFlagEvaluatorThread.fetchResultCohort} waits with no condition and so
-	 * can miss the evaluator's notify; without a bound the refresh would wait with it.
+	 * can miss the evaluator's notify; without a bound the refresh would wait with it. The refresh
+	 * endpoint waits for the run behind a gateway that may give up first, the distro's after 300 s, and
+	 * a flag refresh waits twice, for the flag rows and then for the adherence rows, so the bound stays
+	 * well under that.
 	 */
-	static final long ROWS_WAIT_MINUTES = 5;
+	static final long ROWS_WAIT_MINUTES = 1;
 	
 	// Uuids are written into the queries, so a global property holding anything else is refused.
 	private static final Pattern UUID = Pattern.compile("[A-Za-z0-9-]{1,38}");
@@ -116,13 +119,10 @@ class AdherenceRefresh {
 	 * @param today the day to compute adherence and due dates as of
 	 * @return the number of patients written a row, 0 when none has a prescription
 	 * @throws APIException when a patient's refresh still holds the rows after
-	 *             {@link #ROWS_WAIT_MINUTES} minutes
+	 *             {@link #ROWS_WAIT_MINUTES} minutes, or the wait for them is interrupted
 	 */
 	public int refreshAll(LocalDate today) {
-		if (!lockWithin(ROWS.writeLock(), rowsWaitMillis())) {
-			throw new APIException("The adherence refresh did not run: a patient's refresh has held the adherence rows for "
-			        + TimeUnit.MILLISECONDS.toSeconds(rowsWaitMillis()) + " s");
-		}
+		lockWithin(ROWS.writeLock(), rowsWaitMillis(), "The adherence refresh", "the adherence rows");
 		try {
 			return refresh(today);
 		}
@@ -137,21 +137,27 @@ class AdherenceRefresh {
 	}
 	
 	/**
-	 * Takes the lock unless it is still held by others after the wait. An interrupt ends the wait and
-	 * is kept on the thread.
+	 * Takes a full refresh's lock on its rows, or stops the refresh when others still hold it after the
+	 * wait. An interrupt ends the wait and is kept on the thread.
 	 *
 	 * @param lock the lock to take
 	 * @param millis how long to wait for it
-	 * @return true when the lock was taken
+	 * @param refresh the refresh, as "The adherence refresh"
+	 * @param rows the rows the lock guards, as "the adherence rows"
+	 * @throws APIException when the lock is not taken, saying why
 	 */
-	static boolean lockWithin(Lock lock, long millis) {
+	static void lockWithin(Lock lock, long millis, String refresh, String rows) {
 		try {
-			return lock.tryLock(millis, TimeUnit.MILLISECONDS);
+			if (lock.tryLock(millis, TimeUnit.MILLISECONDS)) {
+				return;
+			}
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			return false;
+			throw new APIException(refresh + " did not run: it was interrupted while waiting for " + rows, e);
 		}
+		throw new APIException(refresh + " did not run: it could not take " + rows + " within "
+		        + TimeUnit.MILLISECONDS.toSeconds(millis) + " s, as a patient's refresh or a dismissal still held them");
 	}
 	
 	private void refreshDeferred(LocalDate today) {

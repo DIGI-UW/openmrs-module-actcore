@@ -68,4 +68,35 @@ public class AdherenceRefreshTest {
 			patient.join();
 		}
 	}
+	
+	@Test(timeout = 10000)
+	public void refreshAll_shouldStopAndKeepTheInterruptWhenTheWaitIsInterrupted() throws InterruptedException {
+		CountDownLatch holding = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		Thread patient = new Thread(() -> AdherenceRefresh.unlessRefreshingAll(7, () -> {
+			holding.countDown();
+			try {
+				release.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}));
+		patient.start();
+		holding.await();
+		try {
+			Thread.currentThread().interrupt();
+			new AdherenceRefresh(mock(AdherenceDAO.class)).refreshAll(DAY);
+			fail("The refresh ran while a patient's refresh held the rows");
+		}
+		catch (APIException e) {
+			assertTrue(Thread.interrupted());
+			assertEquals("The adherence refresh did not run: it was interrupted while waiting for the adherence rows",
+			    e.getMessage());
+		}
+		finally {
+			release.countDown();
+			patient.join();
+		}
+	}
 }

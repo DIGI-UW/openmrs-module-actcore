@@ -106,7 +106,8 @@ public class PatientFlagRefresh {
 	 * @return the flags and lists that failed and whether the adherence refresh failed, or null when
 	 *         another run was in progress
 	 * @throws APIException when a patient's refresh still holds the rows after
-	 *             {@link AdherenceRefresh#ROWS_WAIT_MINUTES} minutes; the next run can then start
+	 *             {@link AdherenceRefresh#ROWS_WAIT_MINUTES} minutes, or the wait for them is
+	 *             interrupted; the next run can then start
 	 */
 	public Result runIfIdle() {
 		if (!RUNNING.tryLock()) {
@@ -115,11 +116,7 @@ public class PatientFlagRefresh {
 		}
 		try {
 			// Waits for the patients' refreshes already going, as long as AdherenceRefresh waits for its rows.
-			if (!AdherenceRefresh.lockWithin(ROWS.writeLock(), rowsWaitMillis())) {
-				throw new APIException(
-				        "The patient flag refresh did not run: a patient's refresh has held the flag rows for "
-				                + TimeUnit.MILLISECONDS.toSeconds(rowsWaitMillis()) + " s");
-			}
+			AdherenceRefresh.lockWithin(ROWS.writeLock(), rowsWaitMillis(), "The patient flag refresh", "the flag rows");
 			try {
 				return refresh();
 			}
