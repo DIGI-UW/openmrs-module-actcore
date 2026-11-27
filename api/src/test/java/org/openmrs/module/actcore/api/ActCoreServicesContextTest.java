@@ -36,6 +36,8 @@ import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.search.ActivitySearchCriteria;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.api.search.ReadSearchCriteria;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
 import org.openmrs.module.actcore.model.RunChartPeriod;
 import org.openmrs.module.patientflags.Flag;
 import org.openmrs.module.patientflags.PatientFlagsConstants;
@@ -86,6 +88,16 @@ public class ActCoreServicesContextTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(service);
 		refused(() -> service.recordDownload(null, "{}"), ActCorePrivileges.DOWNLOAD_DATA);
 		refused(() -> service.getDownloads(new DownloadSearchCriteria()), ActCoreConstants.AUDITLOGWEB_VIEW_READ_AUDIT_LOGS);
+	}
+	
+	@Test
+	public void formDownloadService_shouldRefuseAUserWithoutADownloadPrivilege() {
+		FormDownloadService service = Context.getService(FormDownloadService.class);
+		assertNotNull(service);
+		Runnable download = () -> service.download(Collections.<FormDownloadChoice> emptyList(), false,
+		    new FormDownloadFilters(null, null, null), null, null, null);
+		refused(download, ActCorePrivileges.DOWNLOAD_DATA);
+		holding(ActCorePrivileges.DOWNLOAD_IDENTIFIERS, () -> refused(download, ActCorePrivileges.DOWNLOAD_DATA));
 	}
 	
 	@Test

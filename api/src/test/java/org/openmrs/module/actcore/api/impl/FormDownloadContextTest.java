@@ -38,6 +38,8 @@ import org.openmrs.Program;
 import org.openmrs.Location;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
 
 public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
@@ -245,12 +247,12 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	
 	@Test(expected = UnsupportedOperationException.class)
 	public void patientFields_shouldNotBeChangeable() {
-		FormDownload.PATIENT_FIELDS.put("address", "Address");
+		ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.put("address", "Address");
 	}
 	
 	@Test(expected = UnsupportedOperationException.class)
 	public void identifyingPatientFields_shouldNotBeChangeable() {
-		FormDownload.IDENTIFYING_PATIENT_FIELDS.set(0, "sex");
+		ActCoreConstants.DOWNLOAD_IDENTIFYING_PATIENT_FIELDS.set(0, "sex");
 	}
 	
 	@Test
@@ -302,7 +304,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		Concept address = concept("Home Address", "Text");
 		property(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS, address.getUuid());
 		encounter(form, 7, 0);
-		FormDownload.Choice echo = new FormDownload.Choice(form, "Echo", Arrays.asList(ejection, address),
+		FormDownloadChoice echo = new FormDownloadChoice(form, "Echo", Arrays.asList(ejection, address),
 		        Arrays.asList("EF", "Home Address"));
 		
 		FormDownload.Table table = new FormDownload().buildPerPatient(Collections.singletonList(echo), null, null, false,
@@ -316,7 +318,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 	public void buildPerPatient_shouldHeadEachFormsColumnsWhenNoPatientSavedIt() {
 		Form consult = otherForm("RHD Consultation Visit");
 		encounter(form, 7, 0);
-		List<FormDownload.Choice> choices = Arrays.asList(choice(form, "Echo", ejection, "EF"),
+		List<FormDownloadChoice> choices = Arrays.asList(choice(form, "Echo", ejection, "EF"),
 		    choice(consult, "Consultation", finding, "MR"));
 		List<String> headers = Arrays.asList("ACT ID", "Sex", "Age", "Echo 1: Form date", "Echo 1: Location", "Echo 1: EF",
 		    "Consultation 1: Form date", "Consultation 1: Location", "Consultation 1: MR");
@@ -367,7 +369,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		Program registry = registryProgram();
 		enrol(7, registry, null);
 		Patient seven = Context.getPatientService().getPatient(7);
-		FormDownload.Filters active = filters("active", null, null);
+		FormDownload.Filters active = new FormDownload.Filters(filters("active", null, null));
 		assertTrue(active.matches(seven));
 		
 		PatientProgram enrolment = Context.getProgramWorkflowService()
@@ -376,7 +378,7 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		Context.getProgramWorkflowService().savePatientProgram(enrolment);
 		
 		assertTrue(active.matches(seven));
-		assertFalse(filters("active", null, null).matches(seven));
+		assertFalse(new FormDownload.Filters(filters("active", null, null)).matches(seven));
 	}
 	
 	@Test
@@ -413,19 +415,19 @@ public class FormDownloadContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals("6TS-4", table.rows.get(0).get(0));
 	}
 	
-	private List<String> actIds(FormDownload.Filters filters) {
+	private List<String> actIds(FormDownloadFilters filters) {
 		List<String> ids = new java.util.ArrayList<String>();
 		new FormDownload().buildPerPatient(Collections.singletonList(choice(form, "Echo", ejection, "EF")), null, null,
 		    false, false, filters).rows.forEach(r -> ids.add(r.get(0)));
 		return ids;
 	}
 	
-	private static FormDownload.Filters filters(String status, Location cardiac, Location primaryCare) {
-		return new FormDownload.Filters(status, cardiac, primaryCare);
+	private static FormDownloadFilters filters(String status, Location cardiac, Location primaryCare) {
+		return new FormDownloadFilters(status, cardiac, primaryCare);
 	}
 	
-	private static FormDownload.Choice choice(Form form, String name, Concept concept, String label) {
-		return new FormDownload.Choice(form, name, Collections.singletonList(concept), Collections.singletonList(label));
+	private static FormDownloadChoice choice(Form form, String name, Concept concept, String label) {
+		return new FormDownloadChoice(form, name, Collections.singletonList(concept), Collections.singletonList(label));
 	}
 	
 	private static List<String> row(FormDownload.Table table, String actId) {

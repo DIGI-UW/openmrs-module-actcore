@@ -65,6 +65,23 @@
         </property>
     </bean>
 
+    <bean id="actcore.FormDownloadService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="target">
+            <bean class="org.openmrs.module.actcore.api.impl.FormDownloadServiceImpl"/>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors"/>
+        <property name="transactionAttributeSource" ref="transactionAttributeSource"/>
+    </bean>
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.actcore.api.FormDownloadService</value>
+                <ref bean="actcore.FormDownloadService"/>
+            </list>
+        </property>
+    </bean>
+
     <!-- A bean of its own, as the flag refresh and the flag lists look it up to read the flag rows and cohorts -->
     <bean id="actcoreRaisedFlagDAO" class="org.openmrs.module.actcore.api.db.hibernate.HibernateRaisedFlagDAO">
         <property name="sessionFactory" ref="dbSessionFactory"/>

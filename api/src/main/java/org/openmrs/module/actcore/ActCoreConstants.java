@@ -9,13 +9,19 @@
  */
 package org.openmrs.module.actcore;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * The names that ACT Core shares with its config.xml, its database and the modules it depends on:
  * the global properties it declares, the one core keeps of whether it is started, its user
- * property, its tables, and the privileges of other modules that it checks or proxies, and the page
- * sizes of its logs. Each is spelled here once, and the code refers to it through these constants.
- * The config.xml describes each global property. ACT Core's own privileges are in
- * {@link ActCorePrivileges}.
+ * property, its tables, and the privileges of other modules that it checks or proxies, the page
+ * sizes of its logs, and the patient fields a download may choose. Each is spelled here once, and
+ * the code refers to it through these constants. The config.xml describes each global property. ACT
+ * Core's own privileges are in {@link ActCorePrivileges}.
  */
 public final class ActCoreConstants {
 	
@@ -197,6 +203,33 @@ public final class ActCoreConstants {
 	
 	/** The most downloads a download log page holds, whatever the filter asks for. */
 	public static final int DOWNLOAD_MAX_LIMIT = 500;
+	
+	/**
+	 * The patient fields a download of saved forms may choose, as their keys mapped to their column
+	 * labels, in the order their columns take. The ACT ID is not among them, since every row starts
+	 * with it. The identifiers and phones fields each give a column per type that the identifying
+	 * properties name.
+	 */
+	public static final Map<String, String> DOWNLOAD_PATIENT_FIELDS;
+	
+	/**
+	 * The keys of the {@link #DOWNLOAD_PATIENT_FIELDS} that identify the patient, which only a download
+	 * with identifiers gives.
+	 */
+	public static final List<String> DOWNLOAD_IDENTIFYING_PATIENT_FIELDS = Collections
+	        .unmodifiableList(Arrays.asList("givenName", "familyName", "birthDate", "identifiers", "phones"));
+	
+	static {
+		Map<String, String> fields = new LinkedHashMap<String, String>();
+		fields.put("givenName", "Given name");
+		fields.put("familyName", "Family name");
+		fields.put("birthDate", "Birth date");
+		fields.put("identifiers", "ID numbers");
+		fields.put("phones", "Phone numbers");
+		fields.put("sex", "Sex");
+		fields.put("age", "Age");
+		DOWNLOAD_PATIENT_FIELDS = Collections.unmodifiableMap(fields);
+	}
 	
 	private ActCoreConstants() {
 	}

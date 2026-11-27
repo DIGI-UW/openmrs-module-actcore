@@ -41,6 +41,8 @@ import org.openmrs.Program;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.aop.StudyEnrolmentRules;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
 import org.openmrs.parameter.EncounterSearchCriteriaBuilder;
 import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
@@ -54,118 +56,50 @@ import org.openmrs.util.PrivilegeConstants;
  * A download without identifiers leaves out the patient fields, identifier types, attribute types
  * and questions that identify the patient, as the global properties named here configure them.
  */
-public class FormDownload {
+class FormDownload {
 	
 	private static final int OBS_BATCH = 500;
 	
 	/**
-	 * The patient fields a request may choose, as their keys mapped to their column labels, in the
-	 * order their columns take. The ACT ID is not among them, since every row starts with it. The
-	 * identifiers and phones fields each give a column per type that the identifying properties name.
-	 */
-	public static final Map<String, String> PATIENT_FIELDS;
-	
-	/**
-	 * The keys of the patient fields that identify the patient, which only a download with identifiers
-	 * gives.
-	 */
-	public static final List<String> IDENTIFYING_PATIENT_FIELDS = Collections
-	        .unmodifiableList(Arrays.asList("givenName", "familyName", "birthDate", "identifiers", "phones"));
-	
-	static {
-		Map<String, String> fields = new LinkedHashMap<String, String>();
-		fields.put("givenName", "Given name");
-		fields.put("familyName", "Family name");
-		fields.put("birthDate", "Birth date");
-		fields.put("identifiers", "ID numbers");
-		fields.put("phones", "Phone numbers");
-		fields.put("sex", "Sex");
-		fields.put("age", "Age");
-		PATIENT_FIELDS = Collections.unmodifiableMap(fields);
-	}
-	
-	/**
 	 * A built download: the CSV's header row and its rows, with what was given and what was left out.
 	 */
-	public static class Table {
+	static class Table {
 		
 		/** The CSV's column headers, in order. */
-		public final List<String> headers = new ArrayList<String>();
+		final List<String> headers = new ArrayList<String>();
 		
 		/** The CSV's rows, each a cell for each header, empty where there is no value. */
-		public final List<List<String>> rows = new ArrayList<List<String>>();
+		final List<List<String>> rows = new ArrayList<List<String>>();
 		
 		/**
 		 * The labels of the questions asked for that were left out because they identify the patient. A row
 		 * per patient prefixes each label with its form's name.
 		 */
-		public final List<String> withheld = new ArrayList<String>();
+		final List<String> withheld = new ArrayList<String>();
 		
 		/** The keys of the patient fields given, in the order of their columns. */
-		public final List<String> patient = new ArrayList<String>();
+		final List<String> patient = new ArrayList<String>();
 		
 		/**
 		 * The keys of the patient fields asked for that were left out because they identify the patient.
 		 */
-		public final List<String> withheldPatient = new ArrayList<String>();
+		final List<String> withheldPatient = new ArrayList<String>();
 		
 		/** Whether the download gave a patient field or a question that identifies the patient. */
-		public boolean identifiers;
+		boolean identifiers;
 	}
 	
 	/**
-	 * A form chosen for a row per patient, with the questions chosen of it. The name heads the form's
-	 * groups of columns.
+	 * Applies a download's filters to its patients. Make a new instance for each download, since it
+	 * remembers each patient's result for as long as it lives.
 	 */
-	public static class Choice {
+	static class Filters {
 		
-		/**
-		 * The form whose saves the download gives. Each of a patient's saves of the form fills one group of
-		 * the form's columns.
-		 */
-		public final Form form;
+		private final String status;
 		
-		/** The name that prefixes the form's column headers, followed by the number of the save. */
-		public final String name;
+		private final Location cardiacClinic;
 		
-		/**
-		 * The questions chosen from the form. Each question gives one column in every group of the form's
-		 * columns, unless it identifies the patient and the download withholds it.
-		 */
-		public final List<Concept> concepts;
-		
-		/** Each question's column label, in the order of {@link #concepts}. */
-		public final List<String> labels;
-		
-		public Choice(Form form, String name, List<Concept> concepts, List<String> labels) {
-			this.form = form;
-			this.name = name;
-			this.concepts = concepts;
-			this.labels = labels;
-		}
-	}
-	
-	/**
-	 * The filters ACT 2.0's Download offered for choosing which patients' saves to give: their status
-	 * in the registry, their cardiac clinic and their primary care clinic. A filter left null is not
-	 * applied.
-	 * <p>
-	 * Make a new instance for each download, since it remembers each patient's result for as long as it
-	 * lives.
-	 */
-	public static class Filters {
-		
-		/**
-		 * The status to keep: active for a living patient whose latest RHD Registry enrolment is open,
-		 * inactive for anyone else, or null for both.
-		 */
-		public final String status;
-		
-		/** The cardiac clinic a patient must be recorded at, or null for any. */
-		public final Location cardiacClinic;
-		
-		/** The primary care clinic a patient must be recorded at, or null for any. */
-		public final Location primaryCareClinic;
+		private final Location primaryCareClinic;
 		
 		private Program registry;
 		
@@ -173,10 +107,10 @@ public class FormDownload {
 		
 		private final Map<Integer, Boolean> kept = new HashMap<Integer, Boolean>();
 		
-		public Filters(String status, Location cardiacClinic, Location primaryCareClinic) {
-			this.status = status;
-			this.cardiacClinic = cardiacClinic;
-			this.primaryCareClinic = primaryCareClinic;
+		Filters(FormDownloadFilters filters) {
+			this.status = filters.getStatus();
+			this.cardiacClinic = filters.getCardiacClinic();
+			this.primaryCareClinic = filters.getPrimaryCareClinic();
 		}
 		
 		/**
@@ -254,9 +188,10 @@ public class FormDownload {
 	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
 	 *         save matches
 	 */
-	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
-	        boolean identified, boolean researchOnly) {
-		return build(form, asked, askedLabels, from, to, identified, researchOnly, new Filters(null, null, null));
+	Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly) {
+		return build(form, asked, askedLabels, from, to, identified, researchOnly,
+		    new FormDownloadFilters(null, null, null));
 	}
 	
 	/**
@@ -277,8 +212,8 @@ public class FormDownload {
 	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
 	 *         save matches
 	 */
-	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
-	        boolean identified, boolean researchOnly, Filters filters) {
+	Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly, FormDownloadFilters filters) {
 		return build(form, asked, askedLabels, from, to, identified, researchOnly, filters, null);
 	}
 	
@@ -297,13 +232,13 @@ public class FormDownload {
 	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
 	 *            nobody is kept when the opt-in or Yes is not configured
 	 * @param filters the status and clinics to keep patients by
-	 * @param chosen the keys of the {@link #PATIENT_FIELDS} to give, or null for sex and age, and every
-	 *            field when identified
+	 * @param chosen the keys of the {@link ActCoreConstants#DOWNLOAD_PATIENT_FIELDS} to give, or null
+	 *            for sex and age, and every field when identified
 	 * @return the table, a row per save, oldest first, leaving out voided patients; no rows when no
 	 *         save matches
 	 */
-	public Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to,
-	        boolean identified, boolean researchOnly, Filters filters, List<String> chosen) {
+	Table build(Form form, List<Concept> asked, List<String> askedLabels, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly, FormDownloadFilters filters, List<String> chosen) {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
@@ -327,7 +262,7 @@ public class FormDownload {
 		table.headers.addAll(Arrays.asList("Form date", "Location"));
 		table.headers.addAll(labels);
 		
-		List<Encounter> encounters = encounters(form, from, to, researchOnly, filters);
+		List<Encounter> encounters = encounters(form, from, to, researchOnly, new Filters(filters));
 		Map<Integer, Map<Integer, List<Obs>>> answers = answers(encounters, concepts);
 		for (Encounter encounter : encounters) {
 			Patient patient = encounter.getPatient();
@@ -362,16 +297,16 @@ public class FormDownload {
 	 * @return the table, a row per patient by ACT ID, leaving out voided patients; no rows when no save
 	 *         matches, while each form still heads one group of columns
 	 */
-	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
-	        boolean researchOnly, Filters filters) {
+	Table buildPerPatient(List<FormDownloadChoice> choices, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly, FormDownloadFilters filters) {
 		return buildPerPatient(choices, from, to, identified, researchOnly, filters, null);
 	}
 	
 	/**
 	 * Builds a table with a row for each patient across the chosen forms, as
-	 * {@link #buildPerPatient(List, LocalDate, LocalDate, boolean, boolean, Filters)} does, giving the
-	 * patient fields chosen. Without a choice, it gives every patient field when the download has
-	 * identifiers, and sex and age when it does not.
+	 * {@link #buildPerPatient(List, LocalDate, LocalDate, boolean, boolean, FormDownloadFilters)} does,
+	 * giving the patient fields chosen. Without a choice, it gives every patient field when the
+	 * download has identifiers, and sex and age when it does not.
 	 *
 	 * @param choices the forms and the questions chosen of each
 	 * @param from the first day, or null for no start
@@ -381,13 +316,13 @@ public class FormDownload {
 	 * @param researchOnly whether to keep only the patients who answered Yes to the research opt-in;
 	 *            nobody is kept when the opt-in or Yes is not configured
 	 * @param filters the status and clinics to keep patients by
-	 * @param chosen the keys of the {@link #PATIENT_FIELDS} to give, or null for sex and age, and every
-	 *            field when identified
+	 * @param chosen the keys of the {@link ActCoreConstants#DOWNLOAD_PATIENT_FIELDS} to give, or null
+	 *            for sex and age, and every field when identified
 	 * @return the table, a row per patient by ACT ID, leaving out voided patients; no rows when no save
 	 *         matches, while each form still heads one group of columns
 	 */
-	public Table buildPerPatient(List<Choice> choices, LocalDate from, LocalDate to, boolean identified,
-	        boolean researchOnly, Filters filters, List<String> chosen) {
+	Table buildPerPatient(List<FormDownloadChoice> choices, LocalDate from, LocalDate to, boolean identified,
+	        boolean researchOnly, FormDownloadFilters filters, List<String> chosen) {
 		Locale locale = Context.getLocale();
 		List<PatientIdentifierType> identifying = identifierTypes();
 		List<PersonAttributeType> attributeTypes = identified ? attributeTypes() : Collections.emptyList();
@@ -395,26 +330,27 @@ public class FormDownload {
 		Table table = new Table();
 		patientFields(table, chosen, identified);
 		patientHeaders(table, identifying, attributeTypes);
+		Filters kept = new Filters(filters);
 		
 		Map<Integer, Patient> patients = new LinkedHashMap<Integer, Patient>();
 		List<List<Concept>> concepts = new ArrayList<List<Concept>>();
 		List<Map<Integer, List<Encounter>>> saves = new ArrayList<Map<Integer, List<Encounter>>>();
 		List<Map<Integer, Map<Integer, List<Obs>>>> answers = new ArrayList<Map<Integer, Map<Integer, List<Obs>>>>();
 		List<Integer> groups = new ArrayList<Integer>();
-		for (Choice choice : choices) {
+		for (FormDownloadChoice choice : choices) {
 			List<Concept> given = new ArrayList<Concept>();
 			List<String> labels = new ArrayList<String>();
-			for (int i = 0; i < choice.concepts.size(); i++) {
-				boolean question = identifyingConcepts.contains(choice.concepts.get(i).getUuid());
+			for (int i = 0; i < choice.getConcepts().size(); i++) {
+				boolean question = identifyingConcepts.contains(choice.getConcepts().get(i).getUuid());
 				if (question && !identified) {
-					table.withheld.add(choice.name + ": " + choice.labels.get(i));
+					table.withheld.add(choice.getName() + ": " + choice.getLabels().get(i));
 				} else {
 					table.identifiers |= question;
-					given.add(choice.concepts.get(i));
-					labels.add(choice.labels.get(i));
+					given.add(choice.getConcepts().get(i));
+					labels.add(choice.getLabels().get(i));
 				}
 			}
-			List<Encounter> encounters = encounters(choice.form, from, to, researchOnly, filters);
+			List<Encounter> encounters = encounters(choice.getForm(), from, to, researchOnly, kept);
 			Map<Integer, List<Encounter>> byPatient = new LinkedHashMap<Integer, List<Encounter>>();
 			for (Encounter encounter : encounters) {
 				patients.putIfAbsent(encounter.getPatient().getPatientId(), encounter.getPatient());
@@ -424,7 +360,7 @@ public class FormDownload {
 			int most = Math.max(1, byPatient.values().stream().mapToInt(List::size).max().orElse(0));
 			groups.add(most);
 			for (int n = 1; n <= most; n++) {
-				String prefix = choice.name + " " + n + ": ";
+				String prefix = choice.getName() + " " + n + ": ";
 				table.headers.add(prefix + "Form date");
 				table.headers.add(prefix + "Location");
 				labels.forEach(label -> table.headers.add(prefix + label));
@@ -459,14 +395,14 @@ public class FormDownload {
 	}
 	
 	/**
-	 * Records on the table which patient fields it gives, in the order of PATIENT_FIELDS, which it
-	 * withholds, and whether one it gives identifies the patient. Without a choice it gives the fields
-	 * given before they could be chosen: every field when the download has identifiers, and sex and age
-	 * when it does not.
+	 * Records on the table which patient fields it gives, in the order of DOWNLOAD_PATIENT_FIELDS,
+	 * which it withholds, and whether one it gives identifies the patient. Without a choice it gives
+	 * the fields given before they could be chosen: every field when the download has identifiers, and
+	 * sex and age when it does not.
 	 */
 	private static void patientFields(Table table, List<String> asked, boolean identified) {
-		for (String key : PATIENT_FIELDS.keySet()) {
-			boolean identifying = IDENTIFYING_PATIENT_FIELDS.contains(key);
+		for (String key : ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet()) {
+			boolean identifying = ActCoreConstants.DOWNLOAD_IDENTIFYING_PATIENT_FIELDS.contains(key);
 			if (asked == null ? identified || !identifying : asked.contains(key)) {
 				if (identifying && !identified) {
 					table.withheldPatient.add(key);
@@ -487,7 +423,7 @@ public class FormDownload {
 			} else if (key.equals("phones")) {
 				attributeTypes.forEach(type -> table.headers.add(type.getName()));
 			} else {
-				table.headers.add(PATIENT_FIELDS.get(key));
+				table.headers.add(ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.get(key));
 			}
 		}
 	}
@@ -653,7 +589,7 @@ public class FormDownload {
 	 * @param property the global property's name
 	 * @return the uuids, trimmed and in order, without blanks; empty when the property is unset
 	 */
-	public static List<String> uuids(String property) {
+	static List<String> uuids(String property) {
 		String value = Context.getAdministrationService().getGlobalProperty(property);
 		List<String> uuids = new ArrayList<String>();
 		for (String uuid : StringUtils.split(StringUtils.defaultString(value), ',')) {

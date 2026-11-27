@@ -28,11 +28,14 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.api.DownloadLogService;
-import org.openmrs.module.actcore.api.impl.FormDownload;
+import org.openmrs.module.actcore.api.FormDownloadService;
 import org.openmrs.module.actcore.api.impl.Names;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.model.DownloadLogItem;
 import org.openmrs.module.actcore.model.DownloadPage;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
+import org.openmrs.module.actcore.model.FormDownloadTable;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -75,9 +78,10 @@ public class DownloadController extends ActCoreRestController {
 	}
 	
 	/**
-	 * Gets the CSV of the forms asked for and records the download: a row per save of one form, or a
-	 * row per patient across several forms or when asked. Without
-	 * {@link ActCorePrivileges#DOWNLOAD_DATA} it is of the patients who opted in to research.
+	 * Gets the CSV of the forms asked for and records the download, as
+	 * {@link FormDownloadService#download} does: a row per save of one form, or a row per patient
+	 * across several forms or when asked. Without {@link ActCorePrivileges#DOWNLOAD_DATA} it is of the
+	 * patients who opted in to research.
 	 *
 	 * @param body the request body: {@code forms}, each a form uuid and its chosen fields, or one
 	 *            {@code form} and its {@code fields}; and optionally {@code rowPerPatient},
@@ -94,24 +98,21 @@ public class DownloadController extends ActCoreRestController {
 	 * @throws IllegalRequestException when no form is asked for, a form is asked for twice or has no
 	 *             field, a field, status, clinic, date or patient field is not recognised, the start is
 	 *             after the end, or the record of the download would be too long
-	 * @throws JsonProcessingException when the record of the download cannot be written as JSON
 	 */
 	@RequestMapping(method = RequestMethod.POST)
 	@ResponseBody
-	public SimpleObject download(@RequestBody Map<String, Object> body) throws JsonProcessingException {
-		boolean all = Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA);
-		if (!all && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
+	public SimpleObject download(@RequestBody Map<String, Object> body) {
+		// Refused before the body is read, which the service could refuse only after.
+		if (!Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_DATA)
+		        && !Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA)) {
 			throw new APIAuthenticationException("Privilege required: " + ActCorePrivileges.DOWNLOAD_DATA);
 		}
-		boolean identified = all && Context.hasPrivilege(ActCorePrivileges.DOWNLOAD_IDENTIFIERS);
-		boolean researchOnly = !all;
-		List<FormDownload.Choice> choices = choices(body);
-		boolean rowPerPatient = choices.size() > 1 || Boolean.TRUE.equals(body.get("rowPerPatient"));
+		List<FormDownloadChoice> choices = choices(body);
 		Object status = body.get("status");
 		if (status != null && !Arrays.asList("active", "inactive").contains(status.toString())) {
 			throw new IllegalRequestException("status must be active or inactive");
 		}
-		FormDownload.Filters filters = new FormDownload.Filters(status == null ? null : status.toString(),
+		FormDownloadFilters filters = new FormDownloadFilters(status == null ? null : status.toString(),
 		        clinic(body.get("cardiacClinic")), clinic(body.get("primaryCareClinic")));
 		LocalDate from = date("startDate", body.get("startDate"), null);
 		LocalDate to = date("endDate", body.get("endDate"), null);
@@ -119,51 +120,17 @@ public class DownloadController extends ActCoreRestController {
 			throw new IllegalRequestException("The start date is after the end date");
 		}
 		List<String> patient = patient(body.get("patient"));
-		FormDownload.Choice only = choices.get(0);
-		FormDownload.Table table = rowPerPatient
-		        ? new FormDownload().buildPerPatient(choices, from, to, identified, researchOnly, filters, patient)
-		        : new FormDownload().build(only.form, only.concepts, only.labels, from, to, identified, researchOnly,
-		            filters, patient);
-		List<String> withheld = new ArrayList<String>();
-		table.withheldPatient.forEach(key -> withheld.add(FormDownload.PATIENT_FIELDS.get(key)));
-		withheld.addAll(table.withheld);
-		List<String> given = new ArrayList<String>();
-		List<Map<String, Object>> forms = new ArrayList<Map<String, Object>>();
-		for (FormDownload.Choice choice : choices) {
-			List<String> fields = new ArrayList<String>();
-			for (String label : choice.labels) {
-				if (!table.withheld.contains(rowPerPatient ? choice.name + ": " + label : label)) {
-					fields.add(label);
-					given.add(choices.size() > 1 ? choice.name + ": " + label : label);
-				}
-			}
-			Map<String, Object> form = new LinkedHashMap<String, Object>();
-			form.put("uuid", choice.form.getUuid());
-			form.put("name", choice.name);
-			form.put("fields", fields);
-			forms.add(form);
+		FormDownloadTable table;
+		try {
+			table = Context.getService(FormDownloadService.class).download(choices,
+			    Boolean.TRUE.equals(body.get("rowPerPatient")), filters, from, to, patient);
 		}
-		Map<String, Object> shown = new LinkedHashMap<String, Object>();
-		shown.put("status", filters.status);
-		shown.put("cardiacClinic", filters.cardiacClinic == null ? null : filters.cardiacClinic.getName());
-		shown.put("primaryCareClinic", filters.primaryCareClinic == null ? null : filters.primaryCareClinic.getName());
-		Map<String, Object> detail = new LinkedHashMap<String, Object>();
-		detail.put("fields", given);
-		detail.put("withheld", withheld);
-		detail.put("startDate", from == null ? null : from.toString());
-		detail.put("endDate", to == null ? null : to.toString());
-		detail.put("rows", table.rows.size());
-		detail.put("identifiers", table.identifiers);
-		detail.put("researchOnly", researchOnly);
-		detail.put("forms", forms);
-		detail.put("rowPerPatient", rowPerPatient);
-		detail.put("filters", shown);
-		detail.put("patient", table.patient);
-		// Recorded before the rows are returned, so no download goes unrecorded.
-		log(choices.size() == 1 ? only.form.getFormId() : null, detail);
-		
-		return new SimpleObject().add("headers", table.headers).add("rows", table.rows).add("identifiers", table.identifiers)
-		        .add("researchOnly", researchOnly).add("withheld", withheld);
+		catch (ValidationException e) {
+			throw new IllegalRequestException(e.getMessage());
+		}
+		return new SimpleObject().add("headers", table.getHeaders()).add("rows", table.getRows())
+		        .add("identifiers", table.isIdentifiers()).add("researchOnly", table.isResearchOnly())
+		        .add("withheld", table.getWithheld());
 	}
 	
 	/**
@@ -282,21 +249,21 @@ public class DownloadController extends ActCoreRestController {
 	 * {@code forms}, a list of form and fields pairs, or as one {@code form} with its {@code fields}. A
 	 * field asked for twice in one form is kept once.
 	 */
-	private static List<FormDownload.Choice> choices(Map<String, Object> body) {
+	private static List<FormDownloadChoice> choices(Map<String, Object> body) {
 		List<?> asked = body == null ? null
 		        : body.get("forms") instanceof List ? (List<?>) body.get("forms")
 		                : body.get("form") == null ? null : Collections.singletonList(body);
 		if (asked == null || asked.isEmpty()) {
 			throw new IllegalRequestException("The form is required");
 		}
-		List<FormDownload.Choice> choices = new ArrayList<FormDownload.Choice>();
+		List<FormDownloadChoice> choices = new ArrayList<FormDownloadChoice>();
 		for (Object each : asked) {
 			Object formUuid = each instanceof Map ? ((Map<?, ?>) each).get("form") : null;
 			Form form = formUuid == null ? null : Context.getFormService().getFormByUuid(formUuid.toString());
 			if (form == null) {
 				throw new ObjectNotFoundException();
 			}
-			if (choices.stream().anyMatch(choice -> choice.form.equals(form))) {
+			if (choices.stream().anyMatch(choice -> choice.getForm().equals(form))) {
 				throw new IllegalRequestException("A form is asked for twice: " + formUuid);
 			}
 			List<Concept> concepts = new ArrayList<Concept>();
@@ -320,28 +287,29 @@ public class DownloadController extends ActCoreRestController {
 				labels.add(StringUtils.isBlank(label == null ? null : label.toString()) ? concept.getName().getName()
 				        : StringUtils.left(label.toString().trim(), MAX_LABEL));
 			}
-			choices.add(
-			    new FormDownload.Choice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
+			choices.add(new FormDownloadChoice(form, Names.shown("Form", form.getUuid(), form.getName()), concepts, labels));
 		}
 		return choices;
 	}
 	
 	/**
-	 * Reads the patient fields a download asks for, as keys of FormDownload.PATIENT_FIELDS. It is null
-	 * when the request does not say, which leaves the default fields to FormDownload.
+	 * Reads the patient fields a download asks for, as keys of
+	 * {@link ActCoreConstants#DOWNLOAD_PATIENT_FIELDS}. It is null when the request does not say, which
+	 * leaves the default fields to the download.
 	 */
 	private static List<String> patient(Object asked) {
 		if (asked == null) {
 			return null;
 		}
 		if (!(asked instanceof List)) {
-			throw new IllegalRequestException("patient must be a list of " + FormDownload.PATIENT_FIELDS.keySet());
+			throw new IllegalRequestException(
+			        "patient must be a list of " + ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet());
 		}
 		List<String> keys = new ArrayList<String>();
 		for (Object key : (List<?>) asked) {
-			if (!FormDownload.PATIENT_FIELDS.containsKey(String.valueOf(key))) {
+			if (!ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.containsKey(String.valueOf(key))) {
 				throw new IllegalRequestException(
-				        "Not a patient field: " + key + "; one of " + FormDownload.PATIENT_FIELDS.keySet());
+				        "Not a patient field: " + key + "; one of " + ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet());
 			}
 			keys.add(String.valueOf(key));
 		}

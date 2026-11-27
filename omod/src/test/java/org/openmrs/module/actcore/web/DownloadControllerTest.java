@@ -65,11 +65,15 @@ import org.openmrs.module.actcore.ActCoreConstants;
 import org.openmrs.module.actcore.ActCorePrivileges;
 import org.openmrs.module.actcore.ModuleTables;
 import org.openmrs.module.actcore.api.DownloadLogService;
+import org.openmrs.module.actcore.api.FormDownloadService;
 import org.openmrs.module.actcore.api.db.hibernate.HibernateDownloadLogDAO;
 import org.openmrs.module.actcore.api.impl.DownloadLogServiceImpl;
 import org.openmrs.module.actcore.api.search.DownloadSearchCriteria;
 import org.openmrs.module.actcore.model.DownloadLogEntry;
 import org.openmrs.module.actcore.model.DownloadPage;
+import org.openmrs.module.actcore.model.FormDownloadChoice;
+import org.openmrs.module.actcore.model.FormDownloadFilters;
+import org.openmrs.module.actcore.model.FormDownloadTable;
 import org.openmrs.module.actcore.utils.TransactionsInTest;
 import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.response.IllegalRequestException;
@@ -165,6 +169,64 @@ public class DownloadControllerTest extends BaseModuleWebContextSensitiveTest {
 		
 		assertEquals(Boolean.FALSE, download.get("identifiers"));
 		assertEquals(Boolean.TRUE, download.get("researchOnly"));
+	}
+	
+	@Test
+	public void service_shouldRefuseAUserWithoutADownloadPrivilegeAndRecordNothing() {
+		int before = logged().size();
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		try {
+			download(false);
+			fail("expected the download to be refused");
+		}
+		catch (APIAuthenticationException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains(ActCorePrivileges.DOWNLOAD_DATA));
+		}
+		assertEquals(before, logged().size());
+	}
+	
+	@Test
+	public void service_shouldGiveIdentifiersOnlyWithBothFullDownloadPrivilegesAndRecordEachDownload() {
+		int before = logged().size();
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_DATA));
+		FormDownloadTable without = download(false);
+		signInAs("identifiedcaller", with(ActCorePrivileges.DOWNLOAD_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		FormDownloadTable identified = download(false);
+		
+		assertFalse(without.isIdentifiers());
+		assertFalse(without.isResearchOnly());
+		assertFalse(without.getHeaders().contains("Given name"));
+		assertTrue(identified.isIdentifiers());
+		assertFalse(identified.isResearchOnly());
+		assertTrue(identified.getHeaders().contains("Given name"));
+		assertEquals(before + 2, logged().size());
+	}
+	
+	@Test
+	public void service_shouldGiveTheResearchPrivilegeAloneOnlyAResearchDownloadNeverIdentified() {
+		Context.getAdministrationService().setGlobalProperty(ActCoreConstants.GP_DOWNLOAD_IDENTIFYING_CONCEPTS,
+		    question.getUuid());
+		authenticateWith(with(ActCorePrivileges.DOWNLOAD_RESEARCH_DATA, ActCorePrivileges.DOWNLOAD_IDENTIFIERS));
+		
+		for (boolean rowPerPatient : new boolean[] { false, true }) {
+			FormDownloadTable research = download(rowPerPatient);
+			
+			assertTrue(research.isResearchOnly());
+			assertFalse(research.isIdentifiers());
+			assertFalse(research.getHeaders().contains("Given name"));
+			assertTrue(research.getWithheld().contains("Given name"));
+			assertTrue(
+			    research.getWithheld().contains(rowPerPatient ? "Echo: Mitral regurgitation" : "Mitral regurgitation"));
+		}
+	}
+	
+	/** The service's download of the form's one question, every patient field asked for. */
+	private FormDownloadTable download(boolean rowPerPatient) {
+		return Context.getService(FormDownloadService.class).download(
+		    Collections.singletonList(new FormDownloadChoice(form, "Echo", Collections.singletonList(question),
+		            Collections.singletonList("Mitral regurgitation"))),
+		    rowPerPatient, new FormDownloadFilters(null, null, null), null, null,
+		    new ArrayList<String>(ActCoreConstants.DOWNLOAD_PATIENT_FIELDS.keySet()));
 	}
 	
 	@Test
