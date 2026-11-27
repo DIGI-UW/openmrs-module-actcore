@@ -387,6 +387,9 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		Logger logger = (Logger) LogManager.getLogger(RefreshAdherenceOnSave.class);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
+		// Kept off the console: a test captures what it expects to be logged.
+		boolean additive = logger.isAdditive();
+		logger.setAdditive(false);
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.DEBUG);
 		try {
@@ -396,6 +399,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		finally {
 			logger.removeAppender(appender);
 			logger.setLevel(level);
+			logger.setAdditive(additive);
 		}
 		
 		assertEquals(1, logged.size());
@@ -465,6 +469,9 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		Logger logger = (Logger) LogManager.getLogger(RefreshAdherenceOnSave.class);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
+		// Kept off the console: a test captures what it expects to be logged.
+		boolean additive = logger.isAdditive();
+		logger.setAdditive(false);
 		logger.setLevel(Level.WARN);
 		try {
 			service.saveEncounter(encounter(7, 0));
@@ -473,6 +480,7 @@ public class RefreshAdherenceOnSaveContextTest extends AdherenceContextTest {
 		finally {
 			logger.removeAppender(appender);
 			logger.setLevel(level);
+			logger.setAdditive(additive);
 		}
 		return logged;
 	}

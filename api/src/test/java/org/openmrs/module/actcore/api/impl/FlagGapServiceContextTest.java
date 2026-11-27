@@ -411,6 +411,9 @@ public class FlagGapServiceContextTest extends BaseModuleContextSensitiveTest {
 		Logger logger = (Logger) LogManager.getLogger(FlagGapServiceImpl.class);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
+		// Kept off the console: a test captures what it expects to be logged.
+		boolean additive = logger.isAdditive();
+		logger.setAdditive(false);
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(Level.WARN);
 		try {
@@ -419,6 +422,7 @@ public class FlagGapServiceContextTest extends BaseModuleContextSensitiveTest {
 		finally {
 			logger.removeAppender(appender);
 			logger.setLevel(level);
+			logger.setAdditive(additive);
 		}
 		return events;
 	}

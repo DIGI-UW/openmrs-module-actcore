@@ -616,6 +616,9 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		Logger logger = (Logger) LogManager.getLogger(source);
 		Level level = logger.getLevel();
 		logger.addAppender(appender);
+		// Kept off the console: a test captures what it expects to be logged.
+		boolean additive = logger.isAdditive();
+		logger.setAdditive(false);
 		// The test log4j2.xml turns every logger off.
 		logger.setLevel(threshold);
 		try {
@@ -624,6 +627,7 @@ public class ActCoreActivatorContextTest extends BaseModuleContextSensitiveTest 
 		finally {
 			logger.removeAppender(appender);
 			logger.setLevel(level);
+			logger.setAdditive(additive);
 		}
 		return logged;
 	}

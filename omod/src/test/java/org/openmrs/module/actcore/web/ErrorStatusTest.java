@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +35,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
@@ -958,6 +960,9 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		LoggerContext context = (LoggerContext) LogManager.getContext(false);
 		LoggerConfig root = context.getConfiguration().getRootLogger();
 		Level level = root.getLevel();
+		// Kept off the console: a test captures what it expects to be logged.
+		Map<String, Appender> console = new LinkedHashMap<String, Appender>(root.getAppenders());
+		console.keySet().forEach(root::removeAppender);
 		root.addAppender(appender, Level.INFO, null);
 		// The test log4j2.xml turns every logger off.
 		root.setLevel(Level.INFO);
@@ -967,6 +972,7 @@ public class ErrorStatusTest extends BaseModuleWebContextSensitiveTest {
 		}
 		finally {
 			root.removeAppender("capture");
+			console.values().forEach(each -> root.addAppender(each, null, null));
 			root.setLevel(level);
 			context.updateLoggers();
 		}

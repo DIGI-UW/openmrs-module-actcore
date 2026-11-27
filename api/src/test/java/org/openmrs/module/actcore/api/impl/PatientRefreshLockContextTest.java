@@ -401,9 +401,13 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 		List<Logger> loggers = Arrays.asList((Logger) LogManager.getLogger("org.hibernate"),
 		    (Logger) LogManager.getLogger("org.openmrs.module.actcore"));
 		List<Level> levels = new ArrayList<Level>();
+		List<Boolean> additives = new ArrayList<Boolean>();
 		for (Logger logger : loggers) {
 			levels.add(logger.getLevel());
+			additives.add(logger.isAdditive());
 			logger.addAppender(appender);
+			// Kept off the console: a test captures what it expects to be logged.
+			logger.setAdditive(false);
 			// The test log4j2.xml turns every logger off; this sets its child loggers' level too.
 			Configurator.setLevel(logger.getName(), Level.ERROR);
 		}
@@ -414,6 +418,7 @@ public class PatientRefreshLockContextTest extends BaseModuleContextSensitiveTes
 			for (int i = 0; i < loggers.size(); i++) {
 				loggers.get(i).removeAppender(appender);
 				Configurator.setLevel(loggers.get(i).getName(), levels.get(i));
+				loggers.get(i).setAdditive(additives.get(i));
 			}
 		}
 		return logged;
