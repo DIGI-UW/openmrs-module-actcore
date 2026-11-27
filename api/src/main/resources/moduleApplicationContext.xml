@@ -242,4 +242,14 @@
             </list>
         </property>
     </bean>
+    <!-- Guards the flag cache from the moment a context refresh creates FlagService, before any module's advice is loaded -->
+    <bean class="org.springframework.beans.factory.config.MethodInvokingBean">
+        <property name="targetObject" ref="flagService"/>
+        <property name="targetMethod" value="addAdvice"/>
+        <property name="arguments">
+            <list>
+                <bean class="org.openmrs.module.actcore.aop.GuardFlagCache"/>
+            </list>
+        </property>
+    </bean>
 </beans>
