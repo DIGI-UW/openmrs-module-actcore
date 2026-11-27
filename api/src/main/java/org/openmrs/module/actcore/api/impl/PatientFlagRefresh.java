@@ -463,9 +463,16 @@ public class PatientFlagRefresh {
 		}
 	}
 	
-	private Set<Integer> evaluate(FlagService flagService, Flag flag, Map<Object, Object> evaluationContext) {
+	/**
+	 * Gives the patients the flag matches. A Groovy flag is evaluated without FlagService, whose
+	 * getFlaggedPatients only evaluates it, so that its worker holds no transaction, nor its
+	 * connection, while it waits for the script.
+	 */
+	static Set<Integer> evaluate(FlagService flagService, Flag flag, Map<Object, Object> evaluationContext) {
 		Set<Integer> patientIds = new HashSet<Integer>();
-		Cohort cohort = BoundedFlagEvaluation.within(flag, () -> flagService.getFlaggedPatients(flag, evaluationContext));
+		Cohort cohort = BoundedFlagEvaluation.isGroovy(flag)
+		        ? BoundedFlagEvaluation.within(flag, () -> flag.evalCohort(null, evaluationContext))
+		        : flagService.getFlaggedPatients(flag, evaluationContext);
 		if (cohort != null) {
 			for (CohortMembership membership : cohort.getMemberships()) {
 				patientIds.add(membership.getPatientId());

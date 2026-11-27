@@ -40,6 +40,9 @@ import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
  * ends keeps its worker, and patientflags' thread, for good. Each Groovy flag that does not end
  * costs its caller the bound, once per flag. Evaluations by other evaluators run on the caller's
  * thread, unbounded.
+ * <p>
+ * The full refresh evaluates a flag over every patient within the same bound, so a Groovy flag
+ * whose evaluation over the whole registry takes longer fails each run and is never refreshed.
  */
 final class BoundedFlagEvaluation {
 	
@@ -67,7 +70,7 @@ final class BoundedFlagEvaluation {
 	}
 	
 	static <T> T within(Flag flag, Supplier<T> evaluation, long millis) {
-		if (!GroovyFlagEvaluator.class.getName().equals(flag.getEvaluator())) {
+		if (!isGroovy(flag)) {
 			return evaluation.get();
 		}
 		FutureTask<T> task = new FutureTask<T>(evaluation::get);
@@ -92,6 +95,16 @@ final class BoundedFlagEvaluation {
 			}
 			throw (RuntimeException) e.getCause();
 		}
+	}
+	
+	/**
+	 * Tells whether {@link #within} bounds the flag's evaluation.
+	 *
+	 * @param flag the flag
+	 * @return true when the flag's evaluator is the Groovy evaluator
+	 */
+	static boolean isGroovy(Flag flag) {
+		return GroovyFlagEvaluator.class.getName().equals(flag.getEvaluator());
 	}
 	
 	private static void start(Runnable task) {

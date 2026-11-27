@@ -10,6 +10,7 @@
 package org.openmrs.module.actcore.api.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import org.aopalliance.intercept.MethodInterceptor;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
@@ -62,6 +65,7 @@ import org.openmrs.module.patientflags.evaluator.FlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.GroovyFlagEvaluator;
 import org.openmrs.module.patientflags.evaluator.SQLFlagEvaluator;
 import org.openmrs.test.BaseModuleContextSensitiveTest;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTest {
 	
@@ -81,7 +85,7 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 	
 	private static final long HANG_MILLIS = 5000;
 	
-	// A Groovy criterion that outlasts the evaluation bound the tests set; it matches every patient once it wakes.
+	// Outlasts the evaluation bound the tests set; matches every patient once it wakes.
 	private static final String HANGS = "Thread.sleep(" + HANG_MILLIS + "); return testCohort";
 	
 	private FlagService flagService;
@@ -348,6 +352,32 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		
 		assertTrue(System.currentTimeMillis() - startedAt < HANG_MILLIS);
 		assertEquals(1, liveRows(overdue));
+	}
+	
+	@Test(timeout = 60000)
+	public void aRunEvaluatesAGroovyFlagOutsideAnyTransactionAndASqlFlagThroughFlagService() {
+		List<Boolean> inTransaction = new CopyOnWriteArrayList<Boolean>();
+		List<String> serviceCalls = new CopyOnWriteArrayList<String>();
+		MethodInterceptor recording = invocation -> {
+			serviceCalls.add(invocation.getMethod().getName());
+			return invocation.proceed();
+		};
+		Context.addAdvice(FlagService.class, recording);
+		try {
+			assertTrue(PatientFlagRefresh.evaluate(flagService,
+			    recordingFlag(GroovyFlagEvaluator.class, "return testCohort", inTransaction), new HashMap<Object, Object>())
+			        .contains(MATCHING_PATIENT));
+			assertEquals(Collections.singletonList(false), inTransaction);
+			assertFalse(serviceCalls.contains("getFlaggedPatients"));
+			
+			assertEquals(Collections.singleton(MATCHING_PATIENT), PatientFlagRefresh.evaluate(flagService,
+			    recordingFlag(SQLFlagEvaluator.class, MATCHES_ONE, inTransaction), new HashMap<Object, Object>()));
+			assertEquals(Arrays.asList(false, true), inTransaction);
+			assertTrue(serviceCalls.contains("getFlaggedPatients"));
+		}
+		finally {
+			Context.removeAdvice(FlagService.class, recording);
+		}
 	}
 	
 	@Test
@@ -1004,6 +1034,23 @@ public class PatientFlagRefreshContextTest extends BaseModuleContextSensitiveTes
 		flag.setMessage(name);
 		flag.setEnabled(Boolean.TRUE);
 		flagService.saveFlag(flag);
+		return flag;
+	}
+	
+	/** A flag that records whether a transaction is active on the thread that evaluates it. */
+	private static Flag recordingFlag(Class<?> evaluator, String criteria, List<Boolean> inTransaction) {
+		Flag flag = new Flag() {
+			
+			@Override
+			public Cohort evalCohort(Cohort cohort, Map<Object, Object> context) {
+				inTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
+				return super.evalCohort(cohort, context);
+			}
+		};
+		flag.setName("recording");
+		flag.setCriteria(criteria);
+		flag.setEvaluator(evaluator.getName());
+		flag.setEnabled(Boolean.TRUE);
 		return flag;
 	}
 	
