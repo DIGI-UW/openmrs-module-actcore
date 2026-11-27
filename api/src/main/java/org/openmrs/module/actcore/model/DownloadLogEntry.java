@@ -14,6 +14,9 @@ import java.util.Date;
 /** One recorded download, as the download log holds it. */
 public class DownloadLogEntry {
 	
+	/** The uuid of the download's record. */
+	public String uuid;
+	
 	/** When the download was recorded. */
 	public Date date;
 	
